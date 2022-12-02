@@ -1,0 +1,12 @@
+programs:
+- name: opensnoop
+  metrics:
+    counters:
+    - name: eunomia_file_open_counter
+      description: test
+      labels:
+      - name: pid
+      - name: comm
+      - name: filename
+        from: fname
+  compiled_ebpf_filename: package.json
