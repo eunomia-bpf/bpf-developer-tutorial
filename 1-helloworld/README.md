@@ -4,6 +4,35 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 
 本文是 eBPF 入门开发实践指南的第二篇，主要介绍 eBPF 的基本框架和开发流程。
 
+## 下载安装 eunomia-bpf 开发工具
+
+可以通过以下步骤下载和安装 eunomia-bpf：
+
+下载 ecli 工具，用于运行 eBPF 程序：
+
+```console
+$ wget https://aka.pw/bpf-ecli -O ecli && chmod +x ./ecli
+$ ./ecli -h
+Usage: ecli [--help] [--version] [--json] [--no-cache] url-and-args
+```
+
+下载编译器工具链，用于将 eBPF 内核代码编译为 config 文件或 WASM 模块：
+
+```console
+$ wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/eunomia.tar.gz
+$ tar -xvf eunomia.tar.gz -C ~
+$ export PATH=$PATH:~/.eunomia/bin
+$ ecc -h
+eunomia-bpf compiler
+Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
+```
+
+也可以使用 docker 镜像进行编译：
+
+```console
+$ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
+```
+
 ## Hello World - minimal eBPF program
 
 ```c
@@ -38,13 +67,21 @@ int handle_tp(void *ctx)
 $ ecc hello.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-```console
+```
+
+或使用 docker 镜像进行编译：
+
+```shell
+docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+```
+
 然后使用 ecli 运行编译后的程序：
 
 ```console
 $ sudo ecli ./package.json
 Runing eBPF program...
 ```
+
 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
 
 ```console

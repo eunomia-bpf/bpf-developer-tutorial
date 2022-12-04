@@ -1,79 +1,105 @@
----
-layout: post
-title: bootstrap
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, examples, uprobe, perf event]
-summary: an example of a simple (but realistic) BPF application prints bash commands from all running bash shells on the system. 
----
+# eBPF 入门开发实践指南五：使用 uprobe 捕获 bash 的 readline 函数调用
 
+eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
+本文是 eBPF 入门开发实践指南的第五篇，主要介绍如何使用 uprobe 捕获 bash 的 readline 函数调用。
 
-This prints bash commands from all running bash shells on the system. 
+## 使用 uprobe 捕获 bash 的 readline 函数调用
 
-## System requirements:
+uprobe 是一种用于捕获用户空间函数调用的 eBPF 的探针，我们可以通过它来捕获用户空间程序调用的系统函数。
 
-- Linux kernel > 5.5
-- Eunomia's [ecli](https://github.com/eunomia-bpf/eunomia-bpf/tree/master/ecli) installed
+例如，我们可以使用 uprobe 来捕获 bash 的 readline 函数调用，从而获取用户在 bash 中输入的命令行。示例代码如下：
 
+```c
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (c) 2021 Facebook */
+#include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "bashreadline.h"
 
-## Run
+#define TASK_COMM_LEN 16
+#define MAX_LINE_SIZE 80
 
-- Compile:
+/* Format of u[ret]probe section definition supporting auto-attach:
+ * u[ret]probe/binary:function[+offset]
+ *
+ * binary can be an absolute/relative path or a filename; the latter is resolved to a
+ * full binary path via bpf_program__attach_uprobe_opts.
+ *
+ * Specifying uprobe+ ensures we carry out strict matching; either "uprobe" must be
+ * specified (and auto-attach is not possible) or the above format is specified for
+ * auto-attach.
+ */
+SEC("uprobe//bin/bash:readline")
+int BPF_KRETPROBE(printret, const void *ret) {
+	char str[MAX_LINE_SIZE];
+	char comm[TASK_COMM_LEN];
+	u32 pid;
 
-  ```shell
-  docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
-  ```
+	if (!ret)
+		return 0;
 
-  or
+	bpf_get_current_comm(&comm, sizeof(comm));
 
-  ```shell
-  ecc bashreadline.bpf.c bashreadline.h
-  ```
+	pid = bpf_get_current_pid_tgid() >> 32;
+	bpf_probe_read_user_str(str, sizeof(str), ret);
 
-- Run:
+	bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
 
-  ```console
-  $ sudo ./ecli run eunomia-bpf/examples/bpftools/bootstrap/package.json
-  TIME      PID    STR
-  11:17:34  28796  whoami
-  11:17:41  28796  ps -ef
-  11:17:51  28796  echo "Hello eBPF!"
-  ```
+	return 0;
+};
 
-## details in bcc
-
-
+char LICENSE[] SEC("license") = "GPL";
 ```
-Demonstrations of bashreadline, the Linux eBPF/bcc version.
 
-This prints bash commands from all running bash shells on the system. For
-example:
+这段代码的作用是在 bash 的 readline 函数返回时执行指定的 BPF_KRETPROBE 函数，即 printret 函数。
 
-# ./bashreadline
-TIME      PID    COMMAND
-05:28:25  21176  ls -l
-05:28:28  21176  date
-05:28:35  21176  echo hello world
-05:28:43  21176  foo this command failed
-05:28:45  21176  df -h
-05:29:04  3059   echo another shell
-05:29:13  21176  echo first shell again
+在 printret 函数中，我们首先获取了调用 readline 函数的进程的进程名称和进程 ID，然后通过 bpf_probe_read_user_str 函数读取了用户输入的命令行字符串，最后通过 bpf_printk 函数打印出进程 ID、进程名称和输入的命令行字符串。
 
-When running the script on Arch Linux, you may need to specify the location
-of libreadline.so library:
+除此之外，我们还需要通过 SEC 宏来定义 uprobe 探针，并使用 BPF_KRETPROBE 宏来定义探针函数。
 
-# ./bashreadline -s /lib/libreadline.so
-TIME      PID    COMMAND
-11:17:34  28796  whoami
-11:17:41  28796  ps -ef
-11:17:51  28796  echo "Hello eBPF!"
+在 SEC 宏中，我们需要指定 uprobe 的类型、要捕获的二进制文件的路径和要捕获的函数名称。例如，上面的代码中的 SEC 宏的定义如下：
 
-
-The entered command may fail. This is just showing what command lines were
-entered interactively for bash to process.
-
-It works by tracing the return of the readline() function using uprobes
-(specifically a uretprobe).
+```c
+SEC("uprobe//bin/bash:readline")
 ```
+
+这表示我们要捕获的是 /bin/bash 二进制文件中的 readline 函数。
+
+接下来，我们需要使用 BPF_KRETPROBE 宏来定义探针函数，例如：
+
+```c
+BPF_KRETPROBE(printret, const void *ret)
+```
+
+这里的 printret 是探针函数的名称，const void *ret 是探针函数的参数，它代表被捕获的函数的返回值。
+
+编译运行上述代码：
+
+
+```console
+$ ecc bashreadline.bpf.c bashreadline.h
+Compiling bpf object...
+Packing ebpf object and config into package.json...
+$ sudo ecli package.json
+Runing eBPF program...
+```
+
+运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
+
+```console
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+PID 12345 (bash) read: ls -l
+PID 12345 (bash) read: date
+PID 12345 (bash) read: echo "Hello eBPF!"
+```
+
+可以看到，我们成功的捕获了 bash 的 readline 函数调用，并获取了用户在 bash 中输入的命令行。
+
+请注意，在上述代码中，我们使用了 SEC 宏来定义了一个 uprobe 探针，它指定了要捕获的用户空间程序 (bin/bash) 和要捕获的函数 (readline)。
+
+此外，我们还使用了 BPF_KRETPROBE 宏来定义了一个用于处理 readline 函数返回值的回调函数 (printret)。该函数可以获取到 readline 函数的返回值，并将其打印到内核日志中。
+
+通过这样的方式，我们就可以使用 eBPF 来捕获 bash 的 readline 函数调用，并获取用户在 bash 中输入的命令行.
+
