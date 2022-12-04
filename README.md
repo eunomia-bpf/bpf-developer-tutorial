@@ -4,30 +4,34 @@
 
 在学习 eBPF 的过程中，我们受到了 [tutorial_bcc_python_developer](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从 2022 年的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目。
 
+本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 eBPF 用户态代码的编写。
+
+教程主要关注于可观察性，并简要介绍了 eBPF 的其他应用。
+
 ## 目录
 
-- [lesson 0-introduce](0-introduce/introduce.md) 介绍 eBPF 的基本概念和常见的开发工具
-- [lesson 1-helloworld](1-helloworld/README.md) 演示如何使用 eBPF 开发最简单的「Hello World」程序，介绍 eBPF 的基本框架和开发流程
-- [lesson 2-fentry-unlink](2-fentry-unlink/README.md) 基于 eBPF 的 fentry hook，演示了如何捕获并记录 unlink 系统调用
-- [lesson 3-kprobe-unlink](3-kprobe-unlink/README.md) 基于 eBPF 的 kprobe hook，演示了如何捕获并记录 unlink 系统调用
-- [lesson 4-opensnoop](4-opensnoop/README.md)
-- [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md)
-- [lesson 6-sigsnoop](6-sigsnoop/README.md)
-- [lesson 7-execsnoop](7-execsnoop/README.md)
-- [lesson 8-runqslower](8-runqslower/README.md)
-- [lesson 9-runqlat](9-runqlat/README.md)
-- [lesson 10-hardirqs](20-hardirqs/README.md)
-- [lesson 11-llcstat](21-llcstat/README.md)
-- [lesson 12-bindsnoop](12-bindsnoop/README.md)
-- [lesson 13-tcpconnlat](13-tcpconnlat/README.md)
-- [lesson 14-tcpstates](14-tcpstates/README.md)
-- [lesson 15-tcprtt](15-tcprtt/README.md)
-- [lesson 16-profile](16-profile/README.md)
-- [lesson 17-memleak](17-memleak/README.md)
-- [lesson 18-biopattern](18-biopattern/README.md)
-- [lesson 19-syscount](19-syscount/README.md)
-- [lesson 20-lsm-connect](20-lsm-connect/README.md)
-- [lesson 21-tc](21-tc/README.md)
+- [lesson 0-introduce](0-introduce/README.md) 介绍 eBPF 的基本概念和常见的开发工具
+- [lesson 1-helloworld](1-helloworld/README.md) 使用 eBPF 开发最简单的「Hello World」程序，介绍 eBPF 的基本框架和开发流程
+- [lesson 2-fentry-unlink](2-fentry-unlink/README.md) 在 eBPF 中使用 fentry 捕获 unlink 系统调用
+- [lesson 3-kprobe-unlink](3-kprobe-unlink/README.md) 在 eBPF 中使用 kprobe 捕获 unlink 系统调用
+- [lesson 4-opensnoop](4-opensnoop/README.md) 捕获进程打开文件的系统调用集合，使用全局变量在 eBPF 中过滤进程 pid
+- [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md) 使用 uprobe 捕获 bash 的 readline 函数调用
+- [lesson 6-sigsnoop](6-sigsnoop/README.md) 捕获进程发送信号的系统调用集合，使用 hash map 保存状态
+- [lesson 7-execsnoop](7-execsnoop/README.md) 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出
+- [lesson 8-runqslower](8-runqslower/README.md) 捕获进程调度事件，使用 ring buffer 向用户态打印输出
+- [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
+- [lesson 10-hardirqs](20-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
+- [lesson 11-llcstat](21-llcstat/README.md) 通过 PID 统计 cache references and misses
+- [lesson 12-profile](12-profile/README.md) 使用 eBPF 进行性能分析
+- [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟
+- [lesson 14-tcpstates](14-tcpstates/README.md) 记录 TCP 连接状态
+- [lesson 15-tcprtt](15-tcprtt/README.md) 以直方图方式记录 TCP RTT
+- [lesson 16-memleak](16-memleak/README.md) 检测内存泄漏
+- [lesson 17-biopattern](17-biopattern/README.md) 捕获磁盘 IO 模式
+- [lesson 18-further-reading](18-further-reading/README.md) 更进一步的相关资料？
+- [lesson 19-lsm-connect](19-lsm-connect/README.md) 使用 LSM 进行安全检测防御
+- [lesson 20-tc](20-tc/README.md) 使用 eBPF 进行 tc 流量控制
+- [lesson 21-xdp](20-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
   
 ## 为什么需要基于 libbpf 和 BPF CO-RE 的教程？
 
