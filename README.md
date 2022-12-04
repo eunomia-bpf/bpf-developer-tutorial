@@ -12,8 +12,8 @@
 
 - [lesson 0-introduce](0-introduce/README.md) 介绍 eBPF 的基本概念和常见的开发工具
 - [lesson 1-helloworld](1-helloworld/README.md) 使用 eBPF 开发最简单的「Hello World」程序，介绍 eBPF 的基本框架和开发流程
-- [lesson 2-fentry-unlink](2-fentry-unlink/README.md) 在 eBPF 中使用 fentry 捕获 unlink 系统调用
-- [lesson 3-kprobe-unlink](3-kprobe-unlink/README.md) 在 eBPF 中使用 kprobe 捕获 unlink 系统调用
+- [lesson 2-kprobe-unlink](2-kprobe-unlink/README.md) 在 eBPF 中使用 kprobe 捕获 unlink 系统调用
+- [lesson 3-fentry-unlink](3-fentry-unlink/README.md) 在 eBPF 中使用 fentry 捕获 unlink 系统调用
 - [lesson 4-opensnoop](4-opensnoop/README.md) 捕获进程打开文件的系统调用集合，使用全局变量在 eBPF 中过滤进程 pid
 - [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md) 使用 uprobe 捕获 bash 的 readline 函数调用
 - [lesson 6-sigsnoop](6-sigsnoop/README.md) 捕获进程发送信号的系统调用集合，使用 hash map 保存状态

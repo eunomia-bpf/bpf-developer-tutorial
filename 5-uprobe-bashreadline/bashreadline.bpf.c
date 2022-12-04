@@ -6,12 +6,7 @@
 #include "bashreadline.h"
 
 #define TASK_COMM_LEN 16
-
-struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(__u32));
-	__uint(value_size, sizeof(__u32));
-} events SEC(".maps");
+#define MAX_LINE_SIZE 80
 
 /* Format of u[ret]probe section definition supporting auto-attach:
  * u[ret]probe/binary:function[+offset]
@@ -25,7 +20,7 @@ struct {
  */
 SEC("uprobe//bin/bash:readline")
 int BPF_KRETPROBE(printret, const void *ret) {
-	struct str_t data;
+	char str[MAX_LINE_SIZE];
 	char comm[TASK_COMM_LEN];
 	u32 pid;
 
@@ -33,14 +28,11 @@ int BPF_KRETPROBE(printret, const void *ret) {
 		return 0;
 
 	bpf_get_current_comm(&comm, sizeof(comm));
-	if (comm[0] != 'b' || comm[1] != 'a' || comm[2] != 's' || comm[3] != 'h' || comm[4] != 0 )
-		return 0;
 
 	pid = bpf_get_current_pid_tgid() >> 32;
-	data.pid = pid;
-	bpf_probe_read_user_str(&data.str, sizeof(data.str), ret);
+	bpf_probe_read_user_str(str, sizeof(str), ret);
 
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &data, sizeof(data));
+	bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
 
 	return 0;
 };
