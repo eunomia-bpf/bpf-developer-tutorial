@@ -1,12 +1,3 @@
----
-layout: post
-title: minimal
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, tracepoint, example, syscall]
-summary: a minimal example of a BPF application installs a tracepoint handler which is triggered by write syscall
----
 
 
 `minimal` is just that – a minimal practical BPF application example. It
