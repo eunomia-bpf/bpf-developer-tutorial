@@ -1,13 +1,4 @@
----
-layout: post
-title: tc
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, tc, example]
-summary: a minimal example of a BPF application use tc
----
-
+## eBPF 入门实践教程：
 
 `tc` (short for Traffic Control) is an example of handling ingress network traffics.
 It creates a qdisc on the `lo` interface and attaches the `tc_ingress` BPF program to it.

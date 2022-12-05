@@ -1,12 +1,4 @@
----
-layout: post
-title: tcpconnlat
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, syscall, network]
-summary: Traces the kernel function performing active TCP connections(eg, via a connect() syscall; accept() are passive connections).  and show connection latency.
----
+## eBPF 入门实践教程：
 
 ## origin
 

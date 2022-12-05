@@ -1,6 +1,4 @@
-| layout | title      | date             | category | author   | tags            | summary                                         |
-| ------ | ---------- | ---------------- | -------- | -------- | --------------- | ----------------------------------------------- |
-| post   | runqslower | 2022-11-11-20:50 | bpftools | yunwei37 | bpftool syscall | runqslower Trace long process scheduling delays |
+## eBPF 入门实践教程：
 
 ## origin
 

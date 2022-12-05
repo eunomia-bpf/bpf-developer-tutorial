@@ -1,15 +1,98 @@
----
-layout: post
-title: sigsnoop
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, syscall, kprobe, tracepoint]
-summary: Trace signals generated system wide, from syscalls and others.
----
+# eBPF 入门开发实践指南六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态
+
+## sigsnoop
+
+```c
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+/* Copyright (c) 2021~2022 Hengqi Chen */
+#include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
+#include "sigsnoop.h"
+
+#define MAX_ENTRIES	10240
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, __u32);
+	__type(value, struct event);
+} values SEC(".maps");
 
 
-## origin
+static int probe_entry(pid_t tpid, int sig)
+{
+	struct event event = {};
+	__u64 pid_tgid;
+	__u32 pid, tid;
+
+	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	event.pid = pid;
+	event.tpid = tpid;
+	event.sig = sig;
+	bpf_get_current_comm(event.comm, sizeof(event.comm));
+	bpf_map_update_elem(&values, &tid, &event, BPF_ANY);
+	return 0;
+}
+
+static int probe_exit(void *ctx, int ret)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 tid = (__u32)pid_tgid;
+	struct event *eventp;
+
+	eventp = bpf_map_lookup_elem(&values, &tid);
+	if (!eventp)
+		return 0;
+
+	eventp->ret = ret;
+	bpf_printk("PID %d (%s) sent signal %d to PID %d, ret = %d",
+		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, eventp->ret);
+
+cleanup:
+	bpf_map_delete_elem(&values, &tid);
+	return 0;
+}
+
+SEC("tracepoint/syscalls/sys_enter_kill")
+int kill_entry(struct trace_event_raw_sys_enter *ctx)
+{
+	pid_t tpid = (pid_t)ctx->args[0];
+	int sig = (int)ctx->args[1];
+
+	return probe_entry(tpid, sig);
+}
+
+SEC("tracepoint/syscalls/sys_exit_kill")
+int kill_exit(struct trace_event_raw_sys_exit *ctx)
+{
+	return probe_exit(ctx, ctx->ret);
+}
+
+SEC("tracepoint/syscalls/sys_enter_tkill")
+int tkill_entry(struct trace_event_raw_sys_enter *ctx)
+{
+	pid_t tpid = (pid_t)ctx->args[0];
+	int sig = (int)ctx->args[1];
+
+	return probe_entry(tpid, sig);
+}
+
+SEC("tracepoint/syscalls/sys_exit_tkill")
+int tkill_exit(struct trace_event_raw_sys_exit *ctx)
+{
+	return probe_exit(ctx, ctx->ret);
+}
+
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+```
+
+上面的代码定义了一个 eBPF 程序，用于捕获进程发送信号的系统调用，包括 kill、tkill 和 tgkill。它通过使用 tracepoint 来捕获系统调用的进入和退出事件，并在这些事件发生时执行指定的探针函数，例如 probe_entry 和 probe_exit。
+
+在探针函数中，我们使用 bpf_map 存储捕获的事件信息，包括发送信号的进程 ID、接收信号的进程 ID、信号值和系统调用的返回值。在系统调用退出时，我们将获取存储在 bpf_map 中的事件信息，并使用 bpf_printk 打印进程 ID、进程名称、发送的信号和系统调用的返回值。
+
+最后，我们还需要使用 SEC 宏来定义探针，并指定要捕获的系统调用的名称，以及要执行的探针函数。
 
 origin from:
 
@@ -60,96 +143,3 @@ Optional arguments:
 Built with eunomia-bpf framework.
 See https://github.com/eunomia-bpf/eunomia-bpf for more information.
 ```
-
-## WASM example
-
-Generate WASM skel:
-
-```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest gen-wasm-skel
-```
-
-> The skel is generated and commit, so you don't need to generate it again.
-> skel includes:
->
-> - eunomia-include: include headers for WASM
-> - app.c: the WASM app. all library is header only.
-
-Build WASM module
-
-```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest build-wasm
-```
-
-Run:
-
-```console
-$ sudo ./ecli run app.wasm -h
-Usage: sigsnoop [-h] [-x] [-k] [-n] [-p PID] [-s SIGNAL]
-Trace standard and real-time signals.
-
-
-    -h, --help  show this help message and exit
-    -x, --failed  failed signals only
-    -k, --killed  kill only
-    -p, --pid=<int>  target pid
-    -s, --signal=<int>  target signal
-
-$ sudo ./ecli run app.wasm                                                                       
-running and waiting for the ebpf events from perf event...
-{"pid":185539,"tpid":185538,"sig":17,"ret":0,"comm":"cat","sig_name":"SIGCHLD"}
-{"pid":185540,"tpid":185538,"sig":17,"ret":0,"comm":"grep","sig_name":"SIGCHLD"}
-
-$ sudo ./ecli run app.wasm -p 1641
-running and waiting for the ebpf events from perf event...
-{"pid":1641,"tpid":2368,"sig":23,"ret":0,"comm":"YDLive","sig_name":"SIGURG"}
-{"pid":1641,"tpid":2368,"sig":23,"ret":0,"comm":"YDLive","sig_name":"SIGURG"}
-```
-
-## details in bcc
-
-Demonstrations of sigsnoop.
-
-
-This traces signals generated system wide. For example:
-```console
-# ./sigsnoop -n
-TIME     PID     COMM             SIG       TPID    RESULT
-19:56:14 3204808 a.out            SIGSEGV   3204808 0
-19:56:14 3204808 a.out            SIGPIPE   3204808 0
-19:56:14 3204808 a.out            SIGCHLD   3204722 0
-```
-The first line showed that a.out (a test program) deliver a SIGSEGV signal.
-The result, 0, means success.
-
-The second and third lines showed that a.out also deliver SIGPIPE/SIGCHLD
-signals successively.
-
-USAGE message:
-```console
-# ./sigsnoop -h
-Usage: sigsnoop [OPTION...]
-Trace standard and real-time signals.
-
-USAGE: sigsnoop [-h] [-x] [-k] [-n] [-p PID] [-s SIGNAL]
-
-EXAMPLES:
-    sigsnoop             # trace signals system-wide
-    sigsnoop -k          # trace signals issued by kill syscall only
-    sigsnoop -x          # trace failed signals only
-    sigsnoop -p 1216     # only trace PID 1216
-    sigsnoop -s 9        # only trace signal 9
-
-  -k, --kill                 Trace signals issued by kill syscall only.
-  -n, --name                 Output signal name instead of signal number.
-  -p, --pid=PID              Process ID to trace
-  -s, --signal=SIGNAL        Signal to trace.
-  -x, --failed               Trace failed signals only.
-  -?, --help                 Give this help list
-      --usage                Give a short usage message
-  -V, --version              Print program version
-```
-Mandatory or optional arguments to long options are also mandatory or optional
-for any corresponding short options.
-
-Report bugs to https://github.com/iovisor/bcc/tree/master/libbpf-tools.

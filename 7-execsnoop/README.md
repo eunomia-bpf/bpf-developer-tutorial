@@ -1,18 +1,82 @@
----
-layout: post
-title: execsnoop
-date: 2022-11-17 19:57
-category: bpftools
-author: yunwei37
-tags: [bpftools, syscall]
-summary: execsnoop traces the exec() syscall system-wide, and prints various details.
----
+## eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出
 
-## origin
+## execsnoop
 
-origin from:
+```c
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+#include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_core_read.h>
+#include "execsnoop.bpf.h"
 
-https://github.com/iovisor/bcc/blob/master/libbpf-tools/execsnoop.bpf.c
+struct {
+	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__uint(key_size, sizeof(u32));
+	__uint(value_size, sizeof(u32));
+} events SEC(".maps");
+
+SEC("tracepoint/syscalls/sys_enter_execve")
+int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
+{
+	u64 id;
+	pid_t pid, tgid;
+	unsigned int ret;
+	struct event event;
+	struct task_struct *task;
+	const char **args = (const char **)(ctx->args[1]);
+	const char *argp;
+
+	uid_t uid = (u32)bpf_get_current_uid_gid();
+	int i;
+	id = bpf_get_current_pid_tgid();
+	pid = (pid_t)id;
+	tgid = id >> 32;
+
+	event.pid = tgid;
+	event.uid = uid;
+	task = (struct task_struct*)bpf_get_current_task();
+	bpf_probe_read_str(&event.comm, sizeof(event.comm), task->comm);
+	event.is_exit = false;
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	return 0;
+}
+
+SEC("tracepoint/syscalls/sys_exit_execve")
+int tracepoint__syscalls__sys_exit_execve(struct trace_event_raw_sys_exit* ctx)
+{
+	u64 id;
+	pid_t pid;
+	int ret;
+	struct event event;
+
+	u32 uid = (u32)bpf_get_current_uid_gid();
+
+	id = bpf_get_current_pid_tgid();
+	pid = (pid_t)id;
+
+	ret = ctx->ret;
+	event.retval = ret;
+	event.pid = pid;
+	event.uid = uid;
+	event.is_exit = true;
+	bpf_get_current_comm(&event.comm, sizeof(event.comm));
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+	return 0;
+}
+
+char LICENSE[] SEC("license") = "GPL";
+
+```
+
+这段代码定义了两个 eBPF 程序，一个用于捕获进程执行 execve 系统调用的入口，另一个用于捕获进程执行 execve 系统调用的出口。
+
+在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
+
+在出口程序中，我们首先获取了进程的进程 ID 和用户 ID，然后通过 bpf_get_current_comm 函数获取了进程的名称，最后通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
+
+使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件。我们可以通过工具（例如 eunomia-bpf）来查看这些事件，并分析进程的执行情况。
+
+
 
 ## Compile and Run
 

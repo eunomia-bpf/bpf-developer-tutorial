@@ -1,4 +1,4 @@
-# eBPF 入门开发实践指南三：在 eBPF 中使用 fentry 捕获 unlink 系统调用
+# eBPF 入门开发实践指南三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
@@ -59,3 +59,9 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
               rm-9290    [004] d..2  4637.798698: bpf_trace_printk: fentry: pid = 9290, filename = test_file2
               rm-9290    [004] d..2  4637.798843: bpf_trace_printk: fexit: pid = 9290, filename = test_file2, ret = 0
 ```
+
+## 总结
+
+这段程序是一个 eBPF 程序，通过使用 fentry 和 fexit 捕获 do_unlinkat 和 do_unlinkat_exit 函数，并通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数获取调用 do_unlinkat 的进程 ID、文件名和返回值，并在内核日志中打印出来。
+
+编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 /sys/kernel/debug/tracing/trace_pipe 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf

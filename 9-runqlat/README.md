@@ -1,13 +1,4 @@
----
-layout: post
-title: runqlat
-date: 2022-10-10 16:18
-category: bpftools
-author: yunwei37
-tags: [bpftools, syscall, tracepoint]
-summary: Summarize run queue (scheduler) latency as a histogram.
----
-
+## eBPF 入门实践教程：
 
 ## origin
 

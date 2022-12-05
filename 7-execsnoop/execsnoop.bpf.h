@@ -15,10 +15,8 @@ struct event {
 	int ppid;
 	int uid;
 	int retval;
-	int args_count;
-	unsigned int args_size;
+	bool is_exit;
 	char comm[TASK_COMM_LEN];
-	char args[FULL_MAX_ARGS_ARR];
 };
 
 #endif /* __EXECSNOOP_H */

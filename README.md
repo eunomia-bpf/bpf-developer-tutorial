@@ -14,8 +14,8 @@
 - [lesson 1-helloworld](1-helloworld/README.md) 使用 eBPF 开发最简单的「Hello World」程序，介绍 eBPF 的基本框架和开发流程
 - [lesson 2-kprobe-unlink](2-kprobe-unlink/README.md) 在 eBPF 中使用 kprobe 捕获 unlink 系统调用
 - [lesson 3-fentry-unlink](3-fentry-unlink/README.md) 在 eBPF 中使用 fentry 捕获 unlink 系统调用
-- [lesson 4-opensnoop](4-opensnoop/README.md) 捕获进程打开文件的系统调用集合，使用全局变量在 eBPF 中过滤进程 pid
-- [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md) 使用 uprobe 捕获 bash 的 readline 函数调用
+- [lesson 4-opensnoop](4-opensnoop/README.md) 使用 eBPF 捕获进程打开文件的系统调用集合，使用全局变量在 eBPF 中过滤进程 pid
+- [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md) 在 eBPF 中使用 uprobe 捕获 bash 的 readline 函数调用
 - [lesson 6-sigsnoop](6-sigsnoop/README.md) 捕获进程发送信号的系统调用集合，使用 hash map 保存状态
 - [lesson 7-execsnoop](7-execsnoop/README.md) 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出
 - [lesson 8-runqslower](8-runqslower/README.md) 捕获进程调度事件，使用 ring buffer 向用户态打印输出
@@ -49,3 +49,30 @@
 > 在API和代码约定方面，libbpf坚持"最少意外"的哲学，即大部分内容都需要明确地阐述：不会隐含任何头文件，也不会重写代码。仅使用简单的C代码和适当的辅助宏即可消除大部分单调的环节。 此外，用户编写的是需要执行的内容，BPF应用程序的结构是一对一的，最终由内核验证并执行。
 >
 > 参考：[BCC 到libbpf 的转换指南【译】 - 深入浅出eBPF: https://www.ebpf.top/post/bcc-to-libbpf-guid/](https://www.ebpf.top/post/bcc-to-libbpf-guid/)
+
+## eunomia-bpf
+
+[eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 是一个开源的 eBPF 动态加载运行时和开发工具链，是为了简化 eBPF 程序的开发、构建、分发、运行而设计的，基于 libbpf 的 CO-RE 轻量级开发框架。
+
+使用 eunomia-bpf ，可以：
+
+- 在编写 eBPF 程序或工具时只编写 libbpf 内核态代码，自动获取内核态导出信息；
+- 使用 WASM 进行用户态交互程序的开发，在 WASM 虚拟机内部控制整个 eBPF 程序的加载和执行，以及处理相关数据；
+- eunomia-bpf 可以将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块，跨架构和内核版本进行分发，无需重新编译即可动态加载运行。
+
+eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的 BCC、原生 libbpf 等框架，大幅简化了 eBPF 程序的开发流程，在大多数时候只需编写内核态代码，即可轻松构建、打包、发布完整的 eBPF 应用，同时内核态 eBPF 代码保证和主流的 libbpf, libbpfgo, libbpf-rs 等开发框架的 100% 兼容性。需要编写用户态代码的时候，也可以借助 Webassembly 实现通过多种语言进行用户态开发。和 bpftrace 等脚本工具相比, eunomia-bpf 保留了类似的便捷性, 同时不仅局限于 trace 方面, 可以用于更多的场景, 如网络、安全等等。
+
+> - eunomia-bpf 项目 Github 地址: <https://github.com/eunomia-bpf/eunomia-bpf>
+> - gitee 镜像: <https://gitee.com/anolis/eunomia>
+
+## 让 chatGPT 来帮助我们
+
+> 本教程大部分内容由 chatGPT 生成，我们尝试教会 chatGPT 编写 eBPF 程序：
+>
+> 1. 告诉它基本的 eBPF 编程相关的常识
+> 2. 一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序等等，并且让它开始编写教程
+> 3. 手动调整并纠正代码和文档中的错误
+> 4. 把修改后的代码再喂给 chatGPT，让它继续学习
+> 5. 尝试让 chatGPT 自动生成 eBPF 程序！
+>
+
