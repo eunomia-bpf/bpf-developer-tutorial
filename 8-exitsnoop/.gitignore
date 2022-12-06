@@ -1,4 +1,4 @@
 .vscode
-package.json
 eunomia-exporter
 ecli
+*.json

@@ -1,4 +1,4 @@
-# bpf-develop-tutorial: learn CO-RE ebpf with example tools 
+# bpf-develop-tutorial: learn CO-RE ebpf with example tools
 
 这是一个基于 `CO-RE`（一次编译，到处运行）的 `libbpf` 的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践指南，包括基本概念、代码实例、实际应用等内容。我们主要提供了一些 eBPF 工具的案例，帮助开发者学习 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
 
@@ -6,8 +6,7 @@
 
 本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写。
 
-教程主要关注于可观察性，并简要介绍了 eBPF 的其他应用。
-
+教程主要关注于可观察性，并简要介绍了 eBPF 的其他应用，例如网络、安全等等。
 
 ## 让 chatGPT 来帮助我们
 
@@ -21,7 +20,7 @@
 
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
 
-完整的对话可以在这里找到: [chatGPT.md](chatGPT.md)
+完整的对话记录可以在这里找到: [chatGPT.md](chatGPT.md)
 
 ## 目录
 
@@ -32,8 +31,8 @@
 - [lesson 4-opensnoop](4-opensnoop/README.md) 使用 eBPF 捕获进程打开文件的系统调用集合，使用全局变量在 eBPF 中过滤进程 pid
 - [lesson 5-uprobe-bashreadline](5-uprobe-bashreadline/README.md) 在 eBPF 中使用 uprobe 捕获 bash 的 readline 函数调用
 - [lesson 6-sigsnoop](6-sigsnoop/README.md) 捕获进程发送信号的系统调用集合，使用 hash map 保存状态
-- [lesson 7-execsnoop](7-execsnoop/README.md) 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出
-- [lesson 8-runqslower](8-runqslower/README.md) 捕获进程调度事件，使用 ring buffer 向用户态打印输出
+- [lesson 7-execsnoop](7-execsnoop/README.md) 捕获进程执行时间，通过 perf event array 向用户态打印输出
+- [lesson 8-execsnoop](8-exitsnoop/README.md) 捕获进程退出事件，使用 ring buffer 向用户态打印输出
 - [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
 - [lesson 10-hardirqs](20-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
 - [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的的用户态代码
@@ -51,10 +50,11 @@
 ## 为什么需要基于 libbpf 和 BPF CO-RE 的教程？
 
 > 历史上，当需要开发一个BPF应用时可以选择BCC 框架，在实现各种用于Tracepoints的BPF程序时需要将BPF程序加载到内核中。BCC提供了内置的Clang编译器，可以在运行时编译BPF代码，并将其定制为符合特定主机内核的程序。这是在不断变化的内核内部下开发可维护的BPF应用程序的唯一方法。在BPF的可移植性和CO-RE一文中详细介绍了为什么会这样，以及为什么BCC是之前唯一的可行方式，此外还解释了为什么 libbpf 是目前比较好的选择。去年，Libbpf的功能和复杂性得到了重大提升，消除了与BCC之间的很多差异(特别是对Tracepoints应用来说)，并增加了很多BCC不支持的新的且强大的特性(如全局变量和BPF skeletons)。
-> 
+>
 > 诚然，BCC会竭尽全力简化BPF开发人员的工作，但有时在获取便利性的同时也增加了问题定位和修复的困难度。用户必须记住其命名规范以及自动生成的用于Tracepoints的结构体，且必须依赖这些代码的重写来读取内核数据和获取kprobe参数。当使用BPF map时，需要编写一个半面向对象的C代码，这与内核中发生的情况并不完全匹配。除此之外，BCC使得用户在用户空间编写了大量样板代码，且需要手动配置最琐碎的部分。
-> 
+>
 > 如上所述，BCC依赖运行时编译，且本身嵌入了庞大的LLVM/Clang库，由于这些原因，BCC与理想的使用有一定差距：
+>
 > - 编译时的高资源利用率(内存和CPU)，在繁忙的服务器上时有可能干扰主流程。
 > - 依赖内核头文件包，不得不在每台目标主机上进行安装。即使这样，如果需要某些没有通过公共头文件暴露的内核内容时，需要将类型定义拷贝黏贴到BPF代码中，通过这种方式达成目的。
 > - 即使是很小的编译时错误也只能在运行时被检测到，之后不得不重新编译并重启用户层的应用；这大大影响了开发的迭代时间(并增加了挫败感...)
@@ -79,15 +79,3 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 
 > - eunomia-bpf 项目 Github 地址: <https://github.com/eunomia-bpf/eunomia-bpf>
 > - gitee 镜像: <https://gitee.com/anolis/eunomia>
-
-## 让 chatGPT 来帮助我们
-
-> 本教程大部分内容由 chatGPT 生成，我们尝试教会 chatGPT 编写 eBPF 程序：
->
-> 1. 告诉它基本的 eBPF 编程相关的常识
-> 2. 一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序等等，并且让它开始编写教程
-> 3. 手动调整并纠正代码和文档中的错误
-> 4. 把修改后的代码再喂给 chatGPT，让它继续学习
-> 5. 尝试让 chatGPT 自动生成 eBPF 程序！
->
-

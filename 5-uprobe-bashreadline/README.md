@@ -83,7 +83,6 @@ BPF_KRETPROBE(printret, const void *ret)
 
 编译运行上述代码：
 
-
 ```console
 $ ecc bashreadline.bpf.c bashreadline.h
 Compiling bpf object...

@@ -35,7 +35,7 @@ struct event {
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
-#include "execsnoop.bpf.h"
+#include "execsnoop.h"
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
@@ -48,14 +48,10 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 {
 	u64 id;
 	pid_t pid, tgid;
-	unsigned int ret;
 	struct event event;
 	struct task_struct *task;
-	const char **args = (const char **)(ctx->args[1]);
-	const char *argp;
 
 	uid_t uid = (u32)bpf_get_current_uid_gid();
-	int i;
 	id = bpf_get_current_pid_tgid();
 	pid = (pid_t)id;
 	tgid = id >> 32;
@@ -63,70 +59,43 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 	event.pid = tgid;
 	event.uid = uid;
 	task = (struct task_struct*)bpf_get_current_task();
-	bpf_probe_read_str(&event.comm, sizeof(event.comm), task->comm);
-	event.is_exit = false;
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
-	return 0;
-}
-
-SEC("tracepoint/syscalls/sys_exit_execve")
-int tracepoint__syscalls__sys_exit_execve(struct trace_event_raw_sys_exit* ctx)
-{
-	u64 id;
-	pid_t pid;
-	int ret;
-	struct event event;
-
-	u32 uid = (u32)bpf_get_current_uid_gid();
-
-	id = bpf_get_current_pid_tgid();
-	pid = (pid_t)id;
-
-	ret = ctx->ret;
-	event.retval = ret;
-	event.pid = pid;
-	event.uid = uid;
-	event.is_exit = true;
+	event.ppid = BPF_CORE_READ(task, real_parent, tgid);
 	bpf_get_current_comm(&event.comm, sizeof(event.comm));
 	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
 	return 0;
 }
 
 char LICENSE[] SEC("license") = "GPL";
-
 ```
 
-这段代码定义了两个 eBPF 程序，一个用于捕获进程执行 execve 系统调用的入口，另一个用于捕获进程执行 execve 系统调用的出口。
+这段代码定义了个 eBPF 程序，用于捕获进程执行 execve 系统调用的入口。
 
 在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
 
-在出口程序中，我们首先获取了进程的进程 ID 和用户 ID，然后通过 bpf_get_current_comm 函数获取了进程的名称，最后通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
+使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件, 并分析进程的执行情况。
 
-使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件。我们可以通过工具（例如 eunomia-bpf）来查看这些事件，并分析进程的执行情况。
-
-## Compile and Run
-
-Compile:
+使用容器编译：
 
 ```shell
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 ```
 
-Run:
+或者使用 ecc 编译：
 
+```shell
+ecc bootstrap.bpf.c bootstrap.h
 ```
-$ sudo ./ecli run package.json
 
-running and waiting for the ebpf events from perf event...
-time pid ppid uid retval args_count args_size comm args 
-23:07:35 32940 32783 1000 0 1 13 cat /usr/bin/cat 
-23:07:43 32946 24577 1000 0 1 10 bash /bin/bash 
-23:07:43 32948 32946 1000 0 1 18 lesspipe /usr/bin/lesspipe 
-23:07:43 32949 32948 1000 0 2 36 basename /usr/bin/basename 
-23:07:43 32951 32950 1000 0 2 35 dirname /usr/bin/dirname 
-23:07:43 32952 32946 1000 0 2 22 dircolors /usr/bin/dircolors 
-23:07:48 32953 32946 1000 0 2 25 ls /usr/bin/ls 
-23:07:53 32957 32946 1000 0 2 17 sleep /usr/bin/sleep 
-23:07:57 32959 32946 1000 0 1 17 oneko /usr/games/oneko 
+运行
 
+```console
+$ sudo ./ecli run package.json 
+TIME     PID     PPID    UID     COMM    
+21:28:30  40747  3517    1000    node
+21:28:30  40748  40747   1000    sh
+21:28:30  40749  3517    1000    node
+21:28:30  40750  40749   1000    sh
+21:28:30  40751  3517    1000    node
+21:28:30  40752  40751   1000    sh
+21:28:30  40753  40752   1000    cpuUsage.sh
 ```

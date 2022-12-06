@@ -1,5 +1,9 @@
 # eBPF 入门开发实践指南六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态
 
+eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+
+本文是 eBPF 入门开发实践指南的第六篇，主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。
+
 ## sigsnoop
 
 示例代码如下：
@@ -7,9 +11,18 @@
 ```c
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
-#include "sigsnoop.h"
+#include <bpf/bpf_tracing.h>
 
 #define MAX_ENTRIES	10240
+#define TASK_COMM_LEN	16
+
+struct event {
+	unsigned int pid;
+	unsigned int tpid;
+	int sig;
+	int ret;
+	char comm[TASK_COMM_LEN];
+};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -23,11 +36,11 @@ static int probe_entry(pid_t tpid, int sig)
 {
 	struct event event = {};
 	__u64 pid_tgid;
-	__u32 pid, tid;
+	__u32 tid;
 
 	pid_tgid = bpf_get_current_pid_tgid();
-	pid = pid_tgid >> 32;
-	event.pid = pid;
+	tid = (__u32)pid_tgid;
+	event.pid = pid_tgid >> 32;
 	event.tpid = tpid;
 	event.sig = sig;
 	bpf_get_current_comm(event.comm, sizeof(event.comm));
@@ -47,7 +60,7 @@ static int probe_exit(void *ctx, int ret)
 
 	eventp->ret = ret;
 	bpf_printk("PID %d (%s) sent signal %d to PID %d, ret = %d",
-		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, eventp->ret);
+		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, ret);
 
 cleanup:
 	bpf_map_delete_elem(&values, &tid);
@@ -69,21 +82,6 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 	return probe_exit(ctx, ctx->ret);
 }
 
-SEC("tracepoint/syscalls/sys_enter_tkill")
-int tkill_entry(struct trace_event_raw_sys_enter *ctx)
-{
-	pid_t tpid = (pid_t)ctx->args[0];
-	int sig = (int)ctx->args[1];
-
-	return probe_entry(tpid, sig);
-}
-
-SEC("tracepoint/syscalls/sys_exit_tkill")
-int tkill_exit(struct trace_event_raw_sys_exit *ctx)
-{
-	return probe_exit(ctx, ctx->ret);
-}
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
@@ -93,52 +91,34 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 最后，我们还需要使用 SEC 宏来定义探针，并指定要捕获的系统调用的名称，以及要执行的探针函数。
 
-origin from:
-
-https://github.com/iovisor/bcc/blob/master/libbpf-tools/sigsnoop.bpf.c
-
-## Compile and Run
-
-Compile:
+编译运行上述代码：
 
 ```shell
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 ```
 
-Or compile with `ecc`:
+或者
 
 ```console
 $ ecc sigsnoop.bpf.c sigsnoop.h
 Compiling bpf object...
 Generating export types...
 Packing ebpf object and config into package.json...
+$ sudo ecli package.json
+Runing eBPF program...
 ```
 
-Run:
+运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
 
 ```console
-$ sudo ./ecli examples/bpftools/sigsnoop/package.json
-TIME     PID     TPID    SIG     RET     COMM    
-20:43:44  21276  3054    0       0       cpptools-srv
-20:43:44  22407  3054    0       0       cpptools-srv
-20:43:44  20222  3054    0       0       cpptools-srv
-20:43:44  8933   3054    0       0       cpptools-srv
-20:43:44  2915   2803    0       0       node
-20:43:44  2943   2803    0       0       node
-20:43:44  31453  3054    0       0       cpptools-srv
-$ sudo ./ecli examples/bpftools/sigsnoop/package.json  -h
-Usage: sigsnoop_bpf [--help] [--version] [--verbose] [--filtered_pid VAR] [--target_signal VAR] [--failed_only]
-
-A simple eBPF program
-
-Optional arguments:
-  -h, --help            shows help message and exits 
-  -v, --version         prints version information and exits 
-  --verbose             prints libbpf debug information 
-  --filtered_pid        set value of pid_t variable filtered_pid 
-  --target_signal       set value of int variable target_signal 
-  --failed_only         set value of bool variable failed_only 
-
-Built with eunomia-bpf framework.
-See https://github.com/eunomia-bpf/eunomia-bpf for more information.
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+            node-3517    [003] d..31 82575.798191: bpf_trace_printk: PID 3517 (node) sent signal 0 to PID 3427, ret = 0
+            node-15194   [003] d..31 82575.849227: bpf_trace_printk: PID 15194 (node) sent signal 0 to PID 3427, ret = 0
+            node-30016   [003] d..31 82576.001361: bpf_trace_printk: PID 30016 (node) sent signal 0 to PID 3427, ret = 0
+    cpptools-srv-38617   [002] d..31 82576.461085: bpf_trace_printk: PID 38617 (cpptools-srv) sent signal 0 to PID 30496, ret = 0
+            node-30040   [002] d..31 82576.467720: bpf_trace_printk: PID 30016 (node) sent signal 0 to PID 3427, ret = 0
 ```
+
+## 总结
+
+更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf

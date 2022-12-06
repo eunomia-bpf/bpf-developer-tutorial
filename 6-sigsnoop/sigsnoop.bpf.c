@@ -25,11 +25,11 @@ static int probe_entry(pid_t tpid, int sig)
 {
 	struct event event = {};
 	__u64 pid_tgid;
-	__u32 pid, tid;
+	__u32 tid;
 
 	pid_tgid = bpf_get_current_pid_tgid();
-	pid = pid_tgid >> 32;
-	event.pid = pid;
+	tid = (__u32)pid_tgid;
+	event.pid = pid_tgid >> 32;
 	event.tpid = tpid;
 	event.sig = sig;
 	bpf_get_current_comm(event.comm, sizeof(event.comm));
