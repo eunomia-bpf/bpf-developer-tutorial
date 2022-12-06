@@ -2,9 +2,9 @@
 
 ## sigsnoop
 
+示例代码如下：
+
 ```c
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-/* Copyright (c) 2021~2022 Hengqi Chen */
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include "sigsnoop.h"
@@ -85,7 +85,6 @@ int tkill_exit(struct trace_event_raw_sys_exit *ctx)
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
-
 ```
 
 上面的代码定义了一个 eBPF 程序，用于捕获进程发送信号的系统调用，包括 kill、tkill 和 tgkill。它通过使用 tracepoint 来捕获系统调用的进入和退出事件，并在这些事件发生时执行指定的探针函数，例如 probe_entry 和 probe_exit。

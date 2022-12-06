@@ -64,34 +64,4 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 	return probe_exit(ctx, ctx->ret);
 }
 
-SEC("tracepoint/syscalls/sys_enter_tkill")
-int tkill_entry(struct trace_event_raw_sys_enter *ctx)
-{
-	pid_t tpid = (pid_t)ctx->args[0];
-	int sig = (int)ctx->args[1];
-
-	return probe_entry(tpid, sig);
-}
-
-SEC("tracepoint/syscalls/sys_exit_tkill")
-int tkill_exit(struct trace_event_raw_sys_exit *ctx)
-{
-	return probe_exit(ctx, ctx->ret);
-}
-
-SEC("tracepoint/syscalls/sys_enter_tgkill")
-int tgkill_entry(struct trace_event_raw_sys_enter *ctx)
-{
-	pid_t tpid = (pid_t)ctx->args[1];
-	int sig = (int)ctx->args[2];
-
-	return probe_entry(tpid, sig);
-}
-
-SEC("tracepoint/syscalls/sys_exit_tgkill")
-int tgkill_exit(struct trace_event_raw_sys_exit *ctx)
-{
-	return probe_exit(ctx, ctx->ret);
-}
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

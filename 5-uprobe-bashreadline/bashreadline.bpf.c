@@ -1,9 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2021 Facebook */
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
-#include "bashreadline.h"
 
 #define TASK_COMM_LEN 16
 #define MAX_LINE_SIZE 80
@@ -18,8 +15,9 @@
  * specified (and auto-attach is not possible) or the above format is specified for
  * auto-attach.
  */
-SEC("uprobe//bin/bash:readline")
-int BPF_KRETPROBE(printret, const void *ret) {
+SEC("uretprobe//bin/bash:readline")
+int BPF_KRETPROBE(printret, const void *ret)
+{
 	char str[MAX_LINE_SIZE];
 	char comm[TASK_COMM_LEN];
 	u32 pid;

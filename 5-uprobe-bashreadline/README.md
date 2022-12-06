@@ -19,12 +19,9 @@ uprobe 是一种用于捕获用户空间函数调用的 eBPF 的探针，我们�
 例如，我们可以使用 uprobe 来捕获 bash 的 readline 函数调用，从而获取用户在 bash 中输入的命令行。示例代码如下：
 
 ```c
-/* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2021 Facebook */
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
-#include "bashreadline.h"
 
 #define TASK_COMM_LEN 16
 #define MAX_LINE_SIZE 80
@@ -39,8 +36,9 @@ uprobe 是一种用于捕获用户空间函数调用的 eBPF 的探针，我们�
  * specified (and auto-attach is not possible) or the above format is specified for
  * auto-attach.
  */
-SEC("uprobe//bin/bash:readline")
-int BPF_KRETPROBE(printret, const void *ret) {
+SEC("uretprobe//bin/bash:readline")
+int BPF_KRETPROBE(printret, const void *ret)
+{
 	char str[MAX_LINE_SIZE];
 	char comm[TASK_COMM_LEN];
 	u32 pid;
@@ -98,13 +96,14 @@ Runing eBPF program...
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
-PID 12345 (bash) read: ls -l
-PID 12345 (bash) read: date
-PID 12345 (bash) read: echo "Hello eBPF!"
+            bash-32969   [000] d..31 64001.375748: bpf_trace_printk: PID 32969 (bash) read: fff 
+            bash-32969   [000] d..31 64002.056951: bpf_trace_printk: PID 32969 (bash) read: fff
 ```
 
 可以看到，我们成功的捕获了 bash 的 readline 函数调用，并获取了用户在 bash 中输入的命令行。
 
 ## 总结
 
-在上述代码中，我们使用了 SEC 宏来定义了一个 uprobe 探针，它指定了要捕获的用户空间程序 (bin/bash) 和要捕获的函数 (readline)。此外，我们还使用了 BPF_KRETPROBE 宏来定义了一个用于处理 readline 函数返回值的回调函数 (printret)。该函数可以获取到 readline 函数的返回值，并将其打印到内核日志中。通过这样的方式，我们就可以使用 eBPF 来捕获 bash 的 readline 函数调用，并获取用户在 bash 中输入的命令行。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
+在上述代码中，我们使用了 SEC 宏来定义了一个 uprobe 探针，它指定了要捕获的用户空间程序 (bin/bash) 和要捕获的函数 (readline)。此外，我们还使用了 BPF_KRETPROBE 宏来定义了一个用于处理 readline 函数返回值的回调函数 (printret)。该函数可以获取到 readline 函数的返回值，并将其打印到内核日志中。通过这样的方式，我们就可以使用 eBPF 来捕获 bash 的 readline 函数调用，并获取用户在 bash 中输入的命令行。
+
+更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf

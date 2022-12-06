@@ -50,6 +50,15 @@ $ sudo ecli package.json
 Runing eBPF program...
 ```
 
+在另外一个窗口中：
+
+```shell
+touch test_file
+rm test_file
+touch test_file2
+rm test_file2
+```
+
 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
 
 ```console

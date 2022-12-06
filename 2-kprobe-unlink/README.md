@@ -76,6 +76,15 @@ Packing ebpf object and config into package.json...
 sudo ecli package.json
 ```
 
+在另外一个窗口中：
+
+```shell
+touch test1
+rm test1
+touch test2
+rm test2
+```
+
 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的 kprobe 演示输出：
 
 ```shell
@@ -90,4 +99,4 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 通过本文的示例，我们学习了如何使用 eBPF 的 kprobe 和 kretprobe 捕获 unlink 系统调用。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
 
-本文是 eBPF 入门开发实践指南的第二篇。下一篇文章将介绍如何使用 eBPF 的内核映射（maps）进行数据交换和共享。
+本文是 eBPF 入门开发实践指南的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用

@@ -4,8 +4,8 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
-#include "runqslower.bpf.h"
-#include "core_fixes.h"
+#include "runqslower.h"
+#include "core_fixes.bpf.h"
 
 #define TASK_RUNNING	0
 
