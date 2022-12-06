@@ -1,10 +1,17 @@
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-/* Copyright (c) 2021~2022 Hengqi Chen */
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
-#include "sigsnoop.h"
+#include <bpf/bpf_tracing.h>
 
 #define MAX_ENTRIES	10240
+#define TASK_COMM_LEN	16
+
+struct event {
+	unsigned int pid;
+	unsigned int tpid;
+	int sig;
+	int ret;
+	char comm[TASK_COMM_LEN];
+};
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -42,7 +49,7 @@ static int probe_exit(void *ctx, int ret)
 
 	eventp->ret = ret;
 	bpf_printk("PID %d (%s) sent signal %d to PID %d, ret = %d",
-		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, eventp->ret);
+		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, ret);
 
 cleanup:
 	bpf_map_delete_elem(&values, &tid);

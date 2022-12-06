@@ -4,9 +4,24 @@
 
 在学习 eBPF 的过程中，我们受到了 [tutorial_bcc_python_developer](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从 2022 年的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目。
 
-本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 eBPF 用户态代码的编写。
+本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写。
 
 教程主要关注于可观察性，并简要介绍了 eBPF 的其他应用。
+
+
+## 让 chatGPT 来帮助我们
+
+本教程大部分内容由 chatGPT 生成，我们尝试教会 chatGPT 编写 eBPF 程序：
+
+1. 告诉它基本的 eBPF 编程相关的常识
+2. 告诉它一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序进行追踪，并且让它开始编写教程
+3. 手动调整教程，并纠正代码和文档中的错误
+4. 把修改后的代码再喂给 chatGPT，让它继续学习
+5. 尝试让 chatGPT 自动生成 eBPF 程序和对应的教程文档！例如
+
+![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
+
+完整的对话可以在这里找到: [chatGPT.md](chatGPT.md)
 
 ## 目录
 
@@ -21,7 +36,7 @@
 - [lesson 8-runqslower](8-runqslower/README.md) 捕获进程调度事件，使用 ring buffer 向用户态打印输出
 - [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
 - [lesson 10-hardirqs](20-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
-- [lesson 11-llcstat](21-llcstat/README.md) 通过 PID 统计 cache references and misses
+- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的的用户态代码
 - [lesson 12-profile](12-profile/README.md) 使用 eBPF 进行性能分析
 - [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟
 - [lesson 14-tcpstates](14-tcpstates/README.md) 记录 TCP 连接状态
