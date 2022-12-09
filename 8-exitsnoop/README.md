@@ -8,7 +8,6 @@ exitsnoop
 #include <bpf/bpf_core_read.h>
 #include "exitsnoop.h"
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
-
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 256 * 1024);
