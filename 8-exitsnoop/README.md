@@ -1,8 +1,5 @@
 ## eBPF 入门开发实践指南八：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用：
 
-
-
-
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
 #include "vmlinux.h"
