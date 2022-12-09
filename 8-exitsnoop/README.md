@@ -1,5 +1,9 @@
 ## eBPF 入门开发实践指南八：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用：
 
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
 #include "vmlinux.h"
@@ -51,8 +55,15 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 	return 0;
 }
 
+<<<<<<< Updated upstream
 这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件。它通过注册一个 tracepoint（“tp/sched/sched_process_exit”）来捕获进程退出事件，并使用 BPF 环形缓冲区来存储捕获的事件数据。
 当系统中发生进程退出事件时，BPF 程序会捕获该事件，并调用“handle_exit”函数来处理它。该函数会检查
+=======
+这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件。BPF（Berkeley Packet Filter）是一种内核态程序设计语言，允许开发人员编写内核模块以捕获和处理内核事件。
+该程序通过注册一个 tracepoint，来监控进程退出事件。Tracepoint 是一种内核特性，允许内核模块获取特定事件的通知。在本程序中，注册的 tracepoint 是“tp/sched/sched_process_exit”，表示该程序监控的是进程退出事件。
+当系统中发生进程退出事件时，BPF 程序会捕获该事件，并调用“handle_exit”函数来处理它。该函数首先检查当前退出事件是否是进程退出事件（而不是线程退出事件），然后在 BPF 环形缓冲区（“rb”）中保留一个事件结构体，并填充该结构体中的其他信息，例如进程 ID、进程名称、退出代码和退出信号等信息。最后，该函数还会调用 BPF 的“perf_event_output”函数，将捕获的事件发送给用户空间程序。
+总而言之，这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件
+>>>>>>> Stashed changes
 
 
 ## origin
