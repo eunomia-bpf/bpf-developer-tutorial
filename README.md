@@ -37,11 +37,11 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 - [lesson 8-execsnoop](8-exitsnoop/README.md) 捕获进程退出事件，使用 ring buffer 向用户态打印输出
 - [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
 - [lesson 10-hardirqs](10-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
-- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的的用户态代码
+- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
 - [lesson 12-profile](12-profile/README.md) 使用 eBPF 进行性能分析
-- [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟
+- [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟，并使用 libbpf-boostrap 或 Webassembly （WASM）在用户态处理数据
 - [lesson 14-tcpstates](14-tcpstates/README.md) 记录 TCP 连接状态
-- [lesson 15-tcprtt](15-tcprtt/README.md) 以直方图方式记录 TCP RTT
+- [lesson 15-tcprtt](15-tcprtt/README.md) 以直方图方式记录 TCP RTT，并使用 libbpf-boostrap 或 WASM 在用户态采样 map 信息
 - [lesson 16-memleak](16-memleak/README.md) 检测内存泄漏
 - [lesson 17-biopattern](17-biopattern/README.md) 捕获磁盘 IO 模式
 - [lesson 18-further-reading](18-further-reading/README.md) 更进一步的相关资料？
