@@ -33,6 +33,14 @@ int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 	return 0;
 }
 ```
+```
+SEC("fentry/do_unlinkat")
+int BPF_PROG(do_unlinkat, int dfd, struct filename *name) {
+  // BPF program body
+}
+
+In this example, the BPF program is attached to the fentry (function entry) of the do_unlinkat function. The SEC macro specifies the section name "fentry/do_unlinkat", which tells the BPF loader to attach the program to the fentry of do_unlinkat.
+```
 
 这段程序通过定义两个函数，分别附加到 do_unlinkat 和 do_unlinkat_exit 上。这两个函数分别在进入 do_unlinkat 和离开 do_unlinkat 时执行。这两个函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数来获取调用 do_unlinkat 的进程 ID，文件名和返回值，并在内核日志中打印出来。
 
