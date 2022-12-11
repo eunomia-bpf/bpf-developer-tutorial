@@ -1,4 +1,4 @@
-## eBPF 入门开发实践指南九：一个 Linux 内核 BPF 程序，旨在收集和报告运行队列的延迟
+## eBPF 入门开发实践指南九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
 runqlat
@@ -158,14 +158,7 @@ char LICENSE[] SEC("license") = "GPL";
 ```
 这是一个 Linux 内核 BPF 程序，旨在收集和报告运行队列的延迟。BPF 是 Linux 内核中一项技术，它允许将程序附加到内核中的特定点并进行安全高效的执行。这些程序可用于收集有关内核行为的信息，并实现自定义行为。这个 BPF 程序使用 BPF maps和来自 bpf_helpers.h 和 bpf_tracing.h 头文件的帮助程序的组合来收集有关任务何时从内核的运行队列中排队和取消排队的信息，并记录任务在被安排执行之前在运行队列上等待的时间。然后，它使用这些信息生成直方图，显示不同组任务的运行队列延迟分布。这些直方图可用于识别和诊断内核调度行为中的性能问题。
 
-## origin
 
-origin from:
-
-<https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
-
-This program summarizes scheduler run queue latency as a histogram, showing
-how long tasks spent waiting their turn to run on-CPU.
 
 ## Compile and Run
 
@@ -822,3 +815,15 @@ examples:
     ./runqlat -p 185     # trace PID 185 only
 
 ```
+
+## 总结
+一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度
+编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 /sys/kernel/debug/tracing/trace_pipe 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
+## origin
+
+origin from:
+
+<https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
+
+This program summarizes scheduler run queue latency as a histogram, showing
+how long tasks spent waiting their turn to run on-CPU.
