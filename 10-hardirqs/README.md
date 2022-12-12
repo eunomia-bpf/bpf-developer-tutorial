@@ -4,7 +4,9 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 
 本文是 eBPF 入门开发实践指南的第十篇，在 eBPF 中。
 ## hardirqs是什么？
-	hardirqs 是 bcc-tools 工具包的一部分，该工具包是一组用于在 Linux 系统上执行系统跟踪和分析的实用程序。hardirqs 是一种用于跟踪和分析 Linux 内核中的中断处理程序的工具。它使用 BPF（Berkeley Packet Filter）程序来收集有关中断处理程序的数据，并可用于识别内核中的性能问题和其他与中断处理相关的问题。
+	hardirqs 是 bcc-tools 工具包的一部分，该工具包是一组用于在 Linux 系统上执行系统跟踪和分析的实用程序。
+	hardirqs 是一种用于跟踪和分析 Linux 内核中的中断处理程序的工具。它使用 BPF（Berkeley Packet Filter）程序来收集有关中断处理程序的数据，
+	并可用于识别内核中的性能问题和其他与中断处理相关的问题。
 ##使用方法：
 	sudo hardirqs：该命令会显示有关内核中断处理程序的信息，包括每个处理程序的名称、统计信息和其他相关数据。
 	hardirqs 提供了多种选项，您可以根据需要使用它们来控制 hardirqs 的输出。一些常用的选项包括：
