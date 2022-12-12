@@ -10,7 +10,7 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 	使用内核跟踪点和函数探针的结合来测量任务在运行队列中的时间。当任务被排队时，trace_enqueue 函数会在一个映射中记录时间戳。
 	当任务被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）
 	然后用于更新任务的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。
-## runqlat
+## runqlat代码实现
 ```
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2020 Wenbo Zhang
