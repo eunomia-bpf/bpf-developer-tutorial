@@ -167,7 +167,7 @@ Compile:
 ```shell
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 ```
-
+或者
 ```console
 $ ecc runqlat.bpf.c runqlat.h
 Compiling bpf object...
