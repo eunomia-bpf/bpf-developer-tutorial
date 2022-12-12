@@ -1,5 +1,5 @@
 ## eBPF 入门开发实践指南八：在 eBPF 中使用 exitsnoop 监控 进程退出事件：
-exitsnoop
+##exitsnoop
 
 
 #include "vmlinux.h"
