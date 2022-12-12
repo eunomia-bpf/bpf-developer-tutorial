@@ -1,13 +1,164 @@
-## eBPF 入门实践教程：
+## eBPF 入门开发实践指南九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度
+eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-## origin
+## runqlat
+```
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2020 Wenbo Zhang
+#include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_core_read.h>
+#include <bpf/bpf_tracing.h>
+#include "runqlat.h"
+#include "bits.bpf.h"
+#include "maps.bpf.h"
+#include "core_fixes.bpf.h"
 
-origin from:
+#define MAX_ENTRIES	10240
+#define TASK_RUNNING 	0
 
-<https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
+const volatile bool filter_cg = false;
+const volatile bool targ_per_process = false;
+const volatile bool targ_per_thread = false;
+const volatile bool targ_per_pidns = false;
+const volatile bool targ_ms = false;
+const volatile pid_t targ_tgid = 0;
 
-This program summarizes scheduler run queue latency as a histogram, showing
-how long tasks spent waiting their turn to run on-CPU.
+struct {
+	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
+	__type(key, u32);
+	__type(value, u32);
+	__uint(max_entries, 1);
+} cgroup_map SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, u32);
+	__type(value, u64);
+} start SEC(".maps");
+
+static struct hist zero;
+
+/// @sample {"interval": 1000, "type" : "log2_hist"}
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, u32);
+	__type(value, struct hist);
+} hists SEC(".maps");
+
+static int trace_enqueue(u32 tgid, u32 pid)
+{
+	u64 ts;
+
+	if (!pid)
+		return 0;
+	if (targ_tgid && targ_tgid != tgid)
+		return 0;
+
+	ts = bpf_ktime_get_ns();
+	bpf_map_update_elem(&start, &pid, &ts, BPF_ANY);
+	return 0;
+}
+
+static unsigned int pid_namespace(struct task_struct *task)
+{
+	struct pid *pid;
+	unsigned int level;
+	struct upid upid;
+	unsigned int inum;
+
+	/*  get the pid namespace by following task_active_pid_ns(),
+	 *  pid->numbers[pid->level].ns
+	 */
+	pid = BPF_CORE_READ(task, thread_pid);
+	level = BPF_CORE_READ(pid, level);
+	bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
+	inum = BPF_CORE_READ(upid.ns, ns.inum);
+
+	return inum;
+}
+
+static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
+{
+	struct hist *histp;
+	u64 *tsp, slot;
+	u32 pid, hkey;
+	s64 delta;
+
+	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+		return 0;
+
+	if (get_task_state(prev) == TASK_RUNNING)
+		trace_enqueue(BPF_CORE_READ(prev, tgid), BPF_CORE_READ(prev, pid));
+
+	pid = BPF_CORE_READ(next, pid);
+
+	tsp = bpf_map_lookup_elem(&start, &pid);
+	if (!tsp)
+		return 0;
+	delta = bpf_ktime_get_ns() - *tsp;
+	if (delta < 0)
+		goto cleanup;
+
+	if (targ_per_process)
+		hkey = BPF_CORE_READ(next, tgid);
+	else if (targ_per_thread)
+		hkey = pid;
+	else if (targ_per_pidns)
+		hkey = pid_namespace(next);
+	else
+		hkey = -1;
+	histp = bpf_map_lookup_or_try_init(&hists, &hkey, &zero);
+	if (!histp)
+		goto cleanup;
+	if (!histp->comm[0])
+		bpf_probe_read_kernel_str(&histp->comm, sizeof(histp->comm),
+					next->comm);
+	if (targ_ms)
+		delta /= 1000000U;
+	else
+		delta /= 1000U;
+	slot = log2l(delta);
+	if (slot >= MAX_SLOTS)
+		slot = MAX_SLOTS - 1;
+	__sync_fetch_and_add(&histp->slots[slot], 1);
+
+cleanup:
+	bpf_map_delete_elem(&start, &pid);
+	return 0;
+}
+
+SEC("raw_tp/sched_wakeup")
+int BPF_PROG(handle_sched_wakeup, struct task_struct *p)
+{
+	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+		return 0;
+
+	return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
+}
+
+SEC("raw_tp/sched_wakeup_new")
+int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
+{
+	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+		return 0;
+
+	return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
+}
+
+SEC("raw_tp/sched_switch")
+int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct task_struct *next)
+{
+	return handle_switch(preempt, prev, next);
+}
+
+char LICENSE[] SEC("license") = "GPL";
+```
+这是一个 Linux 内核 BPF 程序，旨在收集和报告运行队列的延迟。BPF 是 Linux 内核中一项技术，它允许将程序附加到内核中的特定点并进行安全高效的执行。这些程序可用于收集有关内核行为的信息，并实现自定义行为。这个 BPF 程序使用 BPF maps和来自 bpf_helpers.h 和 bpf_tracing.h 头文件的帮助程序的组合来收集有关任务何时从内核的运行队列中排队和取消排队的信息，并记录任务在被安排执行之前在运行队列上等待的时间。然后，它使用这些信息生成直方图，显示不同组任务的运行队列延迟分布。这些直方图可用于识别和诊断内核调度行为中的性能问题。
+
+
 
 ## Compile and Run
 
@@ -16,7 +167,7 @@ Compile:
 ```shell
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 ```
-
+或者
 ```console
 $ ecc runqlat.bpf.c runqlat.h
 Compiling bpf object...
@@ -664,3 +815,15 @@ examples:
     ./runqlat -p 185     # trace PID 185 only
 
 ```
+
+## 总结
+一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度
+编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，runqlat是一种用于监控Linux内核中进程调度延迟的工具。它可以帮助您了解进程在内核中等待执行的时间，并根据这些信息优化进程调度，提高系统的性能。要使用runq-lat，需要在终端中输入runq-lat命令，然后按照提示操作即可。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
+## origin
+
+origin from:
+
+<https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
+
+This program summarizes scheduler run queue latency as a histogram, showing
+how long tasks spent waiting their turn to run on-CPU.
