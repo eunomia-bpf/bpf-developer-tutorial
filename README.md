@@ -2,11 +2,13 @@
 
 这是一个基于 `CO-RE`（一次编译，到处运行）的 `libbpf` 的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践指南，包括基本概念、代码实例、实际应用等内容。我们主要提供了一些 eBPF 工具的案例，帮助开发者学习 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
 
-在学习 eBPF 的过程中，我们受到了 [tutorial_bcc_python_developer](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从 2022 年的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目。
+在学习 eBPF 的过程中，我们受到了 [tutorial_bcc_python_developer](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从 2022 年的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目，采用类似 tutorial_bcc_python_developer 的组织方式，但使用 CO-RE 的 libbpf 进行开发。
 
-本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写。
+本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写，让开发者专注于内核态的 eBPF 代码的开发。
 
 教程主要关注于可观察性，并简要介绍了 eBPF 的其他应用，例如网络、安全等等。
+
+Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 
 ## 让 chatGPT 来帮助我们
 
@@ -34,12 +36,12 @@
 - [lesson 7-execsnoop](7-execsnoop/README.md) 捕获进程执行时间，通过 perf event array 向用户态打印输出
 - [lesson 8-execsnoop](8-exitsnoop/README.md) 捕获进程退出事件，使用 ring buffer 向用户态打印输出
 - [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
-- [lesson 10-hardirqs](20-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
-- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的的用户态代码
+- [lesson 10-hardirqs](10-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
+- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
 - [lesson 12-profile](12-profile/README.md) 使用 eBPF 进行性能分析
-- [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟
+- [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟，并使用 libbpf-boostrap 或 Webassembly （WASM）在用户态处理数据
 - [lesson 14-tcpstates](14-tcpstates/README.md) 记录 TCP 连接状态
-- [lesson 15-tcprtt](15-tcprtt/README.md) 以直方图方式记录 TCP RTT
+- [lesson 15-tcprtt](15-tcprtt/README.md) 以直方图方式记录 TCP RTT，并使用 libbpf-boostrap 或 WASM 在用户态采样 map 信息
 - [lesson 16-memleak](16-memleak/README.md) 检测内存泄漏
 - [lesson 17-biopattern](17-biopattern/README.md) 捕获磁盘 IO 模式
 - [lesson 18-further-reading](18-further-reading/README.md) 更进一步的相关资料？
