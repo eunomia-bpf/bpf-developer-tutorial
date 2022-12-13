@@ -1,5 +1,8 @@
 ## eBPF 入门开发实践指南八：在 eBPF 中使用 exitsnoop 监控 进程退出事件：
 ## exitsnoop
+eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+
+本文是 eBPF 入门开发实践指南的第八篇，在 eBPF 中使用 exitsnoop 监控进程退出事件。
 
 ```c
 #include "vmlinux.h"
