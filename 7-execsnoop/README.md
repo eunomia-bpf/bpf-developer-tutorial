@@ -83,7 +83,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 或者使用 ecc 编译：
 
 ```shell
-ecc bootstrap.bpf.c bootstrap.h
+ecc execsnoop.bpf.c execsnoop.h
 ```
 
 运行
