@@ -1,4 +1,6 @@
-## eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时
+# eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时
+
+## 代码解释
 
 ### 背景
 
@@ -36,10 +38,9 @@ tcp 连接的整个过程如图所示：
 - 半连接队列，也称 SYN 队列；
 - 全连接队列，也称 accepet 队列；
 
-
 服务端收到客户端发起的 SYN 请求后，内核会把该连接存储到半连接队列，并向客户端响应 SYN+ACK，接着客户端会返回 ACK，服务端收到第三次握手的 ACK 后，内核会把连接从半连接队列移除，然后创建新的完全的连接，并将其添加到 accept 队列，等待进程调用 accept 函数时把连接取出来。
 
-我们的 ebpf 代码实现在 https://github.com/yunwei37/Eunomia/blob/master/bpftools/tcpconnlat/tcpconnlat.bpf.c 中：
+我们的 ebpf 代码实现在 <https://github.com/yunwei37/Eunomia/blob/master/bpftools/tcpconnlat/tcpconnlat.bpf.c> 中：
 
 它主要使用了 trace_tcp_rcv_state_process 和 kprobe/tcp_v4_connect 这样的跟踪点：
 
@@ -48,19 +49,19 @@ tcp 连接的整个过程如图所示：
 SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 {
-	return trace_connect(sk);
+ return trace_connect(sk);
 }
 
 SEC("kprobe/tcp_v6_connect")
 int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
 {
-	return trace_connect(sk);
+ return trace_connect(sk);
 }
 
 SEC("kprobe/tcp_rcv_state_process")
 int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
 {
-	return handle_tcp_rcv_state_process(ctx, sk);
+ return handle_tcp_rcv_state_process(ctx, sk);
 }
 ```
 
@@ -68,25 +69,25 @@ int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
 
 ```c
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 4096);
-	__type(key, struct sock *);
-	__type(value, struct piddata);
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, 4096);
+ __type(key, struct sock *);
+ __type(value, struct piddata);
 } start SEC(".maps");
 
 static int trace_connect(struct sock *sk)
 {
-	u32 tgid = bpf_get_current_pid_tgid() >> 32;
-	struct piddata piddata = {};
+ u32 tgid = bpf_get_current_pid_tgid() >> 32;
+ struct piddata piddata = {};
 
-	if (targ_tgid && targ_tgid != tgid)
-		return 0;
+ if (targ_tgid && targ_tgid != tgid)
+  return 0;
 
-	bpf_get_current_comm(&piddata.comm, sizeof(piddata.comm));
-	piddata.ts = bpf_ktime_get_ns();
-	piddata.tgid = tgid;
-	bpf_map_update_elem(&start, &sk, &piddata, 0);
-	return 0;
+ bpf_get_current_comm(&piddata.comm, sizeof(piddata.comm));
+ piddata.ts = bpf_ktime_get_ns();
+ piddata.tgid = tgid;
+ bpf_map_update_elem(&start, &sk, &piddata, 0);
+ return 0;
 }
 ```
 
@@ -95,48 +96,48 @@ static int trace_connect(struct sock *sk)
 ```c
 static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
 {
-	struct piddata *piddatap;
-	struct event event = {};
-	s64 delta;
-	u64 ts;
+ struct piddata *piddatap;
+ struct event event = {};
+ s64 delta;
+ u64 ts;
 
-	if (BPF_CORE_READ(sk, __sk_common.skc_state) != TCP_SYN_SENT)
-		return 0;
+ if (BPF_CORE_READ(sk, __sk_common.skc_state) != TCP_SYN_SENT)
+  return 0;
 
-	piddatap = bpf_map_lookup_elem(&start, &sk);
-	if (!piddatap)
-		return 0;
+ piddatap = bpf_map_lookup_elem(&start, &sk);
+ if (!piddatap)
+  return 0;
 
-	ts = bpf_ktime_get_ns();
-	delta = (s64)(ts - piddatap->ts);
-	if (delta < 0)
-		goto cleanup;
+ ts = bpf_ktime_get_ns();
+ delta = (s64)(ts - piddatap->ts);
+ if (delta < 0)
+  goto cleanup;
 
-	event.delta_us = delta / 1000U;
-	if (targ_min_us && event.delta_us < targ_min_us)
-		goto cleanup;
-	__builtin_memcpy(&event.comm, piddatap->comm,
-			sizeof(event.comm));
-	event.ts_us = ts / 1000;
-	event.tgid = piddatap->tgid;
-	event.lport = BPF_CORE_READ(sk, __sk_common.skc_num);
-	event.dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
-	event.af = BPF_CORE_READ(sk, __sk_common.skc_family);
-	if (event.af == AF_INET) {
-		event.saddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-		event.daddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_daddr);
-	} else {
-		BPF_CORE_READ_INTO(&event.saddr_v6, sk,
-				__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-		BPF_CORE_READ_INTO(&event.daddr_v6, sk,
-				__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-	}
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-			&event, sizeof(event));
+ event.delta_us = delta / 1000U;
+ if (targ_min_us && event.delta_us < targ_min_us)
+  goto cleanup;
+ __builtin_memcpy(&event.comm, piddatap->comm,
+   sizeof(event.comm));
+ event.ts_us = ts / 1000;
+ event.tgid = piddatap->tgid;
+ event.lport = BPF_CORE_READ(sk, __sk_common.skc_num);
+ event.dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
+ event.af = BPF_CORE_READ(sk, __sk_common.skc_family);
+ if (event.af == AF_INET) {
+  event.saddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+  event.daddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+ } else {
+  BPF_CORE_READ_INTO(&event.saddr_v6, sk,
+    __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+  BPF_CORE_READ_INTO(&event.daddr_v6, sk,
+    __sk_common.skc_v6_daddr.in6_u.u6_addr32);
+ }
+ bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+   &event, sizeof(event));
 
 cleanup:
-	bpf_map_delete_elem(&start, &sk);
-	return 0;
+ bpf_map_delete_elem(&start, &sk);
+ return 0;
 }
 ```
 
@@ -162,7 +163,7 @@ PID    COMM        IP  SRC              DEST             PORT  LAT(ms) CONATINER
 
 使用下述查询命令即可看到延时的统计图表：
 
-```
+```plain
   rate(eunomia_observed_tcpconnlat_v4_histogram_sum[5m])
 /
   rate(eunomia_observed_tcpconnlat_v4_histogram_count[5m])
@@ -178,9 +179,9 @@ PID    COMM        IP  SRC              DEST             PORT  LAT(ms) CONATINER
 
 > `Eunomia` 是一个使用 C/C++ 开发的基于 eBPF的轻量级，高性能云原生监控工具，旨在帮助用户了解容器的各项行为、监控可疑的容器安全事件，力求提供覆盖容器全生命周期的轻量级开源监控解决方案。它使用 `Linux` `eBPF` 技术在运行时跟踪您的系统和应用程序，并分析收集的事件以检测可疑的行为模式。目前，它包含性能分析、容器集群网络可视化分析*、容器安全感知告警、一键部署、持久化存储监控等功能，提供了多样化的 ebpf 追踪点。其核心导出器/命令行工具最小仅需要约 4MB 大小的二进制程序，即可在支持的 Linux 内核上启动。
 
-项目地址：https://github.com/yunwei37/Eunomia
+项目地址：<https://github.com/yunwei37/Eunomia>
 
 ### 参考资料
 
-1. http://kerneltravel.net/blog/2020/tcpconnlat/
-2. https://network.51cto.com/article/640631.html
+1. <http://kerneltravel.net/blog/2020/tcpconnlat/>
+2. <https://network.51cto.com/article/640631.html>
