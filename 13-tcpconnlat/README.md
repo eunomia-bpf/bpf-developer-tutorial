@@ -1,4 +1,4 @@
-## eBPF 入门实践教程：
+# eBPF 入门实践教程
 
 ## 备注
 
@@ -8,7 +8,7 @@
 
 origin from:
 
-https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c
+<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
 
 ## Compile and Run
 
@@ -30,10 +30,10 @@ TODO: support union in C
 
 Demonstrations of tcpconnect, the Linux eBPF/bcc version.
 
-
 This tool traces the kernel function performing active TCP connections
 (eg, via a connect() syscall; accept() are passive connections). Some example
 output (IP addresses changed to protect the innocent):
+
 ```console
 # ./tcpconnect
 PID    COMM         IP SADDR            DADDR            DPORT
@@ -43,6 +43,7 @@ PID    COMM         IP SADDR            DADDR            DPORT
 1991   telnet       6  ::1              ::1              23
 2015   ssh          6  fe80::2000:bff:fe82:3ac fe80::2000:bff:fe82:3ac 22
 ```
+
 This output shows four connections, one from a "telnet" process, two from
 "curl", and one from "ssh". The output details shows the IP version, source
 address, destination address, and destination port. This traces attempted
@@ -52,8 +53,8 @@ The overhead of this tool should be negligible, since it is only tracing the
 kernel functions performing connect. It is not tracing every packet and then
 filtering.
 
-
 The -t option prints a timestamp column:
+
 ```console
 # ./tcpconnect -t
 TIME(s)  PID    COMM         IP SADDR            DADDR            DPORT
@@ -64,6 +65,7 @@ TIME(s)  PID    COMM         IP SADDR            DADDR            DPORT
 90.928   2482   local_agent  4  10.103.219.236   10.102.64.230    7001
 90.938   2482   local_agent  4  10.103.219.236   10.115.167.169   7101
 ```
+
 The output shows some periodic connections (or attempts) from a "local_agent"
 process to various other addresses. A few connections occur every minute.
 
@@ -74,6 +76,7 @@ in this column. Queries for 127.0.0.1 and ::1 are automatically associated with
 "localhost". If the time between when the DNS response was received and a
 connect call was traced exceeds 100ms, the tool will print the time delta
 after the query name.  See below for www.domain.com for an example.
+
 ```console
 # ./tcpconnect -d
 PID    COMM         IP SADDR            DADDR            DPORT QUERY
@@ -86,6 +89,7 @@ PID    COMM         IP SADDR            DADDR            DPORT QUERY
 ```
 
 The -L option prints a LPORT column:
+
 ```console
 # ./tcpconnect -L
 PID    COMM         IP SADDR            LPORT  DADDR            DPORT
@@ -95,6 +99,7 @@ PID    COMM         IP SADDR            LPORT  DADDR            DPORT
 ```
 
 The -U option prints a UID column:
+
 ```console
 # ./tcpconnect -U
 UID   PID    COMM         IP SADDR            DADDR            DPORT
@@ -105,14 +110,17 @@ UID   PID    COMM         IP SADDR            DADDR            DPORT
 ```
 
 The -u option filtering UID:
+
 ```console
 # ./tcpconnect -Uu 1000
 UID   PID    COMM         IP SADDR            DADDR            DPORT
 1000  31338  telnet       6  ::1              ::1              23
 1000  31338  telnet       4  127.0.0.1        127.0.0.1        23
 ```
+
 To spot heavy outbound connections quickly one can use the -c flag. It will
 count all active connections per source ip and destination ip/port.
+
 ```console
 # ./tcpconnect.py -c
 Tracing connect ... Hit Ctrl-C to end
@@ -126,17 +134,18 @@ LADDR                 RADDR                      RPORT             CONNECTS
 
 The --cgroupmap option filters based on a cgroup set. It is meant to be used
 with an externally created map.
+
 ```console
 # ./tcpconnect --cgroupmap /sys/fs/bpf/test01
 ```
-For more details, see docs/special_filtering.md
 
+For more details, see docs/special_filtering.md
 
 ## eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时
 
 ## 来源
 
-修改自 https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c
+修改自 <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
 
 ## 编译运行
 
@@ -147,7 +156,8 @@ For more details, see docs/special_filtering.md
 - ```sudo ./tcpconnlat```
 
 ## 效果
-```
+
+```plain
 root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpconnlat 
 PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222564 wget         4  192.168.88.15    110.242.68.3     80    25.29

@@ -1,10 +1,10 @@
-## eBPF 入门实践教程：
+# eBPF 入门实践教程
 
 ## origin
 
 origin from:
 
-https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c
+<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
 
 ## Compile and Run
 
@@ -13,6 +13,7 @@ Compile:
 ```shell
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 ```
+
 Run:
 
 ```shell
@@ -23,9 +24,9 @@ sudo ./ecli run package.json
 
 Demonstrations of tcpstates, the Linux BPF/bcc version.
 
-
 tcpstates prints TCP state change information, including the duration in each
 state as milliseconds. For example, a single TCP session:
+
 ```console
 # tcpstates
 SKADDR           C-PID C-COMM     LADDR           LPORT RADDR           RPORT OLDSTATE    -> NEWSTATE    MS
@@ -36,6 +37,7 @@ ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FI
 ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT2   -> CLOSE       0.006
 ^C
 ```
+
 This showed that the most time was spent in the ESTABLISHED state (which then
 transitioned to FIN_WAIT1), which was 176.042 milliseconds.
 
@@ -49,7 +51,7 @@ process context. If that's not the case, they may show kernel details.
 
 ## 来源
 
-修改自 https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c
+修改自 <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c>
 
 ## 编译运行
 
@@ -60,7 +62,8 @@ process context. If that's not the case, they may show kernel details.
 - ```sudo ./tcpstates```
 
 ## 效果
-```
+
+```plain
 root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpstates 
 SKADDR           PID     COMM       LADDR           LPORT RADDR           RPORT OLDSTATE    -> NEWSTATE    MS
 ffff9bf61bb62bc0 164978  node       192.168.88.15   0     52.178.17.2     443   CLOSE       -> SYN_SENT    0.000
@@ -87,73 +90,65 @@ int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
 
 在套接字改变状态处附加一个eBPF跟踪函数。
 
-
-
 ```c
-	if (ctx->protocol != IPPROTO_TCP)
-		return 0;
+ if (ctx->protocol != IPPROTO_TCP)
+  return 0;
 
-	if (target_family && target_family != family)
-		return 0;
+ if (target_family && target_family != family)
+  return 0;
 
-	if (filter_by_sport && !bpf_map_lookup_elem(&sports, &sport))
-		return 0;
+ if (filter_by_sport && !bpf_map_lookup_elem(&sports, &sport))
+  return 0;
 
-	if (filter_by_dport && !bpf_map_lookup_elem(&dports, &dport))
-		return 0;
+ if (filter_by_dport && !bpf_map_lookup_elem(&dports, &dport))
+  return 0;
 ```
 
 跟踪函数被调用后，先判断当前改变状态的套接字是否满足我们需要的过滤条件，如果不满足则不进行记录。
 
-
-
 ```c
-	tsp = bpf_map_lookup_elem(&timestamps, &sk);
-	ts = bpf_ktime_get_ns();
-	if (!tsp)
-		delta_us = 0;
-	else
-		delta_us = (ts - *tsp) / 1000;
+ tsp = bpf_map_lookup_elem(&timestamps, &sk);
+ ts = bpf_ktime_get_ns();
+ if (!tsp)
+  delta_us = 0;
+ else
+  delta_us = (ts - *tsp) / 1000;
 
-	event.skaddr = (__u64)sk;
-	event.ts_us = ts / 1000;
-	event.delta_us = delta_us;
-	event.pid = bpf_get_current_pid_tgid() >> 32;
-	event.oldstate = ctx->oldstate;
-	event.newstate = ctx->newstate;
-	event.family = family;
-	event.sport = sport;
-	event.dport = dport;
-	bpf_get_current_comm(&event.task, sizeof(event.task));
+ event.skaddr = (__u64)sk;
+ event.ts_us = ts / 1000;
+ event.delta_us = delta_us;
+ event.pid = bpf_get_current_pid_tgid() >> 32;
+ event.oldstate = ctx->oldstate;
+ event.newstate = ctx->newstate;
+ event.family = family;
+ event.sport = sport;
+ event.dport = dport;
+ bpf_get_current_comm(&event.task, sizeof(event.task));
 
-	if (family == AF_INET) {
-		bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_rcv_saddr);
-		bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_daddr);
-	} else { /* family == AF_INET6 */
-		bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-		bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-	}
+ if (family == AF_INET) {
+  bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_rcv_saddr);
+  bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_daddr);
+ } else { /* family == AF_INET6 */
+  bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+  bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+ }
 ```
 
 使用状态改变相关填充event结构体。
 
 - 此处使用了```libbpf``` 的 CO-RE 支持。
 
-
-
 ```c
-	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+ bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
 ```
 
 将事件结构体发送至用户态程序。
 
-
-
 ```c
-	if (ctx->newstate == TCP_CLOSE)
-		bpf_map_delete_elem(&timestamps, &sk);
-	else
-		bpf_map_update_elem(&timestamps, &sk, &ts, BPF_ANY);
+ if (ctx->newstate == TCP_CLOSE)
+  bpf_map_delete_elem(&timestamps, &sk);
+ else
+  bpf_map_update_elem(&timestamps, &sk, &ts, BPF_ANY);
 ```
 
 根据这个TCP链接的新状态，决定是更新下时间戳记录还是不再记录它的时间戳。
