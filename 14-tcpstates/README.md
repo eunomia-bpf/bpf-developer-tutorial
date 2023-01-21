@@ -1,5 +1,9 @@
 ## eBPF 入门实践教程：
 
+## 备注
+
+对于使用 `libbpf-bootstrap` 的开发，具体见 [tcpstates-libbpf-bootstrap.md](tcpstates-libbpf-bootstrap.md)
+
 ## origin
 
 origin from:
