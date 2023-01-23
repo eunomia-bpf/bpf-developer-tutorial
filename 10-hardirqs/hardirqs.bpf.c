@@ -15,6 +15,10 @@ const volatile bool targ_dist = false;
 const volatile bool targ_ns = false;
 const volatile bool do_count = false;
 
+struct irq_key {
+	char name[32];
+};
+
 struct {
 	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
 	__type(key, u32);
@@ -29,6 +33,7 @@ struct {
 	__type(value, u64);
 } start SEC(".maps");
 
+/// @sample {"interval": 1000, "type" : "log2_hist"}
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);

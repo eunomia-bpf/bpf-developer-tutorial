@@ -4,10 +4,6 @@
 
 #define MAX_SLOTS	20
 
-struct irq_key {
-	char name[32];
-};
-
 struct info {
 	__u64 count;
 	__u32 slots[MAX_SLOTS];
