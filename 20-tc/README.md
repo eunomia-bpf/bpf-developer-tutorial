@@ -1,4 +1,4 @@
-## eBPF 入门实践教程：
+# eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制
 
 ## tc 程序示例
 
@@ -9,7 +9,7 @@
 #include <bpf/bpf_tracing.h>
 
 #define TC_ACT_OK 0
-#define ETH_P_IP 0x0800 /* Internet Protocol packet	*/
+#define ETH_P_IP 0x0800 /* Internet Protocol packet */
 
 /// @tchook {"ifindex":1, "attach_point":"BPF_TC_INGRESS"}
 /// @tcopts {"handle":1, "priority":1}
@@ -76,10 +76,14 @@ Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe`
 The `tc` output in `/sys/kernel/debug/tracing/trace_pipe` should look
 something like this:
 
-```
+```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
             node-1254811 [007] ..s1 8737831.671074: 0: Got IP packet: tot_len: 79, ttl: 64
             sshd-1254728 [006] ..s1 8737831.674334: 0: Got IP packet: tot_len: 79, ttl: 64
             sshd-1254728 [006] ..s1 8737831.674349: 0: Got IP packet: tot_len: 72, ttl: 64
             node-1254811 [007] ..s1 8737831.674550: 0: Got IP packet: tot_len: 71, ttl: 64
 ```
+
+## 总结
+
+TODO

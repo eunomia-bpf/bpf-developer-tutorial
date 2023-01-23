@@ -1,85 +1,4 @@
-# eBPF 入门实践教程
-
-## origin
-
-origin from:
-
-<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
-
-## Compile and Run
-
-Compile:
-
-```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
-```
-
-Run:
-
-```shell
-sudo ./ecli run package.json
-```
-
-## details in bcc
-
-Demonstrations of tcpstates, the Linux BPF/bcc version.
-
-tcpstates prints TCP state change information, including the duration in each
-state as milliseconds. For example, a single TCP session:
-
-```console
-# tcpstates
-SKADDR           C-PID C-COMM     LADDR           LPORT RADDR           RPORT OLDSTATE    -> NEWSTATE    MS
-ffff9fd7e8192000 22384 curl       100.66.100.185  0     52.33.159.26    80    CLOSE       -> SYN_SENT    0.000
-ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    SYN_SENT    -> ESTABLISHED 1.373
-ffff9fd7e8192000 22384 curl       100.66.100.185  63446 52.33.159.26    80    ESTABLISHED -> FIN_WAIT1   176.042
-ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT1   -> FIN_WAIT2   0.536
-ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT2   -> CLOSE       0.006
-^C
-```
-
-This showed that the most time was spent in the ESTABLISHED state (which then
-transitioned to FIN_WAIT1), which was 176.042 milliseconds.
-
-The first column is the socked address, as the output may include lines from
-different sessions interleaved. The next two columns show the current on-CPU
-process ID and command name: these may show the process that owns the TCP
-session, depending on whether the state change executes synchronously in
-process context. If that's not the case, they may show kernel details.
-
-## eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时
-
-## 来源
-
-修改自 <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c>
-
-## 编译运行
-
-- ```git clone https://github.com/libbpf/libbpf-bootstrap libbpf-bootstrap-cloned```
-- 将 [libbpf-bootstrap](libbpf-bootstrap)目录下的文件复制到 ```libbpf-bootstrap-cloned/examples/c```下
-- 修改 ```libbpf-bootstrap-cloned/examples/c/Makefile``` ，在其 ```APPS``` 项后添加 ```tcpstates```
-- 在 ```libbpf-bootstrap-cloned/examples/c``` 下运行 ```make tcpstates```
-- ```sudo ./tcpstates```
-
-## 效果
-
-```plain
-root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpstates 
-SKADDR           PID     COMM       LADDR           LPORT RADDR           RPORT OLDSTATE    -> NEWSTATE    MS
-ffff9bf61bb62bc0 164978  node       192.168.88.15   0     52.178.17.2     443   CLOSE       -> SYN_SENT    0.000
-ffff9bf61bb62bc0 0       swapper/0  192.168.88.15   41596 52.178.17.2     443   SYN_SENT    -> ESTABLISHED 225.794
-ffff9bf61bb62bc0 0       swapper/0  192.168.88.15   41596 52.178.17.2     443   ESTABLISHED -> CLOSE_WAIT  901.454
-ffff9bf61bb62bc0 164978  node       192.168.88.15   41596 52.178.17.2     443   CLOSE_WAIT  -> LAST_ACK    0.793
-ffff9bf61bb62bc0 164978  node       192.168.88.15   41596 52.178.17.2     443   LAST_ACK    -> LAST_ACK    0.086
-ffff9bf61bb62bc0 228759  kworker/u6 192.168.88.15   41596 52.178.17.2     443   LAST_ACK    -> CLOSE       0.193
-ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     CLOSE       -> LISTEN      0.000
-ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     LISTEN      -> CLOSE       1.763
-ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 ESTABLISHED -> FIN_WAIT1   0.000
-```
-
-对于输出的详细解释，详见 [README.md](README.md)
-
-## ```tcpstates.bpf.c``` 的解释
+# eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时
 
 ```tcpstates``` 是一个追踪当前系统上的TCP套接字的TCP状态的程序，主要通过跟踪内核跟踪点 ```inet_sock_set_state``` 来实现。统计数据通过 ```perf_event```向用户态传输。
 
@@ -153,7 +72,7 @@ int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
 
 根据这个TCP链接的新状态，决定是更新下时间戳记录还是不再记录它的时间戳。
 
-### 对于用户态程序
+## 用户态程序
 
 ```c
     while (!exiting) {
@@ -209,3 +128,33 @@ static void handle_lost_events(void* ctx, int cpu, __u64 lost_cnt) {
 ```
 
 收到事件后所调用对应的处理函数并进行输出打印。
+
+## 编译运行
+
+- ```git clone https://github.com/libbpf/libbpf-bootstrap libbpf-bootstrap-cloned```
+- 将 [libbpf-bootstrap](libbpf-bootstrap)目录下的文件复制到 ```libbpf-bootstrap-cloned/examples/c```下
+- 修改 ```libbpf-bootstrap-cloned/examples/c/Makefile``` ，在其 ```APPS``` 项后添加 ```tcpstates```
+- 在 ```libbpf-bootstrap-cloned/examples/c``` 下运行 ```make tcpstates```
+- ```sudo ./tcpstates```
+
+## 效果
+
+```plain
+root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpstates 
+SKADDR           PID     COMM       LADDR           LPORT RADDR           RPORT OLDSTATE    -> NEWSTATE    MS
+ffff9bf61bb62bc0 164978  node       192.168.88.15   0     52.178.17.2     443   CLOSE       -> SYN_SENT    0.000
+ffff9bf61bb62bc0 0       swapper/0  192.168.88.15   41596 52.178.17.2     443   SYN_SENT    -> ESTABLISHED 225.794
+ffff9bf61bb62bc0 0       swapper/0  192.168.88.15   41596 52.178.17.2     443   ESTABLISHED -> CLOSE_WAIT  901.454
+ffff9bf61bb62bc0 164978  node       192.168.88.15   41596 52.178.17.2     443   CLOSE_WAIT  -> LAST_ACK    0.793
+ffff9bf61bb62bc0 164978  node       192.168.88.15   41596 52.178.17.2     443   LAST_ACK    -> LAST_ACK    0.086
+ffff9bf61bb62bc0 228759  kworker/u6 192.168.88.15   41596 52.178.17.2     443   LAST_ACK    -> CLOSE       0.193
+ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     CLOSE       -> LISTEN      0.000
+ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     LISTEN      -> CLOSE       1.763
+ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 ESTABLISHED -> FIN_WAIT1   0.000
+```
+
+对于输出的详细解释，详见 [README.md](README.md)
+
+## 总结
+
+这里的代码修改自 <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c>

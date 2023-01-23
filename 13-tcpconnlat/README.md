@@ -1,151 +1,143 @@
-# eBPF 入门实践教程
+# eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时
 
-## 备注
+## 背景
 
-对于使用 `libbpf-bootstrap` 的开发，具体见 [tcpconnlat-libbpf-bootstrap.md](tcpconnlat-libbpf-bootstrap.md)
+在互联网后端日常开发接口的时候中，不管你使用的是C、Java、PHP还是Golang，都避免不了需要调用mysql、redis等组件来获取数据，可能还需要执行一些rpc远程调用，或者再调用一些其它restful api。 在这些调用的底层，基本都是在使用TCP协议进行传输。这是因为在传输层协议中，TCP协议具备可靠的连接，错误重传，拥塞控制等优点，所以目前应用比UDP更广泛一些。但相对而言，tcp 连接也有一些缺点，例如建立连接的延时较长等。因此也会出现像 QUIC ，即 快速UDP网络连接 ( Quick UDP Internet Connections )这样的替代方案。
 
-## origin
+tcp 连接延时分析对于网络性能分析优化或者故障排查都能起到不少作用。
 
-origin from:
+## tcpconnlat 的实现原理
 
-<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
+tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数 (例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。
 
-## Compile and Run
+### tcp 连接原理
 
-Compile:
+tcp 连接的整个过程如图所示：
 
-```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+![tcpconnlate](tcpconnlat1.png)
+
+在这个连接过程中，我们来简单分析一下每一步的耗时：
+
+1. 客户端发出SYNC包：客户端一般是通过connect系统调用来发出 SYN 的，这里牵涉到本机的系统调用和软中断的 CPU 耗时开销
+2. SYN传到服务器：SYN从客户端网卡被发出，这是一次长途远距离的网络传输
+3. 服务器处理SYN包：内核通过软中断来收包，然后放到半连接队列中，然后再发出SYN/ACK响应。主要是 CPU 耗时开销
+4. SYC/ACK传到客户端：长途网络跋涉
+5. 客户端处理 SYN/ACK：客户端内核收包并处理SYN后，经过几us的CPU处理，接着发出 ACK。同样是软中断处理开销
+6. ACK传到服务器：长途网络跋涉
+7. 服务端收到ACK：服务器端内核收到并处理ACK，然后把对应的连接从半连接队列中取出来，然后放到全连接队列中。一次软中断CPU开销
+8. 服务器端用户进程唤醒：正在被accpet系统调用阻塞的用户进程被唤醒，然后从全连接队列中取出来已经建立好的连接。一次上下文切换的CPU开销
+
+在客户端视角，在正常情况下一次TCP连接总的耗时也就就大约是一次网络RTT的耗时。但在某些情况下，可能会导致连接时的网络传输耗时上涨、CPU处理开销增加、甚至是连接失败。这种时候在发现延时过长之后，就可以结合其他信息进行分析。
+
+### ebpf 实现原理
+
+在 TCP 三次握手的时候，Linux 内核会维护两个队列，分别是：
+
+- 半连接队列，也称 SYN 队列；
+- 全连接队列，也称 accepet 队列；
+
+服务端收到客户端发起的 SYN 请求后，内核会把该连接存储到半连接队列，并向客户端响应 SYN+ACK，接着客户端会返回 ACK，服务端收到第三次握手的 ACK 后，内核会把连接从半连接队列移除，然后创建新的完全的连接，并将其添加到 accept 队列，等待进程调用 accept 函数时把连接取出来。
+
+我们的 ebpf 代码实现在 <https://github.com/yunwei37/Eunomia/blob/master/bpftools/tcpconnlat/tcpconnlat.bpf.c> 中：
+
+它主要使用了 trace_tcp_rcv_state_process 和 kprobe/tcp_v4_connect 这样的跟踪点：
+
+```c
+
+SEC("kprobe/tcp_v4_connect")
+int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
+{
+ return trace_connect(sk);
+}
+
+SEC("kprobe/tcp_v6_connect")
+int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
+{
+ return trace_connect(sk);
+}
+
+SEC("kprobe/tcp_rcv_state_process")
+int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
+{
+ return handle_tcp_rcv_state_process(ctx, sk);
+}
 ```
 
-Run:
+在 trace_connect 中，我们跟踪新的 tcp 连接，记录到达时间，并且把它加入 map 中：
 
-```shell
-sudo ./ecli run package.json
+```c
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, 4096);
+ __type(key, struct sock *);
+ __type(value, struct piddata);
+} start SEC(".maps");
+
+static int trace_connect(struct sock *sk)
+{
+ u32 tgid = bpf_get_current_pid_tgid() >> 32;
+ struct piddata piddata = {};
+
+ if (targ_tgid && targ_tgid != tgid)
+  return 0;
+
+ bpf_get_current_comm(&piddata.comm, sizeof(piddata.comm));
+ piddata.ts = bpf_ktime_get_ns();
+ piddata.tgid = tgid;
+ bpf_map_update_elem(&start, &sk, &piddata, 0);
+ return 0;
+}
 ```
 
-TODO: support union in C
+在 handle_tcp_rcv_state_process 中，我们跟踪接收到的 tcp 数据包，从 map 从提取出对应的 connect 事件，并且计算延迟：
 
-## details in bcc
+```c
+static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
+{
+ struct piddata *piddatap;
+ struct event event = {};
+ s64 delta;
+ u64 ts;
 
-Demonstrations of tcpconnect, the Linux eBPF/bcc version.
+ if (BPF_CORE_READ(sk, __sk_common.skc_state) != TCP_SYN_SENT)
+  return 0;
 
-This tool traces the kernel function performing active TCP connections
-(eg, via a connect() syscall; accept() are passive connections). Some example
-output (IP addresses changed to protect the innocent):
+ piddatap = bpf_map_lookup_elem(&start, &sk);
+ if (!piddatap)
+  return 0;
 
-```console
-# ./tcpconnect
-PID    COMM         IP SADDR            DADDR            DPORT
-1479   telnet       4  127.0.0.1        127.0.0.1        23
-1469   curl         4  10.201.219.236   54.245.105.25    80
-1469   curl         4  10.201.219.236   54.67.101.145    80
-1991   telnet       6  ::1              ::1              23
-2015   ssh          6  fe80::2000:bff:fe82:3ac fe80::2000:bff:fe82:3ac 22
+ ts = bpf_ktime_get_ns();
+ delta = (s64)(ts - piddatap->ts);
+ if (delta < 0)
+  goto cleanup;
+
+ event.delta_us = delta / 1000U;
+ if (targ_min_us && event.delta_us < targ_min_us)
+  goto cleanup;
+ __builtin_memcpy(&event.comm, piddatap->comm,
+   sizeof(event.comm));
+ event.ts_us = ts / 1000;
+ event.tgid = piddatap->tgid;
+ event.lport = BPF_CORE_READ(sk, __sk_common.skc_num);
+ event.dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
+ event.af = BPF_CORE_READ(sk, __sk_common.skc_family);
+ if (event.af == AF_INET) {
+  event.saddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+  event.daddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+ } else {
+  BPF_CORE_READ_INTO(&event.saddr_v6, sk,
+    __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+  BPF_CORE_READ_INTO(&event.daddr_v6, sk,
+    __sk_common.skc_v6_daddr.in6_u.u6_addr32);
+ }
+ bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+   &event, sizeof(event));
+
+cleanup:
+ bpf_map_delete_elem(&start, &sk);
+ return 0;
+}
 ```
-
-This output shows four connections, one from a "telnet" process, two from
-"curl", and one from "ssh". The output details shows the IP version, source
-address, destination address, and destination port. This traces attempted
-connections: these may have failed.
-
-The overhead of this tool should be negligible, since it is only tracing the
-kernel functions performing connect. It is not tracing every packet and then
-filtering.
-
-The -t option prints a timestamp column:
-
-```console
-# ./tcpconnect -t
-TIME(s)  PID    COMM         IP SADDR            DADDR            DPORT
-31.871   2482   local_agent  4  10.103.219.236   10.251.148.38    7001
-31.874   2482   local_agent  4  10.103.219.236   10.101.3.132     7001
-31.878   2482   local_agent  4  10.103.219.236   10.171.133.98    7101
-90.917   2482   local_agent  4  10.103.219.236   10.251.148.38    7001
-90.928   2482   local_agent  4  10.103.219.236   10.102.64.230    7001
-90.938   2482   local_agent  4  10.103.219.236   10.115.167.169   7101
-```
-
-The output shows some periodic connections (or attempts) from a "local_agent"
-process to various other addresses. A few connections occur every minute.
-
-The -d option tracks DNS responses and tries to associate each connection with
-the a previous DNS query issued before it.  If a DNS response matching the IP
-is found, it will be printed. If no match was found, "No DNS Query" is printed
-in this column. Queries for 127.0.0.1 and ::1 are automatically associated with
-"localhost". If the time between when the DNS response was received and a
-connect call was traced exceeds 100ms, the tool will print the time delta
-after the query name.  See below for www.domain.com for an example.
-
-```console
-# ./tcpconnect -d
-PID    COMM         IP SADDR            DADDR            DPORT QUERY
-1543   amazon-ssm-a 4  10.66.75.54      176.32.119.67    443   ec2messages.us-west-1.amazonaws.com
-1479   telnet       4  127.0.0.1        127.0.0.1        23    localhost
-1469   curl         4  10.201.219.236   54.245.105.25    80    www.domain.com (123.342ms)
-1469   curl         4  10.201.219.236   54.67.101.145    80    No DNS Query
-1991   telnet       6  ::1              ::1              23    localhost
-2015   ssh          6  fe80::2000:bff:fe82:3ac fe80::2000:bff:fe82:3ac 22    anotherhost.org
-```
-
-The -L option prints a LPORT column:
-
-```console
-# ./tcpconnect -L
-PID    COMM         IP SADDR            LPORT  DADDR            DPORT
-3706   nc           4  192.168.122.205  57266  192.168.122.150  5000
-3722   ssh          4  192.168.122.205  50966  192.168.122.150  22
-3779   ssh          6  fe80::1          52328  fe80::2          22
-```
-
-The -U option prints a UID column:
-
-```console
-# ./tcpconnect -U
-UID   PID    COMM         IP SADDR            DADDR            DPORT
-0     31333  telnet       6  ::1              ::1              23
-0     31333  telnet       4  127.0.0.1        127.0.0.1        23
-1000  31322  curl         4  127.0.0.1        127.0.0.1        80
-1000  31322  curl         6  ::1              ::1              80
-```
-
-The -u option filtering UID:
-
-```console
-# ./tcpconnect -Uu 1000
-UID   PID    COMM         IP SADDR            DADDR            DPORT
-1000  31338  telnet       6  ::1              ::1              23
-1000  31338  telnet       4  127.0.0.1        127.0.0.1        23
-```
-
-To spot heavy outbound connections quickly one can use the -c flag. It will
-count all active connections per source ip and destination ip/port.
-
-```console
-# ./tcpconnect.py -c
-Tracing connect ... Hit Ctrl-C to end
-^C
-LADDR                 RADDR                      RPORT             CONNECTS
-192.168.10.50         172.217.21.194             443               70
-192.168.10.50         172.213.11.195             443               34
-192.168.10.50         172.212.22.194             443               21
-[...]
-```
-
-The --cgroupmap option filters based on a cgroup set. It is meant to be used
-with an externally created map.
-
-```console
-# ./tcpconnect --cgroupmap /sys/fs/bpf/test01
-```
-
-For more details, see docs/special_filtering.md
-
-## eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时
-
-## 来源
-
-修改自 <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>
 
 ## 编译运行
 
@@ -166,6 +158,8 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222774 ssh          4  192.168.88.15    1.15.149.151     22    25.31
 ```
 
-对于输出的详细解释，详见 [README.md](README.md)
+## 总结
 
-对于源代码的详解，具体见 [tcpconnlat.md](tcpconnlat.md)
+通过上面的实验，我们可以看到，tcpconnlat 工具的实现原理是基于内核的TCP连接的跟踪，并且可以跟踪到 tcp 连接的延迟时间；除了命令行使用方式之外，还可以将其和容器、k8s 等元信息综合起来，通过 `prometheus` 和 `grafana` 等工具进行网络性能分析。
+
+来源：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c>

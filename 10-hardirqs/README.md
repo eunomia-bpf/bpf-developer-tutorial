@@ -1,4 +1,4 @@
-# eBPF 入门开发实践指南十：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用
+# eBPF 入门开发实践指南十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
@@ -10,19 +10,9 @@ hardirqs 是 bcc-tools 工具包的一部分，该工具包是一组用于在 Li
 hardirqs 是一种用于跟踪和分析 Linux 内核中的中断处理程序的工具。它使用 BPF（Berkeley Packet Filter）程序来收集有关中断处理程序的数据，
 并可用于识别内核中的性能问题和其他与中断处理相关的问题。
 
-## 使用方法
-
- sudo hardirqs：该命令会显示有关内核中断处理程序的信息，包括每个处理程序的名称、统计信息和其他相关数据。
- hardirqs 提供了多种选项，您可以根据需要使用它们来控制 hardirqs 的输出。一些常用的选项包括：
- -h：显示帮助信息，包括所有可用选项的描述和示例。
- -p PID：限制输出仅显示指定进程的中断处理程序。
- -t：在输出中显示时间戳，以毫秒为单位。
- -d：以持续的方式运行 hardirqs，并在输出中显示中断处理程序的实时数据。
- -l：在输出中显示中断处理程序的完整路径。
-
 ## 实现原理
 
- 在 Linux 内核中，每个中断处理程序都有一个唯一的名称，称为中断向量。hardirqs 通过检查每个中断处理程序的中断向量，来监控内核中的中断处理程序。当内核接收到一个中断时，它会查找与该中断相关的中断处理程序，并执行该程序。hardirqs 通过检查内核中执行的中断处理程序，来监控内核中的中断处理程序。另外，hardirqs 还可以通过注入 BPF 程序到内核中，来捕获内核中的中断处理程序。这样，hardirqs 就可以监控内核中执行的中断处理程序，并收集有关它们的信息。
+在 Linux 内核中，每个中断处理程序都有一个唯一的名称，称为中断向量。hardirqs 通过检查每个中断处理程序的中断向量，来监控内核中的中断处理程序。当内核接收到一个中断时，它会查找与该中断相关的中断处理程序，并执行该程序。hardirqs 通过检查内核中执行的中断处理程序，来监控内核中的中断处理程序。另外，hardirqs 还可以通过注入 BPF 程序到内核中，来捕获内核中的中断处理程序。这样，hardirqs 就可以监控内核中执行的中断处理程序，并收集有关它们的信息。
 
 ## 代码实现
 
@@ -166,7 +156,7 @@ char LICENSE[] SEC("license") = "GPL";
 要编译这个程序，请使用 ecc 工具：
 
 ```console
-$ ecc kprobe-link.bpf.c
+$ ecc hardirqs.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 ```
@@ -174,5 +164,11 @@ Packing ebpf object and config into package.json...
 然后运行：
 
 ```console
-sudo ecli package.json
+sudo ecli ./package.json
 ```
+
+## 总结
+
+更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+
+完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
