@@ -74,3 +74,5 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 这段程序是一个 eBPF 程序，通过使用 fentry 和 fexit 捕获 do_unlinkat 和 do_unlinkat_exit 函数，并通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数获取调用 do_unlinkat 的进程 ID、文件名和返回值，并在内核日志中打印出来。
 
 编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 /sys/kernel/debug/tracing/trace_pipe 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+
+完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。

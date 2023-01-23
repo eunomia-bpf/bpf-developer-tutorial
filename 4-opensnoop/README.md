@@ -97,3 +97,5 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 本文介绍了如何使用 eBPF 程序来捕获进程打开文件的系统调用。在 eBPF 程序中，我们可以通过定义 tracepoint__syscalls__sys_enter_open 和 tracepoint__syscalls__sys_enter_openat 函数并使用 SEC 宏把它们附加到 sys_enter_open 和 sys_enter_openat 两个 tracepoint 来捕获进程打开文件的系统调用。我们可以使用 bpf_get_current_pid_tgid 函数获取调用 open 或 openat 系统调用的进程 ID，并使用 bpf_printk 函数在内核日志中打印出来。在 eBPF 程序中，我们还可以通过定义一个全局变量 pid_target 来指定要捕获的进程的 pid，从而过滤输出，只输出指定的进程的信息。
 
 更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+
+完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
