@@ -32,7 +32,7 @@ Linux内核一直是实现监控/可观测性、网络和安全功能的理想�
 eBPF的雏形是BPF(Berkeley Packet Filter, 伯克利包过滤器)。BPF于
 1992年被Steven McCanne和Van Jacobson在其[论文](https://www.tcpdump.org/papers/bpf-usenix93.pdf)
 提出。二人提出BPF的初衷是是提供一种新的数据包过滤方法，该方法的模型如下图所示。
-![](../imgs/original_bpf.png)
+![original_bpf](../imgs/original_bpf.png)
 
 相较于其他过滤方法，BPF有两大创新点，首先是它使用了一个新的虚拟机，可以有效地工作在基于寄存器结构的CPU之上。其次是其不会全盘复制数据包的所有信息，只会复制相关数据，可以有效地提高效率。这两大创新使得BPF在实际应用中得到了巨大的成功，在被移植到Linux系统后，其被上层的`libcap`
 和`tcpdump`等应用使用，是一个性能卓越的工具。
@@ -154,7 +154,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 
 ### 2.3 eunomia-bpf
 
-开发、构建和分发 eBPF 一直以来都是一个高门槛的工作，使用 BCC、bpftrace 等工具开发效率高、可移植性好，但是分发部署时需要安装 LLVM、Clang等编译环境，每次运行的时候执行本地或远程编译过程，资源消耗较大；使用原生的 CO-RE libbpf时又需要编写不少用户态加载代码来帮助 eBPF 程序正确加载和从内核中获取上报的信息，同时对于 eBPF 程序的分发、管理也没有很好地解决方案. 
+开发、构建和分发 eBPF 一直以来都是一个高门槛的工作，使用 BCC、bpftrace 等工具开发效率高、可移植性好，但是分发部署时需要安装 LLVM、Clang等编译环境，每次运行的时候执行本地或远程编译过程，资源消耗较大；使用原生的 CO-RE libbpf时又需要编写不少用户态加载代码来帮助 eBPF 程序正确加载和从内核中获取上报的信息，同时对于 eBPF 程序的分发、管理也没有很好地解决方案。
 
 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 是一个开源的 eBPF 动态加载运行时和开发工具链，是为了简化 eBPF 程序的开发、构建、分发、运行而设计的，基于 libbpf 的 CO-RE 轻量级开发框架。
 
@@ -171,6 +171,6 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 
 ## 参考资料
 
-- eBPF 介绍：https://ebpf.io/
-- BPF Compiler Collection (BCC)：https://github.com/iovisor/bcc
-- eunomia-bpf：https://github.com/eunomia-bpf/eunomia-bpf
+- eBPF 介绍：<https://ebpf.io/>
+- BPF Compiler Collection (BCC)：<https://github.com/iovisor/bcc>
+- eunomia-bpf：<https://github.com/eunomia-bpf/eunomia-bpf>

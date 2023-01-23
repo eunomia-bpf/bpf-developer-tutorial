@@ -14,7 +14,7 @@ kprobes技术包括的3种探测手段分别时kprobe、jprobe和kretprobe。首
 
 kprobes的技术原理并不仅仅包含存软件的实现方案，它也需要硬件架构提供支持。其中涉及硬件架构相关的是CPU的异常处理和单步调试技术，前者用于让程序的执行流程陷入到用户注册的回调函数中去，而后者则用于单步执行被探测点指令，因此并不是所有的架构均支持，目前kprobes技术已经支持多种架构，包括i386、x86_64、ppc64、ia64、sparc64、arm、ppc和mips（有些架构实现可能并不完全，具体可参考内核的Documentation/kprobes.txt）。
 
-kprobes的特点与使用限制： 
+kprobes的特点与使用限制：
 
 1. kprobes允许在同一个被被探测位置注册多个kprobe，但是目前jprobe却不可以；同时也不允许以其他的jprobe回调函数和kprobe的post_handler回调函数作为被探测点。
 2. 一般情况下，可以探测内核中的任何函数，包括中断处理函数。不过在kernel/kprobes.c和arch/*/kernel/kprobes.c程序中用于实现kprobes自身的函数是不允许被探测的，另外还有do_page_fault和notifier_call_chain；
@@ -40,23 +40,23 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 SEC("kprobe/do_unlinkat")
 int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 {
-	pid_t pid;
-	const char *filename;
+ pid_t pid;
+ const char *filename;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
-	filename = BPF_CORE_READ(name, name);
-	bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
-	return 0;
+ pid = bpf_get_current_pid_tgid() >> 32;
+ filename = BPF_CORE_READ(name, name);
+ bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
+ return 0;
 }
 
 SEC("kretprobe/do_unlinkat")
 int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 {
-	pid_t pid;
+ pid_t pid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
-	return 0;
+ pid = bpf_get_current_pid_tgid() >> 32;
+ bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+ return 0;
 }
 ```
 
@@ -97,6 +97,6 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 ## 总结
 
-通过本文的示例，我们学习了如何使用 eBPF 的 kprobe 和 kretprobe 捕获 unlink 系统调用。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
+通过本文的示例，我们学习了如何使用 eBPF 的 kprobe 和 kretprobe 捕获 unlink 系统调用。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
 
 本文是 eBPF 入门开发实践指南的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用

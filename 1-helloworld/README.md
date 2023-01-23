@@ -45,18 +45,20 @@ Usage: ecli [--help] [--version] [--json] [--no-cache] url-and-args
 下载编译器工具链，用于将 eBPF 内核代码编译为 config 文件或 WASM 模块：
 
 ```console
-$ wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/eunomia.tar.gz
-$ tar -xvf eunomia.tar.gz -C ~
-$ export PATH=$PATH:~/.eunomia/bin
-$ ecc -h
+$ wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc && chmod +x ./ecc
+$ ./ecc -h
 eunomia-bpf compiler
 Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
+....
 ```
 
 也可以使用 docker 镜像进行编译：
 
 ```console
 $ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
+export PATH=PATH:~/.eunomia/bin
+Compiling bpf object...
+Packing ebpf object and config into /src/package.json...
 ```
 
 ## Hello World - minimal eBPF program
@@ -77,11 +79,11 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
 {
-	pid_t pid = bpf_get_current_pid_tgid() >> 32;
-	if (pid_filter && pid != pid_filter)
-		return 0;
-	bpf_printk("BPF triggered from PID %d.\n", pid);
-	return 0;
+ pid_t pid = bpf_get_current_pid_tgid() >> 32;
+ if (pid_filter && pid != pid_filter)
+  return 0;
+ bpf_printk("BPF triggered from PID %d.\n", pid);
+ return 0;
 }
 ```
 
@@ -89,7 +91,7 @@ int handle_tp(void *ctx)
 
 - `bpf_trace_printk()`： 一种将信息输出到trace_pipe(/sys/kernel/debug/tracing/trace_pipe)简单机制。 在一些简单用例中这样使用没有问题， but它也有一些限制：最多3 参数； 第一个参数必须是%s(即字符串)；同时trace_pipe在内核中全局共享，其他并行使用trace_pipe的程序有可能会将 trace_pipe 的输出扰乱。 一个更好的方式是通过 BPF_PERF_OUTPUT(), 稍后将会讲到。
 - `void *ctx`：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。
-- `return 0`;：必须这样，返回0 (如果要知道why, 参考 #139  https://github.com/iovisor/bcc/issues/139)。
+- `return 0`;：必须这样，返回0 (如果要知道why, 参考 #139  <https://github.com/iovisor/bcc/issues/139>)。
 
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：
 

@@ -16,21 +16,21 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 SEC("fentry/do_unlinkat")
 int BPF_PROG(do_unlinkat, int dfd, struct filename *name)
 {
-	pid_t pid;
+ pid_t pid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("fentry: pid = %d, filename = %s\n", pid, name->name);
-	return 0;
+ pid = bpf_get_current_pid_tgid() >> 32;
+ bpf_printk("fentry: pid = %d, filename = %s\n", pid, name->name);
+ return 0;
 }
 
 SEC("fexit/do_unlinkat")
 int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 {
-	pid_t pid;
+ pid_t pid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
-	bpf_printk("fexit: pid = %d, filename = %s, ret = %ld\n", pid, name->name, ret);
-	return 0;
+ pid = bpf_get_current_pid_tgid() >> 32;
+ bpf_printk("fexit: pid = %d, filename = %s, ret = %ld\n", pid, name->name, ret);
+ return 0;
 }
 ```
 
@@ -73,4 +73,4 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 这段程序是一个 eBPF 程序，通过使用 fentry 和 fexit 捕获 do_unlinkat 和 do_unlinkat_exit 函数，并通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数获取调用 do_unlinkat 的进程 ID、文件名和返回值，并在内核日志中打印出来。
 
-编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 /sys/kernel/debug/tracing/trace_pipe 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf
+编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 /sys/kernel/debug/tracing/trace_pipe 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
