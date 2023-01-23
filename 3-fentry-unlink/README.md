@@ -40,6 +40,8 @@ int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 
 从 5.5 内核开始，fentry 和 fexit 程序可用。
 
+eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+
 编译运行上述代码：
 
 ```console

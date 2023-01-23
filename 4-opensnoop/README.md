@@ -35,6 +35,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 上面的 eBPF 程序通过定义函数  tracepoint__syscalls__sys_enter_openat 并使用 SEC 宏把它们附加到 sys_enter_openat 的 tracepoint（即在进入 openat 系统调用时执行）。这个函数通过使用 bpf_get_current_pid_tgid 函数获取调用 openat 系统调用的进程 ID，并使用 bpf_printk 函数在内核日志中打印出来。
 
+eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+
 编译运行上述代码：
 
 ```console

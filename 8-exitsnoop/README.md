@@ -66,6 +66,8 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 
 ## Compile and Run
 
+eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+
 Compile:
 
 ```shell

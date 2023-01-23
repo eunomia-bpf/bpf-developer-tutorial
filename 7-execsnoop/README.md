@@ -74,6 +74,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件, 并分析进程的执行情况。
 
+eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+
 使用容器编译：
 
 ```shell
