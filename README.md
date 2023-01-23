@@ -12,7 +12,7 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 
 ## 让 chatGPT 来帮助我们
 
-本教程大部分内容由 chatGPT 生成，我们尝试教会 chatGPT 编写 eBPF 程序：
+本教程借助 chatGPT 来学习编写 eBPF 程序，同时我们尝试教会 chatGPT 编写 eBPF 程序，大概步骤如下：
 
 1. 告诉它基本的 eBPF 编程相关的常识
 2. 告诉它一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序进行追踪，并且让它开始编写教程
