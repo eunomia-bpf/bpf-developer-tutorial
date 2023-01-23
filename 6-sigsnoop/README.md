@@ -123,6 +123,19 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 ## 总结
 
+本文主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。使用 hash map 需要定义一个结构体：
+
+```c
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, __u32);
+ __type(value, struct event);
+} values SEC(".maps");
+```
+
+并使用一些对应的 API 进行访问，例如 bpf_map_lookup_elem、bpf_map_update_elem、bpf_map_delete_elem 等。
+
 更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
 
 完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
