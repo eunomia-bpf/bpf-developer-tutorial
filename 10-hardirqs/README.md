@@ -1,8 +1,8 @@
-# eBPF 入门开发实践指南十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件
+# eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践指南的第十篇，在 eBPF 中。
+本文是 eBPF 入门开发实践教程的第十篇，在 eBPF 中。
 
 ## hardirqs是什么？
 

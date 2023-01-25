@@ -1,6 +1,6 @@
 ## eBPF 入门实践教程：libbpf-bootstrap with user space
 
-# eBPF 入门开发实践指南十一篇：在 eBPF 中使用 bootstrap 跟踪exec()和exit()系统调用
+# eBPF 入门开发实践教程十一篇：在 eBPF 中使用 bootstrap 跟踪exec()和exit()系统调用
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 ## 什么是bootstrap?

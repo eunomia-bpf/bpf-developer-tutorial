@@ -1,8 +1,8 @@
-# eBPF 入门开发实践指南五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用
+# eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践指南的第五篇，主要介绍如何使用 uprobe 捕获 bash 的 readline 函数调用。
+本文是 eBPF 入门开发实践教程的第五篇，主要介绍如何使用 uprobe 捕获 bash 的 readline 函数调用。
 
 ## 什么是uprobe
 

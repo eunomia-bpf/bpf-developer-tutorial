@@ -1,8 +1,8 @@
-# eBPF 入门开发实践指南二：Hello World，基本框架和开发流程
+# eBPF 入门开发实践教程二：Hello World，基本框架和开发流程
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践指南的第二篇，主要介绍 eBPF 的基本框架和开发流程。
+本文是 eBPF 入门开发实践教程的第二篇，主要介绍 eBPF 的基本框架和开发流程。
 
 开发 eBPF 程序可以使用多种工具，如 BCC、eunomia-bpf 等。不同的工具有不同的特点，但基本流程大致相同。
 

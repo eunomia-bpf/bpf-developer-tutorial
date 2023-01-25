@@ -1,8 +1,8 @@
-# eBPF 入门开发实践指南二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用
+# eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践指南的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。
+本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。
 
 ## kprobes技术背景
 
@@ -101,6 +101,6 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 通过本文的示例，我们学习了如何使用 eBPF 的 kprobe 和 kretprobe 捕获 unlink 系统调用。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
 
-本文是 eBPF 入门开发实践指南的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用。
+本文是 eBPF 入门开发实践教程的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用。
 
 完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。

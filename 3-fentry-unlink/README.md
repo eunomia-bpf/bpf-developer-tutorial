@@ -1,8 +1,8 @@
-# eBPF 入门开发实践指南三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用
+# eBPF 入门开发实践教程三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践指南的第三篇，在 eBPF 中使用 fentry 捕获 unlink 系统调用。
+本文是 eBPF 入门开发实践教程的第三篇，在 eBPF 中使用 fentry 捕获 unlink 系统调用。
 
 ## Fentry
 
