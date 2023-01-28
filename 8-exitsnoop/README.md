@@ -1,10 +1,58 @@
-# eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控 进程退出事件
-
-## exitsnoop
+# eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
 本文是 eBPF 入门开发实践教程的第八篇，在 eBPF 中使用 exitsnoop 监控进程退出事件。
+
+## ring buffer
+
+现在有一个新的 BPF 数据结构可用。BPF 环形缓冲区（ring buffer）。它解决了 BPF perf buffer（当今从内核向用户空间发送数据的事实上的标准）的内存效率和事件重排问题，同时达到或超过了它的性能。它既提供了与 perf buffer 兼容以方便迁移，又有新的保留/提交API，具有更好的可用性。另外，合成和真实世界的基准测试表明，在几乎所有的情况下，所以考虑将其作为从BPF程序向用户空间发送数据的默认选择。
+
+### BPF ringbuf vs BPF perfbuf
+
+今天，只要BPF程序需要将收集到的数据发送到用户空间进行后处理和记录，它通常会使用BPF perf buffer（perfbuf）来实现。Perfbuf 是每个CPU循环缓冲区的集合，它允许在内核和用户空间之间有效地交换数据。它在实践中效果很好，但由于其按CPU设计，它有两个主要的缺点，在实践中被证明是不方便的：内存的低效使用和事件的重新排序。
+
+为了解决这些问题，从Linux 5.8开始，BPF提供了一个新的BPF数据结构（BPF map）。BPF环形缓冲区（ringbuf）。它是一个多生产者、单消费者（MPSC）队列，可以同时在多个CPU上安全共享。
+
+BPF ringbuf 支持来自 BPF perfbuf 的熟悉的功能:
+
+- 变长的数据记录。
+- 能够通过内存映射区域有效地从用户空间读取数据，而不需要额外的内存拷贝和/或进入内核的系统调用。
+- 既支持epoll通知，又能以绝对最小的延迟进行忙环操作。
+
+同时，BPF ringbuf解决了BPF perfbuf的以下问题:
+
+- 内存开销。
+- 数据排序。
+- 浪费的工作和额外的数据复制。
+
+## exitsnoop
+
+本文是 eBPF 入门开发实践教程的第八篇，在 eBPF 中使用 exitsnoop 监控进程退出事件，并使用 ring buffer 向用户态打印输出。
+
+使用 ring buffer 向用户态打印输出的步骤和 perf buffer 类似，首先需要定义一个头文件：
+
+头文件：exitsnoop.h
+
+```c
+#ifndef __BOOTSTRAP_H
+#define __BOOTSTRAP_H
+
+#define TASK_COMM_LEN 16
+#define MAX_FILENAME_LEN 127
+
+struct event {
+	int pid;
+	int ppid;
+	unsigned exit_code;
+	unsigned long long duration_ns;
+	char comm[TASK_COMM_LEN];
+};
+
+#endif /* __BOOTSTRAP_H */
+```
+
+源文件：exitsnoop.bpf.c
 
 ```c
 #include "vmlinux.h"
@@ -56,7 +104,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 }
 ```
 
-这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件。BPF（Berkeley Packet Filter）是一种内核态程序设计语言，允许开发人员编写内核模块以捕获和处理内核事件。
+这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件。
 
 该程序通过注册一个 tracepoint，来监控进程退出事件。Tracepoint 是一种内核特性，允许内核模块获取特定事件的通知。在本程序中，注册的 tracepoint 是“tp/sched/sched_process_exit”，表示该程序监控的是进程退出事件。
 
@@ -101,6 +149,6 @@ TIME     PID     PPID    EXIT_CODE  DURATION_NS  COMM
 
 ## 总结
 
-更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+本文介绍了如何使用 eunomia-bpf 开发一个简单的 BPF 程序，该程序可以监控 Linux 系统中的进程退出事件, 并将捕获的事件通过 ring buffer 发送给用户空间程序。在本文中，我们使用 eunomia-bpf 编译运行了这个例子。如果你想了解更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
 
 完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
