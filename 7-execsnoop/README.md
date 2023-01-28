@@ -4,6 +4,10 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 
 本文是 eBPF 入门开发实践教程的第七篇，主要介绍如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，不需要再通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出。通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。
 
+## perf buffer
+
+eBPF 提供了两个环形缓冲区，可以用来将信息从 eBPF 程序传输到用户区控制器。第一个是perf环形缓冲区，，它至少从内核v4.15开始就存在了。第二个是后来引入的 BPF 环形缓冲区。本文只考虑perf环形缓冲区。
+
 ## execsnoop
 
 通过 perf event array 向用户态命令行打印输出，需要编写一个头文件，一个 C 源文件。示例代码如下：
