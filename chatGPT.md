@@ -459,51 +459,56 @@ int sys_exit_stat(struct trace_event_raw_sys_exit *ctx)
 
 ```
 
-> 请继续。
+请继续。
 
-编译运行 eBPF 程序的方法与之前给出的方法类似，首先使用 ecc 编译程序：
-
-Copy code
+> 编译运行 eBPF 程序的方法与之前给出的方法类似，首先使用 ecc 编译程序：
+```console
 $ ecc stat.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-或使用 docker 镜像进行编译：
+```
 
-Copy code
+> 或使用 docker 镜像进行编译：
+
+```sh
 docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
-然后使用 ecli 运行编译后的程序：
+```
 
-Copy code
+> 然后使用 ecli 运行编译后的程序：
+
+```sh
 $ sudo ecli ./package.json
 Runing eBPF program...
-运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
+```
+> 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
 
-Copy code
+```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: stat system call from PID 3840345.
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: stat system call from PID 3840345.
-也可以使用其他工具，如 perf 或 bpftrace，来查看 eBPF 程序的输出。例如，使用 perf 命令查看 eBPF 程序的输出：
+```
 
-Copy code
+> 也可以使用其他工具，如 perf 或 bpftrace，来查看 eBPF 程序的输出。例如，使用 perf 命令查看 eBPF 程序的输出：
+
+```
 $ perf record -e bpf_printk -a
 Running 'record' for 'bpf_printk' (5 secs):
 
 [ perf record: Woken up 1 times to write data ]
 [ perf record: Captured and wrote 0.178 MB perf.data (~1623 samples) ]
-使用 perf script 命令来查看 perf.data 中的输出：
+```
+> 使用 perf script 命令来查看 perf.data 中的输出：
 
-Copy code
+```
 $ perf script
        bash-37048 [002] ....  1617.738101: bpf_trace_printk: stat system call from PID 370
+```
 
-
-
-Yunwei 123
 编写一个 eBPF 程序，追踪进程执行。通过 perf event array 向用户态打印输出。
 
-下面是一个简单的 eBPF 程序，它定义了一个 kprobe 探针函数，用于捕获内核函数 do_syscall_64 的进入事件，并记录调用该函数的进程的 PID、函数名和返回值。
+> 下面是一个简单的 eBPF 程序，它定义了一个 kprobe 探针函数，用于捕获内核函数 do_syscall_64 的进入事件，并记录调用该函数的进程的 PID、函数名和返回值。
 
-Copy code
+```c
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -532,21 +537,18 @@ int BPF_KRETPROBE(do_syscall_64_exit, long ret)
 	bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
 	return 0;
 }
-要编译这段代码，可以使用 ecc 工具：
+```
+> 要编译这段代码，可以使用 ecc 工具：
 
-Copy code
+```
 $ ecc kprobe-syscall.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-然后可以使用 ecli 运行编译后的程序：
+```
 
-Copy code
+> 然后可以使用 ecli 运行编译后的程序：
 
-
-
-Yunwei 123
-
-## execsnoop
+这是一个 execsnoop 的例子
 
 通过 perf event array 向用户态命令行打印输出，需要编写一个头文件，一个 C 源文件。示例代码如下：
 
@@ -666,6 +668,7 @@ char LICENSE[] SEC("license") = "GPL";
 > 还可以通过使用 -C 参数来指定要监控的系统调用，例如：
 >
 > eunomia-bpf -C execve -o execsnoop.o
+> 
 > 这样就只会监
 
 please give me an eBPF program Trace all stat syscall variants with perf event output.
@@ -823,7 +826,7 @@ int tracepoint__syscalls__sys_exit_fstat(struct trace_event_raw_sys_exit* ctx)
 
 > 可以使用如下代码编写 eBPF 程序：
 
-Copy code
+```c
 #include <uapi/linux/bpf.h>
 #include <linux/sched.h>
 
@@ -836,12 +839,13 @@ int handle_tp(void *ctx)
 }
 
 char _license[] SEC("license") = "GPL";
-这个 eBPF 程序通过定义一个 handle_tp 函数并使用 SEC 宏把它附加到 sys_enter_write tracepoint。在进入 write 系统调用时，handle_tp 函数会被执行。该函数会使用 bpf_get_current_pid_tgid 函数获取调用 write 系统调用的进程 ID，然后使用 bpf_printk 函数在内核日志中打印出来。
-
-eBPF 程序的输出结果将是内核日志中打印的调用 write 系统调用的进程的 PID。例如，如果进程 42 调用了 write 系统调用，则输出结果将是：
-
-Copy code
+```
+> 这个 eBPF 程序通过定义一个 handle_tp 函数并使用 SEC 宏把它附加到 sys_enter_write tracepoint。在进入 write 系统调用时，handle_tp 函数会被执行。该函数会使用 bpf_get_current_pid_tgid 函数获取调用 write 系统调用的进程 ID，然后使用 bpf_printk 函数在内核日志中打印出来。
+>
+> eBPF 程序的输出结果将是内核日志中打印的调用 write 系统调用的进程的 PID。例如，如果进程 42 调用了 write 系统调用，则输出结果将是：
+```
 PID of process calling write: 42
+```
 > 需要注意的是，在使用此 eBPF 程序之前，需要编译它并将其加载到内核中。此外，由于 eBPF 程序在内核态运行，因此它可能需要特殊权限才能加载和使用。
 
 ```c
@@ -869,8 +873,7 @@ int handle_tp(void *ctx)
 ```
 不。代码应该是这样的。
 
-您的代码看起来正确。它定义了一个 handle_tp 函数，并使用 SEC 宏把它附加到 sys_enter_write tracepoint。在进入 write 系统调用时，handle_tp 函数会被执行。该函数会使用 bpf_get_current_pid_tgid 函数获取调用 write 系统调用的进程 ID，然后使用 bpf_printk 函数在内核日志中打印出来。如果需要，还可以使用 pid_filter 变量来过滤进程。如果您需要进一步改进您的 eBPF 程序，请告诉我您的需求，我可以帮助您实现它。
-
+> 您的代码看起来正确。它定义了一个 handle_tp 函数，并使用 SEC 宏把它附加到 sys_enter_write tracepoint。在进入 write 系统调用时，handle_tp 函数会被执行。该函数会使用 bpf_get_current_pid_tgid 函数获取调用 write 系统调用的进程 ID，然后使用 bpf_printk 函数在内核日志中打印出来。如果需要，还可以使用 pid_filter 变量来过滤进程。如果您需要进一步改进您的 eBPF 程序，请告诉我您的需求，我可以帮助您实现它。
 
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：
 
@@ -901,13 +904,13 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 ```
 
-您的描述是正确的。eBPF 程序需要编译才能运行。可以使用 ecc 工具来编译 eBPF 程序，也可以使用 docker 镜像进行编译。运行 eBPF 程序的方法有多种，可以使用 ecli 命令运行编译后的程序，也可以使用其他工具。输出结果将在内核日志中打印，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看。
-
-请注意，使用 ecc 编译程序后，会生成一个 package.json 文件，其中包含编译后的 eBPF 程序和配置信息。运行 eBPF 程序时，需要指定该文件，以便 ecli 命令能够找到并运行 eBPF 程序。例如，可以使用以下命令运行 eBPF 程序：
-
-Copy code
+> 您的描述是正确的。eBPF 程序需要编译才能运行。可以使用 ecc 工具来编译 eBPF 程序，也可以使用 docker 镜像进行编译。运行 eBPF 程序的方法有多种，可以使用 ecli 命令运行编译后的程序，也可以使用其他工具。输出结果将在内核日志中打印，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看。
+>
+> 请注意，使用 ecc 编译程序后，会生成一个 package.json 文件，其中包含编译后的 eBPF 程序和配置信息。运行 eBPF 程序时，需要指定该文件，以便 ecli 命令能够找到并运行 eBPF 程序。例如，可以使用以下命令运行 eBPF 程序：
+```
 $ sudo ecli ./package.json
-如果您还有任何问题，请随时告诉我，我很乐意帮助您解决问题。
+```
+> 如果您还有任何问题，请随时告诉我，我很乐意帮助您解决问题。
 
 ```c
 #include "vmlinux.h"
@@ -942,17 +945,18 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 
 kprobe 是 eBPF 用于处理内核空间入口和出口（返回）探针（kprobe 和 kretprobe）的一个例子。它将 kprobe 和 kretprobe BPF 程序附加到 do_unlinkat() 函数上，并使用 bpf_printk() 宏分别记录 PID、文件名和返回值。请告诉我如何编译运行这段程序。
 
-您的 eBPF 程序使用 kprobe 和 kretprobe 宏附加到 do_unlinkat 函数上。kprobe 宏将 BPF 程序附加到 do_unlinkat 函数的入口，kretprobe 宏将 BPF 程序附加到 do_unlinkat 函数的出口（返回）处。这样，您就可以在 do_unlinkat 函数的入口和出口（返回）处捕获数据，并使用 bpf_printk 宏在内核日志中打印数据。
-
-要编译和运行您的 eBPF 程序，您需要安装 bcc 工具集。然后，在终端中输入以下命令：
-
-Copy code
+> 您的 eBPF 程序使用 kprobe 和 kretprobe 宏附加到 do_unlinkat 函数上。kprobe 宏将 BPF 程序附加到 do_unlinkat 函数的入口，kretprobe 宏将 BPF 程序附加到 do_unlinkat 函数的出口（返回）处。这样，您就可以在 do_unlinkat 函数的入口和出口（返回）处捕获数据，并使用 bpf_printk 宏在内核日志中打印数据。
+>
+> 要编译和运行您的 eBPF 程序，您需要安装 bcc 工具集。然后，在终端中输入以下命令：
+>
+```
 # 编译 eBPF 程序
 clang -O2 -target bpf -c my_bpf_prog.c -o my_bpf_prog.o
 
 # 运行 eBPF 程序
 sudo ./bcc.py run my_bpf_prog.o
-这样，就会编译并运行您的 eBPF 程序。在运行 eBPF 程序时，会在内核日志中打
+```
+> 这样，就会编译并运行您的 eBPF 程序。在运行 eBPF 程序时，会在内核日志中打
 
 不对，使用 eunomia-bpf 工具编译。要编译这个程序，请使用 ecc 工具：
 
@@ -978,9 +982,9 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
               rm-9346    [005] d..4  4710.951895: bpf_trace_printk: KPROBE EXIT: ret = 0
 ```
 
-您的描述是正确的。您可以使用 ecc 工具编译您的 eBPF 程序，编译后会生成一个 package.json 文件。然后，可以使用 ecli 命令运行该程序，以便监控系统调用。运行 eBPF 程序后，您可以查看 /sys/kernel/debug/tracing/trace_pipe 文件，以查看程序的输出。
-
-请注意，编译和运行 eBPF 程序的步骤可能会有所不同，具体取决于使用的工具和系统环境。如果您在编译和运行 eBPF 程序时遇到任何问题，请随时告评，我很乐意帮助您解决问题。
+> 您的描述是正确的。您可以使用 ecc 工具编译您的 eBPF 程序，编译后会生成一个 package.json 文件。然后，可以使用 ecli 命令运行该程序，以便监控系统调用。运行 eBPF 程序后，您可以查看 /sys/kernel/debug/tracing/trace_pipe 文件，以查看程序的输出。
+>
+> 请注意，编译和运行 eBPF 程序的步骤可能会有所不同，具体取决于使用的工具和系统环境。如果您在编译和运行 eBPF 程序时遇到任何问题，请随时告评，我很乐意帮助您解决问题。
 
 是的。
 
@@ -1014,31 +1018,30 @@ int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 
 这段程序通过定义两个函数，分别附加到 do_unlinkat 和 do_unlinkat_exit 上。这两个函数分别在进入 do_unlinkat 和离开 do_unlinkat 时执行。这两个函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数来获取调用 do_unlinkat 的进程 ID，文件名和返回值，并在内核日志中打印出来。请告诉我如何编译运行这段程序。
 
-您的 eBPF 程序定义了两个函数：do_unlinkat 和 do_unlinkat_exit。这两个函数都使用 BPF_PROG 宏附加到 do_unlinkat 和 do_unlinkat_exit 函数上。do_unlinkat 函数在进入 do_unlinkat 时执行，do_unlinkat_exit 函数在离开 do_unlinkat 时执行。这两个函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数来获取调用 do_unlinkat 的进程 ID，文件名和返回值，并在内核日志中打印出来。
+> 您的 eBPF 程序定义了两个函数：do_unlinkat 和 do_unlinkat_exit。这两个函数都使用 BPF_PROG 宏附加到 do_unlinkat 和 do_unlinkat_exit 函数上。do_unlinkat 函数在进入 do_unlinkat 时执行，do_unlinkat_exit 函数在离开 do_unlinkat 时执行。这两个函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数来获取调用 do_unlinkat 的进程 ID，文件名和返回值，并在内核日志中打印出来。
+> 
+> 要编译和运行这段程序，您可以使用 bcc 工具集。首先，在终端中输入以下命令来安装 bcc 工具集：
 
-要编译和运行这段程序，您可以使用 bcc 工具集。首先，在终端中输入以下命令来安装 bcc 工具集：
-
-Copy code
+```
 sudo apt install bcc-tools libbcc-examples linux-headers-$(uname -r)
-然后，在终端中输入以下命令来编译您的 eBPF 程序：
-
-``
+```
+> 然后，在终端中输入以下命令来编译您的 eBPF 程序：
 
 我不希望你继续使用 BCC 工具集，请使用 eunomia-bpf
 
-好的。您可以使用 eunomia-bpf 工具编译您的 eBPF 程序。首先，在终端中输入以下命令来安装 eunomia-bpf：
+> 好的。您可以使用 eunomia-bpf 工具编译您的 eBPF 程序。首先，在终端中输入以下命令来安装 eunomia-bpf：
 
-Copy code
 sudo npm install -g eunomia-bpf
-然后，在终端中输入以下命令来编译您的 eBPF 程序：
 
-Copy code
+> 然后，在终端中输入以下命令来编译您的 eBPF 程序：
+```
 ecc kprobe-link.bpf.c
-编译后，您会得到一个 package.json 文件。您可以使用 ecli 命令运行该程序：
-
-Copy code
+```
+> 编译后，您会得到一个 package.json 文件。您可以使用 ecli 命令运行该程序：
+```
 sudo ecli package.json
-运行该程序后，您可以查看 /sys/kernel/debug/tracing/trace_pipe 文件，以查看程序的输出。请注意，编译和运行 eBPF 程序的步骤可能会有所不同，具体取决于使用的工具和系统环境。如果您在编
+```
+> 运行该程序后，您可以查看 /sys/kernel/debug/tracing/trace_pipe 文件，以查看程序的输出。请注意，编译和运行 eBPF 程序的步骤可能会有所不同，具体取决于使用的工具和系统环境。如果您在编
 
 我们需要编写一段 eBPF 程序来捕获进程打开文件的系统调用，具体实现如下：
 
@@ -1086,31 +1089,38 @@ char LICENSE[] SEC("license") = "GPL";
 
 上面的 eBPF 程序通过定义两个函数 tracepoint__syscalls__sys_enter_open 和 tracepoint__syscalls__sys_enter_openat 并使用 SEC 宏把它们附加到 sys_enter_open 和 sys_enter_openat 两个 tracepoint（即在进入 open 和 openat 系统调用时执行）。这两个函数通过使用 bpf_get_current_pid_tgid 函数获取调用 open 或 openat 系统调用的进程 ID，并使用 bpf_printk 函数在内核日志中打印出来。
 
-编译运行这段 eBPF 程序，请使用 ecc 工具编译：
+> 编译运行这段 eBPF 程序，请使用 ecc 工具编译：
 
-Copy code
+```
 $ ecc capture-sys-open.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-然后运行：
+```
 
-Copy code
+> 然后运行：
+
+```
 sudo ecli package.json
-在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
+```
+> 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
 
-Copy code
+```
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
               cat-9349    [005] d..3  4710.951696: bpf_trace_printk: Process ID: 9349 enter sys open
               cat-9349    [005] d..3  4710.951696: bpf_trace_printk: Process ID: 9349 enter sys openat
-如果想要只跟踪特定的进程，可以在程序中设置 pid_target 变量的值，例如：
+```	      
 
-Copy code
+> 如果想要只跟踪特定的进程，可以在程序中设置 pid_target 变量的值，例如：
+
+```
 const volatile int pid_target = 1234;
-这样，程序只会输出 PID 为 1234 的进程的信息。
+```
+
+> 这样，程序只会输出 PID 为 1234 的进程的信息。
 
 是的，谢谢你。我会继续给你一些 eBPF 程序。
 
-好的，请继续。
+> 好的，请继续。
 
 ```c
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -1159,32 +1169,31 @@ SEC("uprobe//bin/bash:readline")
 
 这表示我们要捕获的是 /bin/bash 二进制文件中的 readline 函数。
 
-是的，你描述得很清楚。
+> 是的，你描述得很清楚。
+> 
+> 编译这段程序的方法与其他 eBPF 程序的编译方法相同，需要使用 eunomia-bpf 工具集。首先使用 ecc 编译程序：
 
-编译这段程序的方法与其他 eBPF 程序的编译方法相同，需要使用 eunomia-bpf 工具集。首先使用 ecc 编译程序：
-
-Copy code
+```
 $ ecc bashreadline.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-然后使用 ecli 运行编译后的程序：
+```
 
-Copy code
+> 然后使用 ecli 运行编译后的程序：
+
+```
 $ sudo ecli ./package.json
 Runing eBPF program...
-在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
+```
+> 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
 
-Copy code
+```
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 PID 1234 (bash) read: some command line input
 PID 1234 (bash) read: another command line input
 ...
-这些输出表示有一个进程 ID 为 1234，名称为 bash 的进程在调用 readline 函数时输入了相应的命令行输入。
-
-
-
-
-Yunwei 123
+```
+> 这些输出表示有一个进程 ID 为 1234，名称为 bash 的进程在调用 readline 函数时输入了相应的命令行输入。
 
 ```c
 #include <vmlinux.h>
@@ -1349,8 +1358,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件。我们可以通过工具（例如 eunomia-bpf）来查看这些事件，并分析进程的执行情况。
 
-是的，这段代码通过定义两个 eBPF 程序来捕获进程执行 execve 系统调用的入口和出口事件。在入口程序中，我们获取了当前进程的进程 ID 和用户 ID，并通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。在出口程序中，我们获取了当前进程的进程 ID 和用户 ID，并获取了 execve 系统调用的返回值。最后，在
-
+> 是的，这段代码通过定义两个 eBPF 程序来捕获进程执行 execve 系统调用的入口和出口事件。在入口程序中，我们获取了当前进程的进程 ID 和用户 ID，并通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。在出口程序中，我们获取了当前进程的进程 ID 和用户 ID，并获取了 execve 系统调用的返回值。最后，在
+```
 #include <vmlinux.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
@@ -1385,22 +1394,20 @@ int tc_ingress(struct __sk_buff *ctx)
 }
 
 char __license[] SEC("license") = "GPL";
+```
 
 这段代码定义了一个 eBPF 程序，它可以通过 Linux TC（Transmission Control）来捕获数据包并进行处理。在这个程序中，我们限定了只捕获 IPv4 协议的数据包，然后通过 bpf_printk 函数打印出数据包的总长度和 Time-To-Live（TTL）字段的值。
 
 需要注意的是，我们在代码中使用了一些 BPF 库函数，例如 bpf_htons 和 bpf_ntohs 函数，它们用于进行网络字节序和主机字节序之间的转换。此外，我们还使用了一些注释来为 TC 提供附加点和选项信息。例如，在这段代码的开头，我们使用了以下注释：
 
-Copy code
+```
 /// @tchook {"ifindex":1, "attach_point":"BPF_TC_INGRESS"}
 /// @tcopts {"handle":1, "priority":1}
-这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。
+```
+> 这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。
+> 
+> 总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。
 
-总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。
-
-
-
-
-Yunwei 123
 编译运行
 
 ```console
@@ -1437,11 +1444,7 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 这段代码还使用了 @tchook 和 @tcopts 注释，用于指定该 eBPF 程序的挂载点和处理方式。例如，@tchook 注释中的 ifindex 参数指定了该 eBPF 程序
 
-
-
-
-Yunwei 123
-
+```
 const volatile __u64 min_us = 0;
 const volatile pid_t targ_pid = 0;
 const volatile pid_t targ_tgid = 0;
@@ -1546,22 +1549,18 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 {
 	return handle_switch(ctx, prev, next);
 }
+```
+> 这段代码定义了一个 eBPF 程序，该程序用于跟踪进程在运行队列中的等待时间。它通过使用 tracepoint 和 perf event 输出来实现。
+> 
+> 程序首先定义了两个 BPF 内核映射：start 映射用于存储每个进程在被调度运行之前的时间戳，events 映射用于存储 perf 事件。
+> 
+> 然后，程序定义了一些帮助函数，用于跟踪每个进程的调度状态。 trace_enqueue 函数用于在进程被调度运行之前记录时间戳， handle_switch 函数用于处理进程切换，并计算进程在队列中等待的时间。
+> 
+> 接下来，程序定义了五个 tracepoint 程序，用于捕获不同的调度器事件。 sched_wakeup 和 sched_wakeup_new 程序用于捕获新进程被唤醒的事件， sched_switch 程序用于捕获进程切换事件， handle_sched_wakeup 和 handle_sched_wakeup_new 程序用于捕获 raw tracepoint 事件。这些 tracepoint 程序调用了前面定义的帮助函数来跟踪进程的调度状态。
+> 
+> 最后，程序将计算得到的等待时间输出到 perf 事件中，供用户空间工具进行捕获和分析。
 
-这段代码定义了一个 eBPF 程序，该程序用于跟踪进程在运行队列中的等待时间。它通过使用 tracepoint 和 perf event 输出来实现。
-
-程序首先定义了两个 BPF 内核映射：start 映射用于存储每个进程在被调度运行之前的时间戳，events 映射用于存储 perf 事件。
-
-然后，程序定义了一些帮助函数，用于跟踪每个进程的调度状态。 trace_enqueue 函数用于在进程被调度运行之前记录时间戳， handle_switch 函数用于处理进程切换，并计算进程在队列中等待的时间。
-
-接下来，程序定义了五个 tracepoint 程序，用于捕获不同的调度器事件。 sched_wakeup 和 sched_wakeup_new 程序用于捕获新进程被唤醒的事件， sched_switch 程序用于捕获进程切换事件， handle_sched_wakeup 和 handle_sched_wakeup_new 程序用于捕获 raw tracepoint 事件。这些 tracepoint 程序调用了前面定义的帮助函数来跟踪进程的调度状态。
-
-最后，程序将计算得到的等待时间输出到 perf 事件中，供用户空间工具进行捕获和分析。
-
-
-
-
-Yunwei 123
-
+```
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);
@@ -1686,14 +1685,12 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 }
 
 char LICENSE[] SEC("license") = "GPL";
+```
 
-这个 BPF 程序用于监控进程的调度时间。它使用了 tracepoints 和 raw tracepoints，用于监控进程的唤醒和切换事件，并记录进程调度的时间。它还使用了 BPF 的统计功能，以便对时间进行统计，以查看统计信息。这个程序可以按照进程、进程组或进程命名空间来统计信息，并可以针对特定进程或进程组进行过滤。
+> 这个 BPF 程序用于监控进程的调度时间。它使用了 tracepoints 和 raw tracepoints，用于监控进程的唤醒和切换事件，并记录进程调度的时间。它还使用了 BPF 的统计功能，以便对时间进行统计，以查看统计信息。这个程序可以按照进程、进程组或进程命名空间来统计信息，并可以针对特定进程或进程组进行过滤。
 
-
-
-
-Yunwei 123
 它的输出结果类似这样：
+```console
 $ sudo ecli examples/bpftools/runqlat/package.json
 key =  4294967295
 comm = rcu_preempt
@@ -1714,37 +1711,33 @@ comm = rcu_preempt
       4096 -> 8191       : 0        |                                        |
       8192 -> 16383      : 0        |                                        |
      16384 -> 32767      : 1        |                                        |
+```
 
-本程序监测了系统内进程执行时间。它通过在内核事件 sched_wakeup 和 sched_switch 时记录进程时间，然后在下一次 sched_switch 时计算执行时间并进行输出。
+> 本程序监测了系统内进程执行时间。它通过在内核事件 sched_wakeup 和 sched_switch 时记录进程时间，然后在下一次 sched_switch 时计算执行时间并进行输出。
+> 
+> 在程序开头，定义了一些用于存储进程信息的 BPF map，并定义了两个辅助函数 trace_enqueue 和 handle_switch，用于在事件触发时记录进程信息，并计算执行时间。
+> 
+> 接着，在程序中定义了三个 BPF 程序，分别用于监测事件 sched_wakeup、sched_switch 和 sched_wakeup_new。这些事件在系统中进程被唤醒、切换时触发。每当一个事件触发时，相应的 BPF 程序都会调用辅助函数 handle_switch 计算执行时间。
+>
+> 最后，程序通过 BPF perf events 把执行时间的统计信息输出到标准输出。可以通过工具 bpftrace 或者 ecli 来查看统计结果。
 
-在程序开头，定义了一些用于存储进程信息的 BPF map，并定义了两个辅助函数 trace_enqueue 和 handle_switch，用于在事件触发时记录进程信息，并计算执行时间。
-
-接着，在程序中定义了三个 BPF 程序，分别用于监测事件 sched_wakeup、sched_switch 和 sched_wakeup_new。这些事件在系统中进程被唤醒、切换时触发。每当一个事件触发时，相应的 BPF 程序都会调用辅助函数 handle_switch 计算执行时间。
-
-最后，程序通过 BPF perf events 把执行时间的统计信息输出到标准输出。可以通过工具 bpftrace 或者 ecli 来查看统计结果。
-
-
-
-
-Yunwei 123
-不是  BPF perf events 。通过 sample hash map 来输出直方图。/// @sample {"interval": 1000, "type" : "log2_hist"}
+不是  BPF perf events 。通过 sample hash map 来输出直方图。
+```
+/// @sample {"interval": 1000, "type" : "log2_hist"}
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);
 	__type(key, u32);
 	__type(value, struct hist);
 } hists SEC(".maps");
-
-正确的。该程序使用 BPF hash map 来记录每个线程的执行时间，并使用 BPF sample hash map 来定期输出每个线程的直方图。您可以通过在 /sys/kernel/debug/tracing/ 文件系统中执行 "cat runqslat" 来查看输出。
-
-
+```
+> 正确的。该程序使用 BPF hash map 来记录每个线程的执行时间，并使用 BPF sample hash map 来定期输出每个线程的直方图。您可以通过在 /sys/kernel/debug/tracing/ 文件系统中执行 "cat runqslat" 来查看输出。
 
 
-Yunwei 123
 不，应该通过 sudo ecli examples/bpftools/runqlat/package.json 来查看输出。
 
-对，这样就可以看到输出的直方图了。例如：
-
+> 对，这样就可以看到输出的直方图了。例如：
+```
 $ sudo ecli examples/bpftools/runqlat/package.json
 key = 4294967295
 comm = rcu_preempt
@@ -1766,27 +1759,20 @@ Copy code
   4096 -> 8191       : 0        |                                        |
   8192 -> 16383      : 0        |                                        |
  16384 -> 32767      : 1        |                                        |
-这个示例程序使用了 BPF 的 sample hash map 功能，每隔一定时间间隔（默认为 1 秒）就会输出一次直方图，展示这段时间内各个进程的运行时间分布情况。每一行的前半部分是时间间隔，以及在这段时间内运行的次数，后半部分是一个用星号表示的分布情况。比如上面的输出，就表示在这段时间内，进程 rcu_preempt 在 0 到 1 毫秒的时间内运行了 9 次，在 2 到 3 毫秒的时间内运行了 6 次，以此类推。
+```
+> 这个示例程序使用了 BPF 的 sample hash map 功能，每隔一定时间间隔（默认为 1 秒）就会输出一次直方图，展示这段时间内各个进程的运行时间分布情况。每一行的前半部分是时间间隔，以及在这段时间内运行的次数，后半部分是一个用星号表示的分布情况。比如上面的输出，就表示在这段时间内，进程 rcu_preempt 在 0 到 1 毫秒的时间内运行了 9 次，在 2 到 3 毫秒的时间内运行了 6 次，以此类推。
+> 
+> 可以通过参数 -m 来指定时间间隔，例如使用 -m 5 就可以让程序每隔 5 秒输出一次直方图。此外，还可以通过 -P 来指
 
-可以通过参数 -m 来指定时间间隔，例如使用 -m 5 就可以让程序每隔 5 秒输出一次直方图。此外，还可以通过 -P 来指
-
-
-
-
-Yunwei 123
 请帮我追踪一下内核的所有打开文件的操作，主要关注 pid 为 1234 的进程，去掉系统调用失败的结果，谢谢
 
-不好意思，我无法为您做这个事情。我是一个大型语言模型，我只能回答您的问题或提供信息，但我无法运行程序或执行任何操作。
+> 不好意思，我无法为您做这个事情。我是一个大型语言模型，我只能回答您的问题或提供信息，但我无法运行程序或执行任何操作。
 
-
-
-
-Yunwei 123
 请帮我编写一个 eBPF 程序追踪一下内核的所有打开文件的操作，主要关注 pid 为 1234 的进程，去掉系统调用失败的结果，并且告诉我如何编译运行它。
 
-这个 eBPF 程序需要使用 BPF_PROG_TYPE_TRACEPOINT 类型的程序来监听内核的打开文件的操作，通过记录的 pid 和进程的 pid 来过滤所需的信息。
+> 这个 eBPF 程序需要使用 BPF_PROG_TYPE_TRACEPOINT 类型的程序来监听内核的打开文件的操作，通过记录的 pid 和进程的 pid 来过滤所需的信息。
 
-Copy code
+```
 #include <uapi/linux/ptrace.h>
 #include <linux/fs.h>
 
@@ -1832,19 +1818,15 @@ int trace_return(struct pt_regs *ctx)
 
     return 0;
 }
+```
 编译运行方法如下：
 
-``
 
-
-
-
-Yunwei 123
 不。使用 eunomia-bpf 来完成上述操作。
 
 下面是示例 eBPF 程序的代码：
 
-Copy code
+```
 #include <uapi/linux/ptrace.h>
 #include <linux/fs.h>
 #include <linux/sched.h>
@@ -1883,11 +1865,14 @@ int trace_open_return(struct pt_regs *ctx)
 
     return 0;
 }
-可以使用下面的命令来编译和运行这个程序：
+```
 
-Copy code
+> 可以使用下面的命令来编译和运行这个程序：
+
+```
 # 编译
 $ clang -O2 -target bpf -c open.c -o open.o
 
 # 运行
 $ sudo bpftrace -e 'tracepoint:raw_syscalls:sys_enter_openat /pid == 1234/ { @[comm] = count();
+```
