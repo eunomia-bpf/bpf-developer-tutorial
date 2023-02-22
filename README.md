@@ -1,4 +1,4 @@
-# bpf-develop-tutorial: learn CO-RE ebpf with example tools
+# 基于 libbpf 的 eBPF 开发者教程：通过 20 个小工具一步步学习 eBPF
 
 这是一个基于 `CO-RE`（一次编译，到处运行）的 `libbpf` 的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践，包括基本概念、代码实例、实际应用等内容。
 
@@ -85,3 +85,7 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
 
 完整的对话记录可以在这里找到: [chatGPT.md](chatGPT.md)
+
+我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：https://github.com/eunomia-bpf/GPTtrace
+
+![ebpf-chatgpt-signal](https://github.com/eunomia-bpf/GPTtrace/blob/main/doc/result.gif)
