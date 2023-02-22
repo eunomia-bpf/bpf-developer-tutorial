@@ -10,7 +10,7 @@ eBPF 是一项革命性的技术，起源于 Linux 内核，可以在操作系�
 
 对于浏览器而言，JavaScript 的引入带来的可编程性开启了一场巨大的革命，使浏览器发展成为几乎独立的操作系统。现在让我们回到 eBPF：为了理解 eBPF 对 Linux 内核的可编程性影响，对 Linux 内核的结构以及它如何与应用程序和硬件进行交互有一个高层次的理解是有帮助的[4]。
 
-!(kernel-arch](kernel-arch.webp)
+![kernel-arch](kernel-arch.webp)
 
 Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个一致的API（系统调用），允许应用程序运行和共享资源。为了实现这个目的，我们维护了一系列子系统和层，以分配这些责任[5]。每个子系统通常允许某种程度的配置，以考虑到用户的不同需求。如果不能配置所需的行为，就需要改变内核，从历史上看，改变内核的行为，或者让用户编写的程序能够在内核中运行，就有两种选择:
 
@@ -43,11 +43,11 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 推荐：
 
-- 阅读 ebpf 简介：https://ebpf.io/（30min）
-- 简要了解一下 ebpf 内核相关文档：https://prototype-kernel.readthedocs.io/en/latest/bpf/ （知道有问题去哪里查询: 30min）
-- 阅读 ebpf 中文入门指南：https://www.modb.pro/db/391570（1h）
-- 有大量的参考资料：https://github.com/zoidbergwill/awesome-ebpf（2-3h）
-- 可以选自己感兴趣的 PPT 翻一翻：https://github.com/gojue/ebpf-slide（1-2h）
+- 阅读 ebpf 简介：<https://ebpf.io/（30min）>
+- 简要了解一下 ebpf 内核相关文档：<https://prototype-kernel.readthedocs.io/en/latest/bpf/> （知道有问题去哪里查询: 30min）
+- 阅读 ebpf 中文入门指南：<https://www.modb.pro/db/391570（1h）>
+- 有大量的参考资料：<https://github.com/zoidbergwill/awesome-ebpf（2-3h）>
+- 可以选自己感兴趣的 PPT 翻一翻：<https://github.com/gojue/ebpf-slide（1-2h）>
 
 回答三个问题：
 
@@ -59,9 +59,9 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 了解并尝试一下 eBPF 开发框架：
 
-- BCC 开发各类小工具的例子：https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md（跑一遍：3-4h）
-- libbpf 的一些例子: https://github.com/libbpf/libbpf-bootstrap（选感兴趣的运行一下，并阅读一下源代码：2h）
-- 基于 libbpf 和 eunomia-bpf 的教程： https://github.com/eunomia-bpf/bpf-developer-tutorial（阅读 1-10 的部分: 3-4h）
+- BCC 开发各类小工具的例子：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md（跑一遍：3-4h）>
+- libbpf 的一些例子: <https://github.com/libbpf/libbpf-bootstrap（选感兴趣的运行一下，并阅读一下源代码：2h>）
+- 基于 libbpf 和 eunomia-bpf 的教程： <https://github.com/eunomia-bpf/bpf-developer-tutorial（阅读> 1-10 的部分: 3-4h）
 
 其他开发框架：Go 语言或者 Rust 语言，请自行搜索并且尝试（0-2h）
 
