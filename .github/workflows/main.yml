@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Deploy gh-pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3.3.0
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: (test -x $HOME/.cargo/bin/mdbook || cargo install mdbook)
+      - run: mdbook build && mdbook test
+      - uses: JamesIves/github-pages-deploy-action@v4.4.1
+        with:
+          branch: gh-pages
+          folder: book
