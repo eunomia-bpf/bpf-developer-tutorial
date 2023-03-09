@@ -1,0 +1,685 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>BPF Features by Linux Kernel Version - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">eBPF 入门开发实践教程</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> eBPF 入门开发实践教程三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> eBPF 入门开发实践教程四：在 eBPF 中捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> eBPF 入门开发实践教程六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF入门实践教程</li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/tcpconnlat.html"><strong aria-hidden="true">14.</strong> eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../15-tcprtt/index.html"><strong aria-hidden="true">16.</strong> eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc Guide</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html" class="active"><strong aria-hidden="true">22.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">23.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">24.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">25.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">26.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">27.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="bpf-features-by-linux-kernel-version"><a class="header" href="#bpf-features-by-linux-kernel-version">BPF Features by Linux Kernel Version</a></h1>
+<h2 id="ebpf-support"><a class="header" href="#ebpf-support">eBPF support</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Kernel version</th><th>Commit</th></tr></thead><tbody>
+<tr><td>3.15</td><td><a href="https://github.com/torvalds/linux/commit/bd4cf0ed331a275e9bf5a49e6d0fd55dffc551b8"><code>bd4cf0ed331a</code></a></td></tr>
+</tbody></table>
+</div>
+<h2 id="jit-compiling"><a class="header" href="#jit-compiling">JIT compiling</a></h2>
+<p>The list of supported architectures for your kernel can be retrieved with:</p>
+<pre><code class="language-sh">git grep HAVE_EBPF_JIT arch/
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Feature / Architecture</th><th>Kernel version</th><th>Commit</th></tr></thead><tbody>
+<tr><td>x86_64</td><td>3.16</td><td><a href="https://github.com/torvalds/linux/commit/622582786c9e041d0bd52bde201787adeab249f8"><code>622582786c9e</code></a></td></tr>
+<tr><td>ARM64</td><td>3.18</td><td><a href="https://github.com/torvalds/linux/commit/e54bcde3d69d40023ae77727213d14f920eb264a"><code>e54bcde3d69d</code></a></td></tr>
+<tr><td>s390</td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/054623105728b06852f077299e2bf1bf3d5f2b0b"><code>054623105728</code></a></td></tr>
+<tr><td>Constant blinding for JIT machines</td><td>4.7</td><td><a href="https://github.com/torvalds/linux/commit/4f3446bb809f20ad56cadf712e6006815ae7a8f9"><code>4f3446bb809f</code></a></td></tr>
+<tr><td>PowerPC64</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/156d0e290e969caba25f1851c52417c14d141b24"><code>156d0e290e96</code></a></td></tr>
+<tr><td>Constant blinding - PowerPC64</td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/b7b7013cac55d794940bd9cb7b7c55c9dececac4"><code>b7b7013cac55</code></a></td></tr>
+<tr><td>Sparc64</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/7a12b5031c6b947cc13918237ae652b536243b76"><code>7a12b5031c6b</code></a></td></tr>
+<tr><td>MIPS</td><td>4.13</td><td><a href="https://github.com/torvalds/linux/commit/f381bf6d82f032b7410185b35d000ea370ac706b"><code>f381bf6d82f0</code></a></td></tr>
+<tr><td>ARM32</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/39c13c204bb1150d401e27d41a9d8b332be47c49"><code>39c13c204bb1</code></a></td></tr>
+<tr><td>x86_32</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/03f5781be2c7b7e728d724ac70ba10799cc710d7"><code>03f5781be2c7</code></a></td></tr>
+<tr><td>RISC-V RV64G</td><td>5.1</td><td><a href="https://github.com/torvalds/linux/commit/2353ecc6f91fd15b893fa01bf85a1c7a823ee4f2"><code>2353ecc6f91f</code></a></td></tr>
+<tr><td>RISC-V RV32G</td><td>5.7</td><td><a href="https://github.com/torvalds/linux/commit/5f316b65e99f109942c556dc8790abd4c75bcb34"><code>5f316b65e99f</code></a></td></tr>
+<tr><td>PowerPC32</td><td>5.13</td><td><a href="https://github.com/torvalds/linux/commit/51c66ad849a703d9bbfd7704c941827aed0fd9fd"><code>51c66ad849a7</code></a></td></tr>
+<tr><td>LoongArch</td><td>6.1</td><td><a href="https://github.com/torvalds/linux/commit/5dc615520c4dfb358245680f1904bad61116648e"><code>5dc615520c4d</code></a></td></tr>
+</tbody></table>
+</div>
+<h2 id="main-features"><a class="header" href="#main-features">Main features</a></h2>
+<p>Several (but not all) of these <em>main features</em> translate to an eBPF program type.
+The list of such program types supported in your kernel can be found in file
+<a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h"><code>include/uapi/linux/bpf.h</code></a>:</p>
+<pre><code class="language-sh">git grep -W 'bpf_prog_type {' include/uapi/linux/bpf.h
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Kernel version</th><th>Commit</th></tr></thead><tbody>
+<tr><td><code>AF_PACKET</code> (libpcap/tcpdump, <code>cls_bpf</code> classifier, netfilter's <code>xt_bpf</code>, team driver's load-balancing mode…)</td><td>3.15</td><td><a href="https://github.com/torvalds/linux/commit/bd4cf0ed331a275e9bf5a49e6d0fd55dffc551b8"><code>bd4cf0ed331a</code></a></td></tr>
+<tr><td>Kernel helpers</td><td>3.15</td><td><a href="https://github.com/torvalds/linux/commit/bd4cf0ed331a275e9bf5a49e6d0fd55dffc551b8"><code>bd4cf0ed331a</code></a></td></tr>
+<tr><td><code>bpf()</code> syscall</td><td>3.18</td><td><a href="https://github.com/torvalds/linux/commit/99c55f7d47c0dc6fc64729f37bf435abf43f4c60"><code>99c55f7d47c0</code></a></td></tr>
+<tr><td>Maps (<em>a.k.a.</em> Tables; details below)</td><td>3.18</td><td><a href="https://github.com/torvalds/linux/commit/99c55f7d47c0dc6fc64729f37bf435abf43f4c60"><code>99c55f7d47c0</code></a></td></tr>
+<tr><td>BPF attached to sockets</td><td>3.19</td><td><a href="https://github.com/torvalds/linux/commit/89aa075832b0da4402acebd698d0411dcc82d03e"><code>89aa075832b0</code></a></td></tr>
+<tr><td>BPF attached to <code>kprobes</code></td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/2541517c32be2531e0da59dfd7efc1ce844644f5"><code>2541517c32be</code></a></td></tr>
+<tr><td><code>cls_bpf</code> / <code>act_bpf</code> for <code>tc</code></td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/e2e9b6541dd4b31848079da80fe2253daaafb549"><code>e2e9b6541dd4</code></a></td></tr>
+<tr><td>Tail calls</td><td>4.2</td><td><a href="https://github.com/torvalds/linux/commit/04fd61ab36ec065e194ab5e74ae34a5240d992bb"><code>04fd61ab36ec</code></a></td></tr>
+<tr><td>Non-root programs on sockets</td><td>4.4</td><td><a href="https://github.com/torvalds/linux/commit/1be7f75d1668d6296b80bf35dcf6762393530afc"><code>1be7f75d1668</code></a></td></tr>
+<tr><td>Persistent maps and programs (virtual FS)</td><td>4.4</td><td><a href="https://github.com/torvalds/linux/commit/b2197755b2633e164a439682fb05a9b5ea48f706"><code>b2197755b263</code></a></td></tr>
+<tr><td><code>tc</code>'s <code>direct-action</code> (<code>da</code>) mode</td><td>4.4</td><td><a href="https://github.com/torvalds/linux/commit/045efa82ff563cd4e656ca1c2e354fa5bf6bbda4"><code>045efa82ff56</code></a></td></tr>
+<tr><td><code>tc</code>'s <code>clsact</code> qdisc</td><td>4.5</td><td><a href="https://github.com/torvalds/linux/commit/1f211a1b929c804100e138c5d3d656992cfd5622"><code>1f211a1b929c</code></a></td></tr>
+<tr><td>BPF attached to tracepoints</td><td>4.7</td><td><a href="https://github.com/torvalds/linux/commit/98b5c2c65c2951772a8fc661f50d675e450e8bce"><code>98b5c2c65c29</code></a></td></tr>
+<tr><td>Direct packet access</td><td>4.7</td><td><a href="https://github.com/torvalds/linux/commit/969bf05eb3cedd5a8d4b7c346a85c2ede87a6d6d"><code>969bf05eb3ce</code></a></td></tr>
+<tr><td>XDP (see below)</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6a773a15a1e8874e5eccd2f29190c31085912c95"><code>6a773a15a1e8</code></a></td></tr>
+<tr><td>BPF attached to perf events</td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/0515e5999a466dfe6e1924f460da599bb6821487"><code>0515e5999a46</code></a></td></tr>
+<tr><td>Hardware offload for <code>tc</code>'s <code>cls_bpf</code></td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/332ae8e2f6ecda5e50c5c62ed62894963e3a83f5"><code>332ae8e2f6ec</code></a></td></tr>
+<tr><td>Verifier exposure and internal hooks</td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/13a27dfc669724564aafa2699976ee756029fed2"><code>13a27dfc6697</code></a></td></tr>
+<tr><td>BPF attached to cgroups for socket filtering</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/0e33661de493db325435d565a4a722120ae4cbf3"><code>0e33661de493</code></a></td></tr>
+<tr><td>Lightweight tunnel encapsulation</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2"><code>3a0af8fd61f9</code></a></td></tr>
+<tr><td><strong>e</strong>BPF support for <code>xt_bpf</code> module (iptables)</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/2c16d60332643e90d4fa244f4a706c454b8c7569"><code>2c16d6033264</code></a></td></tr>
+<tr><td>BPF program tag</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/7bd509e311f408f7a5132fcdde2069af65fa05ae"><code>7bd509e311f4</code></a></td></tr>
+<tr><td>Tracepoints to debug BPF</td><td>4.11 (removed in 4.18)</td><td><a href="https://github.com/torvalds/linux/commit/a67edbf4fb6deadcfe57a04a134abed4a5ba3bb5"><code>a67edbf4fb6d</code></a> <a href="https://github.com/torvalds/linux/commit/4d220ed0f8140c478ab7b0a14d96821da639b646"><code>4d220ed0f814</code></a></td></tr>
+<tr><td>Testing / benchmarking BPF programs</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/1cf1cae963c2e6032aebe1637e995bc2f5d330f4"><code>1cf1cae963c2</code></a></td></tr>
+<tr><td>BPF programs and maps IDs</td><td>4.13</td><td><a href="https://github.com/torvalds/linux/commit/dc4bb0e2356149aee4cdae061936f3bbdd45595c"><code>dc4bb0e23561</code></a></td></tr>
+<tr><td>BPF support for <code>sock_ops</code></td><td>4.13</td><td><a href="https://github.com/torvalds/linux/commit/40304b2a1567fecc321f640ee4239556dd0f3ee0"><code>40304b2a1567</code></a></td></tr>
+<tr><td>BPF support for skbs on sockets</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/b005fd189cec9407b700599e1e80e0552446ee79"><code>b005fd189cec</code></a></td></tr>
+<tr><td>bpftool utility in kernel sources</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/71bb428fe2c19512ac671d5ee16ef3e73e1b49a8"><code>71bb428fe2c1</code></a></td></tr>
+<tr><td>BPF attached to cgroups as device controller</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/ebc614f687369f9df99828572b1d85a7c2de3d92"><code>ebc614f68736</code></a></td></tr>
+<tr><td>bpf2bpf function calls</td><td>4.16</td><td><a href="https://github.com/torvalds/linux/commit/cc8b0b92a1699bc32f7fec71daa2bfc90de43a4d"><code>cc8b0b92a169</code></a></td></tr>
+<tr><td>BPF used for monitoring socket RX/TX data</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/4f738adba30a7cfc006f605707e7aee847ffefa0"><code>4f738adba30a</code></a></td></tr>
+<tr><td>BPF attached to raw tracepoints</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/c4f6699dfcb8558d138fe838f741b2c10f416cf9"><code>c4f6699dfcb8</code></a></td></tr>
+<tr><td>BPF attached to <code>bind()</code> system call</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/4fbac77d2d092b475dda9eea66da674369665427"><code>4fbac77d2d09</code></a> <a href="https://github.com/torvalds/linux/commit/aac3fc320d9404f2665a8b1249dc3170d5fa3caf"><code>aac3fc320d94</code></a></td></tr>
+<tr><td>BPF attached to <code>connect()</code> system call</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/d74bad4e74ee373787a9ae24197c17b7cdc428d5"><code>d74bad4e74ee</code></a></td></tr>
+<tr><td>BPF Type Format (BTF)</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/69b693f0aefa0ed521e8bd02260523b5ae446ad7"><code>69b693f0aefa</code></a></td></tr>
+<tr><td>AF_XDP</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/fbfc504a24f53f7ebe128ab55cb5dba634f4ece8"><code>fbfc504a24f5</code></a></td></tr>
+<tr><td>bpfilter</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/d2ba09c17a0647f899d6c20a11bab9e6d3382f07"><code>d2ba09c17a06</code></a></td></tr>
+<tr><td>End.BPF action for seg6local LWT</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/004d4b274e2a1a895a0e5dc66158b90a7d463d44"><code>004d4b274e2a</code></a></td></tr>
+<tr><td>BPF attached to LIRC devices</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/f4364dcfc86df7c1ca47b256eaf6b6d0cdd0d936"><code>f4364dcfc86d</code></a></td></tr>
+<tr><td>Pass map values to map helpers</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/d71962f3e627b5941804036755c844fabfb65ff5"><code>d71962f3e627</code></a></td></tr>
+<tr><td>BPF socket reuseport</td><td>4.19</td><td><a href="https://github.com/torvalds/linux/commit/2dbb9b9e6df67d444fbe425c7f6014858d337adf"><code>2dbb9b9e6df6</code></a></td></tr>
+<tr><td>BPF flow dissector</td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/d58e468b1112dcd1d5193c0a89ff9f98b5a3e8b9"><code>d58e468b1112</code></a></td></tr>
+<tr><td>BPF 1M insn limit</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/c04c0d2b968ac45d6ef020316808ef6c82325a82"><code>c04c0d2b968a</code></a></td></tr>
+<tr><td>BPF cgroup sysctl</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/7b146cebe30cb481b0f70d85779da938da818637"><code>7b146cebe30c</code></a></td></tr>
+<tr><td>BPF raw tracepoint writable</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/9df1c28bb75217b244257152ab7d788bb2a386d0"><code>9df1c28bb752</code></a></td></tr>
+<tr><td>BPF bounded loop</td><td>5.3</td><td><a href="https://github.com/torvalds/linux/commit/2589726d12a1b12eaaa93c7f1ea64287e383c7a5"><code>2589726d12a1</code></a></td></tr>
+<tr><td>BPF trampoline</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/fec56f5890d93fc2ed74166c397dc186b1c25951"><code>fec56f5890d9</code></a></td></tr>
+<tr><td>BPF LSM hook</td><td>5.7</td><td><a href="https://github.com/torvalds/linux/commit/fc611f47f2188ade2b48ff6902d5cce8baac0c58"><code>fc611f47f218</code></a> <a href="https://github.com/torvalds/linux/commit/641cd7b06c911c5935c34f24850ea18690649917"><code>641cd7b06c91</code></a></td></tr>
+<tr><td>BPF iterator</td><td>5.8</td><td><a href="https://github.com/torvalds/linux/commit/180139dca8b38c858027b8360ee10064fdb2fbf7"><code>180139dca8b3</code></a></td></tr>
+<tr><td>BPF socket lookup hook</td><td>5.9</td><td><a href="https://github.com/torvalds/linux/commit/e9ddbb7707ff5891616240026062b8c1e29864ca"><code>e9ddbb7707ff</code></a></td></tr>
+<tr><td>Sleepable BPF programs</td><td>5.10</td><td><a href="https://github.com/torvalds/linux/commit/1e6c62a8821557720a9b2ea9617359b264f2f67c"><code>1e6c62a88215</code></a></td></tr>
+</tbody></table>
+</div>
+<h3 id="program-types"><a class="header" href="#program-types">Program types</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Program type</th><th>Kernel version</th><th>Commit</th><th>Enum</th></tr></thead><tbody>
+<tr><td>Socket filter</td><td>3.19</td><td><a href="https://github.com/torvalds/linux/commit/ddd872bc3098f9d9abe1680a6b2013e59e3337f7"><code>ddd872bc3098</code></a></td><td>BPF_PROG_TYPE_SOCKET_FILTER</td></tr>
+<tr><td>Kprobe</td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/2541517c32be2531e0da59dfd7efc1ce844644f5"><code>2541517c32be</code></a></td><td>BPF_PROG_TYPE_KPROBE</td></tr>
+<tr><td>traffic control (TC)</td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/96be4325f443dbbfeb37d2a157675ac0736531a1"><code>96be4325f443</code></a></td><td>BPF_PROG_TYPE_SCHED_CLS</td></tr>
+<tr><td>traffic control (TC)</td><td>4.1</td><td><a href="https://github.com/torvalds/linux/commit/94caee8c312d96522bcdae88791aaa9ebcd5f22c"><code>94caee8c312d</code></a></td><td>BPF_PROG_TYPE_SCHED_ACT</td></tr>
+<tr><td>Tracepoint</td><td>4.7</td><td><a href="https://github.com/torvalds/linux/commit/98b5c2c65c2951772a8fc661f50d675e450e8bce"><code>98b5c2c65c29</code></a></td><td>BPF_PROG_TYPE_TRACEPOINT</td></tr>
+<tr><td>XDP</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6a773a15a1e8874e5eccd2f29190c31085912c95"><code>6a773a15a1e8</code></a></td><td>BPF_PROG_TYPE_XDP</td></tr>
+<tr><td>Perf event</td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/0515e5999a466dfe6e1924f460da599bb6821487"><code>0515e5999a46</code></a></td><td>BPF_PROG_TYPE_PERF_EVENT</td></tr>
+<tr><td>cgroup socket filtering</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/0e33661de493db325435d565a4a722120ae4cbf3"><code>0e33661de493</code></a></td><td>BPF_PROG_TYPE_CGROUP_SKB</td></tr>
+<tr><td>cgroup sock modification</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/61023658760032e97869b07d54be9681d2529e77"><code>610236587600</code></a></td><td>BPF_PROG_TYPE_CGROUP_SOCK</td></tr>
+<tr><td>lightweight tunnel (IN)</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2"><code>3a0af8fd61f9</code></a></td><td>BPF_PROG_TYPE_LWT_IN</td></tr>
+<tr><td>lightweight tunnel (OUT)</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2"><code>3a0af8fd61f9</code></a></td><td>BPF_PROG_TYPE_LWT_OUT</td></tr>
+<tr><td>lightweight tunnel (XMIT)</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2"><code>3a0af8fd61f9</code></a></td><td>BPF_PROG_TYPE_LWT_XMIT</td></tr>
+<tr><td>cgroup sock ops (per conn)</td><td>4.13</td><td><a href="https://github.com/torvalds/linux/commit/40304b2a1567fecc321f640ee4239556dd0f3ee0"><code>40304b2a1567</code></a></td><td>BPF_PROG_TYPE_SOCK_OPS</td></tr>
+<tr><td>stream parser / stream verdict</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/b005fd189cec9407b700599e1e80e0552446ee79"><code>b005fd189cec</code></a></td><td>BPF_PROG_TYPE_SK_SKB</td></tr>
+<tr><td>cgroup device manager</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/ebc614f687369f9df99828572b1d85a7c2de3d92"><code>ebc614f68736</code></a></td><td>BPF_PROG_TYPE_CGROUP_DEVICE</td></tr>
+<tr><td>socket msg verdict</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/4f738adba30a7cfc006f605707e7aee847ffefa0"><code>4f738adba30a</code></a></td><td>BPF_PROG_TYPE_SK_MSG</td></tr>
+<tr><td>Raw tracepoint</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/c4f6699dfcb8558d138fe838f741b2c10f416cf9"><code>c4f6699dfcb8</code></a></td><td>BPF_PROG_TYPE_RAW_TRACEPOINT</td></tr>
+<tr><td>socket binding</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/4fbac77d2d092b475dda9eea66da674369665427"><code>4fbac77d2d09</code></a></td><td>BPF_PROG_TYPE_CGROUP_SOCK_ADDR</td></tr>
+<tr><td>LWT seg6local</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/004d4b274e2a1a895a0e5dc66158b90a7d463d44"><code>004d4b274e2a</code></a></td><td>BPF_PROG_TYPE_LWT_SEG6LOCAL</td></tr>
+<tr><td>lirc devices</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/f4364dcfc86df7c1ca47b256eaf6b6d0cdd0d936"><code>f4364dcfc86d</code></a></td><td>BPF_PROG_TYPE_LIRC_MODE2</td></tr>
+<tr><td>lookup SO_REUSEPORT socket</td><td>4.19</td><td><a href="https://github.com/torvalds/linux/commit/2dbb9b9e6df67d444fbe425c7f6014858d337adf"><code>2dbb9b9e6df6</code></a></td><td>BPF_PROG_TYPE_SK_REUSEPORT</td></tr>
+<tr><td>flow dissector</td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/d58e468b1112dcd1d5193c0a89ff9f98b5a3e8b9"><code>d58e468b1112</code></a></td><td>BPF_PROG_TYPE_FLOW_DISSECTOR</td></tr>
+<tr><td>cgroup sysctl</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/7b146cebe30cb481b0f70d85779da938da818637"><code>7b146cebe30c</code></a></td><td>BPF_PROG_TYPE_CGROUP_SYSCTL</td></tr>
+<tr><td>writable raw tracepoints</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/9df1c28bb75217b244257152ab7d788bb2a386d0"><code>9df1c28bb752</code></a></td><td>BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE</td></tr>
+<tr><td>cgroup getsockopt/setsockopt</td><td>5.3</td><td><a href="https://github.com/torvalds/linux/commit/0d01da6afc5402f60325c5da31b22f7d56689b49"><code>0d01da6afc54</code></a></td><td>BPF_PROG_TYPE_CGROUP_SOCKOPT</td></tr>
+<tr><td>Tracing (BTF/BPF trampoline)</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/f1b9509c2fb0ef4db8d22dac9aef8e856a5d81f6"><code>f1b9509c2fb0</code></a></td><td>BPF_PROG_TYPE_TRACING</td></tr>
+<tr><td>struct ops</td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/27ae7997a66174cb8afd6a75b3989f5e0c1b9e5a"><code>27ae7997a661</code></a></td><td>BPF_PROG_TYPE_STRUCT_OPS</td></tr>
+<tr><td>extensions</td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/be8704ff07d2374bcc5c675526f95e70c6459683"><code>be8704ff07d2</code></a></td><td>BPF_PROG_TYPE_EXT</td></tr>
+<tr><td>LSM</td><td>5.7</td><td><a href="https://github.com/torvalds/linux/commit/fc611f47f2188ade2b48ff6902d5cce8baac0c58"><code>fc611f47f218</code></a></td><td>BPF_PROG_TYPE_LSM</td></tr>
+<tr><td>lookup listening socket</td><td>5.9</td><td><a href="https://github.com/torvalds/linux/commit/e9ddbb7707ff5891616240026062b8c1e29864ca"><code>e9ddbb7707ff</code></a></td><td>BPF_PROG_TYPE_SK_LOOKUP</td></tr>
+<tr><td>Allow executing syscalls</td><td>5.15</td><td><a href="https://github.com/torvalds/linux/commit/79a7f8bdb159d9914b58740f3d31d602a6e4aca8"><code>79a7f8bdb159</code></a></td><td>BPF_PROG_TYPE_SYSCALL</td></tr>
+</tbody></table>
+</div>
+<h2 id="maps-aka-tables-in-bcc-lingo"><a class="header" href="#maps-aka-tables-in-bcc-lingo">Maps (<em>a.k.a.</em> Tables, in BCC lingo)</a></h2>
+<h3 id="map-types"><a class="header" href="#map-types">Map types</a></h3>
+<p>The list of map types supported in your kernel can be found in file
+<a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h"><code>include/uapi/linux/bpf.h</code></a>:</p>
+<pre><code class="language-sh">git grep -W 'bpf_map_type {' include/uapi/linux/bpf.h
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Map type</th><th>Kernel version</th><th>Commit</th><th>Enum</th></tr></thead><tbody>
+<tr><td>Hash</td><td>3.19</td><td><a href="https://github.com/torvalds/linux/commit/0f8e4bd8a1fc8c4185f1630061d0a1f2d197a475"><code>0f8e4bd8a1fc</code></a></td><td>BPF_MAP_TYPE_HASH</td></tr>
+<tr><td>Array</td><td>3.19</td><td><a href="https://github.com/torvalds/linux/commit/28fbcfa08d8ed7c5a50d41a0433aad222835e8e3"><code>28fbcfa08d8e</code></a></td><td>BPF_MAP_TYPE_ARRAY</td></tr>
+<tr><td>Prog array</td><td>4.2</td><td><a href="https://github.com/torvalds/linux/commit/04fd61ab36ec065e194ab5e74ae34a5240d992bb"><code>04fd61ab36ec</code></a></td><td>BPF_MAP_TYPE_PROG_ARRAY</td></tr>
+<tr><td>Perf events</td><td>4.3</td><td><a href="https://github.com/torvalds/linux/commit/ea317b267e9d03a8241893aa176fba7661d07579"><code>ea317b267e9d</code></a></td><td>BPF_MAP_TYPE_PERF_EVENT_ARRAY</td></tr>
+<tr><td>Per-CPU hash</td><td>4.6</td><td><a href="https://github.com/torvalds/linux/commit/824bd0ce6c7c43a9e1e210abf124958e54d88342"><code>824bd0ce6c7c</code></a></td><td>BPF_MAP_TYPE_PERCPU_HASH</td></tr>
+<tr><td>Per-CPU array</td><td>4.6</td><td><a href="https://github.com/torvalds/linux/commit/a10423b87a7eae75da79ce80a8d9475047a674ee"><code>a10423b87a7e</code></a></td><td>BPF_MAP_TYPE_PERCPU_ARRAY</td></tr>
+<tr><td>Stack trace</td><td>4.6</td><td><a href="https://github.com/torvalds/linux/commit/d5a3b1f691865be576c2bffa708549b8cdccda19"><code>d5a3b1f69186</code></a></td><td>BPF_MAP_TYPE_STACK_TRACE</td></tr>
+<tr><td>cgroup array</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/4ed8ec521ed57c4e207ad464ca0388776de74d4b"><code>4ed8ec521ed5</code></a></td><td>BPF_MAP_TYPE_CGROUP_ARRAY</td></tr>
+<tr><td>LRU hash</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/29ba732acbeece1e34c68483d1ec1f3720fa1bb3"><code>29ba732acbee</code></a> <a href="https://github.com/torvalds/linux/commit/3a08c2fd763450a927d1130de078d6f9e74944fb"><code>3a08c2fd7634</code></a></td><td>BPF_MAP_TYPE_LRU_HASH</td></tr>
+<tr><td>LRU per-CPU hash</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/8f8449384ec364ba2a654f11f94e754e4ff719e0"><code>8f8449384ec3</code></a> <a href="https://github.com/torvalds/linux/commit/961578b63474d13ad0e2f615fcc2901c5197dda6"><code>961578b63474</code></a></td><td>BPF_MAP_TYPE_LRU_PERCPU_HASH</td></tr>
+<tr><td>LPM trie (longest-prefix match)</td><td>4.11</td><td><a href="https://github.com/torvalds/linux/commit/b95a5c4db09bc7c253636cb84dc9b12c577fd5a0"><code>b95a5c4db09b</code></a></td><td>BPF_MAP_TYPE_LPM_TRIE</td></tr>
+<tr><td>Array of maps</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/56f668dfe00dcf086734f1c42ea999398fad6572"><code>56f668dfe00d</code></a></td><td>BPF_MAP_TYPE_ARRAY_OF_MAPS</td></tr>
+<tr><td>Hash of maps</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/bcc6b1b7ebf857a9fe56202e2be3361131588c15"><code>bcc6b1b7ebf8</code></a></td><td>BPF_MAP_TYPE_HASH_OF_MAPS</td></tr>
+<tr><td>Netdevice references (array)</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/546ac1ffb70d25b56c1126940e5ec639c4dd7413"><code>546ac1ffb70d</code></a></td><td>BPF_MAP_TYPE_DEVMAP</td></tr>
+<tr><td>Socket references (array)</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/174a79ff9515f400b9a6115643dafd62a635b7e6"><code>174a79ff9515</code></a></td><td>BPF_MAP_TYPE_SOCKMAP</td></tr>
+<tr><td>CPU references</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/6710e1126934d8b4372b4d2f9ae1646cd3f151bf"><code>6710e1126934</code></a></td><td>BPF_MAP_TYPE_CPUMAP</td></tr>
+<tr><td>AF_XDP socket (XSK) references</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/fbfc504a24f53f7ebe128ab55cb5dba634f4ece8"><code>fbfc504a24f5</code></a></td><td>BPF_MAP_TYPE_XSKMAP</td></tr>
+<tr><td>Socket references (hashmap)</td><td>4.18</td><td><a href="https://github.com/torvalds/linux/commit/81110384441a59cff47430f20f049e69b98c17f4"><code>81110384441a</code></a></td><td>BPF_MAP_TYPE_SOCKHASH</td></tr>
+<tr><td>cgroup storage</td><td>4.19</td><td><a href="https://github.com/torvalds/linux/commit/de9cbbaadba5adf88a19e46df61f7054000838f6"><code>de9cbbaadba5</code></a></td><td>BPF_MAP_TYPE_CGROUP_STORAGE</td></tr>
+<tr><td>reuseport sockarray</td><td>4.19</td><td><a href="https://github.com/torvalds/linux/commit/5dc4c4b7d4e8115e7cde96a030f98cb3ab2e458c"><code>5dc4c4b7d4e8</code></a></td><td>BPF_MAP_TYPE_REUSEPORT_SOCKARRAY</td></tr>
+<tr><td>precpu cgroup storage</td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/b741f1630346defcbc8cc60f1a2bdae8b3b0036f"><code>b741f1630346</code></a></td><td>BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE</td></tr>
+<tr><td>queue</td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/f1a2e44a3aeccb3ff18d3ccc0b0203e70b95bd92"><code>f1a2e44a3aec</code></a></td><td>BPF_MAP_TYPE_QUEUE</td></tr>
+<tr><td>stack</td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/f1a2e44a3aeccb3ff18d3ccc0b0203e70b95bd92"><code>f1a2e44a3aec</code></a></td><td>BPF_MAP_TYPE_STACK</td></tr>
+<tr><td>socket local storage</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/6ac99e8f23d4b10258406ca0dd7bffca5f31da9d"><code>6ac99e8f23d4</code></a></td><td>BPF_MAP_TYPE_SK_STORAGE</td></tr>
+<tr><td>Netdevice references (hashmap)</td><td>5.4</td><td><a href="https://github.com/torvalds/linux/commit/6f9d451ab1a33728adb72d7ff66a7b374d665176"><code>6f9d451ab1a3</code></a></td><td>BPF_MAP_TYPE_DEVMAP_HASH</td></tr>
+<tr><td>struct ops</td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/85d33df357b634649ddbe0a20fd2d0fc5732c3cb"><code>85d33df357b6</code></a></td><td>BPF_MAP_TYPE_STRUCT_OPS</td></tr>
+<tr><td>ring buffer</td><td>5.8</td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td><td>BPF_MAP_TYPE_RINGBUF</td></tr>
+<tr><td>inode storage</td><td>5.10</td><td><a href="https://github.com/torvalds/linux/commit/8ea636848aca35b9f97c5b5dee30225cf2dd0fe6"><code>8ea636848aca</code></a></td><td>BPF_MAP_TYPE_INODE_STORAGE</td></tr>
+<tr><td>task storage</td><td>5.11</td><td><a href="https://github.com/torvalds/linux/commit/4cf1bc1f10452065a29d576fc5693fc4fab5b919"><code>4cf1bc1f1045</code></a></td><td>BPF_MAP_TYPE_TASK_STORAGE</td></tr>
+<tr><td>Bloom filter</td><td>5.16</td><td><a href="https://github.com/torvalds/linux/commit/9330986c03006ab1d33d243b7cfe598a7a3c1baa"><code>9330986c0300</code></a></td><td>BPF_MAP_TYPE_BLOOM_FILTER</td></tr>
+<tr><td>user ringbuf</td><td>6.1</td><td><a href="https://github.com/torvalds/linux/commit/583c1f420173f7d84413a1a1fbf5109d798b4faa"><code>583c1f420173</code></a></td><td>BPF_MAP_TYPE_USER_RINGBUF</td></tr>
+</tbody></table>
+</div>
+<h3 id="map-userspace-api"><a class="header" href="#map-userspace-api">Map userspace API</a></h3>
+<p>Some (but not all) of these <em>API features</em> translate to a subcommand beginning with <code>BPF_MAP_</code>.
+The list of subcommands supported in your kernel can be found in file
+<a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h"><code>include/uapi/linux/bpf.h</code></a>:</p>
+<pre><code class="language-sh">git grep -W 'bpf_cmd {' include/uapi/linux/bpf.h
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Kernel version</th><th>Commit</th></tr></thead><tbody>
+<tr><td>Basic operations (lookup, update, delete, <code>GET_NEXT_KEY</code>)</td><td>3.18</td><td><a href="https://github.com/torvalds/linux/commit/db20fd2b01087bdfbe30bce314a198eefedcc42e"><code>db20fd2b0108</code></a></td></tr>
+<tr><td>Pass flags to <code>UPDATE_ELEM</code></td><td>3.19</td><td><a href="https://github.com/torvalds/linux/commit/3274f52073d88b62f3c5ace82ae9d48546232e72"><code>3274f52073d8</code></a></td></tr>
+<tr><td>Pre-alloc map memory by default</td><td>4.6</td><td><a href="https://github.com/torvalds/linux/commit/6c90598174322b8888029e40dd84a4eb01f56afe"><code>6c9059817432</code></a></td></tr>
+<tr><td>Pass <code>NULL</code> to <code>GET_NEXT_KEY</code></td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/8fe45924387be6b5c1be59a7eb330790c61d5d10"><code>8fe45924387b</code></a></td></tr>
+<tr><td>Creation: select NUMA node</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/96eabe7a40aa17e613cf3db2c742ee8b1fc764d0"><code>96eabe7a40aa</code></a></td></tr>
+<tr><td>Restrict access from syscall side</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/6e71b04a82248ccf13a94b85cbc674a9fefe53f5"><code>6e71b04a8224</code></a></td></tr>
+<tr><td>Creation: specify map name</td><td>4.15</td><td><a href="https://github.com/torvalds/linux/commit/ad5b177bd73f5107d97c36f56395c4281fb6f089"><code>ad5b177bd73f</code></a></td></tr>
+<tr><td><code>LOOKUP_AND_DELETE_ELEM</code></td><td>4.20</td><td><a href="https://github.com/torvalds/linux/commit/bd513cd08f10cbe28856f99ae951e86e86803861"><code>bd513cd08f10</code></a></td></tr>
+<tr><td>Creation: <code>BPF_F_ZERO_SEED</code></td><td>5.0</td><td><a href="https://github.com/torvalds/linux/commit/96b3b6c9091d23289721350e32c63cc8749686be"><code>96b3b6c9091d</code></a></td></tr>
+<tr><td><code>BPF_F_LOCK</code> flag for lookup / update</td><td>5.1</td><td><a href="https://github.com/torvalds/linux/commit/96049f3afd50fe8db69fa0068cdca822e747b1e4"><code>96049f3afd50</code></a></td></tr>
+<tr><td>Restrict access from BPF side</td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/591fe9888d7809d9ee5c828020b6c6ae27c37229"><code>591fe9888d78</code></a></td></tr>
+<tr><td><code>FREEZE</code></td><td>5.2</td><td><a href="https://github.com/torvalds/linux/commit/87df15de441bd4add7876ef584da8cabdd9a042a"><code>87df15de441b</code></a></td></tr>
+<tr><td>mmap() support for array maps</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/fc9702273e2edb90400a34b3be76f7b08fa3344b"><code>fc9702273e2e</code></a></td></tr>
+<tr><td><code>LOOKUP_BATCH</code></td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/cb4d03ab499d4c040f4ab6fd4389d2b49f42b5a5"><code>cb4d03ab499d</code></a></td></tr>
+<tr><td><code>UPDATE_BATCH</code>, <code>DELETE_BATCH</code></td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/aa2e93b8e58e18442edfb2427446732415bc215e"><code>aa2e93b8e58e</code></a></td></tr>
+<tr><td><code>LOOKUP_AND_DELETE_BATCH</code></td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/057996380a42bb64ccc04383cfa9c0ace4ea11f0"><code>057996380a42</code></a></td></tr>
+<tr><td><code>LOOKUP_AND_DELETE_ELEM</code> support for hash maps</td><td>5.14</td><td><a href="https://github.com/torvalds/linux/commit/3e87f192b405960c0fe83e0925bd0dadf4f8cf43"><code>3e87f192b405</code></a></td></tr>
+</tbody></table>
+</div>
+<h2 id="xdp"><a class="header" href="#xdp">XDP</a></h2>
+<p>An approximate list of drivers or components supporting XDP programs for your
+kernel can be retrieved with:</p>
+<pre><code class="language-sh">git grep -l XDP_SETUP_PROG drivers/
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Feature / Driver</th><th>Kernel version</th><th>Commit</th></tr></thead><tbody>
+<tr><td>XDP core architecture</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6a773a15a1e8874e5eccd2f29190c31085912c95"><code>6a773a15a1e8</code></a></td></tr>
+<tr><td>Action: drop</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6a773a15a1e8874e5eccd2f29190c31085912c95"><code>6a773a15a1e8</code></a></td></tr>
+<tr><td>Action: pass on to stack</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6a773a15a1e8874e5eccd2f29190c31085912c95"><code>6a773a15a1e8</code></a></td></tr>
+<tr><td>Action: direct forwarding (on same port)</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/6ce96ca348a9e949f8c43f4d3e98db367d93cffd"><code>6ce96ca348a9</code></a></td></tr>
+<tr><td>Direct packet data write</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/4acf6c0b84c91243c705303cd9ff16421914150d"><code>4acf6c0b84c9</code></a></td></tr>
+<tr><td>Mellanox <code>mlx4</code> driver</td><td>4.8</td><td><a href="https://github.com/torvalds/linux/commit/47a38e155037f417c5740e24ccae6482aedf4b68"><code>47a38e155037</code></a></td></tr>
+<tr><td>Mellanox <code>mlx5</code> driver</td><td>4.9</td><td><a href="https://github.com/torvalds/linux/commit/86994156c736978d113e7927455d4eeeb2128b9f"><code>86994156c736</code></a></td></tr>
+<tr><td>Netronome <code>nfp</code> driver</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/ecd63a0217d5f1e8a92f7516f5586d1177b95de2"><code>ecd63a0217d5</code></a></td></tr>
+<tr><td>QLogic (Cavium) <code>qed*</code> drivers</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/496e051709588f832d7a6a420f44f8642b308a87"><code>496e05170958</code></a></td></tr>
+<tr><td><code>virtio_net</code> driver</td><td>4.10</td><td><a href="https://github.com/torvalds/linux/commit/f600b690501550b94e83e07295d9c8b9c4c39f4e"><code>f600b6905015</code></a></td></tr>
+<tr><td>Broadcom <code>bnxt_en</code> driver</td><td>4.11</td><td><a href="https://github.com/torvalds/linux/commit/c6d30e8391b85e00eb544e6cf047ee0160ee9938"><code>c6d30e8391b8</code></a></td></tr>
+<tr><td>Intel <code>ixgbe*</code> drivers</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/9247080816297de4e31abb684939c0e53e3a8a67"><code>924708081629</code></a></td></tr>
+<tr><td>Cavium <code>thunderx</code> driver</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/05c773f52b96ef3fbc7d9bfa21caadc6247ef7a8"><code>05c773f52b96</code></a></td></tr>
+<tr><td>Generic XDP</td><td>4.12</td><td><a href="https://github.com/torvalds/linux/commit/b5cdae3291f7be7a34e75affe4c0ec1f7f328b64"><code>b5cdae3291f7</code></a></td></tr>
+<tr><td>Intel <code>i40e</code> driver</td><td>4.13</td><td><a href="https://github.com/torvalds/linux/commit/0c8493d90b6bb0f5c4fe9217db8f7203f24c0f28"><code>0c8493d90b6b</code></a></td></tr>
+<tr><td>Action: redirect</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/6453073987ba392510ab6c8b657844a9312c67f7"><code>6453073987ba</code></a></td></tr>
+<tr><td>Support for tap</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/761876c857cb2ef8489fbee01907151da902af91"><code>761876c857cb</code></a></td></tr>
+<tr><td>Support for veth</td><td>4.14</td><td><a href="https://github.com/torvalds/linux/commit/d445516966dcb2924741b13b27738b54df2af01a"><code>d445516966dc</code></a></td></tr>
+<tr><td>Intel <code>ixgbevf</code> driver</td><td>4.17</td><td><a href="https://github.com/torvalds/linux/commit/c7aec59657b60f3a29fc7d3274ebefd698879301"><code>c7aec59657b6</code></a></td></tr>
+<tr><td>Freescale <code>dpaa2</code> driver</td><td>5.0</td><td><a href="https://github.com/torvalds/linux/commit/7e273a8ebdd3b83f94eb8b49fc8ee61464f47cc2"><code>7e273a8ebdd3</code></a></td></tr>
+<tr><td>Socionext <code>netsec</code> driver</td><td>5.3</td><td><a href="https://github.com/torvalds/linux/commit/ba2b232108d3c2951bab02930a00f23b0cffd5af"><code>ba2b232108d3</code></a></td></tr>
+<tr><td>TI <code>cpsw</code> driver</td><td>5.3</td><td><a href="https://github.com/torvalds/linux/commit/9ed4050c0d75768066a07cf66eef4f8dc9d79b52"><code>9ed4050c0d75</code></a></td></tr>
+<tr><td>Intel <code>ice</code> driver</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/efc2214b6047b6f5b4ca53151eba62521b9452d6"><code>efc2214b6047</code></a></td></tr>
+<tr><td>Solarflare <code>sfc</code> driver</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/eb9a36be7f3ec414700af9a616f035eda1f1e63e"><code>eb9a36be7f3e</code></a></td></tr>
+<tr><td>Marvell <code>mvneta</code> driver</td><td>5.5</td><td><a href="https://github.com/torvalds/linux/commit/0db51da7a8e99f0803ec3a8e25c1a66234a219cb"><code>0db51da7a8e9</code></a></td></tr>
+<tr><td>Microsoft <code>hv_netvsc</code> driver</td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/351e1581395fcc7fb952bbd7dda01238f69968fd"><code>351e1581395f</code></a></td></tr>
+<tr><td>Amazon <code>ena</code> driver</td><td>5.6</td><td><a href="https://github.com/torvalds/linux/commit/838c93dc5449e5d6378bae117b0a65a122cf7361"><code>838c93dc5449</code></a></td></tr>
+<tr><td><code>xen-netfront</code> driver</td><td>5.9</td><td><a href="https://github.com/torvalds/linux/commit/6c5aa6fc4defc2a0977a2c59e4710d50fa1e834c"><code>6c5aa6fc4def</code></a></td></tr>
+<tr><td>Intel <code>igb</code> driver</td><td>5.10</td><td><a href="https://github.com/torvalds/linux/commit/9cbc948b5a20c9c054d9631099c0426c16da546b"><code>9cbc948b5a20</code></a></td></tr>
+</tbody></table>
+</div>
+<h2 id="helpers"><a class="header" href="#helpers">Helpers</a></h2>
+<p>The list of helpers supported in your kernel can be found in file
+<a href="https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h"><code>include/uapi/linux/bpf.h</code></a>:</p>
+<pre><code class="language-sh">git grep '	FN(' include/uapi/linux/bpf.h
+</code></pre>
+<p>Alphabetical order</p>
+<div class="table-wrapper"><table><thead><tr><th>Helper</th><th>Kernel version</th><th>License</th><th>Commit</th></tr></thead><tbody>
+<tr><td><code>BPF_FUNC_bind()</code></td><td>4.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d74bad4e74ee373787a9ae24197c17b7cdc428d5"><code>d74bad4e74ee</code></a></td></tr>
+<tr><td><code>BPF_FUNC_bprm_opts_set()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3f6719c7b62f0327c9091e26d0da10e65668229e"><code>3f6719c7b62f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_btf_find_by_name_kind()</code></td><td>5.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3d78417b60fba249cc555468cb72d96f5cde2964"><code>3d78417b60fb</code></a></td></tr>
+<tr><td><code>BPF_FUNC_cgrp_storage_delete()</code></td><td>6.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c4bcfb38a95edb1021a53f2d0356a78120ecfbe4"><code>c4bcfb38a95e</code></a></td></tr>
+<tr><td><code>BPF_FUNC_cgrp_storage_get()</code></td><td>6.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c4bcfb38a95edb1021a53f2d0356a78120ecfbe4"><code>c4bcfb38a95e</code></a></td></tr>
+<tr><td><code>BPF_FUNC_check_mtu()</code></td><td>5.12</td><td></td><td><a href="https://github.com/torvalds/linux/commit/34b2021cc61642d61c3cf943d9e71925b827941b"><code>34b2021cc616</code></a></td></tr>
+<tr><td><code>BPF_FUNC_clone_redirect()</code></td><td>4.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3896d655f4d491c67d669a15f275a39f713410f8"><code>3896d655f4d4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_copy_from_user()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/07be4c4a3e7a0db148e44b16c5190e753d1c8569"><code>07be4c4a3e7a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_copy_from_user_task()</code></td><td>5.18</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/376040e47334c6dc6a939a32197acceb00fe4acf"><code>376040e47334</code></a></td></tr>
+<tr><td><code>BPF_FUNC_csum_diff()</code></td><td>4.6</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7d672345ed295b1356a5d9f7111da1d1d7d65867"><code>7d672345ed29</code></a></td></tr>
+<tr><td><code>BPF_FUNC_csum_level()</code></td><td>5.7</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7cdec54f9713256bb170873a1fc5c75c9127c9d2"><code>7cdec54f9713</code></a></td></tr>
+<tr><td><code>BPF_FUNC_csum_update()</code></td><td>4.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/36bbef52c7eb646ed6247055a2acd3851e317857"><code>36bbef52c7eb</code></a></td></tr>
+<tr><td><code>BPF_FUNC_current_task_under_cgroup()</code></td><td>4.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/60d20f9195b260bdf0ac10c275ae9f6016f9c069"><code>60d20f9195b2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_d_path()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6e22ab9da79343532cd3cde39df25e5a5478c692"><code>6e22ab9da793</code></a></td></tr>
+<tr><td><code>BPF_FUNC_dynptr_data()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/34d4ef5775f776ec4b0d53a02d588bf3195cada6"><code>34d4ef5775f7</code></a></td></tr>
+<tr><td><code>BPF_FUNC_dynptr_from_mem()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/263ae152e96253f40c2c276faad8629e096b3bad"><code>263ae152e962</code></a></td></tr>
+<tr><td><code>BPF_FUNC_dynptr_read()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/13bbbfbea7598ea9f8d9c3d73bf053bb57f9c4b2"><code>13bbbfbea759</code></a></td></tr>
+<tr><td><code>BPF_FUNC_dynptr_write()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/13bbbfbea7598ea9f8d9c3d73bf053bb57f9c4b2"><code>13bbbfbea759</code></a></td></tr>
+<tr><td><code>BPF_FUNC_fib_lookup()</code></td><td>4.18</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/87f5fc7e48dd3175b30dd03b41564e1a8e136323"><code>87f5fc7e48dd</code></a></td></tr>
+<tr><td><code>BPF_FUNC_find_vma()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7c7e3d31e7856a8260a254f8c71db416f7f9f5a1"><code>7c7e3d31e785</code></a></td></tr>
+<tr><td><code>BPF_FUNC_for_each_map_elem()</code></td><td>5.13</td><td></td><td><a href="https://github.com/torvalds/linux/commit/69c087ba6225b574afb6e505b72cb75242a3d844"><code>69c087ba6225</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_attach_cookie()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7adfc6c9b315e174cf8743b21b7b691c8766791b"><code>7adfc6c9b315</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_branch_snapshot()</code></td><td>5.16</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/856c02dbce4f8d6a5644083db22c11750aa11481"><code>856c02dbce4f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_ancestor_cgroup_id()</code></td><td>5.6</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b4490c5c4e023f09b7d27c9a9d3e7ad7d09ea6bf"><code>b4490c5c4e02</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_cgroup_classid()</code></td><td>4.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8d20aabe1c76cccac544d9fcc3ad7823d9e98a2d"><code>8d20aabe1c76</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_cgroup_id()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/bf6fa2c893c5237b48569a13fa3c673041430b6c"><code>bf6fa2c893c5</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_comm()</code></td><td>4.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/ffeedafbf0236f03aeb2e8db273b3e5ae5f5bc89"><code>ffeedafbf023</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_pid_tgid()</code></td><td>4.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/ffeedafbf0236f03aeb2e8db273b3e5ae5f5bc89"><code>ffeedafbf023</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_task()</code></td><td>4.8</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/606274c5abd8e245add01bc7145a8cbb92b69ba8"><code>606274c5abd8</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_task_btf()</code></td><td>5.11</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/3ca1032ab7ab010eccb107aa515598788f7d93bb"><code>3ca1032ab7ab</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_current_uid_gid()</code></td><td>4.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/ffeedafbf0236f03aeb2e8db273b3e5ae5f5bc89"><code>ffeedafbf023</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_func_arg()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f92c1e183604c20ce00eb889315fdaa8f2d9e509"><code>f92c1e183604</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_func_arg_cnt()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f92c1e183604c20ce00eb889315fdaa8f2d9e509"><code>f92c1e183604</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_func_ip()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/5d8b583d04aedb3bd5f6d227a334c210c7d735f9"><code>5d8b583d04ae</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_func_ret()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f92c1e183604c20ce00eb889315fdaa8f2d9e509"><code>f92c1e183604</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_retval()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b44123b4a3dcad4664d3a0f72c011ffd4c9c4d93"><code>b44123b4a3dc</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_hash_recalc()</code></td><td>4.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/13c5c240f789bbd2bcacb14a23771491485ae61f"><code>13c5c240f789</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_listener_sock()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/dbafd7ddd62369b2f3926ab847cbf8fc40e800b7"><code>dbafd7ddd623</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_local_storage()</code></td><td>4.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/cd3394317653837e2eb5c5d0904a8996102af9fc"><code>cd3394317653</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_netns_cookie()</code></td><td>5.7</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f318903c0bf42448b4c884732df2bbb0ef7a2284"><code>f318903c0bf4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_ns_current_pid_tgid()</code></td><td>5.7</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b4490c5c4e023f09b7d27c9a9d3e7ad7d09ea6bf"><code>b4490c5c4e02</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_numa_node_id()</code></td><td>4.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/2d0e30c30f84d08dc16f0f2af41f1b8a85f0755e"><code>2d0e30c30f84</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_prandom_u32()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/03e69b508b6f7c51743055c9f61d1dfeadf4b635"><code>03e69b508b6f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_route_realm()</code></td><td>4.4</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c46646d0484f5d08e2bede9b45034ba5b8b489cc"><code>c46646d0484f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_smp_processor_id()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c04167ce2ca0ecaeaafef006cb0d65cf01b68e42"><code>c04167ce2ca0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_socket_cookie()</code></td><td>4.12</td><td></td><td><a href="https://github.com/torvalds/linux/commit/91b8270f2a4d1d9b268de90451cdca63a70052d6"><code>91b8270f2a4d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_socket_uid()</code></td><td>4.12</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6acc5c2910689fc6ee181bf63085c5efff6a42bd"><code>6acc5c291068</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_stack()</code></td><td>4.18</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/de2ff05f48afcde816ff4edb217417f62f624ab5"><code>de2ff05f48af</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_stackid()</code></td><td>4.6</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/d5a3b1f691865be576c2bffa708549b8cdccda19"><code>d5a3b1f69186</code></a></td></tr>
+<tr><td><code>BPF_FUNC_get_task_stack()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/fa28dcb82a38f8e3993b0fae9106b1a80b59e4f0"><code>fa28dcb82a38</code></a></td></tr>
+<tr><td><code>BPF_FUNC_getsockopt()</code></td><td>4.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/cd86d1fd21025fdd6daf23d1288da405e7ad0ec6"><code>cd86d1fd2102</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ima_file_hash()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/174b16946e39ebd369097e0f773536c91a8c1a4c"><code>174b16946e39</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ima_inode_hash()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/27672f0d280a3f286a410a8db2004f46ace72a17"><code>27672f0d280a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_inode_storage_delete()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8ea636848aca35b9f97c5b5dee30225cf2dd0fe6"><code>8ea636848aca</code></a></td></tr>
+<tr><td><code>BPF_FUNC_inode_storage_get()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8ea636848aca35b9f97c5b5dee30225cf2dd0fe6"><code>8ea636848aca</code></a></td></tr>
+<tr><td><code>BPF_FUNC_jiffies64()</code></td><td>5.5</td><td></td><td><a href="https://github.com/torvalds/linux/commit/5576b991e9c1a11d2cc21c4b94fc75ec27603896"><code>5576b991e9c1</code></a></td></tr>
+<tr><td><code>BPF_FUNC_kallsyms_lookup_name()</code></td><td>5.16</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d6aef08a872b9e23eecc92d0e92393473b13c497"><code>d6aef08a872b</code></a></td></tr>
+<tr><td><code>BPF_FUNC_kptr_xchg()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c0a5a21c25f37c9fd7b36072f9968cdff1e4aa13"><code>c0a5a21c25f3</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ktime_get_boot_ns()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/71d19214776e61b33da48f7c1b46e522c7f78221"><code>71d19214776e</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ktime_get_coarse_ns()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d055126180564a57fe533728a4e93d0cb53d49b3"><code>d05512618056</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ktime_get_ns()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d9847d310ab4003725e6ed1822682e24bd406908"><code>d9847d310ab4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ktime_get_tai_ns()</code></td><td>6.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c8996c98f703b09afe77a1d247dae691c9849dc1"><code>c8996c98f703</code></a></td></tr>
+<tr><td><code>BPF_FUNC_l3_csum_replace()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/91bc4822c3d61b9bb7ef66d3b77948a4f9177954"><code>91bc4822c3d6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_l4_csum_replace()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/91bc4822c3d61b9bb7ef66d3b77948a4f9177954"><code>91bc4822c3d6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_load_hdr_opt()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/0813a841566f0962a5551be7749b43c45f0022a0"><code>0813a841566f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_loop()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/e6f2dd0f80674e9d5960337b3e9c2a242441b326"><code>e6f2dd0f8067</code></a></td></tr>
+<tr><td><code>BPF_FUNC_lwt_push_encap()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee79"><code>fe94cc290f53</code></a></td></tr>
+<tr><td><code>BPF_FUNC_lwt_seg6_action()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee79"><code>fe94cc290f53</code></a></td></tr>
+<tr><td><code>BPF_FUNC_lwt_seg6_adjust_srh()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee79"><code>fe94cc290f53</code></a></td></tr>
+<tr><td><code>BPF_FUNC_lwt_seg6_store_bytes()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee79"><code>fe94cc290f53</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_delete_elem()</code></td><td>3.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d0003ec01c667b731c139e23de3306a8b328ccf5"><code>d0003ec01c66</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_lookup_elem()</code></td><td>3.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d0003ec01c667b731c139e23de3306a8b328ccf5"><code>d0003ec01c66</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_lookup_percpu_elem()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/07343110b293456d30393e89b86c4dee1ac051c8"><code>07343110b293</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_peek_elem()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f1a2e44a3aeccb3ff18d3ccc0b0203e70b95bd92"><code>f1a2e44a3aec</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_pop_elem()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f1a2e44a3aeccb3ff18d3ccc0b0203e70b95bd92"><code>f1a2e44a3aec</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_push_elem()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f1a2e44a3aeccb3ff18d3ccc0b0203e70b95bd92"><code>f1a2e44a3aec</code></a></td></tr>
+<tr><td><code>BPF_FUNC_map_update_elem()</code></td><td>3.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d0003ec01c667b731c139e23de3306a8b328ccf5"><code>d0003ec01c66</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_apply_bytes()</code></td><td>4.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/2a100317c9ebc204a166f16294884fbf9da074ce"><code>2a100317c9eb</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_cork_bytes()</code></td><td>4.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/91843d540a139eb8070bcff8aa10089164436deb"><code>91843d540a13</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_pop_data()</code></td><td>5.0</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7246d8ed4dcce23f7509949a77be15fa9f0e3d28"><code>7246d8ed4dcc</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_pull_data()</code></td><td>4.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/015632bb30daaaee64e1bcac07570860e0bf3092"><code>015632bb30da</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_push_data()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6fff607e2f14bd7c63c06c464a6f93b8efbabe28"><code>6fff607e2f14</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_redirect_hash()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/81110384441a59cff47430f20f049e69b98c17f4"><code>81110384441a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_msg_redirect_map()</code></td><td>4.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4f738adba30a7cfc006f605707e7aee847ffefa0"><code>4f738adba30a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_per_cpu_ptr()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/eaa6bcb71ef6ed3dc18fc525ee7e293b06b4882b"><code>eaa6bcb71ef6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_perf_event_output()</code></td><td>4.4</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/a43eec304259a6c637f4014a6d4767159b6a3aa3"><code>a43eec304259</code></a></td></tr>
+<tr><td><code>BPF_FUNC_perf_event_read()</code></td><td>4.3</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/35578d7984003097af2b1e34502bc943d40c1804"><code>35578d798400</code></a></td></tr>
+<tr><td><code>BPF_FUNC_perf_event_read_value()</code></td><td>4.15</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/908432ca84fc229e906ba164219e9ad0fe56f755"><code>908432ca84fc</code></a></td></tr>
+<tr><td><code>BPF_FUNC_perf_prog_read_value()</code></td><td>4.15</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/4bebdc7a85aa400c0222b5329861e4ad9252f1e5"><code>4bebdc7a85aa</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read()</code></td><td>4.1</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/2541517c32be2531e0da59dfd7efc1ce844644f5"><code>2541517c32be</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read_kernel()</code></td><td>5.5</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/6ae08ae3dea2cfa03dd3665a3c8475c2d429ef47"><code>6ae08ae3dea2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read_kernel_str()</code></td><td>5.5</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/6ae08ae3dea2cfa03dd3665a3c8475c2d429ef47"><code>6ae08ae3dea2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read_user()</code></td><td>5.5</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/6ae08ae3dea2cfa03dd3665a3c8475c2d429ef47"><code>6ae08ae3dea2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read_user_str()</code></td><td>5.5</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/6ae08ae3dea2cfa03dd3665a3c8475c2d429ef47"><code>6ae08ae3dea2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_read_str()</code></td><td>4.11</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/a5e8c07059d0f0b31737408711d44794928ac218"><code>a5e8c07059d0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_probe_write_user()</code></td><td>4.8</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/96ae52279594470622ff0585621a13e96b700600"><code>96ae52279594</code></a></td></tr>
+<tr><td><code>BPF_FUNC_rc_keydown()</code></td><td>4.18</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/f4364dcfc86df7c1ca47b256eaf6b6d0cdd0d936"><code>f4364dcfc86d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_rc_pointer_rel()</code></td><td>5.0</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/01d3240a04f4c09392e13c77b54d4423ebce2d72"><code>01d3240a04f4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_rc_repeat()</code></td><td>4.18</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/f4364dcfc86df7c1ca47b256eaf6b6d0cdd0d936"><code>f4364dcfc86d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_read_branch_records()</code></td><td>5.6</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/fff7b64355eac6e29b50229ad1512315bc04b44e"><code>fff7b64355ea</code></a></td></tr>
+<tr><td><code>BPF_FUNC_redirect()</code></td><td>4.4</td><td></td><td><a href="https://github.com/torvalds/linux/commit/27b29f63058d26c6c1742f1993338280d5a41dc6"><code>27b29f63058d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_redirect_map()</code></td><td>4.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/97f91a7cf04ff605845c20948b8a80e54cbd3376"><code>97f91a7cf04f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_redirect_neigh()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b4ab31414970a7a03a5d55d75083f2c101a30592"><code>b4ab31414970</code></a></td></tr>
+<tr><td><code>BPF_FUNC_redirect_peer()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/9aa1206e8f48222f35a0c809f33b2f4aaa1e2661"><code>9aa1206e8f48</code></a></td></tr>
+<tr><td><code>BPF_FUNC_reserve_hdr_opt()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/0813a841566f0962a5551be7749b43c45f0022a0"><code>0813a841566f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_discard()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_discard_dynptr()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/bc34dee65a65e9c920c420005b8a43f2a721a458"><code>bc34dee65a65</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_output()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_query()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_reserve()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_reserve_dynptr()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/bc34dee65a65e9c920c420005b8a43f2a721a458"><code>bc34dee65a65</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_submit()</code></td><td>5.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/457f44363a8894135c85b7a9afd2bd8196db24ab"><code>457f44363a88</code></a></td></tr>
+<tr><td><code>BPF_FUNC_ringbuf_submit_dynptr()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/bc34dee65a65e9c920c420005b8a43f2a721a458"><code>bc34dee65a65</code></a></td></tr>
+<tr><td><code>BPF_FUNC_send_signal()</code></td><td>5.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8b401f9ed2441ad9e219953927a842d24ed051fc"><code>8b401f9ed244</code></a></td></tr>
+<tr><td><code>BPF_FUNC_send_signal_thread()</code></td><td>5.5</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8482941f09067da42f9c3362e15bfb3f3c19d610"><code>8482941f0906</code></a></td></tr>
+<tr><td><code>BPF_FUNC_seq_printf()</code></td><td>5.7</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/492e639f0c222784e2e0f121966375f641c61b15"><code>492e639f0c22</code></a></td></tr>
+<tr><td><code>BPF_FUNC_seq_printf_btf()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/eb411377aed9e27835e77ee0710ee8f4649958f3"><code>eb411377aed9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_seq_write()</code></td><td>5.7</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/492e639f0c222784e2e0f121966375f641c61b15"><code>492e639f0c22</code></a></td></tr>
+<tr><td><code>BPF_FUNC_set_hash()</code></td><td>4.13</td><td></td><td><a href="https://github.com/torvalds/linux/commit/ded092cd73c2c56a394b936f86897f29b2e131c0"><code>ded092cd73c2</code></a></td></tr>
+<tr><td><code>BPF_FUNC_set_hash_invalid()</code></td><td>4.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7a4b28c6cc9ffac50f791b99cc7e46106436e5d8"><code>7a4b28c6cc9f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_set_retval()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b44123b4a3dcad4664d3a0f72c011ffd4c9c4d93"><code>b44123b4a3dc</code></a></td></tr>
+<tr><td><code>BPF_FUNC_setsockopt()</code></td><td>4.13</td><td></td><td><a href="https://github.com/torvalds/linux/commit/8c4b4c7e9ff0447995750d9329949fa082520269"><code>8c4b4c7e9ff0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_ancestor_cgroup_id()</code></td><td>5.7</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f307fa2cb4c935f7f1ff0aeb880c7b44fb9a642b"><code>f307fa2cb4c9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_assign()</code></td><td>5.6</td><td></td><td><a href="https://github.com/torvalds/linux/commit/cf7fbe660f2dbd738ab58aea8e9b0ca6ad232449"><code>cf7fbe660f2d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_cgroup_id()</code></td><td>5.7</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f307fa2cb4c935f7f1ff0aeb880c7b44fb9a642b"><code>f307fa2cb4c9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_fullsock()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/46f8bc92758c6259bcf945e9216098661c1587cd"><code>46f8bc92758c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_lookup_tcp()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6acc9b432e6714d72d7d77ec7c27f6f8358d0c71"><code>6acc9b432e67</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_lookup_udp()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6acc9b432e6714d72d7d77ec7c27f6f8358d0c71"><code>6acc9b432e67</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_redirect_hash()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/81110384441a59cff47430f20f049e69b98c17f4"><code>81110384441a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_redirect_map()</code></td><td>4.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/174a79ff9515f400b9a6115643dafd62a635b7e6"><code>174a79ff9515</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_release()</code></td><td>4.20</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6acc9b432e6714d72d7d77ec7c27f6f8358d0c71"><code>6acc9b432e67</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_select_reuseport()</code></td><td>4.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/2dbb9b9e6df67d444fbe425c7f6014858d337adf"><code>2dbb9b9e6df6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_storage_delete()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6ac99e8f23d4b10258406ca0dd7bffca5f31da9d"><code>6ac99e8f23d4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sk_storage_get()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6ac99e8f23d4b10258406ca0dd7bffca5f31da9d"><code>6ac99e8f23d4</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_adjust_room()</code></td><td>4.13</td><td></td><td><a href="https://github.com/torvalds/linux/commit/2be7e212d5419a400d051c84ca9fdd083e5aacac"><code>2be7e212d541</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_ancestor_cgroup_id()</code></td><td>4.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7723628101aaeb1d723786747529b4ea65c5b5c5"><code>7723628101aa</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_change_head()</code></td><td>4.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2"><code>3a0af8fd61f9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_change_proto()</code></td><td>4.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/6578171a7ff0c31dc73258f93da7407510abf085"><code>6578171a7ff0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_change_tail()</code></td><td>4.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/5293efe62df81908f2e90c9820c7edcc8e61f5e9"><code>5293efe62df8</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_change_type()</code></td><td>4.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d2485c4242a826fdf493fd3a27b8b792965b9b9e"><code>d2485c4242a8</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_cgroup_classid()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b426ce83baa7dff947fb354118d3133f2953aac8"><code>b426ce83baa7</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_cgroup_id()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/cb20b08ead401fd17627a36f035c0bf5bfee5567"><code>cb20b08ead40</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_ecn_set_ce()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/f7c917ba11a67632a8452ea99fe132f626a7a2cc"><code>f7c917ba11a6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_get_tunnel_key()</code></td><td>4.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d3aa45ce6b94c65b83971257317867db13e5f492"><code>d3aa45ce6b94</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_get_tunnel_opt()</code></td><td>4.6</td><td></td><td><a href="https://github.com/torvalds/linux/commit/14ca0751c96f8d3d0f52e8ed3b3236f8b34d3460"><code>14ca0751c96f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_get_xfrm_state()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/12bed760a78da6e12ac8252fec64d019a9eac523"><code>12bed760a78d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_load_bytes()</code></td><td>4.5</td><td></td><td><a href="https://github.com/torvalds/linux/commit/05c74e5e53f6cb07502c3e6a820f33e2777b6605"><code>05c74e5e53f6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_load_bytes_relative()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4e1ec56cdc59746943b2acfab3c171b930187bbe"><code>4e1ec56cdc59</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_output()</code></td><td>5.5</td><td></td><td><a href="https://github.com/torvalds/linux/commit/a7658e1a4164ce2b9eb4a11aadbba38586e93bd6"><code>a7658e1a4164</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_pull_data()</code></td><td>4.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/36bbef52c7eb646ed6247055a2acd3851e317857"><code>36bbef52c7eb</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_set_tstamp()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/9bb984f28d5bcb917d35d930fcfb89f90f9449fd"><code>9bb984f28d5b</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_set_tunnel_key()</code></td><td>4.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d3aa45ce6b94c65b83971257317867db13e5f492"><code>d3aa45ce6b94</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_set_tunnel_opt()</code></td><td>4.6</td><td></td><td><a href="https://github.com/torvalds/linux/commit/14ca0751c96f8d3d0f52e8ed3b3236f8b34d3460"><code>14ca0751c96f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_store_bytes()</code></td><td>4.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/91bc4822c3d61b9bb7ef66d3b77948a4f9177954"><code>91bc4822c3d6</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_under_cgroup()</code></td><td>4.8</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4a482f34afcc162d8456f449b137ec2a95be60d8"><code>4a482f34afcc</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_vlan_pop()</code></td><td>4.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4e10df9a60d96ced321dd2af71da558c6b750078"><code>4e10df9a60d9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skb_vlan_push()</code></td><td>4.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4e10df9a60d96ced321dd2af71da558c6b750078"><code>4e10df9a60d9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_lookup_tcp()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/edbf8c01de5a104a71ed6df2bf6421ceb2836a8e"><code>edbf8c01de5a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_mctcp_sock()</code></td><td>5.19</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3bc253c2e652cf5f12cd8c00d80d8ec55d67d1a7"><code>3bc253c2e652</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_tcp_sock()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/478cfbdf5f13dfe09cfd0b1cbac821f5e27f6108"><code>478cfbdf5f13</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_tcp_request_sock()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/478cfbdf5f13dfe09cfd0b1cbac821f5e27f6108"><code>478cfbdf5f13</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_tcp_timewait_sock()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/478cfbdf5f13dfe09cfd0b1cbac821f5e27f6108"><code>478cfbdf5f13</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_tcp6_sock()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/af7ec13833619e17f03aa73a785a2f871da6d66b"><code>af7ec1383361</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_udp6_sock()</code></td><td>5.9</td><td></td><td><a href="https://github.com/torvalds/linux/commit/0d4fad3e57df2bf61e8ffc8d12a34b1caf9b8835"><code>0d4fad3e57df</code></a></td></tr>
+<tr><td><code>BPF_FUNC_skc_to_unix_sock()</code></td><td>5.16</td><td></td><td><a href="https://github.com/torvalds/linux/commit/9eeb3aa33ae005526f672b394c1791578463513f"><code>9eeb3aa33ae0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_snprintf()</code></td><td>5.13</td><td></td><td><a href="https://github.com/torvalds/linux/commit/7b15523a989b63927c2bb08e9b5b0bbc10b58bef"><code>7b15523a989b</code></a></td></tr>
+<tr><td><code>BPF_FUNC_snprintf_btf()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c4d0bfb45068d853a478b9067a95969b1886a30f"><code>c4d0bfb45068</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sock_from_file()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4f19cab76136e800a3f04d8c9aa4d8e770e3d3d8"><code>4f19cab76136</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sock_hash_update()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/81110384441a59cff47430f20f049e69b98c17f4"><code>81110384441a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sock_map_update()</code></td><td>4.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/174a79ff9515f400b9a6115643dafd62a635b7e6"><code>174a79ff9515</code></a></td></tr>
+<tr><td><code>BPF_FUNC_spin_lock()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d83525ca62cf8ebe3271d14c36fb900c294274a2"><code>d83525ca62cf</code></a></td></tr>
+<tr><td><code>BPF_FUNC_spin_unlock()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d83525ca62cf8ebe3271d14c36fb900c294274a2"><code>d83525ca62cf</code></a></td></tr>
+<tr><td><code>BPF_FUNC_store_hdr_opt()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/0813a841566f0962a5551be7749b43c45f0022a0"><code>0813a841566f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_strncmp()</code></td><td>5.17</td><td></td><td><a href="https://github.com/torvalds/linux/commit/c5fb19937455095573a19ddcbff32e993ed10e35"><code>c5fb19937455</code></a></td></tr>
+<tr><td><code>BPF_FUNC_strtol()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d7a4cb9b6705a89937d12c8158a35a3145dc967a"><code>d7a4cb9b6705</code></a></td></tr>
+<tr><td><code>BPF_FUNC_strtoul()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/d7a4cb9b6705a89937d12c8158a35a3145dc967a"><code>d7a4cb9b6705</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sys_bpf()</code></td><td>5.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/79a7f8bdb159d9914b58740f3d31d602a6e4aca8"><code>79a7f8bdb159</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sys_close()</code></td><td>5.14</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3abea089246f76c1517b054ddb5946f3f1dbd2c0"><code>3abea089246f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sysctl_get_current_value()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/1d11b3016cec4ed9770b98e82a61708c8f4926e7"><code>1d11b3016cec</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sysctl_get_name()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/808649fb787d918a48a360a668ee4ee9023f0c11"><code>808649fb787d</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sysctl_get_new_value()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4e63acdff864654cee0ac5aaeda3913798ee78f6"><code>4e63acdff864</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sysctl_set_new_value()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4e63acdff864654cee0ac5aaeda3913798ee78f6"><code>4e63acdff864</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tail_call()</code></td><td>4.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/04fd61ab36ec065e194ab5e74ae34a5240d992bb"><code>04fd61ab36ec</code></a></td></tr>
+<tr><td><code>BPF_FUNC_task_pt_regs()</code></td><td>5.15</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/dd6e10fbd9fb86a571d925602c8a24bb4d09a2a7"><code>dd6e10fbd9f</code></a></td></tr>
+<tr><td><code>BPF_FUNC_task_storage_delete()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4cf1bc1f10452065a29d576fc5693fc4fab5b919"><code>4cf1bc1f1045</code></a></td></tr>
+<tr><td><code>BPF_FUNC_task_storage_get()</code></td><td>5.11</td><td></td><td><a href="https://github.com/torvalds/linux/commit/4cf1bc1f10452065a29d576fc5693fc4fab5b919"><code>4cf1bc1f1045</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_check_syncookie()</code></td><td>5.2</td><td></td><td><a href="https://github.com/torvalds/linux/commit/399040847084a69f345e0a52fd62f04654e0fce3"><code>399040847084</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_gen_syncookie()</code></td><td>5.3</td><td></td><td><a href="https://github.com/torvalds/linux/commit/70d66244317e958092e9c971b08dd5b7fd29d9cb#diff-05da4bf36c7fbcd176254e1615d98b28"><code>70d66244317e</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_raw_check_syncookie_ipv4()</code></td><td>6.0</td><td></td><td><a href="https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14"><code>33bf9885040c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_raw_check_syncookie_ipv6()</code></td><td>6.0</td><td></td><td><a href="https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14"><code>33bf9885040c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_raw_gen_syncookie_ipv4()</code></td><td>6.0</td><td></td><td><a href="https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14"><code>33bf9885040c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_raw_gen_syncookie_ipv6()</code></td><td>6.0</td><td></td><td><a href="https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14"><code>33bf9885040c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_send_ack()</code></td><td>5.5</td><td></td><td><a href="https://github.com/torvalds/linux/commit/206057fe020ac5c037d5e2dd6562a9bd216ec765"><code>206057fe020a</code></a></td></tr>
+<tr><td><code>BPF_FUNC_tcp_sock()</code></td><td>5.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/655a51e536c09d15ffa3603b1b6fce2b45b85a1f"><code>655a51e536c0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_this_cpu_ptr()</code></td><td>5.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/63d9b80dcf2c67bc5ade61cbbaa09d7af21f43f1"><code>63d9b80dcf2c</code></a></td></tr>
+<tr><td><code>BPF_FUNC_timer_init()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4"><code>b00628b1c7d5</code></a></td></tr>
+<tr><td><code>BPF_FUNC_timer_set_callback()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4"><code>b00628b1c7d5</code></a></td></tr>
+<tr><td><code>BPF_FUNC_timer_start()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4"><code>b00628b1c7d5</code></a></td></tr>
+<tr><td><code>BPF_FUNC_timer_cancel()</code></td><td>5.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4"><code>b00628b1c7d5</code></a></td></tr>
+<tr><td><code>BPF_FUNC_trace_printk()</code></td><td>4.1</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/9c959c863f8217a2ff3d7c296e8223654d240569"><code>9c959c863f82</code></a></td></tr>
+<tr><td><code>BPF_FUNC_trace_vprintk()</code></td><td>5.16</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/10aceb629e198429c849d5e995c3bb1ba7a9aaa3"><code>10aceb629e19</code></a></td></tr>
+<tr><td><code>BPF_FUNC_user_ringbuf_drain()</code></td><td>6.1</td><td></td><td><a href="https://github.com/torvalds/linux/commit/20571567384428dfc9fe5cf9f2e942e1df13c2dd"><code>205715673844</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_adjust_head()</code></td><td>4.10</td><td></td><td><a href="https://github.com/torvalds/linux/commit/17bedab2723145d17b14084430743549e6943d03"><code>17bedab27231</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_adjust_meta()</code></td><td>4.15</td><td></td><td><a href="https://github.com/torvalds/linux/commit/de8f3a83b0a0fddb2cf56e7a718127e9619ea3da"><code>de8f3a83b0a0</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_adjust_tail()</code></td><td>4.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b32cc5b9a346319c171e3ad905e0cddda032b5eb"><code>b32cc5b9a346</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_get_buff_len()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/0165cc817075cf701e4289838f1d925ff1911b3e"><code>0165cc817075</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_load_bytes()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd"><code>3f364222d032</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_store_bytes()</code></td><td>5.18</td><td></td><td><a href="https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd"><code>3f364222d032</code></a></td></tr>
+<tr><td><code>BPF_FUNC_xdp_output()</code></td><td>5.6</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/d831ee84bfc9173eecf30dbbc2553ae81b996c60"><code>d831ee84bfc9</code></a></td></tr>
+<tr><td><code>BPF_FUNC_override_return()</code></td><td>4.16</td><td>GPL</td><td><a href="https://github.com/torvalds/linux/commit/9802d86585db91655c7d1929a4f6bbe0952ea88e"><code>9802d86585db</code></a></td></tr>
+<tr><td><code>BPF_FUNC_sock_ops_cb_flags_set()</code></td><td>4.16</td><td></td><td><a href="https://github.com/torvalds/linux/commit/b13d880721729384757f235166068c315326f4a1"><code>b13d88072172</code></a></td></tr>
+</tbody></table>
+</div>
+<p>Note: GPL-only BPF helpers require a GPL-compatible license. The current licenses considered GPL-compatible by the kernel are:</p>
+<ul>
+<li>GPL</li>
+<li>GPL v2</li>
+<li>GPL and additional rights</li>
+<li>Dual BSD/GPL</li>
+<li>Dual MIT/GPL</li>
+<li>Dual MPL/GPL</li>
+</ul>
+<p>Check the list of GPL-compatible licenses in your <a href="https://github.com/torvalds/linux/blob/master/include/linux/license.h">kernel source code</a>.</p>
+<h2 id="program-types-1"><a class="header" href="#program-types-1">Program Types</a></h2>
+<p>The list of program types and supported helper functions can be retrieved with:</p>
+<pre><code class="language-sh">git grep -W 'func_proto(enum bpf_func_id func_id' kernel/ net/ drivers/
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>Program Type</th><th>Helper Functions</th></tr></thead><tbody>
+<tr><td><code>BPF_PROG_TYPE_SOCKET_FILTER</code></td><td><code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_skb_load_bytes_relative()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>BPF_FUNC_get_socket_uid()</code> <br> <code>BPF_FUNC_perf_event_output()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_KPROBE</code></td><td><code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_stackid()</code> <br> <code>BPF_FUNC_get_stack()</code> <br> <code>BPF_FUNC_perf_event_read_value()</code> <br> <code>BPF_FUNC_override_return()</code> <br> <code>Tracing functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_SCHED_CLS</code> <br> <code>BPF_PROG_TYPE_SCHED_ACT</code></td><td><code>BPF_FUNC_skb_store_bytes()</code> <br> <code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_skb_load_bytes_relative()</code> <br> <code>BPF_FUNC_skb_pull_data()</code> <br> <code>BPF_FUNC_csum_diff()</code> <br> <code>BPF_FUNC_csum_update()</code> <br> <code>BPF_FUNC_l3_csum_replace()</code> <br> <code>BPF_FUNC_l4_csum_replace()</code> <br> <code>BPF_FUNC_clone_redirect()</code> <br> <code>BPF_FUNC_get_cgroup_classid()</code> <br> <code>BPF_FUNC_skb_vlan_push()</code> <br> <code>BPF_FUNC_skb_vlan_pop()</code> <br> <code>BPF_FUNC_skb_change_proto()</code> <br> <code>BPF_FUNC_skb_change_type()</code> <br> <code>BPF_FUNC_skb_adjust_room()</code> <br> <code>BPF_FUNC_skb_change_tail()</code> <br> <code>BPF_FUNC_skb_get_tunnel_key()</code> <br> <code>BPF_FUNC_skb_set_tunnel_key()</code> <br> <code>BPF_FUNC_skb_get_tunnel_opt()</code> <br> <code>BPF_FUNC_skb_set_tunnel_opt()</code> <br> <code>BPF_FUNC_redirect()</code> <br> <code>BPF_FUNC_get_route_realm()</code> <br> <code>BPF_FUNC_get_hash_recalc()</code> <br> <code>BPF_FUNC_set_hash_invalid()</code> <br> <code>BPF_FUNC_set_hash()</code> <br> <code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_smp_processor_id()</code> <br> <code>BPF_FUNC_skb_under_cgroup()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>BPF_FUNC_get_socket_uid()</code> <br> <code>BPF_FUNC_fib_lookup()</code> <br> <code>BPF_FUNC_skb_get_xfrm_state()</code> <br> <code>BPF_FUNC_skb_cgroup_id()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_TRACEPOINT</code></td><td><code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_stackid()</code> <br> <code>BPF_FUNC_get_stack()</code> <br> <code>BPF_FUNC_d_path()</code> <br> <code>Tracing functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_XDP</code></td><td><code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_smp_processor_id()</code> <br> <code>BPF_FUNC_csum_diff()</code> <br> <code>BPF_FUNC_xdp_adjust_head()</code> <br> <code>BPF_FUNC_xdp_adjust_meta()</code> <br> <code>BPF_FUNC_redirect()</code> <br> <code>BPF_FUNC_redirect_map()</code> <br> <code>BPF_FUNC_xdp_adjust_tail()</code> <br> <code>BPF_FUNC_fib_lookup()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_PERF_EVENT</code></td><td><code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_stackid()</code> <br> <code>BPF_FUNC_get_stack()</code> <br> <code>BPF_FUNC_perf_prog_read_value()</code> <br> <code>Tracing functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_CGROUP_SKB</code></td><td><code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_skb_load_bytes_relative()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>BPF_FUNC_get_socket_uid()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_CGROUP_SOCK</code></td><td><code>BPF_FUNC_get_current_uid_gid()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_LWT_IN</code></td><td><code>BPF_FUNC_lwt_push_encap()</code> <br> <code>LWT functions</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_LWT_OUT</code></td><td><code>LWT functions</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_LWT_XMIT</code></td><td><code>BPF_FUNC_skb_get_tunnel_key()</code> <br> <code>BPF_FUNC_skb_set_tunnel_key()</code> <br> <code>BPF_FUNC_skb_get_tunnel_opt()</code> <br> <code>BPF_FUNC_skb_set_tunnel_opt()</code> <br> <code>BPF_FUNC_redirect()</code> <br> <code>BPF_FUNC_clone_redirect()</code> <br> <code>BPF_FUNC_skb_change_tail()</code> <br> <code>BPF_FUNC_skb_change_head()</code> <br> <code>BPF_FUNC_skb_store_bytes()</code> <br> <code>BPF_FUNC_csum_update()</code> <br> <code>BPF_FUNC_l3_csum_replace()</code> <br> <code>BPF_FUNC_l4_csum_replace()</code> <br> <code>BPF_FUNC_set_hash_invalid()</code> <br> <code>LWT functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_SOCK_OPS</code></td><td><code>BPF_FUNC_setsockopt()</code> <br> <code>BPF_FUNC_getsockopt()</code> <br> <code>BPF_FUNC_sock_ops_cb_flags_set()</code> <br> <code>BPF_FUNC_sock_map_update()</code> <br> <code>BPF_FUNC_sock_hash_update()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_SK_SKB</code></td><td><code>BPF_FUNC_skb_store_bytes()</code> <br> <code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_skb_pull_data()</code> <br> <code>BPF_FUNC_skb_change_tail()</code> <br> <code>BPF_FUNC_skb_change_head()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>BPF_FUNC_get_socket_uid()</code> <br> <code>BPF_FUNC_sk_redirect_map()</code> <br> <code>BPF_FUNC_sk_redirect_hash()</code> <br> <code>BPF_FUNC_sk_lookup_tcp()</code> <br> <code>BPF_FUNC_sk_lookup_udp()</code> <br> <code>BPF_FUNC_sk_release()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_CGROUP_DEVICE</code></td><td><code>BPF_FUNC_map_lookup_elem()</code> <br> <code>BPF_FUNC_map_update_elem()</code> <br> <code>BPF_FUNC_map_delete_elem()</code> <br> <code>BPF_FUNC_get_current_uid_gid()</code> <br> <code>BPF_FUNC_trace_printk()</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_SK_MSG</code></td><td><code>BPF_FUNC_msg_redirect_map()</code> <br> <code>BPF_FUNC_msg_redirect_hash()</code> <br> <code>BPF_FUNC_msg_apply_bytes()</code> <br> <code>BPF_FUNC_msg_cork_bytes()</code> <br> <code>BPF_FUNC_msg_pull_data()</code> <br> <code>BPF_FUNC_msg_push_data()</code> <br> <code>BPF_FUNC_msg_pop_data()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_RAW_TRACEPOINT</code></td><td><code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_stackid()</code> <br> <code>BPF_FUNC_get_stack()</code> <br> <code>BPF_FUNC_skb_output()</code> <br> <code>Tracing functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_CGROUP_SOCK_ADDR</code></td><td><code>BPF_FUNC_get_current_uid_gid()</code> <br> <code>BPF_FUNC_bind()</code> <br> <code>BPF_FUNC_get_socket_cookie()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_LWT_SEG6LOCAL</code></td><td><code>BPF_FUNC_lwt_seg6_store_bytes()</code> <br> <code>BPF_FUNC_lwt_seg6_action()</code> <br> <code>BPF_FUNC_lwt_seg6_adjust_srh()</code> <br> <code>LWT functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_LIRC_MODE2</code></td><td><code>BPF_FUNC_rc_repeat()</code> <br> <code>BPF_FUNC_rc_keydown()</code> <br> <code>BPF_FUNC_rc_pointer_rel()</code> <br> <code>BPF_FUNC_map_lookup_elem()</code> <br> <code>BPF_FUNC_map_update_elem()</code> <br> <code>BPF_FUNC_map_delete_elem()</code> <br> <code>BPF_FUNC_ktime_get_ns()</code> <br> <code>BPF_FUNC_tail_call()</code> <br> <code>BPF_FUNC_get_prandom_u32()</code> <br> <code>BPF_FUNC_trace_printk()</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_SK_REUSEPORT</code></td><td><code>BPF_FUNC_sk_select_reuseport()</code> <br> <code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_load_bytes_relative()</code> <br> <code>Base functions</code></td></tr>
+<tr><td><code>BPF_PROG_TYPE_FLOW_DISSECTOR</code></td><td><code>BPF_FUNC_skb_load_bytes()</code> <br> <code>Base functions</code></td></tr>
+</tbody></table>
+</div><div class="table-wrapper"><table><thead><tr><th>Function Group</th><th>Functions</th></tr></thead><tbody>
+<tr><td><code>Base functions</code></td><td><code>BPF_FUNC_map_lookup_elem()</code> <br> <code>BPF_FUNC_map_update_elem()</code> <br> <code>BPF_FUNC_map_delete_elem()</code> <br> <code>BPF_FUNC_map_peek_elem()</code> <br> <code>BPF_FUNC_map_pop_elem()</code> <br> <code>BPF_FUNC_map_push_elem()</code> <br> <code>BPF_FUNC_get_prandom_u32()</code> <br> <code>BPF_FUNC_get_smp_processor_id()</code> <br> <code>BPF_FUNC_get_numa_node_id()</code> <br> <code>BPF_FUNC_tail_call()</code> <br> <code>BPF_FUNC_ktime_get_boot_ns()</code> <br> <code>BPF_FUNC_ktime_get_ns()</code> <br> <code>BPF_FUNC_trace_printk()</code> <br> <code>BPF_FUNC_spin_lock()</code> <br> <code>BPF_FUNC_spin_unlock()</code></td></tr>
+<tr><td><code>Tracing functions</code></td><td><code>BPF_FUNC_map_lookup_elem()</code> <br> <code>BPF_FUNC_map_update_elem()</code> <br> <code>BPF_FUNC_map_delete_elem()</code> <br> <code>BPF_FUNC_probe_read()</code> <br> <code>BPF_FUNC_ktime_get_boot_ns()</code> <br> <code>BPF_FUNC_ktime_get_ns()</code> <br> <code>BPF_FUNC_tail_call()</code> <br> <code>BPF_FUNC_get_current_pid_tgid()</code> <br> <code>BPF_FUNC_get_current_task()</code> <br> <code>BPF_FUNC_get_current_uid_gid()</code> <br> <code>BPF_FUNC_get_current_comm()</code> <br> <code>BPF_FUNC_trace_printk()</code> <br> <code>BPF_FUNC_get_smp_processor_id()</code> <br> <code>BPF_FUNC_get_numa_node_id()</code> <br> <code>BPF_FUNC_perf_event_read()</code> <br> <code>BPF_FUNC_probe_write_user()</code> <br> <code>BPF_FUNC_current_task_under_cgroup()</code> <br> <code>BPF_FUNC_get_prandom_u32()</code> <br> <code>BPF_FUNC_probe_read_str()</code> <br> <code>BPF_FUNC_get_current_cgroup_id()</code> <br> <code>BPF_FUNC_send_signal()</code> <br> <code>BPF_FUNC_probe_read_kernel()</code> <br> <code>BPF_FUNC_probe_read_kernel_str()</code> <br> <code>BPF_FUNC_probe_read_user()</code> <br> <code>BPF_FUNC_probe_read_user_str()</code> <br> <code>BPF_FUNC_send_signal_thread()</code> <br> <code>BPF_FUNC_get_ns_current_pid_tgid()</code> <br> <code>BPF_FUNC_xdp_output()</code> <br> <code>BPF_FUNC_get_task_stack()</code></td></tr>
+<tr><td><code>LWT functions</code></td><td><code>BPF_FUNC_skb_load_bytes()</code> <br> <code>BPF_FUNC_skb_pull_data()</code> <br> <code>BPF_FUNC_csum_diff()</code> <br> <code>BPF_FUNC_get_cgroup_classid()</code> <br> <code>BPF_FUNC_get_route_realm()</code> <br> <code>BPF_FUNC_get_hash_recalc()</code> <br> <code>BPF_FUNC_perf_event_output()</code> <br> <code>BPF_FUNC_get_smp_processor_id()</code> <br> <code>BPF_FUNC_skb_under_cgroup()</code></td></tr>
+</tbody></table>
+</div>
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../20-tc/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../bcc-documents/kernel_config.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../20-tc/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../bcc-documents/kernel_config.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出 - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">eBPF 入门开发实践教程</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> eBPF 入门开发实践教程三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> eBPF 入门开发实践教程四：在 eBPF 中捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> eBPF 入门开发实践教程六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html" class="active"><strong aria-hidden="true">8.</strong> eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF入门实践教程</li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/tcpconnlat.html"><strong aria-hidden="true">14.</strong> eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../15-tcprtt/index.html"><strong aria-hidden="true">16.</strong> eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc Guide</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">22.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">23.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">24.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">25.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">26.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">27.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf-入门实践教程七捕获进程执行退出时间通过-perf-event-array-向用户态打印输出"><a class="header" href="#ebpf-入门实践教程七捕获进程执行退出时间通过-perf-event-array-向用户态打印输出">eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></h1>
+<p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
+<p>本文是 eBPF 入门开发实践教程的第七篇，主要介绍如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，不需要再通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出。通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。</p>
+<h2 id="perf-buffer"><a class="header" href="#perf-buffer">perf buffer</a></h2>
+<p>eBPF 提供了两个环形缓冲区，可以用来将信息从 eBPF 程序传输到用户区控制器。第一个是perf环形缓冲区，，它至少从内核v4.15开始就存在了。第二个是后来引入的 BPF 环形缓冲区。本文只考虑perf环形缓冲区。</p>
+<h2 id="execsnoop"><a class="header" href="#execsnoop">execsnoop</a></h2>
+<p>通过 perf event array 向用户态命令行打印输出，需要编写一个头文件，一个 C 源文件。示例代码如下：</p>
+<p>头文件：execsnoop.h</p>
+<pre><code class="language-c">#ifndef __EXECSNOOP_H
+#define __EXECSNOOP_H
+
+#define TASK_COMM_LEN 16
+
+struct event {
+ int pid;
+ int ppid;
+ int uid;
+ int retval;
+ bool is_exit;
+ char comm[TASK_COMM_LEN];
+};
+
+#endif /* __EXECSNOOP_H */
+</code></pre>
+<p>源文件：execsnoop.bpf.c</p>
+<pre><code class="language-c">// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+#include &lt;vmlinux.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &quot;execsnoop.h&quot;
+
+struct {
+ __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+ __uint(key_size, sizeof(u32));
+ __uint(value_size, sizeof(u32));
+} events SEC(&quot;.maps&quot;);
+
+SEC(&quot;tracepoint/syscalls/sys_enter_execve&quot;)
+int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
+{
+ u64 id;
+ pid_t pid, tgid;
+ struct event event;
+ struct task_struct *task;
+
+ uid_t uid = (u32)bpf_get_current_uid_gid();
+ id = bpf_get_current_pid_tgid();
+ pid = (pid_t)id;
+ tgid = id &gt;&gt; 32;
+
+ event.pid = tgid;
+ event.uid = uid;
+ task = (struct task_struct*)bpf_get_current_task();
+ event.ppid = BPF_CORE_READ(task, real_parent, tgid);
+ bpf_get_current_comm(&amp;event.comm, sizeof(event.comm));
+ bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
+ return 0;
+}
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+</code></pre>
+<p>这段代码定义了个 eBPF 程序，用于捕获进程执行 execve 系统调用的入口。</p>
+<p>在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。</p>
+<p>使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件, 并分析进程的执行情况。</p>
+<p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
+<p>使用容器编译：</p>
+<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+</code></pre>
+<p>或者使用 ecc 编译：</p>
+<pre><code class="language-shell">ecc execsnoop.bpf.c execsnoop.h
+</code></pre>
+<p>运行</p>
+<pre><code class="language-console">$ sudo ./ecli run package.json 
+TIME     PID     PPID    UID     COMM    
+21:28:30  40747  3517    1000    node
+21:28:30  40748  40747   1000    sh
+21:28:30  40749  3517    1000    node
+21:28:30  40750  40749   1000    sh
+21:28:30  40751  3517    1000    node
+21:28:30  40752  40751   1000    sh
+21:28:30  40753  40752   1000    cpuUsage.sh
+</code></pre>
+<h2 id="总结"><a class="header" href="#总结">总结</a></h2>
+<p>本文介绍了如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。在 libbpf 对应的内核态代码中，定义这样一个结构体和对应的头文件：</p>
+<pre><code class="language-c">struct {
+ __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+ __uint(key_size, sizeof(u32));
+ __uint(value_size, sizeof(u32));
+} events SEC(&quot;.maps&quot;);
+</code></pre>
+<p>就可以往用户态直接发送信息。</p>
+<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
+<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../6-sigsnoop/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../8-exitsnoop/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../6-sigsnoop/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../8-exitsnoop/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具 - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">eBPF 入门开发实践教程</li><li class="chapter-item expanded "><a href="0-introduce/index.html" class="active"><strong aria-hidden="true">1.</strong> eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> eBPF 入门开发实践教程三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> eBPF 入门开发实践教程四：在 eBPF 中捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> eBPF 入门开发实践教程六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="9-runqlat/index.html"><strong aria-hidden="true">10.</strong> eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF入门实践教程</li><li class="chapter-item expanded "><a href="13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="13-tcpconnlat/tcpconnlat.html"><strong aria-hidden="true">14.</strong> eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时</a></li><li class="chapter-item expanded "><a href="14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="15-tcprtt/index.html"><strong aria-hidden="true">16.</strong> eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></li><li class="chapter-item expanded "><a href="16-memleak/index.html"><strong aria-hidden="true">17.</strong> eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="17-biopattern/index.html"><strong aria-hidden="true">18.</strong> eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="18-further-reading/index.html"><strong aria-hidden="true">19.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="20-tc/index.html"><strong aria-hidden="true">21.</strong> eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc Guide</li><li class="chapter-item expanded "><a href="bcc-documents/kernel-versions.html"><strong aria-hidden="true">22.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="bcc-documents/kernel_config.html"><strong aria-hidden="true">23.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="bcc-documents/reference_guide.html"><strong aria-hidden="true">24.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="bcc-documents/special_filtering.html"><strong aria-hidden="true">25.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="bcc-documents/tutorial.html"><strong aria-hidden="true">26.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">27.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf-入门开发实践教程一介绍-ebpf-的基本概念常见的开发工具"><a class="header" href="#ebpf-入门开发实践教程一介绍-ebpf-的基本概念常见的开发工具">eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></h1>
+<h2 id="1-ebpf简介安全和有效地扩展内核"><a class="header" href="#1-ebpf简介安全和有效地扩展内核">1. eBPF简介：安全和有效地扩展内核</a></h2>
+<p>eBPF 是一项革命性的技术，起源于 Linux 内核，可以在操作系统的内核中运行沙盒程序。它被用来安全和有效地扩展内核的功能，而不需要改变内核的源代码或加载内核模块。eBPF 通过允许在操作系统内运行沙盒程序，应用程序开发人员可以在运行时，可编程地向操作系统动态添加额外的功能。然后，操作系统保证安全和执行效率，就像在即时编译（JIT）编译器和验证引擎的帮助下进行本地编译一样。eBPF 程序在内核版本之间是可移植的，并且可以自动更新，从而避免了工作负载中断和节点重启。</p>
+<p>今天，eBPF被广泛用于各类场景：在现代数据中心和云原生环境中，可以提供高性能的网络包处理和负载均衡；以非常低的资源开销，做到对多种细粒度指标的可观测性，帮助应用程序开发人员跟踪应用程序，为性能故障排除提供洞察力；保障应用程序和容器运行时的安全执行，等等。可能性是无穷的，而 eBPF 在操作系统内核中所释放的创新才刚刚开始[3]。</p>
+<h3 id="ebpf-的未来内核的-javascript-可编程接口"><a class="header" href="#ebpf-的未来内核的-javascript-可编程接口">eBPF 的未来：内核的 JavaScript 可编程接口</a></h3>
+<p>对于浏览器而言，JavaScript 的引入带来的可编程性开启了一场巨大的革命，使浏览器发展成为几乎独立的操作系统。现在让我们回到 eBPF：为了理解 eBPF 对 Linux 内核的可编程性影响，对 Linux 内核的结构以及它如何与应用程序和硬件进行交互有一个高层次的理解是有帮助的[4]。</p>
+<p><img src="kernel-arch.webp" alt="kernel-arch" /></p>
+<p>Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个一致的API（系统调用），允许应用程序运行和共享资源。为了实现这个目的，我们维护了一系列子系统和层，以分配这些责任[5]。每个子系统通常允许某种程度的配置，以考虑到用户的不同需求。如果不能配置所需的行为，就需要改变内核，从历史上看，改变内核的行为，或者让用户编写的程序能够在内核中运行，就有两种选择:</p>
+<div class="table-wrapper"><table><thead><tr><th>本地支持内核模块</th><th>写一个内核模块</th></tr></thead><tbody>
+<tr><td>改变内核源代码，并说服Linux内核社区相信这种改变是必要的。等待几年，让新的内核版本成为一种商品。</td><td>定期修复它，因为每个内核版本都可能破坏它。由于缺乏安全边界，冒着破坏你的Linux内核的风险</td></tr>
+</tbody></table>
+</div>
+<p>实际上，两种方案都不常用，前者成本太高，后者则几乎没有可移植性。</p>
+<p>有了 eBPF，就有了一个新的选择，可以重新编程 Linux 内核的行为，而不需要改变内核的源代码或加载内核模块，同时保证在不同内核版本之间一定程度上的行为一致性和兼容性、以及安全性[6]。为了实现这个目的，eBPF 程序也需要有一套对应的 API，允许用户定义的应用程序运行和共享资源 --- 换句话说，某种意义上讲 eBPF 虚拟机也提供了一套类似于系统调用的机制，借助 eBPF 和用户态通信的机制，Wasm 虚拟机和用户态应用也可以获得这套“系统调用”的完整使用权，一方面能可编程地扩展传统的系统调用的能力，另一方面能在网络、文件系统等许多层次实现更高效的可编程 IO 处理。</p>
+<p><img src="new-os-model.jpg" alt="new-os" /></p>
+<p>正如上图所示，当今的 Linux 内核正在向一个新的内核模型演化：用户定义的应用程序可以在内核态和用户态同时执行，用户态通过传统的系统调用访问系统资源，内核态则通过 BPF Helper Calls 和系统的各个部分完成交互。截止 2023 年初，内核中的 eBPF 虚拟机中已经有 220 多个Helper 系统接口，涵盖了非常多的应用场景。</p>
+<p>值得注意的是，BPF Helper Call 和系统调用二者并不是竞争关系，它们的编程模型和有性能优势的场景完全不同，也不会完全替代对方。对 Wasm 和 Wasi 相关生态来说，情况也类似，专门设计的 wasi 接口需要经历一个漫长的标准化过程，但可能在特定场景能为用户态应用获取更佳的性能和可移植性保证，而 eBPF 在保证沙箱本质和可移植性的前提下，可以提供一个快速灵活的扩展系统接口的方案。</p>
+<p>目前的 eBPF 仍然处于早期阶段，但是借助当前 eBPF 提供的内核接口和用户态交互的能力，经由 Wasm-bpf 的系统接口转换，Wasm 虚拟机中的应用已经几乎有能力获取内核以及用户态任意一个函数调用的数据和返回值（kprobe，uprobe...）；以很低的代价收集和理解所有系统调用，并获取所有网络操作的数据包和套接字级别的数据（tracepoint，socket...）；在网络包处理解决方案中添加额外的协议分析器，并轻松地编程任何转发逻辑（XDP，TC...），以满足不断变化的需求，而无需离开Linux内核的数据包处理环境。</p>
+<p>不仅如此，eBPF 还有能力往用户空间任意进程的任意地址写入数据（bpf_probe_write_user[7]），有限度地修改内核函数的返回值（bpf_override_return[8]），甚至在内核态直接执行某些系统调用[9]；所幸的是，eBPF 在加载进内核之前对字节码会进行严格的安全检查，确保没有内存越界等操作，同时，许多可能会扩大攻击面、带来安全风险的功能都是需要在编译内核时明确选择启用才能使用的；在 Wasm 虚拟机将字节码加载进内核之前，也可以明确选择启用或者禁用某些 eBPF 功能，以确保沙箱的安全性。</p>
+<h2 id="2-关于如何学习-ebpf-相关的开发的一些建议"><a class="header" href="#2-关于如何学习-ebpf-相关的开发的一些建议">2. 关于如何学习 eBPF 相关的开发的一些建议</a></h2>
+<p>本文不会对 eBPF 的原理做更详细的介绍，不过这里有一个学习规划和参考资料，也许会有一些价值：</p>
+<h3 id="ebpf-入门5-7h"><a class="header" href="#ebpf-入门5-7h">eBPF 入门（5-7h）</a></h3>
+<ul>
+<li>Google 或者其他搜索引擎查找：eBPF</li>
+<li>询问 ChatGPT 之类的东西：eBPF 是什么？</li>
+</ul>
+<p>推荐：</p>
+<ul>
+<li>阅读 ebpf 简介：<a href="https://ebpf.io/%EF%BC%8830min%EF%BC%89">https://ebpf.io/（30min）</a></li>
+<li>简要了解一下 ebpf 内核相关文档：<a href="https://prototype-kernel.readthedocs.io/en/latest/bpf/">https://prototype-kernel.readthedocs.io/en/latest/bpf/</a> （知道有问题去哪里查询: 30min）</li>
+<li>阅读 ebpf 中文入门指南：<a href="https://www.modb.pro/db/391570%EF%BC%881h%EF%BC%89">https://www.modb.pro/db/391570（1h）</a></li>
+<li>有大量的参考资料：<a href="https://github.com/zoidbergwill/awesome-ebpf%EF%BC%882-3h%EF%BC%89">https://github.com/zoidbergwill/awesome-ebpf（2-3h）</a></li>
+<li>可以选自己感兴趣的 PPT 翻一翻：<a href="https://github.com/gojue/ebpf-slide%EF%BC%881-2h%EF%BC%89">https://github.com/gojue/ebpf-slide（1-2h）</a></li>
+</ul>
+<p>回答三个问题：</p>
+<ol>
+<li>了解 eBPF 是什么东西？为啥要有这个玩意，不能用内核模块？</li>
+<li>它有什么功能？能在 Linux 内核里面完成哪些事情？有哪些 eBPF 程序的类型和 helper（不需要知道全部，但是需要知道去哪里找）？</li>
+<li>能拿来做什么？比如说在哪些场景中进行运用？网络、安全、可观测性？</li>
+</ol>
+<h3 id="了解如何开发-ebpf-程序10-15h"><a class="header" href="#了解如何开发-ebpf-程序10-15h">了解如何开发 eBPF 程序（10-15h）</a></h3>
+<p>了解并尝试一下 eBPF 开发框架：</p>
+<ul>
+<li>BCC 开发各类小工具的例子：<a href="https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md%EF%BC%88%E8%B7%91%E4%B8%80%E9%81%8D%EF%BC%9A3-4h%EF%BC%89">https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md（跑一遍：3-4h）</a></li>
+<li>libbpf 的一些例子: <a href="https://github.com/libbpf/libbpf-bootstrap%EF%BC%88%E9%80%89%E6%84%9F%E5%85%B4%E8%B6%A3%E7%9A%84%E8%BF%90%E8%A1%8C%E4%B8%80%E4%B8%8B%EF%BC%8C%E5%B9%B6%E9%98%85%E8%AF%BB%E4%B8%80%E4%B8%8B%E6%BA%90%E4%BB%A3%E7%A0%81%EF%BC%9A2h">https://github.com/libbpf/libbpf-bootstrap（选感兴趣的运行一下，并阅读一下源代码：2h</a>）</li>
+<li>基于 libbpf 和 eunomia-bpf 的教程： <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial%EF%BC%88%E9%98%85%E8%AF%BB">https://github.com/eunomia-bpf/bpf-developer-tutorial（阅读</a> 1-10 的部分: 3-4h）</li>
+</ul>
+<p>其他开发框架：Go 语言或者 Rust 语言，请自行搜索并且尝试（0-2h）</p>
+<p>有任何问题或者想了解的东西，不管是不是和本项目相关，都可以在本项目的 discussions 里面开始讨论。</p>
+<p>回答一些问题，并且进行一些尝试（2-5h）：</p>
+<ol>
+<li>如何开发一个最简单的 eBPF 程序？</li>
+<li>如何用 eBPF 追踪一个内核功能或函数？有很多种方法，举出对应的代码；</li>
+<li>有哪些方案能通过用户态和内核态通信？如何从用户态向内核态传送信息？如何从内核态向用户态传递信息？举出代码示例；</li>
+<li>编写一个你自己的 eBPF 程序，实现一个功能；</li>
+<li>eBPF 程序的整个生命周期里面，分别在用户态和内核态做了哪些事情？</li>
+</ol>
+<h2 id="3-如何使用ebpf编程"><a class="header" href="#3-如何使用ebpf编程">3. 如何使用eBPF编程</a></h2>
+<p>原始的eBPF程序编写是非常繁琐和困难的。为了改变这一现状，llvm于2015年推出了可以将由高级语言编写的代码编译为eBPF字节码的功能，同时，eBPF 社区将 <code>bpf()</code> 等原始的系统调用进行了初步地封装，给出了<code>libbpf</code>库。这些库会包含将字节码加载到内核中的函数以及一些其他的关键函数。在Linux的源码包的<code>samples/bpf/</code>目录下，有大量Linux提供的基于<code>libbpf</code>的eBPF样例代码。</p>
+<p>一个典型的基于 <code>libbpf</code> 的eBPF程序具有<code>*_kern.c</code>和<code>*_user.c</code>两个文件，<code>*_kern.c</code>中书写在内核中的挂载点以及处理函数，<code>*_user.c</code>中书写用户态代码，完成内核态代码注入以及与用户交互的各种任务。 更为详细的教程可以参考<a href="https://www.bilibili.com/video/BV1f54y1h74r?spm_id_from=333.999.0.0">该视频</a>然而由于该方法仍然较难理解且入门存在一定的难度，因此现阶段的eBPF程序开发大多基于一些工具，比如：</p>
+<ul>
+<li>BCC</li>
+<li>BPFtrace</li>
+<li>libbpf-bootstrap</li>
+<li>Go eBPF library</li>
+</ul>
+<p>以及还有比较新的工具，例如 <code>eunomia-bpf</code>.</p>
+<h2 id="编写-ebpf-程序"><a class="header" href="#编写-ebpf-程序">编写 eBPF 程序</a></h2>
+<p>eBPF 程序由内核态部分和用户态部分构成。内核态部分包含程序的实际逻辑，用户态部分负责加载和管理内核态部分。使用 eunomia-bpf 开发工具，只需编写内核态部分的代码。</p>
+<p>内核态部分的代码需要符合 eBPF 的语法和指令集。eBPF 程序主要由若干个函数组成，每个函数都有其特定的作用。可以使用的函数类型包括：</p>
+<ul>
+<li>kprobe：插探函数，在指定的内核函数前或后执行。</li>
+<li>tracepoint：跟踪点函数，在指定的内核跟踪点处执行。</li>
+<li>raw_tracepoint：原始跟踪点函数，在指定的内核原始跟踪点处执行。</li>
+<li>xdp：网络数据处理函数，拦截和处理网络数据包。</li>
+<li>perf_event：性能事件函数，用于处理内核性能事件。</li>
+<li>kretprobe：函数返回插探函数，在指定的内核函数返回时执行。</li>
+<li>tracepoint_return：跟踪点函数返回，在指定的内核跟踪点返回时执行。</li>
+<li>raw_tracepoint_return：原始跟踪点函数返回，在指定的内核原始跟踪</li>
+</ul>
+<h3 id="bcc"><a class="header" href="#bcc">BCC</a></h3>
+<p>BCC全称为BPF Compiler Collection，该项目是一个python库，
+包含了完整的编写、编译、和加载BPF程序的工具链，以及用于调试和诊断性能问题的工具。</p>
+<p>自2015年发布以来，BCC经过上百位贡献者地不断完善后，目前已经包含了大量随时可用的跟踪工具。<a href="https://github.com/iovisor/bcc/blob/master/docs/tutorial.md">其官方项目库</a>
+提供了一个方便上手的教程，用户可以快速地根据教程完成BCC入门工作。</p>
+<p>用户可以在BCC上使用Python、Lua等高级语言进行编程。
+相较于使用C语言直接编程，这些高级语言具有极大的便捷性，用户只需要使用C来设计内核中的
+BPF程序，其余包括编译、解析、加载等工作在内，均可由BCC完成。</p>
+<p>然而使用BCC存在一个缺点便是在于其兼容性并不好。基于BCC的
+eBPF程序每次执行时候都需要进行编译，编译则需要用户配置相关的头文件和对应实现。在实际应用中，
+相信大家也会有体会，编译依赖问题是一个很棘手的问题。也正是因此，在本项目的开发中我们放弃了BCC，
+选择了可以做到一次编译-多次运行的libbpf-bootstrap工具。</p>
+<h3 id="ebpf-go-library"><a class="header" href="#ebpf-go-library">eBPF Go library</a></h3>
+<p>eBPF Go库提供了一个通用的eBPF库，它解耦了获取 eBPF 字节码的过程和 eBPF 程序的加载和管理，并实现了类似 libbpf 一样的 CO- 功能。eBPF程序通常是通过编写高级语言创建的，然后使用clang/LLVM编译器编译为eBPF字节码。</p>
+<h3 id="libbpf"><a class="header" href="#libbpf">libbpf</a></h3>
+<p><code>libbpf-bootstrap</code>是一个基于<code>libbpf</code>库的BPF开发脚手架，从其
+<a href="https://github.com/libbpf/libbpf-bootstrap">github</a> 上可以得到其源码。</p>
+<p><code>libbpf-bootstrap</code>综合了BPF社区过去多年的实践，为开发者提了一个现代化的、便捷的工作流，实
+现了一次编译，重复使用的目的。</p>
+<p>基于<code>libbpf-bootstrap</code>的BPF程序对于源文件有一定的命名规则，
+用于生成内核态字节码的bpf文件以<code>.bpf.c</code>结尾，用户态加载字节码的文件以<code>.c</code>结尾，且这两个文件的
+前缀必须相同。</p>
+<p>基于<code>libbpf-bootstrap</code>的BPF程序在编译时会先将<code>*.bpf.c</code>文件编译为
+对应的<code>.o</code>文件，然后根据此文件生成<code>skeleton</code>文件，即<code>*.skel.h</code>，这个文件会包含内核态中定义的一些
+数据结构，以及用于装载内核态代码的关键函数。在用户态代码<code>include</code>此文件之后调用对应的装载函数即可将
+字节码装载到内核中。同样的，<code>libbpf-bootstrap</code>也有非常完备的入门教程，用户可以在<a href="https://nakryiko.com/posts/libbpf-bootstrap/">该处</a>
+得到详细的入门操作介绍。</p>
+<h3 id="eunomia-bpf"><a class="header" href="#eunomia-bpf">eunomia-bpf</a></h3>
+<p>开发、构建和分发 eBPF 一直以来都是一个高门槛的工作，使用 BCC、bpftrace 等工具开发效率高、可移植性好，但是分发部署时需要安装 LLVM、Clang等编译环境，每次运行的时候执行本地或远程编译过程，资源消耗较大；使用原生的 CO-RE libbpf时又需要编写不少用户态加载代码来帮助 eBPF 程序正确加载和从内核中获取上报的信息，同时对于 eBPF 程序的分发、管理也没有很好地解决方案。</p>
+<p><a href="https://github.com/eunomia-bpf/eunomia-bpf">eunomia-bpf</a> 是一个开源的 eBPF 动态加载运行时和开发工具链，是为了简化 eBPF 程序的开发、构建、分发、运行而设计的，基于 libbpf 的 CO-RE 轻量级开发框架。</p>
+<p>使用 eunomia-bpf ，可以：</p>
+<ul>
+<li>在编写 eBPF 程序或工具时只编写内核态代码，自动获取内核态导出信息，并作为模块动态加载；</li>
+<li>使用 WASM 进行用户态交互程序的开发，在 WASM 虚拟机内部控制整个 eBPF 程序的加载和执行，以及处理相关数据；</li>
+<li>eunomia-bpf 可以将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块，跨架构和内核版本进行分发，无需重新编译即可动态加载运行。</li>
+</ul>
+<p>eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的 BCC、原生 libbpf 等框架，大幅简化了 eBPF 程序的开发流程，在大多数时候只需编写内核态代码，即可轻松构建、打包、发布完整的 eBPF 应用，同时内核态 eBPF 代码保证和主流的 libbpf, libbpfgo, libbpf-rs 等开发框架的 100% 兼容性。需要编写用户态代码的时候，也可以借助 Webassembly 实现通过多种语言进行用户态开发。和 bpftrace 等脚本工具相比, eunomia-bpf 保留了类似的便捷性, 同时不仅局限于 trace 方面, 可以用于更多的场景, 如网络、安全等等。</p>
+<blockquote>
+<ul>
+<li>eunomia-bpf 项目 Github 地址: <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></li>
+<li>gitee 镜像: <a href="https://gitee.com/anolis/eunomia">https://gitee.com/anolis/eunomia</a></li>
+</ul>
+</blockquote>
+<h2 id="参考资料"><a class="header" href="#参考资料">参考资料</a></h2>
+<ul>
+<li>eBPF 介绍：<a href="https://ebpf.io/">https://ebpf.io/</a></li>
+<li>BPF Compiler Collection (BCC)：<a href="https://github.com/iovisor/bcc">https://github.com/iovisor/bcc</a></li>
+<li>eunomia-bpf：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></li>
+</ul>
+<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+                            <a rel="next" href="1-helloworld/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+                    <a rel="next" href="1-helloworld/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

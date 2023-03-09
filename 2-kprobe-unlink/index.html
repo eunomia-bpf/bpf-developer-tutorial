@@ -1,0 +1,276 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用 - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">eBPF 入门开发实践教程</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html" class="active"><strong aria-hidden="true">3.</strong> eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> eBPF 入门开发实践教程三：在 eBPF 中使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> eBPF 入门开发实践教程四：在 eBPF 中捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> eBPF 入门开发实践教程六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> eBPF 入门开发实践教程八：在 eBPF 中使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF入门实践教程</li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/tcpconnlat.html"><strong aria-hidden="true">14.</strong> eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../15-tcprtt/index.html"><strong aria-hidden="true">16.</strong> eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc Guide</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">22.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">23.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">24.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">25.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">26.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">27.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
+<p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
+<p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
+<h2 id="kprobes技术背景"><a class="header" href="#kprobes技术背景">kprobes技术背景</a></h2>
+<p>开发人员在内核或者模块的调试过程中，往往会需要要知道其中的一些函数有无被调用、何时被调用、执行是否正确以及函数的入参和返回值是什么等等。比较简单的做法是在内核代码对应的函数中添加日志打印信息，但这种方式往往需要重新编译内核或模块，重新启动设备之类的，操作较为复杂甚至可能会破坏原有的代码执行过程。</p>
+<p>而利用kprobes技术，用户可以定义自己的回调函数，然后在内核或者模块中几乎所有的函数中（有些函数是不可探测的，例如kprobes自身的相关实现函数，后文会有详细说明）动态的插入探测点，当内核执行流程执行到指定的探测函数时，会调用该回调函数，用户即可收集所需的信息了，同时内核最后还会回到原本的正常执行流程。如果用户已经收集足够的信息，不再需要继续探测，则同样可以动态地移除探测点。因此kprobes技术具有对内核执行流程影响小和操作方便的优点。</p>
+<p>kprobes技术包括的3种探测手段分别时kprobe、jprobe和kretprobe。首先kprobe是最基本的探测方式，是实现后两种的基础，它可以在任意的位置放置探测点（就连函数内部的某条指令处也可以），它提供了探测点的调用前、调用后和内存访问出错3种回调方式，分别是pre_handler、post_handler和fault_handler，其中pre_handler函数将在被探测指令被执行前回调，post_handler会在被探测指令执行完毕后回调（注意不是被探测函数），fault_handler会在内存访问出错时被调用；jprobe基于kprobe实现，它用于获取被探测函数的入参值；最后kretprobe从名字中就可以看出其用途了，它同样基于kprobe实现，用于获取被探测函数的返回值。</p>
+<p>kprobes的技术原理并不仅仅包含存软件的实现方案，它也需要硬件架构提供支持。其中涉及硬件架构相关的是CPU的异常处理和单步调试技术，前者用于让程序的执行流程陷入到用户注册的回调函数中去，而后者则用于单步执行被探测点指令，因此并不是所有的架构均支持，目前kprobes技术已经支持多种架构，包括i386、x86_64、ppc64、ia64、sparc64、arm、ppc和mips（有些架构实现可能并不完全，具体可参考内核的Documentation/kprobes.txt）。</p>
+<p>kprobes的特点与使用限制：</p>
+<ol>
+<li>kprobes允许在同一个被被探测位置注册多个kprobe，但是目前jprobe却不可以；同时也不允许以其他的jprobe回调函数和kprobe的post_handler回调函数作为被探测点。</li>
+<li>一般情况下，可以探测内核中的任何函数，包括中断处理函数。不过在kernel/kprobes.c和arch/*/kernel/kprobes.c程序中用于实现kprobes自身的函数是不允许被探测的，另外还有do_page_fault和notifier_call_chain；</li>
+<li>如果以一个内联函数为探测点，则kprobes可能无法保证对该函数的所有实例都注册探测点。由于gcc可能会自动将某些函数优化为内联函数，因此可能无法达到用户预期的探测效果；</li>
+<li>一个探测点的回调函数可能会修改被探测函数运行的上下文，例如通过修改内核的数据结构或者保存与struct pt_regs结构体中的触发探测器之前寄存器信息。因此kprobes可以被用来安装bug修复代码或者注入故障测试代码；</li>
+<li>kprobes会避免在处理探测点函数时再次调用另一个探测点的回调函数，例如在printk()函数上注册了探测点，则在它的回调函数中可能再次调用printk函数，此时将不再触发printk探测点的回调，仅仅时增加了kprobe结构体中nmissed字段的数值；</li>
+<li>在kprobes的注册和注销过程中不会使用mutex锁和动态的申请内存；</li>
+<li>kprobes回调函数的运行期间是关闭内核抢占的，同时也可能在关闭中断的情况下执行，具体要视CPU架构而定。因此不论在何种情况下，在回调函数中不要调用会放弃CPU的函数（如信号量、mutex锁等）；</li>
+<li>kretprobe通过替换返回地址为预定义的trampoline的地址来实现，因此栈回溯和gcc内嵌函数__builtin_return_address()调用将返回trampoline的地址而不是真正的被探测函数的返回地址；</li>
+<li>如果一个函数的调用次数和返回次数不相等，则在类似这样的函数上注册kretprobe将可能不会达到预期的效果，例如do_exit()函数会存在问题，而do_execve()函数和do_fork()函数不会；</li>
+<li>如果当在进入和退出一个函数时，CPU运行在非当前任务所有的栈上，那么往该函数上注册kretprobe可能会导致不可预料的后果，因此，kprobes不支持在X86_64的结构下为__switch_to()函数注册kretprobe，将直接返回-EINVAL。</li>
+</ol>
+<h2 id="kprobe"><a class="header" href="#kprobe">kprobe</a></h2>
+<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+
+SEC(&quot;kprobe/do_unlinkat&quot;)
+int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
+{
+ pid_t pid;
+ const char *filename;
+
+ pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+ filename = BPF_CORE_READ(name, name);
+ bpf_printk(&quot;KPROBE ENTRY pid = %d, filename = %s\n&quot;, pid, filename);
+ return 0;
+}
+
+SEC(&quot;kretprobe/do_unlinkat&quot;)
+int BPF_KRETPROBE(do_unlinkat_exit, long ret)
+{
+ pid_t pid;
+
+ pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+ bpf_printk(&quot;KPROBE EXIT: pid = %d, ret = %ld\n&quot;, pid, ret);
+ return 0;
+}
+</code></pre>
+<p>kprobe 是 eBPF 用于处理内核空间入口和出口（返回）探针（kprobe 和 kretprobe）的一个例子。它将 kprobe 和 kretprobe BPF 程序附加到 do_unlinkat() 函数上，并使用 bpf_printk() 宏分别记录 PID、文件名和返回值。</p>
+<p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。</p>
+<p>要编译这个程序，请使用 ecc 工具：</p>
+<pre><code class="language-console">$ ecc kprobe-link.bpf.c
+Compiling bpf object...
+Packing ebpf object and config into package.json...
+</code></pre>
+<p>然后运行：</p>
+<pre><code class="language-console">sudo ecli package.json
+</code></pre>
+<p>在另外一个窗口中：</p>
+<pre><code class="language-shell">touch test1
+rm test1
+touch test2
+rm test2
+</code></pre>
+<p>在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的 kprobe 演示输出：</p>
+<pre><code class="language-shell">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+              rm-9346    [005] d..3  4710.951696: bpf_trace_printk: KPROBE ENTRY pid = 9346, filename = test1
+              rm-9346    [005] d..4  4710.951819: bpf_trace_printk: KPROBE EXIT: ret = 0
+              rm-9346    [005] d..3  4710.951852: bpf_trace_printk: KPROBE ENTRY pid = 9346, filename = test2
+              rm-9346    [005] d..4  4710.951895: bpf_trace_printk: KPROBE EXIT: ret = 0
+</code></pre>
+<h2 id="总结"><a class="header" href="#总结">总结</a></h2>
+<p>通过本文的示例，我们学习了如何使用 eBPF 的 kprobe 和 kretprobe 捕获 unlink 系统调用。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
+<p>本文是 eBPF 入门开发实践教程的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用。</p>
+<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../1-helloworld/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../3-fentry-unlink/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../1-helloworld/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../3-fentry-unlink/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
