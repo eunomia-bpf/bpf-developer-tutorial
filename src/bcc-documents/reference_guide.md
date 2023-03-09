@@ -155,7 +155,7 @@ Arguments are specified on the function declaration: kprobe__*kernel_function_na
 
 For example:
 
-```C
+```c
 int kprobe__tcp_v4_connect(struct pt_regs *ctx, struct sock *sk) {
     [...]
 }
@@ -1457,7 +1457,7 @@ Syntax: ```int map.sock_hash_update(struct bpf_sock_ops *skops, &key, int flags)
 
 Add an entry to, or update a sockhash map referencing sockets. The skops is used as a new value for the entry associated to key. flags is one of:
 
-```
+```sh
 BPF_NOEXIST: The entry for key must not exist in the map.
 BPF_EXIST: The entry for key must already exist in the map.
 BPF_ANY: No condition on the existence of the entry for key.
@@ -2279,7 +2279,7 @@ b["dist"].print_log2_hist("kbytes")
 
 Output:
 
-```
+```sh
      kbytes          : count     distribution
        0 -> 1        : 3        |                                      |
        2 -> 3        : 0        |                                      |
@@ -2330,7 +2330,7 @@ b["dist"].print_linear_hist("kbytes")
 
 Output:
 
-```
+```sh
      kbytes        : count     distribution
         0          : 3        |******                                  |
         1          : 0        |                                        |
@@ -2495,7 +2495,7 @@ Translate a memory address into a function name for a pid, which is returned. A 
 
 Example:
 
-```Python
+```python
 print("function: " + b.sym(addr, pid))
 ```
 
@@ -2511,7 +2511,7 @@ Returns the number of open k[ret]probes. Can be useful for scenarios where event
 
 Example:
 
-```Python
+```python
 b.attach_kprobe(event_re=pattern, fn_name="trace_count")
 matched = b.num_open_kprobes()
 if matched == 0:
@@ -2531,7 +2531,7 @@ Return the corresponding kernel function name of the syscall. This helper functi
 
 Example:
 
-```Python
+```python
 print("The function name of %s in kernel is %s" % ("clone", b.get_syscall_fnname("clone")))
 # sys_clone or __x64_sys_clone or ...
 ```
@@ -2550,7 +2550,7 @@ This can be due to trying to read memory directly, instead of operating on memor
 
 Example:
 
-```
+```sh
 bpf: Permission denied
 0: (bf) r6 = r1
 1: (79) r7 = *(u64 *)(r6 +80)
@@ -2578,7 +2578,7 @@ This error happens when a GPL-only helper is called from a non-GPL BPF program. 
 
 Example calling `bpf_get_stackid()`, a GPL-only BPF helper, from a proprietary program (`#define BPF_LICENSE Proprietary`):
 
-```
+```sh
 bpf: Failed to load program: Invalid argument
 [...]
 8: (85) call bpf_get_stackid#27

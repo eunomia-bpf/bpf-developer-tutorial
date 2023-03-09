@@ -43,7 +43,7 @@ These tools may be installed on your system under /usr/share/bcc/tools, or you c
 
 #### 1.1 execsnoop
 
-```
+```sh
 # ./execsnoop
 PCOMM            PID    RET ARGS
 supervise        9660     0 ./run
@@ -61,7 +61,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/execsnoop_examp
 
 #### 1.2. opensnoop
 
-```
+```sh
 # ./opensnoop
 PID    COMM               FD ERR PATH
 1565   redis-server        5   0 /proc/1565/stat
@@ -84,7 +84,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/opensnoop_examp
 
 #### 1.3. ext4slower (or btrfs\*, xfs\*, zfs\*)
 
-```
+```sh
 # ./ext4slower
 Tracing ext4 operations slower than 10 ms
 TIME     COMM           PID    T BYTES   OFF_KB   LAT(ms) FILENAME
@@ -105,7 +105,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/ext4slower_exam
 
 #### 1.4. biolatency
 
-```
+```sh
 # ./biolatency
 Tracing block device I/O... Hit Ctrl-C to end.
 ^C
@@ -137,7 +137,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/biolatency_exam
 
 #### 1.5. biosnoop
 
-```
+```sh
 # ./biosnoop
 TIME(s)        COMM           PID    DISK    T  SECTOR    BYTES   LAT(ms)
 0.000004001    supervise      1950   xvda1   W  13092560  4096       0.74
@@ -157,7 +157,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/biosnoop_exampl
 
 #### 1.6. cachestat
 
-```
+```sh
 # ./cachestat
     HITS   MISSES  DIRTIES  READ_HIT% WRITE_HIT%   BUFFERS_MB  CACHED_MB
     1074       44       13      94.9%       2.9%            1        223
@@ -177,7 +177,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/cachestat_examp
 
 #### 1.7. tcpconnect
 
-```
+```sh
 # ./tcpconnect
 PID    COMM         IP SADDR            DADDR            DPORT
 1479   telnet       4  127.0.0.1        127.0.0.1        23
@@ -196,7 +196,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpconnect_exam
 
 #### 1.8. tcpaccept
 
-```
+```sh
 # ./tcpaccept
 PID    COMM         IP RADDR            LADDR            LPORT
 907    sshd         4  192.168.56.1     192.168.56.102   22
@@ -213,7 +213,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpaccept_examp
 
 #### 1.9. tcpretrans
 
-```
+```sh
 # ./tcpretrans
 TIME     PID    IP LADDR:LPORT          T> RADDR:RPORT          STATE
 01:55:05 0      4  10.153.223.157:22    R> 69.53.245.40:34619   ESTABLISHED
@@ -230,7 +230,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpretrans_exam
 
 #### 1.10. runqlat
 
-```
+```sh
 # ./runqlat
 Tracing run queue latency... Hit Ctrl-C to end.
 ^C
@@ -261,7 +261,7 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/runqlat_example
 
 #### 1.11. profile
 
-```
+```sh
 # ./profile
 Sampling at 49 Hertz of all threads by user + kernel stack... Hit Ctrl-C to end.
 ^C
@@ -322,7 +322,7 @@ These generic tools may be useful to provide visibility to solve your specific p
 
 Suppose you want to track file ownership change. There are three syscalls, `chown`, `fchown` and `lchown` which users can use to change file ownership. The corresponding syscall entry is `SyS_[f|l]chown`.  The following command can be used to print out syscall parameters and the calling process user id. You can use `id` command to find the uid of a particular user.
 
-```
+```sh
 $ trace.py \
   'p::SyS_chown "file = %s, to_uid = %d, to_gid = %d, from_uid = %d", arg1, arg2, arg3, $uid' \
   'p::SyS_fchown "fd = %d, to_uid = %d, to_gid = %d, from_uid = %d", arg1, arg2, arg3, $uid' \
@@ -338,17 +338,17 @@ PID    TID    COMM         FUNC             -
 ##### Example 2
 
 Suppose you want to count nonvoluntary context switches (`nvcsw`) in your bpf based performance monitoring tools and you do not know what is the proper method. `/proc/<pid>/status` already tells you the number (`nonvoluntary_ctxt_switches`) for a pid and you can use `trace.py` to do a quick experiment to verify your method. With kernel source code, the `nvcsw` is counted at file `linux/kernel/sched/core.c` function `__schedule` and under condition
-```
+```c
 !(!preempt && prev->state) // i.e., preempt || !prev->state
 ```
 
 The `__schedule` function is marked as `notrace`, and the best place to evaluate the above condition seems in `sched/sched_switch` tracepoint called inside function `__schedule` and defined in `linux/include/trace/events/sched.h`. `trace.py` already has `args` being the pointer to the tracepoint `TP_STRUCT__entry`.  The above condition in function `__schedule` can be represented as
-```
+```c
 args->prev_state == TASK_STATE_MAX || args->prev_state == 0
 ```
 
 The below command can be used to count the involuntary context switches (per process or per pid) and compare to `/proc/<pid>/status` or `/proc/<pid>/task/<task_id>/status` for correctness, as in typical cases, involuntary context switches are not very common.
-```
+```sh
 $ trace.py -p 1134138 't:sched:sched_switch (args->prev_state == TASK_STATE_MAX || args->prev_state == 0)'
 PID    TID    COMM         FUNC
 1134138 1134140 contention_test sched_switch
@@ -365,7 +365,7 @@ PID    TID    COMM         FUNC
 
 This example is related to issue [1231](https://github.com/iovisor/bcc/issues/1231) and [1516](https://github.com/iovisor/bcc/issues/1516) where uprobe does not work at all in certain cases. First, you can do a `strace` as below
 
-```
+```sh
 $ strace trace.py 'r:bash:readline "%s", retval'
 ...
 perf_event_open(0x7ffd968212f0, -1, 0, -1, 0x8 /* PERF_FLAG_??? */) = -1 EIO (Input/output error)
@@ -373,23 +373,23 @@ perf_event_open(0x7ffd968212f0, -1, 0, -1, 0x8 /* PERF_FLAG_??? */) = -1 EIO (In
 ```
 
 The `perf_event_open` syscall returns `-EIO`. Digging into kernel uprobe related codes in `/kernel/trace` and `/kernel/events` directories to search `EIO`, the function `uprobe_register` is the most suspicious. Let us find whether this function is called or not and what is the return value if it is called. In one terminal using the following command to print out the return value of uprobe_register,
-```
+```sh
 $ trace.py 'r::uprobe_register "ret = %d", retval'
 ```
 In another terminal run the same bash uretprobe tracing example, and you should get
-```
+```sh
 $ trace.py 'r::uprobe_register "ret = %d", retval'
 PID    TID    COMM         FUNC             -
 1041401 1041401 python2.7    uprobe_register  ret = -5
 ```
 
 The `-5` error code is EIO. This confirms that the following code in function `uprobe_register` is the most suspicious culprit.
-```
+```c
  if (!inode->i_mapping->a_ops->readpage && !shmem_mapping(inode->i_mapping))
         return -EIO;
 ```
 The `shmem_mapping` function is defined as
-```
+```c
 bool shmem_mapping(struct address_space *mapping)
 {
         return mapping->a_ops == &shmem_aops;
@@ -397,7 +397,7 @@ bool shmem_mapping(struct address_space *mapping)
 ```
 
 To confirm the theory, find what is `inode->i_mapping->a_ops` with the following command
-```
+```sh
 $ trace.py -I 'linux/fs.h' 'p::uprobe_register(struct inode *inode) "a_ops = %llx", inode->i_mapping->a_ops'
 PID    TID    COMM         FUNC             -
 814288 814288 python2.7    uprobe_register  a_ops = ffffffff81a2adc0

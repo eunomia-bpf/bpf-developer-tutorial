@@ -12,7 +12,7 @@ This observability tutorial contains 17 lessons, and 46 enumerated things to lea
 
 Start by running [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py), while running some commands (eg, "ls") in another session. It should print "Hello, World!" for new processes. If not, start by fixing bcc: see [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md).
 
-```
+```sh
 # ./examples/hello_world.py
             bash-13364 [002] d... 24573433.052937: : Hello, World!
             bash-13364 [003] d... 24573436.642808: : Hello, World!
@@ -50,8 +50,8 @@ Improve it by printing "Tracing sys_sync()... Ctrl-C to end." when the program f
 
 This program is in [examples/tracing/hello_fields.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_fields.py). Sample output (run commands in another session):
 
-```
-# ./examples/tracing/hello_fields.py
+```sh
+# examples/tracing/hello_fields.py
 TIME(s)            COMM             PID    MESSAGE
 24585001.174885999 sshd             1432   Hello, World!
 24585001.195710000 sshd             15780  Hello, World!
@@ -104,8 +104,8 @@ Remember the days of sysadmins typing ```sync``` three times on a slow console b
 
 The following example times how quickly the ```do_sync``` function is called, and prints output if it has been called more recently than one second ago. A ```sync;sync;sync``` will print output for the 2nd and 3rd sync's:
 
-```
-# ./examples/tracing/sync_timing.py
+```sh
+# examples/tracing/sync_timing.py
 Tracing for quick sync's... Ctrl-C to end
 At time 0.00 s: multiple syncs detected, last 95 ms ago
 At time 0.10 s: multiple syncs detected, last 96 ms ago
@@ -175,8 +175,8 @@ Modify the sync_timing.py program (prior lesson) to store the count of all kerne
 
 Browse the [examples/tracing/disksnoop.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/disksnoop.py) program to see what is new. Here is some sample output:
 
-```
-# ./disksnoop.py
+```sh
+# disksnoop.py
 TIME(s)            T  BYTES    LAT(ms)
 16458043.436012    W  4096        3.13
 16458043.437326    W  4096        4.44
@@ -240,8 +240,8 @@ This is a pretty interesting program, and if you can understand all the code, yo
 
 Let's finally stop using bpf_trace_printk() and use the proper BPF_PERF_OUTPUT() interface. This will also mean we stop getting the free trace_field() members like PID and timestamp, and will need to fetch them directly. Sample output while commands are run in another session:
 
-```
-# ./hello_perf_output.py
+```sh
+# hello_perf_output.py
 TIME(s)            COMM             PID    MESSAGE
 0.000000000        bash             22986  Hello, perf_output!
 0.021080275        systemd-udevd    484    Hello, perf_output!
@@ -325,8 +325,8 @@ Rewrite sync_timing.py, from a prior lesson, to use ```BPF_PERF_OUTPUT```.
 
 The following tool records a histogram of disk I/O sizes. Sample output:
 
-```
-# ./bitehist.py
+```sh
+# bitehist.py
 Tracing... Hit Ctrl-C to end.
 ^C
      kbytes          : count     distribution
@@ -395,8 +395,8 @@ Write a program that times disk I/O, and prints a histogram of their latency. Di
 
 This example is split into separate Python and C files. Example output:
 
-```
-# ./vfsreadlat.py 1
+```sh
+# vfsreadlat.py 1
 Tracing... Hit Ctrl-C to end.
      usecs               : count     distribution
          0 -> 1          : 0        |                                        |
@@ -443,8 +443,8 @@ Browse the code in [examples/tracing/vfsreadlat.py](https://github.com/iovisor/b
 
 Tracing while a ```dd if=/dev/urandom of=/dev/null bs=8k count=5``` is run:
 
-```
-# ./urandomread.py
+```sh
+# urandomread.py
 TIME(s)            COMM             PID    GOTBITS
 24652832.956994001 smtp             24690  384
 24652837.726500999 dd               24692  65536
@@ -486,7 +486,7 @@ Things to learn:
 1. ```TRACEPOINT_PROBE(random, urandom_read)```: Instrument the kernel tracepoint ```random:urandom_read```. These have a stable API, and thus are recommend to use instead of kprobes, wherever possible. You can run ```perf list``` for a list of tracepoints. Linux >= 4.7 is required to attach BPF programs to tracepoints.
 1. ```args->got_bits```: ```args``` is auto-populated to be a structure of the tracepoint arguments. The comment above says where you can see that structure. Eg:
 
-```
+```sh
 # cat /sys/kernel/debug/tracing/events/random/urandom_read/format
 name: urandom_read
 ID: 972
@@ -513,8 +513,8 @@ Convert disksnoop.py from a previous lesson to use the ```block:block_rq_issue``
 
 This program instruments a user-level function, the ```strlen()``` library function, and frequency counts its string argument. Example output:
 
-```
-# ./strlen_count.py
+```sh
+# strlen_count.py
 Tracing strlen()... Hit Ctrl-C to end.
 ^C     COUNT STRING
          1 " "
@@ -596,8 +596,8 @@ Things to learn:
 
 This program instruments a user statically-defined tracing (USDT) probe, which is the user-level version of a kernel tracepoint. Sample output:
 
-```
-# ./nodejs_http_server.py 24728
+```sh
+# nodejs_http_server.py 24728
 TIME(s)            COMM             PID    ARGS
 24653324.561322998 node             24728  path:/index.html
 24653335.343401998 node             24728  path:/images/welcome.png

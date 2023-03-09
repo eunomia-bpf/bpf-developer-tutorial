@@ -9,8 +9,9 @@ Kernel version | Commit
 ## JIT compiling
 
 The list of supported architectures for your kernel can be retrieved with:
-
-    git grep HAVE_EBPF_JIT arch/
+```sh
+git grep HAVE_EBPF_JIT arch/
+```
 
 Feature / Architecture | Kernel version | Commit
 -----------------------|----------------|-------
@@ -34,8 +35,9 @@ LoongArch                          | 6.1  | [`5dc615520c4d`](https://github.com/
 Several (but not all) of these _main features_ translate to an eBPF program type.
 The list of such program types supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
-
-    git grep -W 'bpf_prog_type {' include/uapi/linux/bpf.h
+```sh
+git grep -W 'bpf_prog_type {' include/uapi/linux/bpf.h
+```
 
 Feature | Kernel version | Commit
 --------|----------------|-------
@@ -133,8 +135,9 @@ Allow executing syscalls       | 5.15 | [`79a7f8bdb159`](https://github.com/torv
 
 The list of map types supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
-
-    git grep -W 'bpf_map_type {' include/uapi/linux/bpf.h
+```sh
+git grep -W 'bpf_map_type {' include/uapi/linux/bpf.h
+```
 
  Map type | Kernel version | Commit | Enum
 ----------|----------------|--------|------
@@ -175,8 +178,9 @@ user ringbuf                    | 6.1  | [`583c1f420173`](https://github.com/tor
 Some (but not all) of these *API features* translate to a subcommand beginning with `BPF_MAP_`.
 The list of subcommands supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
-
-    git grep -W 'bpf_cmd {' include/uapi/linux/bpf.h
+```sh
+git grep -W 'bpf_cmd {' include/uapi/linux/bpf.h
+```
 
 Feature | Kernel version | Commit
 --------|----------------|-------
@@ -202,8 +206,9 @@ mmap() support for array maps | 5.5 | [`fc9702273e2e`](https://github.com/torval
 
 An approximate list of drivers or components supporting XDP programs for your
 kernel can be retrieved with:
-
-    git grep -l XDP_SETUP_PROG drivers/
+```sh
+git grep -l XDP_SETUP_PROG drivers/
+```
 
 Feature / Driver | Kernel version | Commit
 -----------------|----------------|-------
@@ -241,8 +246,9 @@ Intel `igb` driver | 5.10 | [`9cbc948b5a20`](https://github.com/torvalds/linux/c
 
 The list of helpers supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
-
-    git grep '	FN(' include/uapi/linux/bpf.h
+```sh
+git grep '	FN(' include/uapi/linux/bpf.h
+```
 
 Alphabetical order
 
@@ -473,8 +479,9 @@ Check the list of GPL-compatible licenses in your [kernel source code](https://g
 
 ## Program Types
 The list of program types and supported helper functions can be retrieved with:
-
-    git grep -W 'func_proto(enum bpf_func_id func_id' kernel/ net/ drivers/
+```sh
+git grep -W 'func_proto(enum bpf_func_id func_id' kernel/ net/ drivers/
+```
 
 |Program Type| Helper Functions|
 |------------|-----------------|
