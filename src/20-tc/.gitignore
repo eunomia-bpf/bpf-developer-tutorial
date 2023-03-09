@@ -1,0 +1,10 @@
+.vscode
+package.json
+*.wasm
+ewasm-skel.h
+ecli
+ewasm
+*.o
+*.skel.json
+*.skel.yaml
+package.yaml
