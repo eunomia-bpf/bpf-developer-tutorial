@@ -43,11 +43,11 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 推荐：
 
-- 阅读 ebpf 简介：<https://ebpf.io/（30min）>
-- 简要了解一下 ebpf 内核相关文档：<https://prototype-kernel.readthedocs.io/en/latest/bpf/> （知道有问题去哪里查询: 30min）
-- 阅读 ebpf 中文入门指南：<https://www.modb.pro/db/391570（1h）>
-- 有大量的参考资料：<https://github.com/zoidbergwill/awesome-ebpf（2-3h）>
-- 可以选自己感兴趣的 PPT 翻一翻：<https://github.com/gojue/ebpf-slide（1-2h）>
+- 阅读 ebpf 简介：<https://ebpf.io/> （30min）
+- 简要了解一下 ebpf 内核相关文档：<https://prototype-kernel.readthedocs.io/en/latest/bpf/> （知道有问题去哪里查询，30min）
+- 阅读 ebpf 中文入门指南：<https://www.modb.pro/db/391570> （1h）
+- 有大量的参考资料：<https://github.com/zoidbergwill/awesome-ebpf> （2-3h）
+- 可以选自己感兴趣的 PPT 翻一翻：<https://github.com/gojue/ebpf-slide> （1-2h）
 
 回答三个问题：
 
@@ -59,9 +59,9 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 了解并尝试一下 eBPF 开发框架：
 
-- BCC 开发各类小工具的例子：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md（跑一遍：3-4h）>
-- libbpf 的一些例子: <https://github.com/libbpf/libbpf-bootstrap（选感兴趣的运行一下，并阅读一下源代码：2h>）
-- 基于 libbpf 和 eunomia-bpf 的教程： <https://github.com/eunomia-bpf/bpf-developer-tutorial（阅读> 1-10 的部分: 3-4h）
+- BCC 开发各类小工具的例子：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> （跑一遍，3-4h）
+- libbpf 的一些例子：<https://github.com/libbpf/libbpf-bootstrap> （选感兴趣的运行一下，并阅读一下源代码，2h）
+- 基于 libbpf 和 eunomia-bpf 的教程：<https://github.com/eunomia-bpf/bpf-developer-tutorial> （阅读 1-10 的部分，3-4h）
 
 其他开发框架：Go 语言或者 Rust 语言，请自行搜索并且尝试（0-2h）
 
