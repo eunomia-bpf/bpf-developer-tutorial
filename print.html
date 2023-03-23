@@ -276,29 +276,32 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 </ul>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二hello-world基本框架和开发流程"><a class="header" href="#ebpf-入门开发实践教程二hello-world基本框架和开发流程">eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></h1>
-<p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
-<p>本文是 eBPF 入门开发实践教程的第二篇，主要介绍 eBPF 的基本框架和开发流程。</p>
-<p>开发 eBPF 程序可以使用多种工具，如 BCC、eunomia-bpf 等。不同的工具有不同的特点，但基本流程大致相同。</p>
-<h2 id="开发-ebpf-程序的流程"><a class="header" href="#开发-ebpf-程序的流程">开发 eBPF 程序的流程</a></h2>
-<p>下面以 BCC 工具为例，介绍 eBPF 程序的基本开发流程。</p>
+<p>在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。</p>
+<p>本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。</p>
+<p>在开发eBPF程序时，有多种开发框架可供选择，如 BCC（BPF Compiler Collection）libbpf、cilium/ebpf、eunomia-bpf 等。虽然不同工具的特点各异，但它们的基本开发流程大致相同。在接下来的内容中，我们将深入了解这些流程，并以 Hello World 程序为例，带领读者逐步掌握eBPF开发的基本技巧。</p>
+<p>本教程将帮助您了解eBPF程序的基本结构、编译和加载过程、用户空间与内核空间的交互方式以及调试与优化技巧。通过学习本教程，您将掌握eBPF开发的基本知识，并为后续进一步学习和实践奠定坚实的基础。</p>
+<h2 id="ebpf开发环境准备与基本开发流程"><a class="header" href="#ebpf开发环境准备与基本开发流程">eBPF开发环境准备与基本开发流程</a></h2>
+<p>在开始编写eBPF程序之前，我们需要准备一个合适的开发环境，并了解eBPF程序的基本开发流程。本部分将详细介绍这些内容。</p>
+<h3 id="安装必要的软件和工具"><a class="header" href="#安装必要的软件和工具">安装必要的软件和工具</a></h3>
+<p>要开发eBPF程序，您需要安装以下软件和工具：</p>
+<ul>
+<li>Linux 内核：由于eBPF是内核技术，因此您需要具备较新版本的Linux内核（推荐4.8及以上版本），以支持eBPF功能。</li>
+<li>LLVM 和 Clang：这些工具用于编译eBPF程序。安装最新版本的LLVM和Clang可以确保您获得最佳的eBPF支持。</li>
+</ul>
+<p>eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。当您选择了合适的开发框架后，如 BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以 BCC 工具为例，我们将介绍 eBPF 程序的基本开发流程：</p>
+<p>当您选择了合适的开发框架后，如BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以BCC工具为例，我们将介绍eBPF程序的基本开发流程：</p>
 <ol>
-<li>安装编译环境和依赖。使用 BCC 开发 eBPF 程序需要安装 LLVM/Clang 和 bcc，以及其它的依赖库。</li>
-<li>编写 eBPF 程序。eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。</li>
-<li>编译和加载 eBPF 程序。使用 bcc 工具将 eBPF 程序编译成机器码，然后使用用户态代码加载并运行该程序。</li>
-<li>运行程序并处理数据。eBPF 程序在内核运行时会触发事件，并将事件相关的信息传递给用户态程序。用户态程序负责处理这些信息并将结果输出。</li>
-<li>结束程序。当 eBPF 程序运行完成后，用户态程序可以卸载并结束运行。</li>
+<li>安装BCC工具：根据您的Linux发行版，按照BCC官方文档的指南安装BCC工具和相关依赖。</li>
+<li>编写eBPF程序（C语言）：使用C语言编写一个简单的eBPF程序，例如Hello World程序。该程序可以在内核空间执行并完成特定任务，如统计网络数据包数量。</li>
+<li>编写用户态程序（Python或C等）：使用Python、C等语言编写用户态程序，用于加载、运行eBPF程序以及与之交互。在这个程序中，您需要使用BCC提供的API来加载和操作内核态的eBPF程序。</li>
+<li>编译eBPF程序：使用BCC工具，将C语言编写的eBPF程序编译成内核可以执行的字节码。BCC会在运行时动态从源码编译eBPF程序。</li>
+<li>加载并运行eBPF程序：在用户态程序中，使用BCC提供的API加载编译好的eBPF程序到内核空间，然后运行该程序。</li>
+<li>与eBPF程序交互：用户态程序通过BCC提供的API与eBPF程序交互，实现数据收集、分析和展示等功能。例如，您可以使用BCC API读取eBPF程序中的map数据，以获取网络数据包统计信息。</li>
+<li>卸载eBPF程序：当不再需要eBPF程序时，用户态程序应使用BCC API将其从内核空间卸载。</li>
+<li>调试与优化：使用 bpftool 等工具进行eBPF程序的调试和优化，提高程序性能和稳定性。</li>
 </ol>
-<p>通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。</p>
-<h2 id="使用-eunomia-bpf-开发-ebpf-程序"><a class="header" href="#使用-eunomia-bpf-开发-ebpf-程序">使用 eunomia-bpf 开发 eBPF 程序</a></h2>
-<p>eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。使用 eunomia-bpf 可以大幅简化 eBPF 程序的开发流程。</p>
-<p>使用 eunomia-bpf 开发 eBPF 程序的流程也大致相同，只是细节略有不同。</p>
-<ol>
-<li>安装编译环境和依赖。使用 eunomia-bpf 开发 eBPF 程序需要安装 eunomia-bpf 工具链和运行时库，以及其它的依赖库。</li>
-<li>编写 eBPF 程序。eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。使用 eunomia-bpf，只需编写内核态代码即可，无需编写用户态代码。</li>
-<li>编译和加载 eBPF 程序。使用 eunomia-bpf 工具链将 eBPF 程序编译成机器码，并将编译后的代码打包为可以在任何系统上运行的模块。然后使用 eunomia-bpf 运行时库加载并运行该模块。</li>
-<li>运行程序并处理数据。eBPF 程序在内核运行时会触发事件，并将事件相关的信息传递给用户态程序。eunomia-bpf 的运行时库负责处理这些信息并将结果输出。</li>
-<li>结束程序。当 eBPF 程序运行完成后，eunomia-bpf 的运行时库可以卸载并结束运行</li>
-</ol>
+<p>通过以上流程，您可以使用BCC工具开发、编译、运行和调试eBPF程序。请注意，其他框架（如libbpf、cilium/ebpf和eunomia-bpf）的开发流程大致相似但略有不同，因此在选择框架时，请参考相应的官方文档和示例。</p>
+<p>通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。我们会使用 eunomia-bpf 进行演示。</p>
 <h2 id="下载安装-eunomia-bpf-开发工具"><a class="header" href="#下载安装-eunomia-bpf-开发工具">下载安装 eunomia-bpf 开发工具</a></h2>
 <p>可以通过以下步骤下载和安装 eunomia-bpf：</p>
 <p>下载 ecli 工具，用于运行 eBPF 程序：</p>
@@ -320,7 +323,10 @@ Compiling bpf object...
 Packing ebpf object and config into /src/package.json...
 </code></pre>
 <h2 id="hello-world---minimal-ebpf-program"><a class="header" href="#hello-world---minimal-ebpf-program">Hello World - minimal eBPF program</a></h2>
-<pre><code class="language-c">/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+<p>我们会先从一个简单的 eBPF 程序开始，它会在内核中打印一条消息。我们会使用 eunomia-bpf 的编译器工具链将其编译为 bpf 字节码文件，然后使用 ecli 工具加载并运行该程序。作为示例，我们可以暂时省略用户态程序的部分。</p>
+<pre><code class="language-c">
+```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #define BPF_NO_GLOBAL_DATA
 #include &lt;linux/bpf.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
@@ -357,7 +363,7 @@ Packing ebpf object and config into package.json...
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
 <p>然后使用 ecli 运行编译后的程序：</p>
-<pre><code class="language-console">$ sudo ecli ./package.json
+<pre><code class="language-console">$ sudo ecli run ./package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
@@ -376,6 +382,24 @@ Runing eBPF program...
 </ul>
 <h2 id="tracepoints"><a class="header" href="#tracepoints">tracepoints</a></h2>
 <p>跟踪点（tracepoints）是内核静态插桩技术，跟踪点在技术上只是放置在内核源代码中的跟踪函数，实际上就是在源码中插入的一些带有控制条件的探测点，这些探测点允许事后再添加处理函数。比如在内核中，最常见的静态跟踪方法就是 printk，即输出日志。又比如：在系统调用、调度程序事件、文件系统操作和磁盘 I/O 的开始和结束时都有跟踪点。 于 2009 年在 Linux 2.6.32 版本中首次提供。跟踪点是一种稳定的 API，数量有限。</p>
+<h2 id="github-模板轻松构建-ebpf-项目和开发环境"><a class="header" href="#github-模板轻松构建-ebpf-项目和开发环境">GitHub 模板：轻松构建 eBPF 项目和开发环境</a></h2>
+<p>面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 <code>Use this template</code> 按钮，即可开始使用。</p>
+<ul>
+<li><a href="https://github.com/eunomia-bpf/libbpf-starter-template">https://github.com/eunomia-bpf/libbpf-starter-template</a>：基于C语言和 libbpf 框架的eBPF项目模板</li>
+<li><a href="https://github.com/eunomia-bpf/cilium-ebpf-starter-template">https://github.com/eunomia-bpf/cilium-ebpf-starter-template</a>：基于C语言和cilium/ebpf框架的eBPF项目模板</li>
+<li><a href="https://github.com/eunomia-bpf/libbpf-rs-starter-template">https://github.com/eunomia-bpf/libbpf-rs-starter-template</a>：基于Rust语言和libbpf-rs框架的eBPF项目模板</li>
+<li><a href="https://github.com/eunomia-bpf/eunomia-template">https://github.com/eunomia-bpf/eunomia-template</a>：基于C语言和eunomia-bpf框架的eBPF项目模板</li>
+</ul>
+<p>这些启动模板包含以下功能：</p>
+<ul>
+<li>一个 Makefile，让您可以一键构建项目</li>
+<li>一个 Dockerfile，用于为您的 eBPF 项目自动创建一个容器化环境并发布到 Github Packages</li>
+<li>GitHub Actions，用于自动化构建、测试和发布流程</li>
+<li>eBPF 开发所需的所有依赖项</li>
+</ul>
+<blockquote>
+<p>通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository</p>
+</blockquote>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
 <p>eBPF 程序的开发和使用流程可以概括为如下几个步骤：</p>
 <ul>
@@ -387,7 +411,7 @@ Runing eBPF program...
 <li>在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。</li>
 </ul>
 <p>需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。</p>
-<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<p>本教程的文档和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
@@ -447,7 +471,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>然后运行：</p>
-<pre><code class="language-console">sudo ecli package.json
+<pre><code class="language-console">sudo ecli run package.json
 </code></pre>
 <p>在另外一个窗口中：</p>
 <pre><code class="language-shell">touch test1
@@ -504,7 +528,7 @@ int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 <pre><code class="language-console">$ ecc fentry-link.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-$ sudo ecli package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>在另外一个窗口中：</p>
@@ -558,7 +582,7 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 <pre><code class="language-console">$ ecc fentry-link.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-$ sudo ecli package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
@@ -662,7 +686,7 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 <pre><code class="language-console">$ ecc bashreadline.bpf.c bashreadline.h
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-$ sudo ecli package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
@@ -767,7 +791,7 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
 Compiling bpf object...
 Generating export types...
 Packing ebpf object and config into package.json...
-$ sudo ecli package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
@@ -1192,7 +1216,7 @@ Generating export types...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>Run:</p>
-<pre><code class="language-console">$ sudo ecli examples/bpftools/runqlat/package.json -h
+<pre><code class="language-console">$ sudo ecli run examples/bpftools/runqlat/package.json -h
 Usage: runqlat_bpf [--help] [--version] [--verbose] [--filter_cg] [--targ_per_process] [--targ_per_thread] [--targ_per_pidns] [--targ_ms] [--targ_tgid VAR]
 
 A simple eBPF program
@@ -1211,7 +1235,7 @@ Optional arguments:
 Built with eunomia-bpf framework.
 See https://github.com/eunomia-bpf/eunomia-bpf for more information.
 
-$ sudo ecli examples/bpftools/runqlat/package.json
+$ sudo ecli run examples/bpftools/runqlat/package.json
 key =  4294967295
 comm = rcu_preempt
 
@@ -1232,7 +1256,7 @@ comm = rcu_preempt
       8192 -&gt; 16383      : 0        |                                        |
      16384 -&gt; 32767      : 1        |                                        |
 
-$ sudo ecli examples/bpftools/runqlat/package.json --targ_per_process
+$ sudo ecli run examples/bpftools/runqlat/package.json --targ_per_process
 key =  3189
 comm = cpptools
 
@@ -1401,7 +1425,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>然后运行：</p>
-<pre><code class="language-console">sudo ecli ./package.json
+<pre><code class="language-console">sudo ecli run ./package.json
 </code></pre>
 <h2 id="总结-9"><a class="header" href="#总结-9">总结</a></h2>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
@@ -1542,7 +1566,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 <pre><code class="language-console">$ ecc bootstrap.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
-$ sudo ecli package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <h2 id="总结-10"><a class="header" href="#总结-10">总结</a></h2>
@@ -2033,7 +2057,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>Run:</p>
-<pre><code class="language-console">sudo ecli  examples/bpftools/lsm-connect/package.json
+<pre><code class="language-console">sudo ecli run  examples/bpftools/lsm-connect/package.json
 </code></pre>
 <h2 id="总结-17"><a class="header" href="#总结-17">总结</a></h2>
 <p>TODO</p>
@@ -2090,7 +2114,7 @@ char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
-<pre><code class="language-shell">$ sudo ecli ./package.json
+<pre><code class="language-shell">$ sudo ecli run ./package.json
 ...
 Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` to see output of the BPF program.
 ......
