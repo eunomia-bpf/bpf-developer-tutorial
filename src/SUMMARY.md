@@ -1,6 +1,6 @@
 # Summary
 
-# eBPF 入门开发实践教程
+# eBPF 实践教程：基于 libbpf 和 CO-RE
 
 - [eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具](0-introduce/README.md)
 - [eBPF 入门开发实践教程二：Hello World，基本框架和开发流程](1-helloworld/README.md)
@@ -14,9 +14,6 @@
 - [eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度](9-runqlat/README.md)
 - [eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件](10-hardirqs/README.md)
 - [eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用](11-bootstrap/README.md)
-
-# eBPF入门实践教程
-
 - [eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时](13-tcpconnlat/README.md)
 - [eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时](13-tcpconnlat/tcpconnlat.md)
 - [eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时](14-tcpstates/README.md)
@@ -27,7 +24,7 @@
 - [eBPF 入门实践教程：使用 LSM 进行安全检测防御](19-lsm-connect/README.md)
 - [eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制](20-tc/README.md)
 
-# bcc Guide
+# bcc 开发者教程
 
 - [BPF Features by Linux Kernel Version](bcc-documents/kernel-versions.md)
 - [Kernel Configuration for BPF Features](bcc-documents/kernel_config.md)
