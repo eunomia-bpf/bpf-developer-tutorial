@@ -110,7 +110,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 

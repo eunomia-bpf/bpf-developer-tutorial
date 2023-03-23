@@ -211,7 +211,7 @@ Packing ebpf object and config into package.json...
 Run:
 
 ```console
-$ sudo ecli examples/bpftools/runqlat/package.json -h
+$ sudo ecli run examples/bpftools/runqlat/package.json -h
 Usage: runqlat_bpf [--help] [--version] [--verbose] [--filter_cg] [--targ_per_process] [--targ_per_thread] [--targ_per_pidns] [--targ_ms] [--targ_tgid VAR]
 
 A simple eBPF program
@@ -230,7 +230,7 @@ Optional arguments:
 Built with eunomia-bpf framework.
 See https://github.com/eunomia-bpf/eunomia-bpf for more information.
 
-$ sudo ecli examples/bpftools/runqlat/package.json
+$ sudo ecli run examples/bpftools/runqlat/package.json
 key =  4294967295
 comm = rcu_preempt
 
@@ -251,7 +251,7 @@ comm = rcu_preempt
       8192 -> 16383      : 0        |                                        |
      16384 -> 32767      : 1        |                                        |
 
-$ sudo ecli examples/bpftools/runqlat/package.json --targ_per_process
+$ sudo ecli run examples/bpftools/runqlat/package.json --targ_per_process
 key =  3189
 comm = cpptools
 
