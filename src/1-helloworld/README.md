@@ -1,34 +1,40 @@
 # eBPF 入门开发实践教程二：Hello World，基本框架和开发流程
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。
 
-本文是 eBPF 入门开发实践教程的第二篇，主要介绍 eBPF 的基本框架和开发流程。
+本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。
 
-开发 eBPF 程序可以使用多种工具，如 BCC、eunomia-bpf 等。不同的工具有不同的特点，但基本流程大致相同。
+在开发eBPF程序时，有多种开发框架可供选择，如 BCC（BPF Compiler Collection）libbpf、cilium/ebpf、eunomia-bpf 等。虽然不同工具的特点各异，但它们的基本开发流程大致相同。在接下来的内容中，我们将深入了解这些流程，并以 Hello World 程序为例，带领读者逐步掌握eBPF开发的基本技巧。
 
-## 开发 eBPF 程序的流程
+本教程将帮助您了解eBPF程序的基本结构、编译和加载过程、用户空间与内核空间的交互方式以及调试与优化技巧。通过学习本教程，您将掌握eBPF开发的基本知识，并为后续进一步学习和实践奠定坚实的基础。
 
-下面以 BCC 工具为例，介绍 eBPF 程序的基本开发流程。
+## eBPF开发环境准备与基本开发流程
 
-1. 安装编译环境和依赖。使用 BCC 开发 eBPF 程序需要安装 LLVM/Clang 和 bcc，以及其它的依赖库。
-2. 编写 eBPF 程序。eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。
-3. 编译和加载 eBPF 程序。使用 bcc 工具将 eBPF 程序编译成机器码，然后使用用户态代码加载并运行该程序。
-4. 运行程序并处理数据。eBPF 程序在内核运行时会触发事件，并将事件相关的信息传递给用户态程序。用户态程序负责处理这些信息并将结果输出。
-5. 结束程序。当 eBPF 程序运行完成后，用户态程序可以卸载并结束运行。
+在开始编写eBPF程序之前，我们需要准备一个合适的开发环境，并了解eBPF程序的基本开发流程。本部分将详细介绍这些内容。
 
-通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。
+### 安装必要的软件和工具
 
-## 使用 eunomia-bpf 开发 eBPF 程序
+要开发eBPF程序，您需要安装以下软件和工具：
 
-eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。使用 eunomia-bpf 可以大幅简化 eBPF 程序的开发流程。
+- Linux 内核：由于eBPF是内核技术，因此您需要具备较新版本的Linux内核（推荐4.8及以上版本），以支持eBPF功能。
+- LLVM 和 Clang：这些工具用于编译eBPF程序。安装最新版本的LLVM和Clang可以确保您获得最佳的eBPF支持。
 
-使用 eunomia-bpf 开发 eBPF 程序的流程也大致相同，只是细节略有不同。
+eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。当您选择了合适的开发框架后，如 BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以 BCC 工具为例，我们将介绍 eBPF 程序的基本开发流程：
 
-1. 安装编译环境和依赖。使用 eunomia-bpf 开发 eBPF 程序需要安装 eunomia-bpf 工具链和运行时库，以及其它的依赖库。
-2. 编写 eBPF 程序。eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。使用 eunomia-bpf，只需编写内核态代码即可，无需编写用户态代码。
-3. 编译和加载 eBPF 程序。使用 eunomia-bpf 工具链将 eBPF 程序编译成机器码，并将编译后的代码打包为可以在任何系统上运行的模块。然后使用 eunomia-bpf 运行时库加载并运行该模块。
-4. 运行程序并处理数据。eBPF 程序在内核运行时会触发事件，并将事件相关的信息传递给用户态程序。eunomia-bpf 的运行时库负责处理这些信息并将结果输出。
-5. 结束程序。当 eBPF 程序运行完成后，eunomia-bpf 的运行时库可以卸载并结束运行
+当您选择了合适的开发框架后，如BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以BCC工具为例，我们将介绍eBPF程序的基本开发流程：
+
+1. 安装BCC工具：根据您的Linux发行版，按照BCC官方文档的指南安装BCC工具和相关依赖。
+2. 编写eBPF程序（C语言）：使用C语言编写一个简单的eBPF程序，例如Hello World程序。该程序可以在内核空间执行并完成特定任务，如统计网络数据包数量。
+3. 编写用户态程序（Python或C等）：使用Python、C等语言编写用户态程序，用于加载、运行eBPF程序以及与之交互。在这个程序中，您需要使用BCC提供的API来加载和操作内核态的eBPF程序。
+4. 编译eBPF程序：使用BCC工具，将C语言编写的eBPF程序编译成内核可以执行的字节码。BCC会在运行时动态从源码编译eBPF程序。
+5. 加载并运行eBPF程序：在用户态程序中，使用BCC提供的API加载编译好的eBPF程序到内核空间，然后运行该程序。
+6. 与eBPF程序交互：用户态程序通过BCC提供的API与eBPF程序交互，实现数据收集、分析和展示等功能。例如，您可以使用BCC API读取eBPF程序中的map数据，以获取网络数据包统计信息。
+7. 卸载eBPF程序：当不再需要eBPF程序时，用户态程序应使用BCC API将其从内核空间卸载。
+8. 调试与优化：使用 bpftool 等工具进行eBPF程序的调试和优化，提高程序性能和稳定性。
+
+通过以上流程，您可以使用BCC工具开发、编译、运行和调试eBPF程序。请注意，其他框架（如libbpf、cilium/ebpf和eunomia-bpf）的开发流程大致相似但略有不同，因此在选择框架时，请参考相应的官方文档和示例。
+
+通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。我们会使用 eunomia-bpf 进行演示。
 
 ## 下载安装 eunomia-bpf 开发工具
 
@@ -62,6 +68,10 @@ Packing ebpf object and config into /src/package.json...
 ```
 
 ## Hello World - minimal eBPF program
+
+我们会先从一个简单的 eBPF 程序开始，它会在内核中打印一条消息。我们会使用 eunomia-bpf 的编译器工具链将其编译为 bpf 字节码文件，然后使用 ecli 工具加载并运行该程序。作为示例，我们可以暂时省略用户态程序的部分。
+
+```c
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -110,7 +120,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 
@@ -136,6 +146,24 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 跟踪点（tracepoints）是内核静态插桩技术，跟踪点在技术上只是放置在内核源代码中的跟踪函数，实际上就是在源码中插入的一些带有控制条件的探测点，这些探测点允许事后再添加处理函数。比如在内核中，最常见的静态跟踪方法就是 printk，即输出日志。又比如：在系统调用、调度程序事件、文件系统操作和磁盘 I/O 的开始和结束时都有跟踪点。 于 2009 年在 Linux 2.6.32 版本中首次提供。跟踪点是一种稳定的 API，数量有限。
 
+## GitHub 模板：轻松构建 eBPF 项目和开发环境
+
+面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 `Use this template` 按钮，即可开始使用。
+
+- <https://github.com/eunomia-bpf/libbpf-starter-template>：基于C语言和 libbpf 框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>：基于C语言和cilium/ebpf框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/libbpf-rs-starter-template>：基于Rust语言和libbpf-rs框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/eunomia-template>：基于C语言和eunomia-bpf框架的eBPF项目模板
+
+这些启动模板包含以下功能：
+
+- 一个 Makefile，让您可以一键构建项目
+- 一个 Dockerfile，用于为您的 eBPF 项目自动创建一个容器化环境并发布到 Github Packages
+- GitHub Actions，用于自动化构建、测试和发布流程
+- eBPF 开发所需的所有依赖项
+
+> 通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository
+
 ## 总结
 
 eBPF 程序的开发和使用流程可以概括为如下几个步骤：
@@ -149,4 +177,4 @@ eBPF 程序的开发和使用流程可以概括为如下几个步骤：
 
 需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。
 
-完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
+本教程的文档和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。

@@ -75,7 +75,7 @@ Packing ebpf object and config into package.json...
 然后运行：
 
 ```console
-sudo ecli package.json
+sudo ecli run package.json
 ```
 
 在另外一个窗口中：

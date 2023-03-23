@@ -51,7 +51,7 @@ Packing ebpf object and config into package.json...
 然后运行：
 
 ```console
-sudo ecli package.json
+sudo ecli run package.json
 ```
 
 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的 kprobe 演示输出：
@@ -158,7 +158,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 
@@ -209,7 +209,7 @@ Packing ebpf object and config into package.json...
 > 使用 ecli 命令运行编译后的程序：
 
 ```console
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 
@@ -477,7 +477,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 > 然后使用 ecli 运行编译后的程序：
 
 ```sh
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 > 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
@@ -892,7 +892,7 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 
@@ -908,7 +908,7 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 >
 > 请注意，使用 ecc 编译程序后，会生成一个 package.json 文件，其中包含编译后的 eBPF 程序和配置信息。运行 eBPF 程序时，需要指定该文件，以便 ecli 命令能够找到并运行 eBPF 程序。例如，可以使用以下命令运行 eBPF 程序：
 ```
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 ```
 > 如果您还有任何问题，请随时告诉我，我很乐意帮助您解决问题。
 
@@ -969,7 +969,7 @@ Packing ebpf object and config into package.json...
 然后运行：
 
 ```console
-sudo ecli package.json
+sudo ecli run package.json
 ```
 
 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的 kprobe 演示输出：
@@ -1039,7 +1039,7 @@ ecc kprobe-link.bpf.c
 ```
 > 编译后，您会得到一个 package.json 文件。您可以使用 ecli 命令运行该程序：
 ```
-sudo ecli package.json
+sudo ecli run package.json
 ```
 > 运行该程序后，您可以查看 /sys/kernel/debug/tracing/trace_pipe 文件，以查看程序的输出。请注意，编译和运行 eBPF 程序的步骤可能会有所不同，具体取决于使用的工具和系统环境。如果您在编
 
@@ -1100,7 +1100,7 @@ Packing ebpf object and config into package.json...
 > 然后运行：
 
 ```
-sudo ecli package.json
+sudo ecli run package.json
 ```
 > 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
 
@@ -1182,7 +1182,7 @@ Packing ebpf object and config into package.json...
 > 然后使用 ecli 运行编译后的程序：
 
 ```
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 Runing eBPF program...
 ```
 > 在 /sys/kernel/debug/tracing/trace_pipe 文件中，应该能看到类似下面的输出：
@@ -1423,7 +1423,7 @@ Packing ebpf object and config into package.json...
 ```
 
 ```shell
-$ sudo ecli ./package.json
+$ sudo ecli run ./package.json
 ...
 Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` to see output of the BPF program.
 ......
@@ -1691,7 +1691,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 它的输出结果类似这样：
 ```console
-$ sudo ecli examples/bpftools/runqlat/package.json
+$ sudo ecli run examples/bpftools/runqlat/package.json
 key =  4294967295
 comm = rcu_preempt
 
@@ -1734,11 +1734,11 @@ struct {
 > 正确的。该程序使用 BPF hash map 来记录每个线程的执行时间，并使用 BPF sample hash map 来定期输出每个线程的直方图。您可以通过在 /sys/kernel/debug/tracing/ 文件系统中执行 "cat runqslat" 来查看输出。
 
 
-不，应该通过 sudo ecli examples/bpftools/runqlat/package.json 来查看输出。
+不，应该通过 sudo ecli run examples/bpftools/runqlat/package.json 来查看输出。
 
 > 对，这样就可以看到输出的直方图了。例如：
 ```
-$ sudo ecli examples/bpftools/runqlat/package.json
+$ sudo ecli run examples/bpftools/runqlat/package.json
 key = 4294967295
 comm = rcu_preempt
 
