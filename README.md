@@ -41,7 +41,26 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 - [lesson 19-lsm-connect](src/19-lsm-connect/README.md) 使用 LSM 进行安全检测防御
 - [lesson 20-tc](src/20-tc/README.md) 使用 eBPF 进行 tc 流量控制
 - [lesson 21-xdp](src/20-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
-  
+
+
+## GitHub 模板：轻松构建 eBPF 项目和开发环境
+
+面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 `Use this template` 按钮，即可开始使用。
+
+- <https://github.com/eunomia-bpf/libbpf-starter-template>：基于C语言和 libbpf 框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>：基于C语言和cilium/ebpf框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/libbpf-rs-starter-template>：基于Rust语言和libbpf-rs框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/eunomia-template>：基于C语言和eunomia-bpf框架的eBPF项目模板
+
+这些启动模板包含以下功能：
+
+- 一个 Makefile，让您可以一键构建项目
+- 一个 Dockerfile，用于为您的 eBPF 项目自动创建一个容器化环境并发布到 Github Packages
+- GitHub Actions，用于自动化构建、测试和发布流程
+- eBPF 开发所需的所有依赖项
+
+> 通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：<https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository>
+
 ## 为什么需要基于 libbpf 和 BPF CO-RE 的教程？
 
 > 历史上，当需要开发一个BPF应用时可以选择BCC 框架，在实现各种用于Tracepoints的BPF程序时需要将BPF程序加载到内核中。BCC提供了内置的Clang编译器，可以在运行时编译BPF代码，并将其定制为符合特定主机内核的程序。这是在不断变化的内核内部下开发可维护的BPF应用程序的唯一方法。在BPF的可移植性和CO-RE一文中详细介绍了为什么会这样，以及为什么BCC是之前唯一的可行方式，此外还解释了为什么 libbpf 是目前比较好的选择。去年，Libbpf的功能和复杂性得到了重大提升，消除了与BCC之间的很多差异(特别是对Tracepoints应用来说)，并增加了很多BCC不支持的新的且强大的特性(如全局变量和BPF skeletons)。
