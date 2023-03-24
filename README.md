@@ -43,7 +43,7 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 - [lesson 21-xdp](src/20-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
 
 
-## GitHub 模板：轻松构建 eBPF 项目和开发环境
+## GitHub 模板：轻松构建 eBPF 项目和开发环境，一键在线编译运行 eBPF 程序
 
 面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 `Use this template` 按钮，即可开始使用。
 
@@ -60,6 +60,20 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 - eBPF 开发所需的所有依赖项
 
 > 通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：<https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository>
+
+当您使用上述 eBPF 项目模板中的一个创建了一个新仓库时，您可以使用 GitHub Codespaces 轻松地设置和启动一个在线开发环境。以下是使用 GitHub Codespaces 编译和运行 eBPF 程序的步骤：
+
+1. 点击您的新仓库中的 Code 按钮，然后选择 Open with Codespaces 选项：
+
+    ![code](imgs/code-button.png)
+
+2. GitHub 将为您创建一个新的 Codespace，这可能需要几分钟的时间，具体取决于您的网络速度和仓库的大小。
+3. 一旦您的 Codespace 启动并准备好使用，您可以打开终端并导航到您的项目目录中。
+4. 可以按照对应的仓库中的介绍来编译和运行 eBPF 程序:
+
+    ![codespace](imgs/codespace.png)
+
+使用 Codespaces，您可以轻松地创建、管理和共享云端开发环境，从而将您的开发过程加速并使其更具可靠性。您可以在任何地方、任何设备上使用 Codespaces 进行开发，只需要一个具有 Web 浏览器的计算机即可。同时，GitHub Codespaces 还支持预先配置好的环境、自定义开发容器和可定制化的开发体验等功能，以满足您的开发需求。
 
 ## 为什么需要基于 libbpf 和 BPF CO-RE 的教程？
 
