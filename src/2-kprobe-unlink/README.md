@@ -2,9 +2,9 @@
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。
+本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。本文会先讲解关于 kprobes 的基本概念和技术背景，然后介绍如何在 eBPF 中使用 kprobe 捕获 unlink 系统调用。
 
-## kprobes技术背景
+## kprobes 技术背景
 
 开发人员在内核或者模块的调试过程中，往往会需要要知道其中的一些函数有无被调用、何时被调用、执行是否正确以及函数的入参和返回值是什么等等。比较简单的做法是在内核代码对应的函数中添加日志打印信息，但这种方式往往需要重新编译内核或模块，重新启动设备之类的，操作较为复杂甚至可能会破坏原有的代码执行过程。
 
@@ -27,7 +27,9 @@ kprobes的特点与使用限制：
 9. 如果一个函数的调用次数和返回次数不相等，则在类似这样的函数上注册kretprobe将可能不会达到预期的效果，例如do_exit()函数会存在问题，而do_execve()函数和do_fork()函数不会；
 10. 如果当在进入和退出一个函数时，CPU运行在非当前任务所有的栈上，那么往该函数上注册kretprobe可能会导致不可预料的后果，因此，kprobes不支持在X86_64的结构下为__switch_to()函数注册kretprobe，将直接返回-EINVAL。
 
-## kprobe
+## kprobe 示例
+
+完整代码如下：
 
 ```c
 #include "vmlinux.h"
@@ -60,7 +62,50 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 }
 ```
 
-kprobe 是 eBPF 用于处理内核空间入口和出口（返回）探针（kprobe 和 kretprobe）的一个例子。它将 kprobe 和 kretprobe BPF 程序附加到 do_unlinkat() 函数上，并使用 bpf_printk() 宏分别记录 PID、文件名和返回值。
+这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件。这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。
+
+首先，我们导入必要的头文件，如 vmlinux.h，bpf_helpers.h，bpf_tracing.h 和 bpf_core_read.h。接着，我们定义许可证，以允许程序在内核中运行。
+
+```c
+#include "vmlinux.h"
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include <bpf/bpf_core_read.h>
+
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+```
+
+接下来，我们定义一个名为 BPF_KPROBE(do_unlinkat) 的 kprobe，当进入 do_unlinkat 函数时，它会被触发。该函数接受两个参数：dfd（文件描述符）和 name（文件名结构体指针）。在这个 kprobe 中，我们获取当前进程的 PID（进程标识符），然后读取文件名。最后，我们使用 bpf_printk 函数在内核日志中打印 PID 和文件名。
+
+```c
+SEC("kprobe/do_unlinkat")
+int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
+{
+ pid_t pid;
+ const char *filename;
+
+ pid = bpf_get_current_pid_tgid() >> 32;
+ filename = BPF_CORE_READ(name, name);
+ bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
+ return 0;
+}
+
+```
+
+接下来，我们定义一个名为 BPF_KRETPROBE(do_unlinkat_exit) 的 kretprobe，当从 do_unlinkat 函数退出时，它会被触发。这个 kretprobe 的目的是捕获函数的返回值（ret）。我们再次获取当前进程的 PID，并使用 bpf_printk 函数在内核日志中打印 PID 和返回值。
+
+```c
+SEC("kretprobe/do_unlinkat")
+int BPF_KRETPROBE(do_unlinkat_exit, long ret)
+{
+ pid_t pid;
+
+ pid = bpf_get_current_pid_tgid() >> 32;
+ bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
+ return 0;
+}
+```
 
 eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。
 
