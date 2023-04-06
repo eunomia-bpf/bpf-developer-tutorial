@@ -155,7 +155,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 编译运行上述代码：
 
 ```console
-$ ecc bootstrap.bpf.c
+$ ecc bootstrap.bpf.c bootstrap.h
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 $ sudo ecli run package.json
