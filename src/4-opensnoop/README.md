@@ -40,7 +40,7 @@ eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发�
 编译运行上述代码：
 
 ```console
-$ ecc fentry-link.bpf.c
+$ ecc opensnoop.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 $ sudo ecli run package.json
