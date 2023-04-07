@@ -106,7 +106,7 @@ int handle_tp(void *ctx)
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：
 
 ```console
-$ ecc hello.bpf.c
+$ ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 ```
