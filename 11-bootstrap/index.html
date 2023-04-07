@@ -277,7 +277,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 <p>程序还定义了一个名为handle_exit的SEC函数，它被附加到跟踪进程退出的BPF程序上。该函数会在确定PID和TID后计算进程的生命周期，然后根据min_duration_ns的值决定是否发出退出事件。如果进程的生命周期足够长，则会从BPF ringbuf保留样本并使用数据填充样本，然后将其提交给用户空间进行后处理。</p>
 <p>最后，主函数调用bpf_ringbuf_poll来轮询BPF ringbuf，并在接收到新的事件时处理该事件。这个函数会持续运行，直到全局标志exiting被设置为true，此时它会清理资源并退出。</p>
 <p>编译运行上述代码：</p>
-<pre><code class="language-console">$ ecc bootstrap.bpf.c
+<pre><code class="language-console">$ ecc bootstrap.bpf.c bootstrap.h
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 $ sudo ecli run package.json

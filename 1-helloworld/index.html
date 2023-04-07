@@ -224,7 +224,7 @@ int handle_tp(void *ctx)
 <li><code>return 0</code>;：必须这样，返回0 (如果要知道why, 参考 #139  <a href="https://github.com/iovisor/bcc/issues/139">https://github.com/iovisor/bcc/issues/139</a>)。</li>
 </ul>
 <p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：</p>
-<pre><code class="language-console">$ ecc hello.bpf.c
+<pre><code class="language-console">$ ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
