@@ -146,8 +146,8 @@
                     <main>
                         <h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
-<p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
-<h2 id="kprobes技术背景"><a class="header" href="#kprobes技术背景">kprobes技术背景</a></h2>
+<p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。本文会先讲解关于 kprobes 的基本概念和技术背景，然后介绍如何在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
+<h2 id="kprobes-技术背景"><a class="header" href="#kprobes-技术背景">kprobes 技术背景</a></h2>
 <p>开发人员在内核或者模块的调试过程中，往往会需要要知道其中的一些函数有无被调用、何时被调用、执行是否正确以及函数的入参和返回值是什么等等。比较简单的做法是在内核代码对应的函数中添加日志打印信息，但这种方式往往需要重新编译内核或模块，重新启动设备之类的，操作较为复杂甚至可能会破坏原有的代码执行过程。</p>
 <p>而利用kprobes技术，用户可以定义自己的回调函数，然后在内核或者模块中几乎所有的函数中（有些函数是不可探测的，例如kprobes自身的相关实现函数，后文会有详细说明）动态的插入探测点，当内核执行流程执行到指定的探测函数时，会调用该回调函数，用户即可收集所需的信息了，同时内核最后还会回到原本的正常执行流程。如果用户已经收集足够的信息，不再需要继续探测，则同样可以动态地移除探测点。因此kprobes技术具有对内核执行流程影响小和操作方便的优点。</p>
 <p>kprobes技术包括的3种探测手段分别时kprobe、jprobe和kretprobe。首先kprobe是最基本的探测方式，是实现后两种的基础，它可以在任意的位置放置探测点（就连函数内部的某条指令处也可以），它提供了探测点的调用前、调用后和内存访问出错3种回调方式，分别是pre_handler、post_handler和fault_handler，其中pre_handler函数将在被探测指令被执行前回调，post_handler会在被探测指令执行完毕后回调（注意不是被探测函数），fault_handler会在内存访问出错时被调用；jprobe基于kprobe实现，它用于获取被探测函数的入参值；最后kretprobe从名字中就可以看出其用途了，它同样基于kprobe实现，用于获取被探测函数的返回值。</p>
@@ -165,7 +165,8 @@
 <li>如果一个函数的调用次数和返回次数不相等，则在类似这样的函数上注册kretprobe将可能不会达到预期的效果，例如do_exit()函数会存在问题，而do_execve()函数和do_fork()函数不会；</li>
 <li>如果当在进入和退出一个函数时，CPU运行在非当前任务所有的栈上，那么往该函数上注册kretprobe可能会导致不可预料的后果，因此，kprobes不支持在X86_64的结构下为__switch_to()函数注册kretprobe，将直接返回-EINVAL。</li>
 </ol>
-<h2 id="kprobe"><a class="header" href="#kprobe">kprobe</a></h2>
+<h2 id="kprobe-示例"><a class="header" href="#kprobe-示例">kprobe 示例</a></h2>
+<p>完整代码如下：</p>
 <pre><code class="language-c">#include &quot;vmlinux.h&quot;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
@@ -195,7 +196,41 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
  return 0;
 }
 </code></pre>
-<p>kprobe 是 eBPF 用于处理内核空间入口和出口（返回）探针（kprobe 和 kretprobe）的一个例子。它将 kprobe 和 kretprobe BPF 程序附加到 do_unlinkat() 函数上，并使用 bpf_printk() 宏分别记录 PID、文件名和返回值。</p>
+<p>这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件。这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。</p>
+<p>首先，我们导入必要的头文件，如 vmlinux.h，bpf_helpers.h，bpf_tracing.h 和 bpf_core_read.h。接着，我们定义许可证，以允许程序在内核中运行。</p>
+<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+
+</code></pre>
+<p>接下来，我们定义一个名为 BPF_KPROBE(do_unlinkat) 的 kprobe，当进入 do_unlinkat 函数时，它会被触发。该函数接受两个参数：dfd（文件描述符）和 name（文件名结构体指针）。在这个 kprobe 中，我们获取当前进程的 PID（进程标识符），然后读取文件名。最后，我们使用 bpf_printk 函数在内核日志中打印 PID 和文件名。</p>
+<pre><code class="language-c">SEC(&quot;kprobe/do_unlinkat&quot;)
+int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
+{
+ pid_t pid;
+ const char *filename;
+
+ pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+ filename = BPF_CORE_READ(name, name);
+ bpf_printk(&quot;KPROBE ENTRY pid = %d, filename = %s\n&quot;, pid, filename);
+ return 0;
+}
+
+</code></pre>
+<p>接下来，我们定义一个名为 BPF_KRETPROBE(do_unlinkat_exit) 的 kretprobe，当从 do_unlinkat 函数退出时，它会被触发。这个 kretprobe 的目的是捕获函数的返回值（ret）。我们再次获取当前进程的 PID，并使用 bpf_printk 函数在内核日志中打印 PID 和返回值。</p>
+<pre><code class="language-c">SEC(&quot;kretprobe/do_unlinkat&quot;)
+int BPF_KRETPROBE(do_unlinkat_exit, long ret)
+{
+ pid_t pid;
+
+ pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+ bpf_printk(&quot;KPROBE EXIT: pid = %d, ret = %ld\n&quot;, pid, ret);
+ return 0;
+}
+</code></pre>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。</p>
 <p>要编译这个程序，请使用 ecc 工具：</p>
 <pre><code class="language-console">$ ecc kprobe-link.bpf.c
