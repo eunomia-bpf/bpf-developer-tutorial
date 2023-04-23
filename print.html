@@ -2260,25 +2260,128 @@ cnt = 0
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-lsm-进行安全检测防御"><a class="header" href="#ebpf-入门实践教程使用-lsm-进行安全检测防御">eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></h1>
 <h2 id="背景-5"><a class="header" href="#背景-5">背景</a></h2>
-<p>TODO</p>
+<p>LSM 从 Linux 2.6 开始成为官方内核的一个安全框架，基于此的安全实现包括 SELinux 和 AppArmor 等。在 Linux 5.7 引入 BPF LSM 后，系统开发人员已经能够自由地实现函数粒度的安全检查能力，本文就提供了这样一个案例：限制通过 socket connect 函数对特定 IPv4 地址进行访问的 BPF LSM 程序。（可见其控制精度是很高的）</p>
 <h2 id="lsm-概述"><a class="header" href="#lsm-概述">LSM 概述</a></h2>
-<p>TODO</p>
+<p>LSM（Linux Security Modules）是 Linux 内核中用于支持各种计算机安全模型的框架。LSM 在 Linux 内核安全相关的关键路径上预置了一批 hook 点，从而实现了内核和安全模块的解耦，使不同的安全模块可以自由地在内核中加载/卸载，无需修改原有的内核代码就可以加入安全检查功能。</p>
+<p>在过去，使用 LSM 主要通过配置已有的安全模块（如 SELinux 和 AppArmor）或编写自己的内核模块；而在 Linux 5.7 引入 BPF LSM 机制后，一切都变得不同了：现在，开发人员可以通过 eBPF 编写自定义的安全策略，并将其动态加载到内核中的 LSM 挂载点，而无需配置或编写内核模块。</p>
+<p>现在 LSM 支持的 hook 点包括但不限于：</p>
+<ul>
+<li>对文件的打开、创建、删除和移动等；</li>
+<li>文件系统的挂载；</li>
+<li>对 task 和 process 的操作；</li>
+<li>对 socket 的操作（创建、绑定 socket，发送和接收消息等）；</li>
+</ul>
+<p>更多 hook 点可以参考 <a href="https://github.com/torvalds/linux/blob/master/include/linux/lsm_hooks.h">lsm_hooks.h</a>。</p>
+<h2 id="确认-bpf-lsm-是否可用"><a class="header" href="#确认-bpf-lsm-是否可用">确认 BPF LSM 是否可用</a></h2>
+<p>首先，请确认内核版本高于 5.7。接下来，可以通过</p>
+<pre><code class="language-console">$ cat /boot/config-$(uname -r) | grep BPF_LSM
+CONFIG_BPF_LSM=y
+</code></pre>
+<p>判断是否内核是否支持 BPF LSM。上述条件都满足的情况下，可以通过</p>
+<pre><code class="language-console">$ cat /sys/kernel/security/lsm
+ndlock,lockdown,yama,integrity,apparmor
+</code></pre>
+<p>查看输出是否包含 bpf 选项，如果输出不包含（像上面的例子），可以通过修改 <code>/etc/default/grub</code>：</p>
+<pre><code class="language-conf">GRUB_CMDLINE_LINUX=&quot;lsm=ndlock,lockdown,yama,integrity,apparmor,bpf&quot;
+</code></pre>
+<p>并通过 <code>update-grub2</code> 命令更新 grub 配置（不同系统的对应命令可能不同），然后重启系统。</p>
 <h2 id="编写-ebpf-程序-4"><a class="header" href="#编写-ebpf-程序-4">编写 eBPF 程序</a></h2>
-<p>TODO</p>
+<pre><code class="language-C">// lsm-connect.bpf.c
+#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+
+#define EPERM 1
+#define AF_INET 2
+
+const __u32 blockme = 16843009; // 1.1.1.1 -&gt; int
+
+SEC(&quot;lsm/socket_connect&quot;)
+int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, int addrlen, int ret)
+{
+    // Satisfying &quot;cannot override a denial&quot; rule
+    if (ret != 0)
+    {
+        return ret;
+    }
+
+    // Only IPv4 in this example
+    if (address-&gt;sa_family != AF_INET)
+    {
+        return 0;
+    }
+
+    // Cast the address to an IPv4 socket address
+    struct sockaddr_in *addr = (struct sockaddr_in *)address;
+
+    // Where do you want to go?
+    __u32 dest = addr-&gt;sin_addr.s_addr;
+    bpf_printk(&quot;lsm: found connect to %d&quot;, dest);
+
+    if (dest == blockme)
+    {
+        bpf_printk(&quot;lsm: blocking %d&quot;, dest);
+        return -EPERM;
+    }
+    return 0;
+}
+
+</code></pre>
+<p>这是一段 C 实现的 eBPF 内核侧代码，它会阻碍所有试图通过 socket 对 1.1.1.1 的连接操作，其中：</p>
+<ul>
+<li><code>SEC(&quot;lsm/socket_connect&quot;)</code> 宏指出该程序期望的挂载点；</li>
+<li>程序通过 <code>BPF_PROG</code> 宏定义（详情可查看 <a href="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/lib/bpf/bpf_tracing.h">tools/lib/bpf/bpf_tracing.h</a>）；</li>
+<li><code>restrict_connect</code> 是 <code>BPF_PROG</code> 宏要求的程序名；</li>
+<li><code>ret</code> 是该挂载点上（潜在的）当前函数之前的 LSM 检查程序的返回值；</li>
+</ul>
+<p>整个程序的思路不难理解：</p>
+<ul>
+<li>首先，若其他安全检查函数返回值不为 0（不通过），则无需检查，直接返回不通过；</li>
+<li>接下来，判断是否为 IPV4 的连接请求，并比较试图连接的地址是否为 1.1.1.1；</li>
+<li>若请求地址为 1.1.1.1 则拒绝连接，否则允许连接；</li>
+</ul>
+<p>在程序运行期间，所有通过 socket 的连接操作都会被输出到 <code>/sys/kernel/debug/tracing/trace_pipe</code>。</p>
 <h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
+<p>通过容器编译：</p>
 <pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
-<p>or compile with <code>ecc</code>:</p>
+<p>或是通过 <code>ecc</code> 编译：</p>
 <pre><code class="language-console">$ ecc lsm-connect.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
-<p>Run:</p>
-<pre><code class="language-console">sudo ecli run  examples/bpftools/lsm-connect/package.json
+<p>并通过 <code>ecli</code> 运行：</p>
+<pre><code class="language-console">$ sudo ecli run package.json
+</code></pre>
+<p>接下来，可以打开另一个 terminal，并尝试访问 1.1.1.1：</p>
+<pre><code class="language-console">$ ping 1.1.1.1
+ping: connect: Operation not permitted
+$ curl 1.1.1.1
+curl: (7) Couldn't connect to server
+$ wget 1.1.1.1
+--2023-04-23 08:41:18--  (try: 2)  http://1.1.1.1/
+Connecting to 1.1.1.1:80... failed: Operation not permitted.
+Retrying.
+</code></pre>
+<p>同时，我们可以查看 <code>bpf_printk</code> 的输出：</p>
+<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+            ping-7054    [000] d...1  6313.430872: bpf_trace_printk: lsm: found connect to 16843009
+            ping-7054    [000] d...1  6313.430874: bpf_trace_printk: lsm: blocking 16843009
+            curl-7058    [000] d...1  6316.346582: bpf_trace_printk: lsm: found connect to 16843009
+            curl-7058    [000] d...1  6316.346584: bpf_trace_printk: lsm: blocking 16843009
+            wget-7061    [000] d...1  6318.800698: bpf_trace_printk: lsm: found connect to 16843009
+            wget-7061    [000] d...1  6318.800700: bpf_trace_printk: lsm: blocking 16843009
 </code></pre>
 <h2 id="总结-17"><a class="header" href="#总结-17">总结</a></h2>
-<p>TODO</p>
-<p>参考：<a href="https://github.com/leodido/demo-cloud-native-ebpf-day">https://github.com/leodido/demo-cloud-native-ebpf-day</a></p>
+<p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 &quot;cannot override a denial&quot; 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
+<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
+<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<h2 id="参考"><a class="header" href="#参考">参考</a></h2>
+<p><a href="https://github.com/leodido/demo-cloud-native-ebpf-day">https://github.com/leodido/demo-cloud-native-ebpf-day</a></p>
+<p><a href="https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program">https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program</a></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-ebpf-进行-tc-流量控制"><a class="header" href="#ebpf-入门实践教程使用-ebpf-进行-tc-流量控制">eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></h1>
 <h2 id="tc-程序示例"><a class="header" href="#tc-程序示例">tc 程序示例</a></h2>
 <pre><code class="language-c">#include &lt;vmlinux.h&gt;
