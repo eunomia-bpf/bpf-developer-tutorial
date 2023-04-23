@@ -150,14 +150,188 @@
 写的不好导致。为了能更好地定位网络问题，<code>tcprtt</code> 工具被提出。它可以监测TCP链接的往返时间，从而分析
 网络质量，帮助用户定位问题来源。</p>
 <p>当有tcp链接建立时，该工具会自动根据当前系统的支持情况，选择合适的执行函数。
-在执行函数中，<code>tcprtt</code>会收集tcp链接的各项基本底薪，包括地址，源端口，目标端口，耗时
+在执行函数中，<code>tcprtt</code>会收集tcp链接的各项基本信息，包括地址，源端口，目标端口，耗时
 等等，并将其更新到直方图的map中。运行结束后通过用户态代码，展现给用户。</p>
 <h2 id="编写-ebpf-程序"><a class="header" href="#编写-ebpf-程序">编写 eBPF 程序</a></h2>
-<p>TODO</p>
+<pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0
+// Copyright (c) 2021 Wenbo Zhang
+#include &lt;vmlinux.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_endian.h&gt;
+#include &quot;tcprtt.h&quot;
+#include &quot;bits.bpf.h&quot;
+#include &quot;maps.bpf.h&quot;
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+
+const volatile bool targ_laddr_hist = false;
+const volatile bool targ_raddr_hist = false;
+const volatile bool targ_show_ext = false;
+const volatile __u16 targ_sport = 0;
+const volatile __u16 targ_dport = 0;
+const volatile __u32 targ_saddr = 0;
+const volatile __u32 targ_daddr = 0;
+const volatile bool targ_ms = false;
+
+#define MAX_ENTRIES	10240
+
+/// @sample {&quot;interval&quot;: 1000, &quot;type&quot; : &quot;log2_hist&quot;}
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, u64);
+	__type(value, struct hist);
+} hists SEC(&quot;.maps&quot;);
+
+static struct hist zero;
+
+SEC(&quot;fentry/tcp_rcv_established&quot;)
+int BPF_PROG(tcp_rcv, struct sock *sk)
+{
+	const struct inet_sock *inet = (struct inet_sock *)(sk);
+	struct tcp_sock *ts;
+	struct hist *histp;
+	u64 key, slot;
+	u32 srtt;
+
+	if (targ_sport &amp;&amp; targ_sport != inet-&gt;inet_sport)
+		return 0;
+	if (targ_dport &amp;&amp; targ_dport != sk-&gt;__sk_common.skc_dport)
+		return 0;
+	if (targ_saddr &amp;&amp; targ_saddr != inet-&gt;inet_saddr)
+		return 0;
+	if (targ_daddr &amp;&amp; targ_daddr != sk-&gt;__sk_common.skc_daddr)
+		return 0;
+
+	if (targ_laddr_hist)
+		key = inet-&gt;inet_saddr;
+	else if (targ_raddr_hist)
+		key = inet-&gt;sk.__sk_common.skc_daddr;
+	else
+		key = 0;
+	histp = bpf_map_lookup_or_try_init(&amp;hists, &amp;key, &amp;zero);
+	if (!histp)
+		return 0;
+	ts = (struct tcp_sock *)(sk);
+	srtt = BPF_CORE_READ(ts, srtt_us) &gt;&gt; 3;
+	if (targ_ms)
+		srtt /= 1000U;
+	slot = log2l(srtt);
+	if (slot &gt;= MAX_SLOTS)
+		slot = MAX_SLOTS - 1;
+	__sync_fetch_and_add(&amp;histp-&gt;slots[slot], 1);
+	if (targ_show_ext) {
+		__sync_fetch_and_add(&amp;histp-&gt;latency, srtt);
+		__sync_fetch_and_add(&amp;histp-&gt;cnt, 1);
+	}
+	return 0;
+}
+
+</code></pre>
+<p>这段代码是基于eBPF的网络延迟分析工具，它通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布。下面是这段代码的主要工作原理：</p>
+<ol>
+<li>
+<p>首先定义了一个名为&quot;hists&quot;的eBPF哈希表，用于保存RTT直方图数据。</p>
+</li>
+<li>
+<p>当tcp_rcv_established函数被调用时，它首先从传入的socket结构体中获取TCP相关信息，包括本地/远程IP地址、本地/远程端口号以及TCP状态信息等。</p>
+</li>
+<li>
+<p>接下来，代码会检查用户指定的条件是否匹配当前TCP连接。如果匹配失败，则直接返回。</p>
+</li>
+<li>
+<p>如果匹配成功，则从&quot;hists&quot;哈希表中查找与本地/远程IP地址匹配的直方图数据。如果该IP地址的直方图不存在，则创建一个新的直方图并插入哈希表中。</p>
+</li>
+<li>
+<p>接下来，代码会从socket结构体中获取当前TCP连接的RTT(srtt)，并根据用户设置的选项来将srtt值进行处理。如果用户设置了&quot;-ms&quot;选项，则将srtt值除以1000。</p>
+</li>
+<li>
+<p>接着，代码会将srtt值转换为直方图的槽位(slot)，并将该槽位的计数器+1。</p>
+</li>
+<li>
+<p>如果用户设置了&quot;-show-ext&quot;选项，则还会累加直方图的总延迟(latency)和计数(cnt)。</p>
+</li>
+</ol>
 <h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
-<p>TODO</p>
+<p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
+<p>Compile:</p>
+<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+</code></pre>
+<p>或者</p>
+<pre><code class="language-console">$ ecc runqlat.bpf.c runqlat.h
+Compiling bpf object...
+Generating export types...
+Packing ebpf object and config into package.json...
+</code></pre>
+<p>Run:</p>
+<pre><code class="language-console">$ sudo ecli run package.json -h
+A simple eBPF program
+
+
+Usage: package.json [OPTIONS]
+
+Options:
+      --verbose                  Whether to show libbpf debug information
+      --targ_laddr_hist          Set value of `bool` variable targ_laddr_hist
+      --targ_raddr_hist          Set value of `bool` variable targ_raddr_hist
+      --targ_show_ext            Set value of `bool` variable targ_show_ext
+      --targ_sport &lt;targ_sport&gt;  Set value of `__u16` variable targ_sport
+      --targ_dport &lt;targ_dport&gt;  Set value of `__u16` variable targ_dport
+      --targ_saddr &lt;targ_saddr&gt;  Set value of `__u32` variable targ_saddr
+      --targ_daddr &lt;targ_daddr&gt;  Set value of `__u32` variable targ_daddr
+      --targ_ms                  Set value of `bool` variable targ_ms
+  -h, --help                     Print help
+  -V, --version                  Print version
+
+Built with eunomia-bpf framework.
+See https://github.com/eunomia-bpf/eunomia-bpf for more information.
+
+$ sudo ecli run package.json
+key =  0
+latency = 0
+cnt = 0
+
+     (unit)              : count    distribution
+         0 -&gt; 1          : 0        |                                        |
+         2 -&gt; 3          : 0        |                                        |
+         4 -&gt; 7          : 0        |                                        |
+         8 -&gt; 15         : 0        |                                        |
+        16 -&gt; 31         : 0        |                                        |
+        32 -&gt; 63         : 0        |                                        |
+        64 -&gt; 127        : 0        |                                        |
+       128 -&gt; 255        : 0        |                                        |
+       256 -&gt; 511        : 0        |                                        |
+       512 -&gt; 1023       : 4        |********************                    |
+      1024 -&gt; 2047       : 1        |*****                                   |
+      2048 -&gt; 4095       : 0        |                                        |
+      4096 -&gt; 8191       : 8        |****************************************|
+
+key =  0
+latency = 0
+cnt = 0
+
+     (unit)              : count    distribution
+         0 -&gt; 1          : 0        |                                        |
+         2 -&gt; 3          : 0        |                                        |
+         4 -&gt; 7          : 0        |                                        |
+         8 -&gt; 15         : 0        |                                        |
+        16 -&gt; 31         : 0        |                                        |
+        32 -&gt; 63         : 0        |                                        |
+        64 -&gt; 127        : 0        |                                        |
+       128 -&gt; 255        : 0        |                                        |
+       256 -&gt; 511        : 0        |                                        |
+       512 -&gt; 1023       : 11       |***************************             |
+      1024 -&gt; 2047       : 1        |**                                      |
+      2048 -&gt; 4095       : 0        |                                        |
+      4096 -&gt; 8191       : 16       |****************************************|
+      8192 -&gt; 16383      : 4        |**********                              |
+</code></pre>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
-<p>TODO</p>
+<p>tcprtt是一个基于eBPF的TCP延迟分析工具。通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布，可以对指定的TCP连接进行RTT分布统计，并将结果保存到eBPF哈希表中。同时，这个工具支持多种条件过滤和RTT分布数据扩展功能，以便用户可以更好地进行网络性能分析和调优。</p>
+<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
+<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 
                     </main>
 
