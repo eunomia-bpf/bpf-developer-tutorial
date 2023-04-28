@@ -71,7 +71,7 @@ union combined_alloc_info {
 + memptrs用于跟踪每个内存分配请求返回的指针，以便在内存释放请求到来时找到对应的内存分配请求；
 + stack_traces是一个堆栈跟踪类型的哈希表，用于存储每个线程的堆栈信息（key为线程id，value为堆栈跟踪信息）以便在内存分配和释放请求到来时能够追踪和分析相应的堆栈信息。
 
-其中combined_alloc_info是一个联合体，其中包含一个结构体和一个unsigned long long类型的变量bits。结构体中的两个成员变量total_size和number_of_allocs分别表示总分配大小和分配的次数。其中40和24分别表示total_size和number_of_allocs这两个成员变量所占用的位数，用来限制其大小。通过这样的位数限制，可以节省combined_alloc_info结构的存储空间。同时，由于total_size和number_of_allocs在存储时是共用一个unsigned long long类型的变量bits，因此可以通过位运算来访问和修改这两个成员变量，从而避免了在程序中定义额外的变量和函数的复杂性。
+其中combined_alloc_info是一个联合体，其中包含一个结构体和一个unsigned long long类型的变量bits。结构体中的两个成员变量total_size和number_of_allocs分别表示总分配大小和分配的次数。其中40和24分别表示total_size和number_of_allocs这两个成员变量所占用的位数，用来限制其大小。通过这样的位数限制，可以节省combined_alloc_info结构的存储空间。同时，由于total_size和number_of_allocs在存储时是共用一个unsigned long long类型的变量bits，因此可以通过在成员变量bits上进行位运算来访问和修改total_size和number_of_allocs，从而避免了在程序中定义额外的变量和函数的复杂性。
 
 ```c
 static int gen_alloc_enter(size_t size)
@@ -162,9 +162,7 @@ int BPF_KRETPROBE(malloc_exit)
 }
 ```
 
-update_statistics_add用来更新 combined_allocs map 中与 stack_id 相关联的内存分配信息。它会先调用 bpf_map_lookup_or_try_init 来查找 stack_id 是否已经存在于 combined_allocs map 中，如果不存在则会在 map 中创建一个新的 entry，并将其初始化为 initial_cinfo。然后，它会将 sz 和 1 分别赋值给 incremental_cinfo.total_size 和 incremental_cinfo.number_of_allocs，并将其存储在 incremental_cinfo 中。最后，它使用 __sync_fetch_and_add 将 incremental_cinfo 中的信息累加到 existing_cinfo 中。
-
-其次，gen_alloc_exit2函数会在内存释放时被调用，它用来记录内存释放的信息，并更新相关的 map。具体地，它首先通过 bpf_get_current_pid_tgid 来获取当前进程的 PID，并将其右移32位，获得PID值，然后使用 bpf_map_lookup_elem 查找 sizes map 中与该 PID 相关联的内存分配大小信息，并将其赋值给 info.size。如果找不到相应的 entry，则返回 0，表示在内存分配时没有记录到该 PID 相关的信息。接着，它会调用 __builtin_memset 来将 info 的所有字段清零，并调用 bpf_map_delete_elem 来删除 sizes map 中与该 PID 相关联的 entry。
+gen_alloc_exit2函数会在内存释放时被调用，它用来记录内存释放的信息，并更新相关的 map。具体地，它首先通过 bpf_get_current_pid_tgid 来获取当前进程的 PID，并将其右移32位，获得PID值，然后使用 bpf_map_lookup_elem 查找 sizes map 中与该 PID 相关联的内存分配大小信息，并将其赋值给 info.size。如果找不到相应的 entry，则返回 0，表示在内存分配时没有记录到该 PID 相关的信息。接着，它会调用 __builtin_memset 来将 info 的所有字段清零，并调用 bpf_map_delete_elem 来删除 sizes map 中与该 PID 相关联的 entry。
 
 如果 address 不为 0，则说明存在相应的内存分配信息，此时它会调用 bpf_ktime_get_ns 来获取当前时间戳，并将其赋值给 info.timestamp_ns。然后，它会调用 bpf_get_stackid 来获取当前函数调用堆栈的 ID，并将其赋值给 info.stack_id。最后，它会调用 bpf_map_update_elem 来将 address 和 info 相关联，即将 address 映射到 info。随后，它会调用 update_statistics_add 函数来更新 combined_allocs map 中与 info.stack_id 相关联的内存分配信息。
 
