@@ -50,55 +50,59 @@ static int open_and_attach_perf_event(int freq, struct bpf_program *prog,
 其ebpf程序实现逻辑是对程序的堆栈进行定时采样，从而捕获程序的执行流程。
 ```c
 SEC("perf_event")
-int do_perf_event(struct bpf_perf_event_data *ctx)
+int profile(void *ctx)
 {
-	__u64 id = bpf_get_current_pid_tgid();
-	__u32 pid = id >> 32;
-	__u32 tid = id;
-	__u64 *valp;
-	static const __u64 zero;
-	struct key_t key = {};
+	int pid = bpf_get_current_pid_tgid() >> 32;
+	int cpu_id = bpf_get_smp_processor_id();
+	struct stacktrace_event *event;
+	int cp;
 
-	if (!include_idle && tid == 0)
-		return 0;
+	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+	if (!event)
+		return 1;
 
-	if (targ_pid != -1 && targ_pid != pid)
-		return 0;
-	if (targ_tid != -1 && targ_tid != tid)
-		return 0;
+	event->pid = pid;
+	event->cpu_id = cpu_id;
 
-	key.pid = pid;
-	bpf_get_current_comm(&key.name, sizeof(key.name));
+	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
+		event->comm[0] = 0;
 
-	if (user_stacks_only)
-		key.kern_stack_id = -1;
-	else
-		key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stackmap, 0);
+	event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
 
-	if (kernel_stacks_only)
-		key.user_stack_id = -1;
-	else
-		key.user_stack_id = bpf_get_stackid(&ctx->regs, &stackmap, BPF_F_USER_STACK);
+	event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
-	if (key.kern_stack_id >= 0) {
-		// populate extras to fix the kernel stack
-		__u64 ip = PT_REGS_IP(&ctx->regs);
-
-		if (is_kernel_addr(ip)) {
-		    key.kernel_ip = ip;
-		}
-	}
-
-	valp = bpf_map_lookup_or_try_init(&counts, &key, &zero);
-	if (valp)
-		__sync_fetch_and_add(valp, 1);
+	bpf_ringbuf_submit(event, 0);
 
 	return 0;
 }
 ```
 通过这种方式，它可以根据用户指令，简单的决定追踪用户态层面的执行流程或是内核态层面的执行流程。
-### Eunomia中使用方式
+### 编译运行
+```console
+$ git clone https://github.com/libbpf/libbpf-bootstrap.git --recurse-submodules 
+$ cd examples/c
+$ make profile
+$ sudo ./profile 
+COMM: chronyd (pid=156) @ CPU 1
+Kernel:
+  0 [<ffffffff81ee9f56>] _raw_spin_lock_irqsave+0x16
+  1 [<ffffffff811527b4>] remove_wait_queue+0x14
+  2 [<ffffffff8132611d>] poll_freewait+0x3d
+  3 [<ffffffff81326d3f>] do_select+0x7bf
+  4 [<ffffffff81327af2>] core_sys_select+0x182
+  5 [<ffffffff81327f3a>] __x64_sys_pselect6+0xea
+  6 [<ffffffff81ed9e38>] do_syscall_64+0x38
+  7 [<ffffffff82000099>] entry_SYSCALL_64_after_hwframe+0x61
+Userspace:
+  0 [<00007fab187bfe09>]
+  1 [<000000000ee6ae98>]
 
+COMM: profile (pid=9843) @ CPU 6
+No Kernel Stack
+Userspace:
+  0 [<0000556deb068ac8>]
+  1 [<0000556dec34cad0>]
+```
 
 ### 总结
 `profile` 实现了对程序执行流程的分析，在debug等操作中可以极大的帮助开发者提高效率。
