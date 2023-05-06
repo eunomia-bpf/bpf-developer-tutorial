@@ -4,42 +4,38 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include "tcpstates.bpf.h"
+#include "tcpstates.h"
 
-#define MAX_ENTRIES 10240
-#define AF_INET 2
-#define AF_INET6 10
+#define MAX_ENTRIES	10240
+#define AF_INET		2
+#define AF_INET6	10
 
 const volatile bool filter_by_sport = false;
 const volatile bool filter_by_dport = false;
 const volatile short target_family = 0;
 
-struct
-{
+struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);
 	__type(key, __u16);
 	__type(value, __u16);
 } sports SEC(".maps");
 
-struct
-{
+struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);
 	__type(key, __u16);
 	__type(value, __u16);
 } dports SEC(".maps");
 
-struct
-{
+struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_ENTRIES);
 	__type(key, struct sock *);
 	__type(value, __u64);
 } timestamps SEC(".maps");
 
-struct
-{
+struct {
 	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
 	__uint(key_size, sizeof(__u32));
 	__uint(value_size, sizeof(__u32));
@@ -85,13 +81,10 @@ int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
 	event.dport = dport;
 	bpf_get_current_comm(&event.task, sizeof(event.task));
 
-	if (family == AF_INET)
-	{
+	if (family == AF_INET) {
 		bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_rcv_saddr);
 		bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_daddr);
-	}
-	else
-	{ /* family == AF_INET6 */
+	} else { /* family == AF_INET6 */
 		bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
 		bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
 	}

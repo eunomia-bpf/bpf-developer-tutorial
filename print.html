@@ -2235,7 +2235,7 @@ TIME     EVENT COMM             PID     PPID    FILENAME/EXIT CODE
 <p>在互联网后端日常开发接口的时候中，不管你使用的是C、Java、PHP还是Golang，都避免不了需要调用mysql、redis等组件来获取数据，可能还需要执行一些rpc远程调用，或者再调用一些其它restful api。 在这些调用的底层，基本都是在使用TCP协议进行传输。这是因为在传输层协议中，TCP协议具备可靠的连接，错误重传，拥塞控制等优点，所以目前应用比UDP更广泛一些。但相对而言，tcp 连接也有一些缺点，例如建立连接的延时较长等。因此也会出现像 QUIC ，即 快速UDP网络连接 ( Quick UDP Internet Connections )这样的替代方案。</p>
 <p>tcp 连接延时分析对于网络性能分析优化或者故障排查都能起到不少作用。</p>
 <h2 id="tcpconnlat-的实现原理"><a class="header" href="#tcpconnlat-的实现原理">tcpconnlat 的实现原理</a></h2>
-<p>tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数 (例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。</p>
+<p>tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数（例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。</p>
 <h3 id="tcp-连接原理"><a class="header" href="#tcp-连接原理">tcp 连接原理</a></h3>
 <p>tcp 连接的整个过程如图所示：</p>
 <p><img src="13-tcpconnlat/tcpconnlat1.png" alt="tcpconnlate" /></p>
@@ -2350,15 +2350,13 @@ cleanup:
 }
 </code></pre>
 <h2 id="编译运行-2"><a class="header" href="#编译运行-2">编译运行</a></h2>
-<ul>
-<li><code>git clone https://github.com/libbpf/libbpf-bootstrap libbpf-bootstrap-cloned</code></li>
-<li>将 <a href="13-tcpconnlat/libbpf-bootstrap">libbpf-bootstrap</a>目录下的文件复制到 <code>libbpf-bootstrap-cloned/examples/c</code>下</li>
-<li>修改 <code>libbpf-bootstrap-cloned/examples/c/Makefile</code> ，在其 <code>APPS</code> 项后添加 <code>tcpconnlat</code></li>
-<li>在 <code>libbpf-bootstrap-cloned/examples/c</code> 下运行 <code>make tcpconnlat</code></li>
-<li><code>sudo ./tcpconnlat</code></li>
-</ul>
-<h2 id="效果"><a class="header" href="#效果">效果</a></h2>
-<pre><code class="language-plain">root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpconnlat 
+<pre><code class="language-console">$ make
+...
+  BPF      .output/tcpconnlat.bpf.o
+  GEN-SKEL .output/tcpconnlat.skel.h
+  CC       .output/tcpconnlat.o
+  BINARY   tcpconnlat
+$ sudo ./tcpconnlat 
 PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222564 wget         4  192.168.88.15    110.242.68.3     80    25.29
 222684 wget         4  192.168.88.15    167.179.101.42   443   246.76
@@ -2369,139 +2367,111 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 <p>通过上面的实验，我们可以看到，tcpconnlat 工具的实现原理是基于内核的TCP连接的跟踪，并且可以跟踪到 tcp 连接的延迟时间；除了命令行使用方式之外，还可以将其和容器、k8s 等元信息综合起来，通过 <code>prometheus</code> 和 <code>grafana</code> 等工具进行网络性能分析。</p>
 <p>来源：<a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.bpf.c</a></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-tcpconnlat-测量-tcp-连接延时"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-tcpconnlat-测量-tcp-连接延时">eBPF 入门实践教程：编写 eBPF 程序 tcpconnlat 测量 tcp 连接延时</a></h1>
-<h2 id="代码解释"><a class="header" href="#代码解释">代码解释</a></h2>
-<h3 id="背景-1"><a class="header" href="#背景-1">背景</a></h3>
-<p>在互联网后端日常开发接口的时候中，不管你使用的是C、Java、PHP还是Golang，都避免不了需要调用mysql、redis等组件来获取数据，可能还需要执行一些rpc远程调用，或者再调用一些其它restful api。 在这些调用的底层，基本都是在使用TCP协议进行传输。这是因为在传输层协议中，TCP协议具备可靠的连接，错误重传，拥塞控制等优点，所以目前应用比UDP更广泛一些。但相对而言，tcp 连接也有一些缺点，例如建立连接的延时较长等。因此也会出现像 QUIC ，即 快速UDP网络连接 ( Quick UDP Internet Connections )这样的替代方案。</p>
-<p>tcp 连接延时分析对于网络性能分析优化或者故障排查都能起到不少作用。</p>
-<h3 id="tcpconnlat-的实现原理-1"><a class="header" href="#tcpconnlat-的实现原理-1">tcpconnlat 的实现原理</a></h3>
-<p>tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数 (例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。</p>
-<h3 id="tcp-连接原理-1"><a class="header" href="#tcp-连接原理-1">tcp 连接原理</a></h3>
-<p>tcp 连接的整个过程如图所示：</p>
-<p><img src="13-tcpconnlat/tcpconnlat1.png" alt="tcpconnlate" /></p>
-<p>在这个连接过程中，我们来简单分析一下每一步的耗时：</p>
-<ol>
-<li>客户端发出SYNC包：客户端一般是通过connect系统调用来发出 SYN 的，这里牵涉到本机的系统调用和软中断的 CPU 耗时开销</li>
-<li>SYN传到服务器：SYN从客户端网卡被发出，这是一次长途远距离的网络传输</li>
-<li>服务器处理SYN包：内核通过软中断来收包，然后放到半连接队列中，然后再发出SYN/ACK响应。主要是 CPU 耗时开销</li>
-<li>SYC/ACK传到客户端：长途网络跋涉</li>
-<li>客户端处理 SYN/ACK：客户端内核收包并处理SYN后，经过几us的CPU处理，接着发出 ACK。同样是软中断处理开销</li>
-<li>ACK传到服务器：长途网络跋涉</li>
-<li>服务端收到ACK：服务器端内核收到并处理ACK，然后把对应的连接从半连接队列中取出来，然后放到全连接队列中。一次软中断CPU开销</li>
-<li>服务器端用户进程唤醒：正在被accpet系统调用阻塞的用户进程被唤醒，然后从全连接队列中取出来已经建立好的连接。一次上下文切换的CPU开销</li>
-</ol>
-<p>在客户端视角，在正常情况下一次TCP连接总的耗时也就就大约是一次网络RTT的耗时。但在某些情况下，可能会导致连接时的网络传输耗时上涨、CPU处理开销增加、甚至是连接失败。这种时候在发现延时过长之后，就可以结合其他信息进行分析。</p>
-<h3 id="ebpf-实现原理-1"><a class="header" href="#ebpf-实现原理-1">ebpf 实现原理</a></h3>
-<p>在 TCP 三次握手的时候，Linux 内核会维护两个队列，分别是：</p>
-<ul>
-<li>半连接队列，也称 SYN 队列；</li>
-<li>全连接队列，也称 accepet 队列；</li>
-</ul>
-<p>服务端收到客户端发起的 SYN 请求后，内核会把该连接存储到半连接队列，并向客户端响应 SYN+ACK，接着客户端会返回 ACK，服务端收到第三次握手的 ACK 后，内核会把连接从半连接队列移除，然后创建新的完全的连接，并将其添加到 accept 队列，等待进程调用 accept 函数时把连接取出来。</p>
-<p>我们的 ebpf 代码实现在 <a href="https://github.com/yunwei37/Eunomia/blob/master/bpftools/tcpconnlat/tcpconnlat.bpf.c">https://github.com/yunwei37/Eunomia/blob/master/bpftools/tcpconnlat/tcpconnlat.bpf.c</a> 中：</p>
-<p>它主要使用了 trace_tcp_rcv_state_process 和 kprobe/tcp_v4_connect 这样的跟踪点：</p>
-<pre><code class="language-c">
-SEC(&quot;kprobe/tcp_v4_connect&quot;)
-int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
-{
- return trace_connect(sk);
-}
-
-SEC(&quot;kprobe/tcp_v6_connect&quot;)
-int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
-{
- return trace_connect(sk);
-}
-
-SEC(&quot;kprobe/tcp_rcv_state_process&quot;)
-int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
-{
- return handle_tcp_rcv_state_process(ctx, sk);
-}
-</code></pre>
-<p>在 trace_connect 中，我们跟踪新的 tcp 连接，记录到达时间，并且把它加入 map 中：</p>
-<pre><code class="language-c">struct {
- __uint(type, BPF_MAP_TYPE_HASH);
- __uint(max_entries, 4096);
- __type(key, struct sock *);
- __type(value, struct piddata);
-} start SEC(&quot;.maps&quot;);
-
-static int trace_connect(struct sock *sk)
-{
- u32 tgid = bpf_get_current_pid_tgid() &gt;&gt; 32;
- struct piddata piddata = {};
-
- if (targ_tgid &amp;&amp; targ_tgid != tgid)
-  return 0;
-
- bpf_get_current_comm(&amp;piddata.comm, sizeof(piddata.comm));
- piddata.ts = bpf_ktime_get_ns();
- piddata.tgid = tgid;
- bpf_map_update_elem(&amp;start, &amp;sk, &amp;piddata, 0);
- return 0;
-}
-</code></pre>
-<p>在 handle_tcp_rcv_state_process 中，我们跟踪接收到的 tcp 数据包，从 map 从提取出对应的 connect 事件，并且计算延迟：</p>
-<pre><code class="language-c">static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
-{
- struct piddata *piddatap;
- struct event event = {};
- s64 delta;
- u64 ts;
-
- if (BPF_CORE_READ(sk, __sk_common.skc_state) != TCP_SYN_SENT)
-  return 0;
-
- piddatap = bpf_map_lookup_elem(&amp;start, &amp;sk);
- if (!piddatap)
-  return 0;
-
- ts = bpf_ktime_get_ns();
- delta = (s64)(ts - piddatap-&gt;ts);
- if (delta &lt; 0)
-  goto cleanup;
-
- event.delta_us = delta / 1000U;
- if (targ_min_us &amp;&amp; event.delta_us &lt; targ_min_us)
-  goto cleanup;
- __builtin_memcpy(&amp;event.comm, piddatap-&gt;comm,
-   sizeof(event.comm));
- event.ts_us = ts / 1000;
- event.tgid = piddatap-&gt;tgid;
- event.lport = BPF_CORE_READ(sk, __sk_common.skc_num);
- event.dport = BPF_CORE_READ(sk, __sk_common.skc_dport);
- event.af = BPF_CORE_READ(sk, __sk_common.skc_family);
- if (event.af == AF_INET) {
-  event.saddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-  event.daddr_v4 = BPF_CORE_READ(sk, __sk_common.skc_daddr);
- } else {
-  BPF_CORE_READ_INTO(&amp;event.saddr_v6, sk,
-    __sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-  BPF_CORE_READ_INTO(&amp;event.daddr_v6, sk,
-    __sk_common.skc_v6_daddr.in6_u.u6_addr32);
- }
- bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU,
-   &amp;event, sizeof(event));
-
-cleanup:
- bpf_map_delete_elem(&amp;start, &amp;sk);
- return 0;
-}
-</code></pre>
-<h3 id="编译运行-3"><a class="header" href="#编译运行-3">编译运行</a></h3>
-<p>TODO</p>
-<h3 id="总结-12"><a class="header" href="#总结-12">总结</a></h3>
-<p>通过上面的实验，我们可以看到，tcpconnlat 工具的实现原理是基于内核的TCP连接的跟踪，并且可以跟踪到 tcp 连接的延迟时间；除了命令行使用方式之外，还可以将其和容器、k8s 等元信息综合起来，通过 <code>prometheus</code> 和 <code>grafana</code> 等工具进行网络性能分析。</p>
-<blockquote>
-<p><code>Eunomia</code> 是一个使用 C/C++ 开发的基于 eBPF的轻量级，高性能云原生监控工具，旨在帮助用户了解容器的各项行为、监控可疑的容器安全事件，力求提供覆盖容器全生命周期的轻量级开源监控解决方案。它使用 <code>Linux</code> <code>eBPF</code> 技术在运行时跟踪您的系统和应用程序，并分析收集的事件以检测可疑的行为模式。目前，它包含性能分析、容器集群网络可视化分析*、容器安全感知告警、一键部署、持久化存储监控等功能，提供了多样化的 ebpf 追踪点。其核心导出器/命令行工具最小仅需要约 4MB 大小的二进制程序，即可在支持的 Linux 内核上启动。</p>
-</blockquote>
-<p>项目地址：<a href="https://github.com/yunwei37/Eunomia">https://github.com/yunwei37/Eunomia</a></p>
-<h3 id="参考资料-1"><a class="header" href="#参考资料-1">参考资料</a></h3>
-<ol>
-<li><a href="http://kerneltravel.net/blog/2020/tcpconnlat/">http://kerneltravel.net/blog/2020/tcpconnlat/</a></li>
-<li><a href="https://network.51cto.com/article/640631.html">https://network.51cto.com/article/640631.html</a></li>
-</ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf入门实践教程使用-libbpf-bootstrap-开发程序统计-tcp-连接延时-1"><a class="header" href="#ebpf入门实践教程使用-libbpf-bootstrap-开发程序统计-tcp-连接延时-1">eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></h1>
+<h2 id="内核态代码"><a class="header" href="#内核态代码">内核态代码</a></h2>
+<pre><code class="language-c">// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+/* Copyright (c) 2021 Hengqi Chen */
+#include &lt;vmlinux.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &quot;tcpstates.h&quot;
+
+#define MAX_ENTRIES	10240
+#define AF_INET		2
+#define AF_INET6	10
+
+const volatile bool filter_by_sport = false;
+const volatile bool filter_by_dport = false;
+const volatile short target_family = 0;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, __u16);
+	__type(value, __u16);
+} sports SEC(&quot;.maps&quot;);
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, __u16);
+	__type(value, __u16);
+} dports SEC(&quot;.maps&quot;);
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_ENTRIES);
+	__type(key, struct sock *);
+	__type(value, __u64);
+} timestamps SEC(&quot;.maps&quot;);
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(__u32));
+} events SEC(&quot;.maps&quot;);
+
+SEC(&quot;tracepoint/sock/inet_sock_set_state&quot;)
+int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
+{
+	struct sock *sk = (struct sock *)ctx-&gt;skaddr;
+	__u16 family = ctx-&gt;family;
+	__u16 sport = ctx-&gt;sport;
+	__u16 dport = ctx-&gt;dport;
+	__u64 *tsp, delta_us, ts;
+	struct event event = {};
+
+	if (ctx-&gt;protocol != IPPROTO_TCP)
+		return 0;
+
+	if (target_family &amp;&amp; target_family != family)
+		return 0;
+
+	if (filter_by_sport &amp;&amp; !bpf_map_lookup_elem(&amp;sports, &amp;sport))
+		return 0;
+
+	if (filter_by_dport &amp;&amp; !bpf_map_lookup_elem(&amp;dports, &amp;dport))
+		return 0;
+
+	tsp = bpf_map_lookup_elem(&amp;timestamps, &amp;sk);
+	ts = bpf_ktime_get_ns();
+	if (!tsp)
+		delta_us = 0;
+	else
+		delta_us = (ts - *tsp) / 1000;
+
+	event.skaddr = (__u64)sk;
+	event.ts_us = ts / 1000;
+	event.delta_us = delta_us;
+	event.pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+	event.oldstate = ctx-&gt;oldstate;
+	event.newstate = ctx-&gt;newstate;
+	event.family = family;
+	event.sport = sport;
+	event.dport = dport;
+	bpf_get_current_comm(&amp;event.task, sizeof(event.task));
+
+	if (family == AF_INET) {
+		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_rcv_saddr);
+		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_daddr);
+	} else { /* family == AF_INET6 */
+		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+	}
+
+	bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
+
+	if (ctx-&gt;newstate == TCP_CLOSE)
+		bpf_map_delete_elem(&amp;timestamps, &amp;sk);
+	else
+		bpf_map_update_elem(&amp;timestamps, &amp;sk, &amp;ts, BPF_ANY);
+
+	return 0;
+}
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+</code></pre>
 <p><code>tcpstates</code> 是一个追踪当前系统上的TCP套接字的TCP状态的程序，主要通过跟踪内核跟踪点 <code>inet_sock_set_state</code> 来实现。统计数据通过 <code>perf_event</code>向用户态传输。</p>
 <pre><code class="language-c">SEC(&quot;tracepoint/sock/inet_sock_set_state&quot;)
 int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
@@ -2609,16 +2579,14 @@ static void handle_lost_events(void* ctx, int cpu, __u64 lost_cnt) {
 }
 </code></pre>
 <p>收到事件后所调用对应的处理函数并进行输出打印。</p>
-<h2 id="编译运行-4"><a class="header" href="#编译运行-4">编译运行</a></h2>
-<ul>
-<li><code>git clone https://github.com/libbpf/libbpf-bootstrap libbpf-bootstrap-cloned</code></li>
-<li>将 <a href="14-tcpstates/libbpf-bootstrap">libbpf-bootstrap</a>目录下的文件复制到 <code>libbpf-bootstrap-cloned/examples/c</code>下</li>
-<li>修改 <code>libbpf-bootstrap-cloned/examples/c/Makefile</code> ，在其 <code>APPS</code> 项后添加 <code>tcpstates</code></li>
-<li>在 <code>libbpf-bootstrap-cloned/examples/c</code> 下运行 <code>make tcpstates</code></li>
-<li><code>sudo ./tcpstates</code></li>
-</ul>
-<h2 id="效果-1"><a class="header" href="#效果-1">效果</a></h2>
-<pre><code class="language-plain">root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpstates 
+<h2 id="编译运行-3"><a class="header" href="#编译运行-3">编译运行</a></h2>
+<pre><code class="language-console">$ make
+...
+  BPF      .output/tcpstates.bpf.o
+  GEN-SKEL .output/tcpstates.skel.h
+  CC       .output/tcpstates.o
+  BINARY   tcpstates
+$ sudo ./tcpstates 
 SKADDR           PID     COMM       LADDR           LPORT RADDR           RPORT OLDSTATE    -&gt; NEWSTATE    MS
 ffff9bf61bb62bc0 164978  node       192.168.88.15   0     52.178.17.2     443   CLOSE       -&gt; SYN_SENT    0.000
 ffff9bf61bb62bc0 0       swapper/0  192.168.88.15   41596 52.178.17.2     443   SYN_SENT    -&gt; ESTABLISHED 225.794
@@ -2630,11 +2598,10 @@ ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     
 ffff9bf6d8ee88c0 229832  redis-serv 0.0.0.0         6379  0.0.0.0         0     LISTEN      -&gt; CLOSE       1.763
 ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 ESTABLISHED -&gt; FIN_WAIT1   0.000
 </code></pre>
-<p>对于输出的详细解释，详见 <a href="14-tcpstates/README.html">README.md</a></p>
-<h2 id="总结-13"><a class="header" href="#总结-13">总结</a></h2>
+<h2 id="总结-12"><a class="header" href="#总结-12">总结</a></h2>
 <p>这里的代码修改自 <a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c</a></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-tcprtt-测量-tcp-连接的往返时间"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-tcprtt-测量-tcp-连接的往返时间">eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></h1>
-<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
+<h2 id="背景-1"><a class="header" href="#背景-1">背景</a></h2>
 <p>网络质量在互联网社会中是一个很重要的因素。导致网络质量差的因素有很多，可能是硬件因素导致，也可能是程序
 写的不好导致。为了能更好地定位网络问题，<code>tcprtt</code> 工具被提出。它可以监测TCP链接的往返时间，从而分析
 网络质量，帮助用户定位问题来源。</p>
@@ -2668,10 +2635,10 @@ const volatile bool targ_ms = false;
 
 /// @sample {&quot;interval&quot;: 1000, &quot;type&quot; : &quot;log2_hist&quot;}
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, u64);
-	__type(value, struct hist);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, u64);
+    __type(value, struct hist);
 } hists SEC(&quot;.maps&quot;);
 
 static struct hist zero;
@@ -2679,71 +2646,57 @@ static struct hist zero;
 SEC(&quot;fentry/tcp_rcv_established&quot;)
 int BPF_PROG(tcp_rcv, struct sock *sk)
 {
-	const struct inet_sock *inet = (struct inet_sock *)(sk);
-	struct tcp_sock *ts;
-	struct hist *histp;
-	u64 key, slot;
-	u32 srtt;
+    const struct inet_sock *inet = (struct inet_sock *)(sk);
+    struct tcp_sock *ts;
+    struct hist *histp;
+    u64 key, slot;
+    u32 srtt;
 
-	if (targ_sport &amp;&amp; targ_sport != inet-&gt;inet_sport)
-		return 0;
-	if (targ_dport &amp;&amp; targ_dport != sk-&gt;__sk_common.skc_dport)
-		return 0;
-	if (targ_saddr &amp;&amp; targ_saddr != inet-&gt;inet_saddr)
-		return 0;
-	if (targ_daddr &amp;&amp; targ_daddr != sk-&gt;__sk_common.skc_daddr)
-		return 0;
+    if (targ_sport &amp;&amp; targ_sport != inet-&gt;inet_sport)
+        return 0;
+    if (targ_dport &amp;&amp; targ_dport != sk-&gt;__sk_common.skc_dport)
+        return 0;
+    if (targ_saddr &amp;&amp; targ_saddr != inet-&gt;inet_saddr)
+        return 0;
+    if (targ_daddr &amp;&amp; targ_daddr != sk-&gt;__sk_common.skc_daddr)
+        return 0;
 
-	if (targ_laddr_hist)
-		key = inet-&gt;inet_saddr;
-	else if (targ_raddr_hist)
-		key = inet-&gt;sk.__sk_common.skc_daddr;
-	else
-		key = 0;
-	histp = bpf_map_lookup_or_try_init(&amp;hists, &amp;key, &amp;zero);
-	if (!histp)
-		return 0;
-	ts = (struct tcp_sock *)(sk);
-	srtt = BPF_CORE_READ(ts, srtt_us) &gt;&gt; 3;
-	if (targ_ms)
-		srtt /= 1000U;
-	slot = log2l(srtt);
-	if (slot &gt;= MAX_SLOTS)
-		slot = MAX_SLOTS - 1;
-	__sync_fetch_and_add(&amp;histp-&gt;slots[slot], 1);
-	if (targ_show_ext) {
-		__sync_fetch_and_add(&amp;histp-&gt;latency, srtt);
-		__sync_fetch_and_add(&amp;histp-&gt;cnt, 1);
-	}
-	return 0;
+    if (targ_laddr_hist)
+        key = inet-&gt;inet_saddr;
+    else if (targ_raddr_hist)
+        key = inet-&gt;sk.__sk_common.skc_daddr;
+    else
+        key = 0;
+    histp = bpf_map_lookup_or_try_init(&amp;hists, &amp;key, &amp;zero);
+    if (!histp)
+        return 0;
+    ts = (struct tcp_sock *)(sk);
+    srtt = BPF_CORE_READ(ts, srtt_us) &gt;&gt; 3;
+    if (targ_ms)
+        srtt /= 1000U;
+    slot = log2l(srtt);
+    if (slot &gt;= MAX_SLOTS)
+        slot = MAX_SLOTS - 1;
+    __sync_fetch_and_add(&amp;histp-&gt;slots[slot], 1);
+    if (targ_show_ext) {
+        __sync_fetch_and_add(&amp;histp-&gt;latency, srtt);
+        __sync_fetch_and_add(&amp;histp-&gt;cnt, 1);
+    }
+    return 0;
 }
 
 </code></pre>
 <p>这段代码是基于eBPF的网络延迟分析工具，它通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布。下面是这段代码的主要工作原理：</p>
 <ol>
-<li>
-<p>首先定义了一个名为&quot;hists&quot;的eBPF哈希表，用于保存RTT直方图数据。</p>
-</li>
-<li>
-<p>当tcp_rcv_established函数被调用时，它首先从传入的socket结构体中获取TCP相关信息，包括本地/远程IP地址、本地/远程端口号以及TCP状态信息等。</p>
-</li>
-<li>
-<p>接下来，代码会检查用户指定的条件是否匹配当前TCP连接。如果匹配失败，则直接返回。</p>
-</li>
-<li>
-<p>如果匹配成功，则从&quot;hists&quot;哈希表中查找与本地/远程IP地址匹配的直方图数据。如果该IP地址的直方图不存在，则创建一个新的直方图并插入哈希表中。</p>
-</li>
-<li>
-<p>接下来，代码会从socket结构体中获取当前TCP连接的RTT(srtt)，并根据用户设置的选项来将srtt值进行处理。如果用户设置了&quot;-ms&quot;选项，则将srtt值除以1000。</p>
-</li>
-<li>
-<p>接着，代码会将srtt值转换为直方图的槽位(slot)，并将该槽位的计数器+1。</p>
-</li>
-<li>
-<p>如果用户设置了&quot;-show-ext&quot;选项，则还会累加直方图的总延迟(latency)和计数(cnt)。</p>
-</li>
+<li>首先定义了一个名为&quot;hists&quot;的eBPF哈希表，用于保存RTT直方图数据。</li>
+<li>当tcp_rcv_established函数被调用时，它首先从传入的socket结构体中获取TCP相关信息，包括本地/远程IP地址、本地/远程端口号以及TCP状态信息等。</li>
+<li>接下来，代码会检查用户指定的条件是否匹配当前TCP连接。如果匹配失败，则直接返回。</li>
+<li>如果匹配成功，则从&quot;hists&quot;哈希表中查找与本地/远程IP地址匹配的直方图数据。如果该IP地址的直方图不存在，则创建一个新的直方图并插入哈希表中。</li>
+<li>接下来，代码会从socket结构体中获取当前TCP连接的RTT(srtt)，并根据用户设置的选项来将srtt值进行处理。如果用户设置了&quot;-ms&quot;选项，则将srtt值除以1000。</li>
+<li>接着，代码会将srtt值转换为直方图的槽位(slot)，并将该槽位的计数器+1。</li>
+<li>如果用户设置了&quot;-show-ext&quot;选项，则还会累加直方图的总延迟(latency)和计数(cnt)。</li>
 </ol>
-<h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
+<h2 id="编译运行-4"><a class="header" href="#编译运行-4">编译运行</a></h2>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
 <p>Compile:</p>
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
@@ -2817,12 +2770,12 @@ cnt = 0
       4096 -&gt; 8191       : 16       |****************************************|
       8192 -&gt; 16383      : 4        |**********                              |
 </code></pre>
-<h2 id="总结-14"><a class="header" href="#总结-14">总结</a></h2>
+<h2 id="总结-13"><a class="header" href="#总结-13">总结</a></h2>
 <p>tcprtt是一个基于eBPF的TCP延迟分析工具。通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布，可以对指定的TCP连接进行RTT分布统计，并将结果保存到eBPF哈希表中。同时，这个工具支持多种条件过滤和RTT分布数据扩展功能，以便用户可以更好地进行网络性能分析和调优。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-memleak-监控内存泄漏"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-memleak-监控内存泄漏">eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></h1>
-<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
+<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
 <p>内存泄漏对于一个程序而言是一个很严重的问题。倘若放任一个存在内存泄漏的程序运行，久而久之
 系统的内存会慢慢被耗尽，导致程序运行速度显著下降。为了避免这一情况，<code>memleak</code>工具被提出。
 它可以跟踪并匹配内存分配和释放的请求，并且打印出已经被分配资源而又尚未释放的堆栈信息。</p>
@@ -3027,7 +2980,7 @@ int BPF_KPROBE(free_enter, void *address)
 <p>gen_free_enter函数接收一个地址参数，该函数首先使用allocs map查找该地址对应的内存分配信息。如果未找到，则表示该地址没有被分配，该函数返回0。如果找到了对应的内存分配信息，则使用bpf_map_delete_elem从allocs map中删除该信息。</p>
 <p>接下来，调用update_statistics_del函数用于更新内存分配的统计信息，它接收堆栈ID和内存块大小作为参数。首先在combined_allocs map中查找堆栈ID对应的内存分配统计信息。如果没有找到，则输出一条日志，表示查找失败，并且函数直接返回。如果找到了对应的内存分配统计信息，则使用原子操作从内存分配统计信息中减去该内存块大小和1（表示减少了1个内存块）。这是因为堆栈ID对应的内存块数量减少了1，而堆栈ID对应的内存块总大小也减少了该内存块的大小。</p>
 <p>最后定义了一个bpf程序BPF_KPROBE(free_enter, void *address)会在进程调用free函数时执行。它会接收参数address，表示正在释放的内存块的地址，并调用gen_free_enter函数来处理该内存块的释放。</p>
-<h2 id="编译运行-6"><a class="header" href="#编译运行-6">编译运行</a></h2>
+<h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
 <pre><code class="language-console">$ git clone https://github.com/iovisor/bcc.git --recurse-submodules 
 $ cd libbpf-tools/
 $ make memleak
@@ -3047,11 +3000,11 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
         6 [&lt;ffffffff82000b62&gt;] &lt;null sym&gt;
 ...
 </code></pre>
-<h2 id="总结-15"><a class="header" href="#总结-15">总结</a></h2>
+<h2 id="总结-14"><a class="header" href="#总结-14">总结</a></h2>
 <p>memleak是一个内存泄漏监控工具，可以用来跟踪内存分配和释放时间对应的调用栈信息。随着时间的推移，这个工具可以显示长期不被释放的内存。</p>
 <p>这份代码来自于https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.bpf.c</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io">eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></h1>
-<h2 id="背景-4"><a class="header" href="#背景-4">背景</a></h2>
+<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
 <p>Biopattern 可以统计随机/顺序磁盘I/O次数的比例。</p>
 <p>TODO</p>
 <h2 id="实现原理-2"><a class="header" href="#实现原理-2">实现原理</a></h2>
@@ -3060,13 +3013,13 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
 会获得操作信息，根据哈希表中该设备的上一次操作记录来判断本次操作是随机IO还是顺序IO，并更新操作计数。</p>
 <h2 id="编写-ebpf-程序-3"><a class="header" href="#编写-ebpf-程序-3">编写 eBPF 程序</a></h2>
 <p>TODO</p>
-<h3 id="总结-16"><a class="header" href="#总结-16">总结</a></h3>
+<h3 id="总结-15"><a class="header" href="#总结-15">总结</a></h3>
 <p>Biopattern 可以展现随机/顺序磁盘I/O次数的比例，对于开发者把握整体I/O情况有较大帮助。</p>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="更多的参考资料"><a class="header" href="#更多的参考资料">更多的参考资料</a></h1>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-lsm-进行安全检测防御"><a class="header" href="#ebpf-入门实践教程使用-lsm-进行安全检测防御">eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></h1>
-<h2 id="背景-5"><a class="header" href="#背景-5">背景</a></h2>
+<h2 id="背景-4"><a class="header" href="#背景-4">背景</a></h2>
 <p>LSM 从 Linux 2.6 开始成为官方内核的一个安全框架，基于此的安全实现包括 SELinux 和 AppArmor 等。在 Linux 5.7 引入 BPF LSM 后，系统开发人员已经能够自由地实现函数粒度的安全检查能力，本文就提供了这样一个案例：限制通过 socket connect 函数对特定 IPv4 地址进行访问的 BPF LSM 程序。（可见其控制精度是很高的）</p>
 <h2 id="lsm-概述"><a class="header" href="#lsm-概述">LSM 概述</a></h2>
 <p>LSM（Linux Security Modules）是 Linux 内核中用于支持各种计算机安全模型的框架。LSM 在 Linux 内核安全相关的关键路径上预置了一批 hook 点，从而实现了内核和安全模块的解耦，使不同的安全模块可以自由地在内核中加载/卸载，无需修改原有的内核代码就可以加入安全检查功能。</p>
@@ -3151,7 +3104,7 @@ int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, in
 <li>若请求地址为 1.1.1.1 则拒绝连接，否则允许连接；</li>
 </ul>
 <p>在程序运行期间，所有通过 socket 的连接操作都会被输出到 <code>/sys/kernel/debug/tracing/trace_pipe</code>。</p>
-<h2 id="编译运行-7"><a class="header" href="#编译运行-7">编译运行</a></h2>
+<h2 id="编译运行-6"><a class="header" href="#编译运行-6">编译运行</a></h2>
 <p>通过容器编译：</p>
 <pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
@@ -3182,7 +3135,7 @@ Retrying.
             wget-7061    [000] d...1  6318.800698: bpf_trace_printk: lsm: found connect to 16843009
             wget-7061    [000] d...1  6318.800700: bpf_trace_printk: lsm: blocking 16843009
 </code></pre>
-<h2 id="总结-17"><a class="header" href="#总结-17">总结</a></h2>
+<h2 id="总结-16"><a class="header" href="#总结-16">总结</a></h2>
 <p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 &quot;cannot override a denial&quot; 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
@@ -3233,7 +3186,7 @@ char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 </code></pre>
 <p>这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。</p>
 <p>总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。</p>
-<h2 id="编译运行-8"><a class="header" href="#编译运行-8">编译运行</a></h2>
+<h2 id="编译运行-7"><a class="header" href="#编译运行-7">编译运行</a></h2>
 <pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
 <p>or compile with <code>ecc</code>:</p>
@@ -3254,7 +3207,7 @@ something like this:</p>
             sshd-1254728 [006] ..s1 8737831.674349: 0: Got IP packet: tot_len: 72, ttl: 64
             node-1254811 [007] ..s1 8737831.674550: 0: Got IP packet: tot_len: 71, ttl: 64
 </code></pre>
-<h2 id="总结-18"><a class="header" href="#总结-18">总结</a></h2>
+<h2 id="总结-17"><a class="header" href="#总结-17">总结</a></h2>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="bpf-features-by-linux-kernel-version"><a class="header" href="#bpf-features-by-linux-kernel-version">BPF Features by Linux Kernel Version</a></h1>
 <h2 id="ebpf-support"><a class="header" href="#ebpf-support">eBPF support</a></h2>
