@@ -81,6 +81,30 @@ BPF_KRETPROBE(printret, const void *ret)
 
 这里的 printret 是探针函数的名称，const void *ret 是探针函数的参数，它代表被捕获的函数的返回值。
 
+然后，我们使用了 bpf_get_current_comm 函数获取当前任务的名称，并将其存储在 comm 数组中。
+
+```c
+ bpf_get_current_comm(&comm, sizeof(comm));
+```
+
+使用 bpf_get_current_pid_tgid 函数获取当前进程的 PID，并将其存储在 pid 变量中。
+
+```c
+ pid = bpf_get_current_pid_tgid() >> 32;
+```
+
+使用 bpf_probe_read_user_str 函数从用户空间读取 readline 函数的返回值，并将其存储在 str 数组中。
+
+```c
+ bpf_probe_read_user_str(str, sizeof(str), ret);
+```
+
+最后使用 bpf_printk 函数输出 PID、任务名称和用户输入的字符串。
+
+```c
+ bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
+```
+
 eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
 
 编译运行上述代码：
