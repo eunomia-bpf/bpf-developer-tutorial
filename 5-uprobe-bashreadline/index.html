@@ -204,6 +204,18 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 <pre><code class="language-c">BPF_KRETPROBE(printret, const void *ret)
 </code></pre>
 <p>这里的 printret 是探针函数的名称，const void *ret 是探针函数的参数，它代表被捕获的函数的返回值。</p>
+<p>然后，我们使用了 bpf_get_current_comm 函数获取当前任务的名称，并将其存储在 comm 数组中。</p>
+<pre><code class="language-c"> bpf_get_current_comm(&amp;comm, sizeof(comm));
+</code></pre>
+<p>使用 bpf_get_current_pid_tgid 函数获取当前进程的 PID，并将其存储在 pid 变量中。</p>
+<pre><code class="language-c"> pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+</code></pre>
+<p>使用 bpf_probe_read_user_str 函数从用户空间读取 readline 函数的返回值，并将其存储在 str 数组中。</p>
+<pre><code class="language-c"> bpf_probe_read_user_str(str, sizeof(str), ret);
+</code></pre>
+<p>最后使用 bpf_printk 函数输出 PID、任务名称和用户输入的字符串。</p>
+<pre><code class="language-c"> bpf_printk(&quot;PID %d (%s) read: %s &quot;, pid, comm, str);
+</code></pre>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
 <p>编译运行上述代码：</p>
 <pre><code class="language-console">$ ecc bashreadline.bpf.c
