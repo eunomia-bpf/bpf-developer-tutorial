@@ -2,19 +2,36 @@
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-本文是 eBPF 入门开发实践教程的第十篇，在 eBPF 中。
+本文是 eBPF 入门开发实践教程的第十篇，在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件。
+hardirqs 和 softirqs 是 Linux 内核中两种不同类型的中断处理程序。它们用于处理硬件设备产生的中断请求，以及内核中的异步事件。在 eBPF 中，我们可以使用同名的 eBPF 工具 hardirqs 和 softirqs 来捕获和分析内核中与中断处理相关的信息。
 
-## hardirqs是什么？
+## hardirqs 和 softirqs 是什么？
 
-hardirqs 是 bcc-tools 工具包的一部分，该工具包是一组用于在 Linux 系统上执行系统跟踪和分析的实用程序。
-hardirqs 是一种用于跟踪和分析 Linux 内核中的中断处理程序的工具。它使用 BPF（Berkeley Packet Filter）程序来收集有关中断处理程序的数据，
-并可用于识别内核中的性能问题和其他与中断处理相关的问题。
+hardirqs 是硬件中断处理程序。当硬件设备产生一个中断请求时，内核会将该请求映射到一个特定的中断向量，然后执行与之关联的硬件中断处理程序。硬件中断处理程序通常用于处理设备驱动程序中的事件，例如设备数据传输完成或设备错误。
+
+softirqs 是软件中断处理程序。它们是内核中的一种底层异步事件处理机制，用于处理内核中的高优先级任务。softirqs 通常用于处理网络协议栈、磁盘子系统和其他内核组件中的事件。与硬件中断处理程序相比，软件中断处理程序具有更高的灵活性和可配置性。
 
 ## 实现原理
 
-在 Linux 内核中，每个中断处理程序都有一个唯一的名称，称为中断向量。hardirqs 通过检查每个中断处理程序的中断向量，来监控内核中的中断处理程序。当内核接收到一个中断时，它会查找与该中断相关的中断处理程序，并执行该程序。hardirqs 通过检查内核中执行的中断处理程序，来监控内核中的中断处理程序。另外，hardirqs 还可以通过注入 BPF 程序到内核中，来捕获内核中的中断处理程序。这样，hardirqs 就可以监控内核中执行的中断处理程序，并收集有关它们的信息。
+在 eBPF 中，我们可以通过挂载特定的 kprobe 或者 tracepoint 来捕获和分析 hardirqs 和 softirqs。为了捕获 hardirqs 和 softirqs，需要在相关的内核函数上放置 eBPF 程序。这些函数包括：
 
-## 代码实现
+- 对于 hardirqs：irq_handler_entry 和 irq_handler_exit。
+- 对于 softirqs：softirq_entry 和 softirq_exit。
+
+当内核处理 hardirqs 或 softirqs 时，这些 eBPF 程序会被执行，从而收集相关信息，如中断向量、中断处理程序的执行时间等。收集到的信息可以用于分析内核中的性能问题和其他与中断处理相关的问题。
+
+为了捕获 hardirqs 和 softirqs，可以遵循以下步骤：
+
+1. 在 eBPF 程序中定义用于存储中断信息的数据结构和映射。
+2. 编写 eBPF 程序，将其挂载到相应的内核函数上，以捕获 hardirqs 或 softirqs。
+3. 在 eBPF 程序中，收集中断处理程序的相关信息，并将这些信息存储在映射中。
+4. 在用户空间应用程序中，读取映射中的数据以分析和展示中断处理信息。
+
+通过上述方法，我们可以在 eBPF 中使用 hardirqs 和 softirqs 捕获和分析内核中的中断事件，以识别潜在的性能问题和与中断处理相关的问题。
+
+## hardirqs 代码实现
+
+hardirqs 程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -149,7 +166,74 @@ int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这是一个 BPF（Berkeley Packet Filter）程序。BPF 程序是小型程序，可以直接在 Linux 内核中运行，用于过滤和操纵网络流量。这个特定的程序似乎旨在收集内核中中断处理程序的统计信息。它定义了一些 maps （可以在 BPF 程序和内核的其他部分之间共享的数据结构）和两个函数：handle_entry 和 handle_exit。当内核进入和退出中断处理程序时，分别执行这些函数。handle_entry 函数用于跟踪中断处理程序被执行的次数，而 handle_exit 则用于测量中断处理程序中花费的时间。
+这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。 
+
+1. 包含必要的头文件和定义数据结构：
+
+```c
+
+#include <vmlinux.h>
+#include <bpf/bpf_core_read.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "hardirqs.h"
+#include "bits.bpf.h"
+#include "maps.bpf.h"
+```
+
+该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。 
+
+2. 定义全局变量和映射：
+
+```c
+
+#define MAX_ENTRIES 256
+
+const volatile bool filter_cg = false;
+const volatile bool targ_dist = false;
+const volatile bool targ_ns = false;
+const volatile bool do_count = false;
+
+...
+```
+
+该程序定义了一些全局变量，用于配置程序的行为。例如，`filter_cg` 控制是否过滤 cgroup，`targ_dist` 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。 
+
+3. 定义两个辅助函数 `handle_entry` 和 `handle_exit`：
+
+这两个函数分别在中断处理程序的入口和出口处被调用。`handle_entry` 记录开始时间戳或更新中断计数，`handle_exit` 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。 
+4. 定义 eBPF 程序的入口点：
+
+```c
+
+SEC("tp_btf/irq_handler_entry")
+int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
+{
+ return handle_entry(irq, action);
+}
+
+SEC("tp_btf/irq_handler_exit")
+int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
+{
+ return handle_exit(irq, action);
+}
+
+SEC("raw_tp/irq_handler_entry")
+int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
+{
+ return handle_entry(irq, action);
+}
+
+SEC("raw_tp/irq_handler_exit")
+int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
+{
+ return handle_exit(irq, action);
+}
+```
+
+这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。`tp_btf` 和 `raw_tp` 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。
+
+Softirq 代码也类似，这里就不再赘述了。
 
 ## 运行代码
 
@@ -171,6 +255,8 @@ sudo ecli run ./package.json
 
 ## 总结
 
-更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+在本章节（eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件）中，我们学习了如何使用 eBPF 程序捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。我们详细讲解了示例代码，包括如何定义数据结构、映射以及 eBPF 程序入口点，以及如何在中断处理程序的入口和出口处调用辅助函数来记录执行信息。
 
-完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
+通过学习本章节内容，您应该已经掌握了如何在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件的方法，以及如何分析这些事件以识别内核中的性能问题和其他与中断处理相关的问题。这些技能对于分析和优化 Linux 内核的性能至关重要。
+
+为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf。此外，我们还为您提供了完整的教程和源代码，您可以在 https://github.com/eunomia-bpf/bpf-developer-tutorial 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。

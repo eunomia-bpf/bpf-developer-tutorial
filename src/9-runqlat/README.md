@@ -1,16 +1,16 @@
-# eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度
+# eBPF 入门开发实践教程九：捕获进程调度延迟，以直方图方式记录
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
-## runqlat是什么？
+runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。
 
-bcc-tools 是一组用于在 Linux 系统上使用 BPF 程序的工具。runqlat 是 bcc-tools 中的一个工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。
+# runqlat 原理
 
-## runqlat 原理
-
-runqlat 使用内核跟踪点和函数探针的结合来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）然后用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。
+runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。
 
 ## runqlat 代码实现
+
+### runqlat.bpf.c
 
 首先我们需要编写一个源代码文件 runqlat.bpf.c:
 
@@ -169,6 +169,121 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 char LICENSE[] SEC("license") = "GPL";
 ```
 
+首先，定义了一些常量和全局变量：
+
+```c
+#define MAX_ENTRIES 10240
+#define TASK_RUNNING  0
+
+const volatile bool filter_cg = false;
+const volatile bool targ_per_process = false;
+const volatile bool targ_per_thread = false;
+const volatile bool targ_per_pidns = false;
+const volatile bool targ_ms = false;
+const volatile pid_t targ_tgid = 0;
+```
+这些变量包括最大映射项数量、任务状态、过滤选项和目标选项。这些选项可以通过用户空间程序设置，以定制 eBPF 程序的行为。
+
+接下来，定义了一些 eBPF 映射：
+
+```c
+struct {
+ __uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
+ __type(key, u32);
+ __type(value, u32);
+ __uint(max_entries, 1);
+} cgroup_map SEC(".maps");
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, u64);
+} start SEC(".maps");
+
+static struct hist zero;
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, struct hist);
+} hists SEC(".maps");
+```
+这些映射包括：
+
+- cgroup_map 用于过滤 cgroup；
+- start 用于存储进程入队时的时间戳；
+- hists 用于存储直方图数据，记录进程调度延迟。
+
+接下来是一些辅助函数：
+
+trace_enqueue 函数用于在进程入队时记录其时间戳：
+
+```c
+static int trace_enqueue(u32 tgid, u32 pid)
+{
+ u64 ts;
+
+ if (!pid)
+  return 0;
+ if (targ_tgid && targ_tgid != tgid)
+  return 0;
+
+ ts = bpf_ktime_get_ns();
+ bpf_map_update_elem(&start, &pid, &ts, BPF_ANY);
+ return 0;
+}
+```
+pid_namespace 函数用于获取进程所属的 PID namespace：
+
+```c
+static unsigned int pid_namespace(struct task_struct *task)
+{
+ struct pid *pid;
+ unsigned int level;
+ struct upid upid;
+ unsigned int inum;
+
+ /*  get the pid namespace by following task_active_pid_ns(),
+  *  pid->numbers[pid->level].ns
+  */
+ pid = BPF_CORE_READ(task, thread_pid);
+ level = BPF_CORE_READ(pid, level);
+ bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
+ inum = BPF_CORE_READ(upid.ns, ns.inum);
+
+ return inum;
+}
+```
+
+handle_switch 函数是核心部分，用于处理调度切换事件，计算进程调度延迟并更新直方图数据：
+
+```c
+static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
+{
+ ...
+}
+```
+首先，函数根据 filter_cg 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 TASK_RUNNING，则调用 trace_enqueue 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
+
+接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：
+
+- handle_sched_wakeup：用于处理 sched_wakeup 事件，当一个进程从睡眠状态被唤醒时触发。
+- handle_sched_wakeup_new：用于处理 sched_wakeup_new 事件，当一个新创建的进程被唤醒时触发。
+- handle_sched_switch：用于处理 sched_switch 事件，当调度器选择一个新的进程运行时触发。
+
+这些入口点分别处理不同的调度事件，但都会调用 handle_switch 函数来计算进程的调度延迟并更新直方图数据。
+
+最后，程序包含一个许可证声明：
+
+```c
+char LICENSE[] SEC("license") = "GPL";
+```
+这一声明指定了 eBPF 程序的许可证类型，这里使用的是 "GPL"。这对于许多内核功能是必需的，因为它们要求 eBPF 程序遵循 GPL 许可证。
+
+### runqlat.h
+
 然后我们需要定义一个头文件`runqlat.h`，用来给用户态处理从内核态上报的事件：
 
 ```c
@@ -186,8 +301,6 @@ struct hist {
 
 #endif /* __RUNQLAT_H */
 ```
-
-这是一个 Linux 内核 BPF 程序，旨在收集和报告运行队列的延迟。BPF 是 Linux 内核中一项技术，它允许将程序附加到内核中的特定点并进行安全高效的执行。这些程序可用于收集有关内核行为的信息，并实现自定义行为。这个 BPF 程序使用 BPF maps 来收集有关任务何时从内核的运行队列中排队和取消排队的信息，并记录任务在被安排执行之前在运行队列上等待的时间。然后，它使用这些信息生成直方图，显示不同组任务的运行队列延迟分布。这些直方图可用于识别和诊断内核调度行为中的性能问题。
 
 ## 编译运行
 
