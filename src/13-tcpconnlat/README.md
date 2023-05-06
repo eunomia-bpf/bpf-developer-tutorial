@@ -8,7 +8,7 @@ tcp 连接延时分析对于网络性能分析优化或者故障排查都能起�
 
 ## tcpconnlat 的实现原理
 
-tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数 (例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。
+tcpconnlat 这个工具跟踪执行活动TCP连接的内核函数（例如，通过connect()系统调用），并显示本地测量的连接的延迟（时间），即从发送 SYN 到响应包的时间。
 
 ### tcp 连接原理
 
@@ -141,16 +141,14 @@ cleanup:
 
 ## 编译运行
 
-- ```git clone https://github.com/libbpf/libbpf-bootstrap libbpf-bootstrap-cloned```
-- 将 [libbpf-bootstrap](libbpf-bootstrap)目录下的文件复制到 ```libbpf-bootstrap-cloned/examples/c```下
-- 修改 ```libbpf-bootstrap-cloned/examples/c/Makefile``` ，在其 ```APPS``` 项后添加 ```tcpconnlat```
-- 在 ```libbpf-bootstrap-cloned/examples/c``` 下运行 ```make tcpconnlat```
-- ```sudo ./tcpconnlat```
-
-## 效果
-
-```plain
-root@yutong-VirtualBox:~/libbpf-bootstrap/examples/c# ./tcpconnlat 
+```console
+$ make
+...
+  BPF      .output/tcpconnlat.bpf.o
+  GEN-SKEL .output/tcpconnlat.skel.h
+  CC       .output/tcpconnlat.o
+  BINARY   tcpconnlat
+$ sudo ./tcpconnlat 
 PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222564 wget         4  192.168.88.15    110.242.68.3     80    25.29
 222684 wget         4  192.168.88.15    167.179.101.42   443   246.76

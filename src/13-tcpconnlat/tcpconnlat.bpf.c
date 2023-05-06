@@ -4,7 +4,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
-#include "tcpconnlat.bpf.h"
+#include "tcpconnlat.h"
 
 #define AF_INET    2
 #define AF_INET6   10
@@ -106,6 +106,24 @@ int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
 
 SEC("kprobe/tcp_rcv_state_process")
 int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
+{
+	return handle_tcp_rcv_state_process(ctx, sk);
+}
+
+SEC("fentry/tcp_v4_connect")
+int BPF_PROG(fentry_tcp_v4_connect, struct sock *sk)
+{
+	return trace_connect(sk);
+}
+
+SEC("fentry/tcp_v6_connect")
+int BPF_PROG(fentry_tcp_v6_connect, struct sock *sk)
+{
+	return trace_connect(sk);
+}
+
+SEC("fentry/tcp_rcv_state_process")
+int BPF_PROG(fentry_tcp_rcv_state_process, struct sock *sk)
 {
 	return handle_tcp_rcv_state_process(ctx, sk);
 }
