@@ -51,3 +51,16 @@ book
 Module.symvers
 Mkfile.old
 dkms.conf
+
+.output
+src/11-bootstrap/bootstrap
+/minimal
+/minimal_legacy
+/uprobe
+/kprobe
+/fentry
+src/12-profile/profile
+/usdt
+/sockfilter
+/tc
+/ksyscall

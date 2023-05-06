@@ -151,6 +151,22 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 
 最后，主函数调用bpf_ringbuf_poll来轮询BPF ringbuf，并在接收到新的事件时处理该事件。这个函数会持续运行，直到全局标志exiting被设置为true，此时它会清理资源并退出。
 
+## Install Dependencies
+
+You will need `clang`, `libelf` and `zlib` to build the examples, package names may vary across distros.
+
+On Ubuntu/Debian, you need:
+```shell
+$ apt install clang libelf1 libelf-dev zlib1g-dev
+```
+
+On CentOS/Fedora, you need:
+
+```shell
+$ dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
+```
+
+## 编译运行
 
 编译运行上述代码：
 
@@ -161,7 +177,6 @@ Packing ebpf object and config into package.json...
 $ sudo ecli run package.json
 Runing eBPF program...
 ```
-
 
 ## 总结
 

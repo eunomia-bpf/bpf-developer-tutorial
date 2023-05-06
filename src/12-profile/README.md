@@ -1,4 +1,4 @@
-# eBPF 入门实践教程：编写 eBPF 程序 profile 进行性能分析
+# eBPF 入门实践教程：使用 eBPF 程序 profile 进行性能分析
 
 ## 背景
 
