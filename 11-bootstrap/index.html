@@ -276,6 +276,15 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 <p>程序定义了一个名为handle_exec的SEC（static evaluator of code）函数，它被附加到跟踪进程执行的BPF程序上。该函数记录为该PID执行exec（）的时间，并在指定了最小持续时间时不发出exec事件。如果未指定最小持续时间，则会从BPF ringbuf保留样本并使用数据填充样本，然后将其提交给用户空间进行后处理。</p>
 <p>程序还定义了一个名为handle_exit的SEC函数，它被附加到跟踪进程退出的BPF程序上。该函数会在确定PID和TID后计算进程的生命周期，然后根据min_duration_ns的值决定是否发出退出事件。如果进程的生命周期足够长，则会从BPF ringbuf保留样本并使用数据填充样本，然后将其提交给用户空间进行后处理。</p>
 <p>最后，主函数调用bpf_ringbuf_poll来轮询BPF ringbuf，并在接收到新的事件时处理该事件。这个函数会持续运行，直到全局标志exiting被设置为true，此时它会清理资源并退出。</p>
+<h2 id="install-dependencies"><a class="header" href="#install-dependencies">Install Dependencies</a></h2>
+<p>You will need <code>clang</code>, <code>libelf</code> and <code>zlib</code> to build the examples, package names may vary across distros.</p>
+<p>On Ubuntu/Debian, you need:</p>
+<pre><code class="language-shell">$ apt install clang libelf1 libelf-dev zlib1g-dev
+</code></pre>
+<p>On CentOS/Fedora, you need:</p>
+<pre><code class="language-shell">$ dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
+</code></pre>
+<h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
 <p>编译运行上述代码：</p>
 <pre><code class="language-console">$ ecc bootstrap.bpf.c bootstrap.h
 Compiling bpf object...
@@ -284,7 +293,7 @@ $ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
-<p>这是一个使用BPF的C程序，用于跟踪进程的启动和退出事件，并显示有关这些事件的信息。它通过使用argp API来解析命令行参数，并使用BPF地图存储进程的信息，包括进程的PID和执行文件的文件名。程序还使用了SEC函数来附加BPF程序，以监视进程的执行和退出事件。最后，程序在终端中打印出启动和退出的进程信息。</p>
+<p>这是一个使用BPF的C程序，用于跟踪进程的启动和退出事件，并显示有关这些事件的信息。它通过使用argp API来解析命令行参数，并使用BPF maps 存储进程的信息，包括进程的PID和执行文件的文件名。程序还使用了SEC函数来附加BPF程序，以监视进程的执行和退出事件。最后，程序在终端中打印出启动和退出的进程信息。</p>
 <p>编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf</p>
 
                     </main>
