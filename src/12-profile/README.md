@@ -47,7 +47,7 @@ Userspace:
 
 profile 工具由两个部分组成，内核态中的 eBPF 程序和用户态中的 `profile` 符号处理程序。`profile` 符号处理程序负责加载 eBPF 程序，以及处理 eBPF 程序输出的数据。
 
-### 内核态部分：
+### 内核态部分
 
 内核态 eBPF 程序的实现逻辑主要是借助 perf event，对程序的堆栈进行定时采样，从而捕获程序的执行流程。
 
@@ -64,118 +64,116 @@ profile 工具由两个部分组成，内核态中的 eBPF 程序和用户态中
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
 SEC("perf_event")
 int profile(void *ctx)
 {
-	int pid = bpf_get_current_pid_tgid() >> 32;
-	int cpu_id = bpf_get_smp_processor_id();
-	struct stacktrace_event *event;
-	int cp;
+    int pid = bpf_get_current_pid_tgid() >> 32;
+    int cpu_id = bpf_get_smp_processor_id();
+    struct stacktrace_event *event;
+    int cp;
 
-	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
-	if (!event)
-		return 1;
+    event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event)
+        return 1;
 
-	event->pid = pid;
-	event->cpu_id = cpu_id;
+    event->pid = pid;
+    event->cpu_id = cpu_id;
 
-	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
-		event->comm[0] = 0;
+    if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
+        event->comm[0] = 0;
 
-	event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
+    event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
 
-	event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+    event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
-	bpf_ringbuf_submit(event, 0);
+    bpf_ringbuf_submit(event, 0);
 
-	return 0;
+    return 0;
 }
 ```
 
-接下来，我们将重点讲解内核态代码的关键部分。 
+接下来，我们将重点讲解内核态代码的关键部分。
 
 1. 定义 eBPF maps `events`：
 
-```c
+    ```c
 
-struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
-} events SEC(".maps");
-```
+    struct {
+        __uint(type, BPF_MAP_TYPE_RINGBUF);
+        __uint(max_entries, 256 * 1024);
+    } events SEC(".maps");
+    ```
 
-这里定义了一个类型为 `BPF_MAP_TYPE_RINGBUF` 的 eBPF  maps 。Ring Buffer 是一种高性能的循环缓冲区，用于在内核和用户空间之间传输数据。`max_entries` 设置了 Ring Buffer 的最大大小。 
+    这里定义了一个类型为 `BPF_MAP_TYPE_RINGBUF` 的 eBPF  maps 。Ring Buffer 是一种高性能的循环缓冲区，用于在内核和用户空间之间传输数据。`max_entries` 设置了 Ring Buffer 的最大大小。
 
 2. 定义 `perf_event` eBPF 程序：
 
-```c
-SEC("perf_event")
-int profile(void *ctx)
-```
+    ```c
+    SEC("perf_event")
+    int profile(void *ctx)
+    ```
 
-
-
-这里定义了一个名为 `profile` 的 eBPF 程序，它将在 perf 事件触发时执行。
+    这里定义了一个名为 `profile` 的 eBPF 程序，它将在 perf 事件触发时执行。
 
 3. 获取进程 ID 和 CPU ID：
 
-```c
-int pid = bpf_get_current_pid_tgid() >> 32;
-int cpu_id = bpf_get_smp_processor_id();
-```
+    ```c
+    int pid = bpf_get_current_pid_tgid() >> 32;
+    int cpu_id = bpf_get_smp_processor_id();
+    ```
 
-`bpf_get_current_pid_tgid()` 函数返回当前进程的 PID 和 TID，通过右移 32 位，我们得到 PID。`bpf_get_smp_processor_id()` 函数返回当前 CPU 的 ID。
+    `bpf_get_current_pid_tgid()` 函数返回当前进程的 PID 和 TID，通过右移 32 位，我们得到 PID。`bpf_get_smp_processor_id()` 函数返回当前 CPU 的 ID。
 
 4. 预留 Ring Buffer 空间：
 
-```c
-event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
-if (!event)
-	return 1;
-```
+    ```c
+    event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event)
+        return 1;
+    ```
 
-通过 `bpf_ringbuf_reserve()` 函数预留 Ring Buffer 空间，用于存储采集的栈信息。若预留失败，返回错误.
+    通过 `bpf_ringbuf_reserve()` 函数预留 Ring Buffer 空间，用于存储采集的栈信息。若预留失败，返回错误.
 
 5. 获取当前进程名：
 
-```c
+    ```c
 
-if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
-	event->comm[0] = 0;
-```
+    if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
+        event->comm[0] = 0;
+    ```
 
-使用 `bpf_get_current_comm()` 函数获取当前进程名并将其存储到 `event->comm`。
+    使用 `bpf_get_current_comm()` 函数获取当前进程名并将其存储到 `event->comm`。
 
 6. 获取内核栈信息：
 
-```c
+    ```c
 
-event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
-```
+    event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
+    ```
 
-使用 `bpf_get_stack()` 函数获取内核栈信息。将结果存储在 `event->kstack`，并将其大小存储在 `event->kstack_sz`。
+    使用 `bpf_get_stack()` 函数获取内核栈信息。将结果存储在 `event->kstack`，并将其大小存储在 `event->kstack_sz`。
 
 7. 获取用户空间栈信息：
 
-```c
-event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
-```
+    ```c
+    event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+    ```
 
-同样使用 `bpf_get_stack()` 函数，但传递 `BPF_F_USER_STACK` 标志以获取用户空间栈信息。将结果存储在 `event->ustack`，并将其大小存储在 `event->ustack_sz`。
+    同样使用 `bpf_get_stack()` 函数，但传递 `BPF_F_USER_STACK` 标志以获取用户空间栈信息。将结果存储在 `event->ustack`，并将其大小存储在 `event->ustack_sz`。
 
 8. 将事件提交到 Ring Buffer：
 
-```c
-bpf_ringbuf_submit(event, 0);
-```
+    ```c
+    bpf_ringbuf_submit(event, 0);
+    ```
 
-最后，使用 `bpf_ringbuf_submit()` 函数将事件提交到 Ring Buffer，以便用户空间程序可以读取和处理。
+    最后，使用 `bpf_ringbuf_submit()` 函数将事件提交到 Ring Buffer，以便用户空间程序可以读取和处理。
 
-这个内核态 eBPF 程序通过定期采样程序的内核栈和用户空间栈来捕获程序的执行流程。这些数据将存储在 Ring Buffer 中，以便用户态的 `profile` 程序能读取
+    这个内核态 eBPF 程序通过定期采样程序的内核栈和用户空间栈来捕获程序的执行流程。这些数据将存储在 Ring Buffer 中，以便用户态的 `profile` 程序能读取。
 
 ### 用户态部分
 
@@ -183,37 +181,37 @@ bpf_ringbuf_submit(event, 0);
 
 ```c
 static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
-			    int cpu, int group_fd, unsigned long flags)
+                int cpu, int group_fd, unsigned long flags)
 {
-	int ret;
+    int ret;
 
-	ret = syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-	return ret;
+    ret = syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
+    return ret;
 }
 
 int main(){
     ...
     for (cpu = 0; cpu < num_cpus; cpu++) {
-		/* skip offline/not present CPUs */
-		if (cpu >= num_online_cpus || !online_mask[cpu])
-			continue;
+        /* skip offline/not present CPUs */
+        if (cpu >= num_online_cpus || !online_mask[cpu])
+            continue;
 
-		/* Set up performance monitoring on a CPU/Core */
-		pefd = perf_event_open(&attr, pid, cpu, -1, PERF_FLAG_FD_CLOEXEC);
-		if (pefd < 0) {
-			fprintf(stderr, "Fail to set up performance monitor on a CPU/Core\n");
-			err = -1;
-			goto cleanup;
-		}
-		pefds[cpu] = pefd;
+        /* Set up performance monitoring on a CPU/Core */
+        pefd = perf_event_open(&attr, pid, cpu, -1, PERF_FLAG_FD_CLOEXEC);
+        if (pefd < 0) {
+            fprintf(stderr, "Fail to set up performance monitor on a CPU/Core\n");
+            err = -1;
+            goto cleanup;
+        }
+        pefds[cpu] = pefd;
 
-		/* Attach a BPF program on a CPU */
-		links[cpu] = bpf_program__attach_perf_event(skel->progs.profile, pefd);
-		if (!links[cpu]) {
-			err = -1;
-			goto cleanup;
-		}
-	}
+        /* Attach a BPF program on a CPU */
+        links[cpu] = bpf_program__attach_perf_event(skel->progs.profile, pefd);
+        if (!links[cpu]) {
+            err = -1;
+            goto cleanup;
+        }
+    }
     ...
 }
 ```
@@ -224,7 +222,7 @@ int main(){
 
 ```c
 for (cpu = 0; cpu < num_cpus; cpu++) {
-	// ...
+    // ...
 }
 ```
 
@@ -237,86 +235,86 @@ for (cpu = 0; cpu < num_cpus; cpu++) {
 ```c
 static void show_stack_trace(__u64 *stack, int stack_sz, pid_t pid)
 {
-	const struct blazesym_result *result;
-	const struct blazesym_csym *sym;
-	sym_src_cfg src;
-	int i, j;
+    const struct blazesym_result *result;
+    const struct blazesym_csym *sym;
+    sym_src_cfg src;
+    int i, j;
 
-	if (pid) {
-		src.src_type = SRC_T_PROCESS;
-		src.params.process.pid = pid;
-	} else {
-		src.src_type = SRC_T_KERNEL;
-		src.params.kernel.kallsyms = NULL;
-		src.params.kernel.kernel_image = NULL;
-	}
+    if (pid) {
+        src.src_type = SRC_T_PROCESS;
+        src.params.process.pid = pid;
+    } else {
+        src.src_type = SRC_T_KERNEL;
+        src.params.kernel.kallsyms = NULL;
+        src.params.kernel.kernel_image = NULL;
+    }
 
-	result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
+    result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
 
-	for (i = 0; i < stack_sz; i++) {
-		if (!result || result->size <= i || !result->entries[i].size) {
-			printf("  %d [<%016llx>]\n", i, stack[i]);
-			continue;
-		}
+    for (i = 0; i < stack_sz; i++) {
+        if (!result || result->size <= i || !result->entries[i].size) {
+            printf("  %d [<%016llx>]\n", i, stack[i]);
+            continue;
+        }
 
-		if (result->entries[i].size == 1) {
-			sym = &result->entries[i].syms[0];
-			if (sym->path && sym->path[0]) {
-				printf("  %d [<%016llx>] %s+0x%llx %s:%ld\n",
-				       i, stack[i], sym->symbol,
-				       stack[i] - sym->start_address,
-				       sym->path, sym->line_no);
-			} else {
-				printf("  %d [<%016llx>] %s+0x%llx\n",
-				       i, stack[i], sym->symbol,
-				       stack[i] - sym->start_address);
-			}
-			continue;
-		}
+        if (result->entries[i].size == 1) {
+            sym = &result->entries[i].syms[0];
+            if (sym->path && sym->path[0]) {
+                printf("  %d [<%016llx>] %s+0x%llx %s:%ld\n",
+                       i, stack[i], sym->symbol,
+                       stack[i] - sym->start_address,
+                       sym->path, sym->line_no);
+            } else {
+                printf("  %d [<%016llx>] %s+0x%llx\n",
+                       i, stack[i], sym->symbol,
+                       stack[i] - sym->start_address);
+            }
+            continue;
+        }
 
-		printf("  %d [<%016llx>]\n", i, stack[i]);
-		for (j = 0; j < result->entries[i].size; j++) {
-			sym = &result->entries[i].syms[j];
-			if (sym->path && sym->path[0]) {
-				printf("        %s+0x%llx %s:%ld\n",
-				       sym->symbol, stack[i] - sym->start_address,
-				       sym->path, sym->line_no);
-			} else {
-				printf("        %s+0x%llx\n", sym->symbol,
-				       stack[i] - sym->start_address);
-			}
-		}
-	}
+        printf("  %d [<%016llx>]\n", i, stack[i]);
+        for (j = 0; j < result->entries[i].size; j++) {
+            sym = &result->entries[i].syms[j];
+            if (sym->path && sym->path[0]) {
+                printf("        %s+0x%llx %s:%ld\n",
+                       sym->symbol, stack[i] - sym->start_address,
+                       sym->path, sym->line_no);
+            } else {
+                printf("        %s+0x%llx\n", sym->symbol,
+                       stack[i] - sym->start_address);
+            }
+        }
+    }
 
-	blazesym_result_free(result);
+    blazesym_result_free(result);
 }
 
 /* Receive events from the ring buffer. */
 static int event_handler(void *_ctx, void *data, size_t size)
 {
-	struct stacktrace_event *event = data;
+    struct stacktrace_event *event = data;
 
-	if (event->kstack_sz <= 0 && event->ustack_sz <= 0)
-		return 1;
+    if (event->kstack_sz <= 0 && event->ustack_sz <= 0)
+        return 1;
 
-	printf("COMM: %s (pid=%d) @ CPU %d\n", event->comm, event->pid, event->cpu_id);
+    printf("COMM: %s (pid=%d) @ CPU %d\n", event->comm, event->pid, event->cpu_id);
 
-	if (event->kstack_sz > 0) {
-		printf("Kernel:\n");
-		show_stack_trace(event->kstack, event->kstack_sz / sizeof(__u64), 0);
-	} else {
-		printf("No Kernel Stack\n");
-	}
+    if (event->kstack_sz > 0) {
+        printf("Kernel:\n");
+        show_stack_trace(event->kstack, event->kstack_sz / sizeof(__u64), 0);
+    } else {
+        printf("No Kernel Stack\n");
+    }
 
-	if (event->ustack_sz > 0) {
-		printf("Userspace:\n");
-		show_stack_trace(event->ustack, event->ustack_sz / sizeof(__u64), event->pid);
-	} else {
-		printf("No Userspace Stack\n");
-	}
+    if (event->ustack_sz > 0) {
+        printf("Userspace:\n");
+        show_stack_trace(event->ustack, event->ustack_sz / sizeof(__u64), event->pid);
+    } else {
+        printf("No Userspace Stack\n");
+    }
 
-	printf("\n");
-	return 0;
+    printf("\n");
+    return 0;
 }
 ```
 
@@ -330,6 +328,6 @@ static int event_handler(void *_ctx, void *data, size_t size)
 
 通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 程序进行性能分析。在这个过程中，我们详细讲解了如何创建 eBPF 程序，监控进程的性能，并从 ring buffer 中获取数据以分析栈回溯。我们还学习了如何使用 perf_event_open() 函数设置性能监控，并将 BPF 程序附加到性能事件上。在本教程中，我们还展示了如何编写 eBPF 程序来捕获进程的内核和用户空间栈信息，进而分析程序性能瓶颈。通过这个例子，您可以了解到 eBPF 在性能分析方面的强大功能。
 
-如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf。您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术，希望这些内容对您在 eBPF 开发道路上的学习和实践有所帮助。

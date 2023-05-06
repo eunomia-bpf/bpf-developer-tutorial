@@ -4,7 +4,7 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 
 runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。
 
-# runqlat 原理
+## runqlat 原理
 
 runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。
 
@@ -182,6 +182,7 @@ const volatile bool targ_per_pidns = false;
 const volatile bool targ_ms = false;
 const volatile pid_t targ_tgid = 0;
 ```
+
 这些变量包括最大映射项数量、任务状态、过滤选项和目标选项。这些选项可以通过用户空间程序设置，以定制 eBPF 程序的行为。
 
 接下来，定义了一些 eBPF 映射：
@@ -210,6 +211,7 @@ struct {
  __type(value, struct hist);
 } hists SEC(".maps");
 ```
+
 这些映射包括：
 
 - cgroup_map 用于过滤 cgroup；
@@ -235,6 +237,7 @@ static int trace_enqueue(u32 tgid, u32 pid)
  return 0;
 }
 ```
+
 pid_namespace 函数用于获取进程所属的 PID namespace：
 
 ```c
@@ -265,6 +268,7 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
  ...
 }
 ```
+
 首先，函数根据 filter_cg 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 TASK_RUNNING，则调用 trace_enqueue 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
 
 接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：
@@ -280,6 +284,7 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 ```c
 char LICENSE[] SEC("license") = "GPL";
 ```
+
 这一声明指定了 eBPF 程序的许可证类型，这里使用的是 "GPL"。这对于许多内核功能是必需的，因为它们要求 eBPF 程序遵循 GPL 许可证。
 
 ### runqlat.h

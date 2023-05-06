@@ -5,3 +5,4 @@ package.json
 *.skel.yaml
 package.yaml
 ecli
+bootstrap

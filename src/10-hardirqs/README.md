@@ -166,72 +166,72 @@ int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。 
+这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。
 
 1. 包含必要的头文件和定义数据结构：
 
-```c
+    ```c
+    #include <vmlinux.h>
+    #include <bpf/bpf_core_read.h>
+    #include <bpf/bpf_helpers.h>
+    #include <bpf/bpf_tracing.h>
+    #include "hardirqs.h"
+    #include "bits.bpf.h"
+    #include "maps.bpf.h"
+    ```
 
-#include <vmlinux.h>
-#include <bpf/bpf_core_read.h>
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
-#include "hardirqs.h"
-#include "bits.bpf.h"
-#include "maps.bpf.h"
-```
-
-该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。 
+    该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。
 
 2. 定义全局变量和映射：
 
-```c
+    ```c
 
-#define MAX_ENTRIES 256
+    #define MAX_ENTRIES 256
 
-const volatile bool filter_cg = false;
-const volatile bool targ_dist = false;
-const volatile bool targ_ns = false;
-const volatile bool do_count = false;
+    const volatile bool filter_cg = false;
+    const volatile bool targ_dist = false;
+    const volatile bool targ_ns = false;
+    const volatile bool do_count = false;
 
-...
-```
+    ...
+    ```
 
-该程序定义了一些全局变量，用于配置程序的行为。例如，`filter_cg` 控制是否过滤 cgroup，`targ_dist` 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。 
+    该程序定义了一些全局变量，用于配置程序的行为。例如，`filter_cg` 控制是否过滤 cgroup，`targ_dist` 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。
 
 3. 定义两个辅助函数 `handle_entry` 和 `handle_exit`：
 
-这两个函数分别在中断处理程序的入口和出口处被调用。`handle_entry` 记录开始时间戳或更新中断计数，`handle_exit` 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。 
+    这两个函数分别在中断处理程序的入口和出口处被调用。`handle_entry` 记录开始时间戳或更新中断计数，`handle_exit` 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。
+
 4. 定义 eBPF 程序的入口点：
 
-```c
+    ```c
 
-SEC("tp_btf/irq_handler_entry")
-int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
-{
- return handle_entry(irq, action);
-}
+    SEC("tp_btf/irq_handler_entry")
+    int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
+    {
+    return handle_entry(irq, action);
+    }
 
-SEC("tp_btf/irq_handler_exit")
-int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
-{
- return handle_exit(irq, action);
-}
+    SEC("tp_btf/irq_handler_exit")
+    int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
+    {
+    return handle_exit(irq, action);
+    }
 
-SEC("raw_tp/irq_handler_entry")
-int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
-{
- return handle_entry(irq, action);
-}
+    SEC("raw_tp/irq_handler_entry")
+    int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
+    {
+    return handle_entry(irq, action);
+    }
 
-SEC("raw_tp/irq_handler_exit")
-int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
-{
- return handle_exit(irq, action);
-}
-```
+    SEC("raw_tp/irq_handler_exit")
+    int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
+    {
+    return handle_exit(irq, action);
+    }
+    ```
 
-这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。`tp_btf` 和 `raw_tp` 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。
+    这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。`tp_btf` 和 `raw_tp` 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。
 
 Softirq 代码也类似，这里就不再赘述了。
 
@@ -259,4 +259,4 @@ sudo ecli run ./package.json
 
 通过学习本章节内容，您应该已经掌握了如何在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件的方法，以及如何分析这些事件以识别内核中的性能问题和其他与中断处理相关的问题。这些技能对于分析和优化 Linux 内核的性能至关重要。
 
-为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf。此外，我们还为您提供了完整的教程和源代码，您可以在 https://github.com/eunomia-bpf/bpf-developer-tutorial 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。
+为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。此外，我们还为您提供了完整的教程和源代码，您可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。
