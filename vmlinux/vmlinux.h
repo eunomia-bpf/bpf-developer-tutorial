@@ -1,1 +1,1 @@
-x86/vmlinux.h
+x86/vmlinux_601.h

@@ -141,38 +141,9 @@ cleanup:
 }
 ```
 
-### Eunomia 测试 demo
+### 编译运行
 
-使用命令行进行追踪：
-
-```bash
-$ sudo build/bin/Release/eunomia run tcpconnlat
-[sudo] password for yunwei: 
-[2022-08-07 02:13:39.601] [info] eunomia run in cmd...
-[2022-08-07 02:13:40.534] [info] press 'Ctrl C' key to exit...
-PID    COMM        IP  SRC              DEST             PORT  LAT(ms) CONATINER/OS
-3477   openresty    4  172.19.0.7       172.19.0.5       2379  0.05    docker-apisix_apisix_1
-3483   openresty    4  172.19.0.7       172.19.0.5       2379  0.08    docker-apisix_apisix_1
-3477   openresty    4  172.19.0.7       172.19.0.5       2379  0.04    docker-apisix_apisix_1
-3478   openresty    4  172.19.0.7       172.19.0.5       2379  0.05    docker-apisix_apisix_1
-3478   openresty    4  172.19.0.7       172.19.0.5       2379  0.03    docker-apisix_apisix_1
-3478   openresty    4  172.19.0.7       172.19.0.5       2379  0.03    docker-apisix_apisix_1
-```
-
-还可以使用 eunomia 作为 prometheus exporter，在运行上述命令之后，打开 prometheus 自带的可视化面板：
-
-使用下述查询命令即可看到延时的统计图表：
-
-```plain
-  rate(eunomia_observed_tcpconnlat_v4_histogram_sum[5m])
-/
-  rate(eunomia_observed_tcpconnlat_v4_histogram_count[5m])
-```
-
-结果：
-
-![result](tcpconnlat_p.png)
-
+TODO
 ### 总结
 
 通过上面的实验，我们可以看到，tcpconnlat 工具的实现原理是基于内核的TCP连接的跟踪，并且可以跟踪到 tcp 连接的延迟时间；除了命令行使用方式之外，还可以将其和容器、k8s 等元信息综合起来，通过 `prometheus` 和 `grafana` 等工具进行网络性能分析。
