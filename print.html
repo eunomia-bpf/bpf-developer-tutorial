@@ -1097,13 +1097,13 @@ TIME     PID     PPID    EXIT_CODE  DURATION_NS  COMM
 <h2 id="总结-7"><a class="header" href="#总结-7">总结</a></h2>
 <p>本文介绍了如何使用 eunomia-bpf 开发一个简单的 BPF 程序，该程序可以监控 Linux 系统中的进程退出事件, 并将捕获的事件通过 ring buffer 发送给用户空间程序。在本文中，我们使用 eunomia-bpf 编译运行了这个例子。如果你想了解更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程九一个-linux-内核-bpf-程序通过柱状图来总结调度程序运行队列延迟显示任务等待运行在-cpu-上的时间长度"><a class="header" href="#ebpf-入门开发实践教程九一个-linux-内核-bpf-程序通过柱状图来总结调度程序运行队列延迟显示任务等待运行在-cpu-上的时间长度">eBPF 入门开发实践教程九：一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录"><a class="header" href="#ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录">eBPF 入门开发实践教程九：捕获进程调度延迟，以直方图方式记录</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
-<h2 id="runqlat是什么"><a class="header" href="#runqlat是什么">runqlat是什么？</a></h2>
-<p>bcc-tools 是一组用于在 Linux 系统上使用 BPF 程序的工具。runqlat 是 bcc-tools 中的一个工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。</p>
-<h2 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h2>
-<p>runqlat 使用内核跟踪点和函数探针的结合来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）然后用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。</p>
+<p>runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。</p>
+<h1 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h1>
+<p>runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。</p>
 <h2 id="runqlat-代码实现"><a class="header" href="#runqlat-代码实现">runqlat 代码实现</a></h2>
+<h3 id="runqlatbpfc"><a class="header" href="#runqlatbpfc">runqlat.bpf.c</a></h3>
 <p>首先我们需要编写一个源代码文件 runqlat.bpf.c:</p>
 <pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2020 Wenbo Zhang
@@ -1258,6 +1258,102 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 </code></pre>
+<p>首先，定义了一些常量和全局变量：</p>
+<pre><code class="language-c">#define MAX_ENTRIES 10240
+#define TASK_RUNNING  0
+
+const volatile bool filter_cg = false;
+const volatile bool targ_per_process = false;
+const volatile bool targ_per_thread = false;
+const volatile bool targ_per_pidns = false;
+const volatile bool targ_ms = false;
+const volatile pid_t targ_tgid = 0;
+</code></pre>
+<p>这些变量包括最大映射项数量、任务状态、过滤选项和目标选项。这些选项可以通过用户空间程序设置，以定制 eBPF 程序的行为。</p>
+<p>接下来，定义了一些 eBPF 映射：</p>
+<pre><code class="language-c">struct {
+ __uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
+ __type(key, u32);
+ __type(value, u32);
+ __uint(max_entries, 1);
+} cgroup_map SEC(&quot;.maps&quot;);
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, u64);
+} start SEC(&quot;.maps&quot;);
+
+static struct hist zero;
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, struct hist);
+} hists SEC(&quot;.maps&quot;);
+</code></pre>
+<p>这些映射包括：</p>
+<ul>
+<li>cgroup_map 用于过滤 cgroup；</li>
+<li>start 用于存储进程入队时的时间戳；</li>
+<li>hists 用于存储直方图数据，记录进程调度延迟。</li>
+</ul>
+<p>接下来是一些辅助函数：</p>
+<p>trace_enqueue 函数用于在进程入队时记录其时间戳：</p>
+<pre><code class="language-c">static int trace_enqueue(u32 tgid, u32 pid)
+{
+ u64 ts;
+
+ if (!pid)
+  return 0;
+ if (targ_tgid &amp;&amp; targ_tgid != tgid)
+  return 0;
+
+ ts = bpf_ktime_get_ns();
+ bpf_map_update_elem(&amp;start, &amp;pid, &amp;ts, BPF_ANY);
+ return 0;
+}
+</code></pre>
+<p>pid_namespace 函数用于获取进程所属的 PID namespace：</p>
+<pre><code class="language-c">static unsigned int pid_namespace(struct task_struct *task)
+{
+ struct pid *pid;
+ unsigned int level;
+ struct upid upid;
+ unsigned int inum;
+
+ /*  get the pid namespace by following task_active_pid_ns(),
+  *  pid-&gt;numbers[pid-&gt;level].ns
+  */
+ pid = BPF_CORE_READ(task, thread_pid);
+ level = BPF_CORE_READ(pid, level);
+ bpf_core_read(&amp;upid, sizeof(upid), &amp;pid-&gt;numbers[level]);
+ inum = BPF_CORE_READ(upid.ns, ns.inum);
+
+ return inum;
+}
+</code></pre>
+<p>handle_switch 函数是核心部分，用于处理调度切换事件，计算进程调度延迟并更新直方图数据：</p>
+<pre><code class="language-c">static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
+{
+ ...
+}
+</code></pre>
+<p>首先，函数根据 filter_cg 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 TASK_RUNNING，则调用 trace_enqueue 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。</p>
+<p>接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：</p>
+<ul>
+<li>handle_sched_wakeup：用于处理 sched_wakeup 事件，当一个进程从睡眠状态被唤醒时触发。</li>
+<li>handle_sched_wakeup_new：用于处理 sched_wakeup_new 事件，当一个新创建的进程被唤醒时触发。</li>
+<li>handle_sched_switch：用于处理 sched_switch 事件，当调度器选择一个新的进程运行时触发。</li>
+</ul>
+<p>这些入口点分别处理不同的调度事件，但都会调用 handle_switch 函数来计算进程的调度延迟并更新直方图数据。</p>
+<p>最后，程序包含一个许可证声明：</p>
+<pre><code class="language-c">char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+</code></pre>
+<p>这一声明指定了 eBPF 程序的许可证类型，这里使用的是 &quot;GPL&quot;。这对于许多内核功能是必需的，因为它们要求 eBPF 程序遵循 GPL 许可证。</p>
+<h3 id="runqlath"><a class="header" href="#runqlath">runqlat.h</a></h3>
 <p>然后我们需要定义一个头文件<code>runqlat.h</code>，用来给用户态处理从内核态上报的事件：</p>
 <pre><code class="language-c">/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #ifndef __RUNQLAT_H
@@ -1273,7 +1369,6 @@ struct hist {
 
 #endif /* __RUNQLAT_H */
 </code></pre>
-<p>这是一个 Linux 内核 BPF 程序，旨在收集和报告运行队列的延迟。BPF 是 Linux 内核中一项技术，它允许将程序附加到内核中的特定点并进行安全高效的执行。这些程序可用于收集有关内核行为的信息，并实现自定义行为。这个 BPF 程序使用 BPF maps 来收集有关任务何时从内核的运行队列中排队和取消排队的信息，并记录任务在被安排执行之前在运行队列上等待的时间。然后，它使用这些信息生成直方图，显示不同组任务的运行队列延迟分布。这些直方图可用于识别和诊断内核调度行为中的性能问题。</p>
 <h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
 <p>Compile:</p>
@@ -1347,14 +1442,28 @@ comm = cpptools
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程十在-ebpf-中使用-hardirqs-或-softirqs-捕获中断事件"><a class="header" href="#ebpf-入门开发实践教程十在-ebpf-中使用-hardirqs-或-softirqs-捕获中断事件">eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
-<p>本文是 eBPF 入门开发实践教程的第十篇，在 eBPF 中。</p>
-<h2 id="hardirqs是什么"><a class="header" href="#hardirqs是什么">hardirqs是什么？</a></h2>
-<p>hardirqs 是 bcc-tools 工具包的一部分，该工具包是一组用于在 Linux 系统上执行系统跟踪和分析的实用程序。
-hardirqs 是一种用于跟踪和分析 Linux 内核中的中断处理程序的工具。它使用 BPF（Berkeley Packet Filter）程序来收集有关中断处理程序的数据，
-并可用于识别内核中的性能问题和其他与中断处理相关的问题。</p>
+<p>本文是 eBPF 入门开发实践教程的第十篇，在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件。
+hardirqs 和 softirqs 是 Linux 内核中两种不同类型的中断处理程序。它们用于处理硬件设备产生的中断请求，以及内核中的异步事件。在 eBPF 中，我们可以使用同名的 eBPF 工具 hardirqs 和 softirqs 来捕获和分析内核中与中断处理相关的信息。</p>
+<h2 id="hardirqs-和-softirqs-是什么"><a class="header" href="#hardirqs-和-softirqs-是什么">hardirqs 和 softirqs 是什么？</a></h2>
+<p>hardirqs 是硬件中断处理程序。当硬件设备产生一个中断请求时，内核会将该请求映射到一个特定的中断向量，然后执行与之关联的硬件中断处理程序。硬件中断处理程序通常用于处理设备驱动程序中的事件，例如设备数据传输完成或设备错误。</p>
+<p>softirqs 是软件中断处理程序。它们是内核中的一种底层异步事件处理机制，用于处理内核中的高优先级任务。softirqs 通常用于处理网络协议栈、磁盘子系统和其他内核组件中的事件。与硬件中断处理程序相比，软件中断处理程序具有更高的灵活性和可配置性。</p>
 <h2 id="实现原理"><a class="header" href="#实现原理">实现原理</a></h2>
-<p>在 Linux 内核中，每个中断处理程序都有一个唯一的名称，称为中断向量。hardirqs 通过检查每个中断处理程序的中断向量，来监控内核中的中断处理程序。当内核接收到一个中断时，它会查找与该中断相关的中断处理程序，并执行该程序。hardirqs 通过检查内核中执行的中断处理程序，来监控内核中的中断处理程序。另外，hardirqs 还可以通过注入 BPF 程序到内核中，来捕获内核中的中断处理程序。这样，hardirqs 就可以监控内核中执行的中断处理程序，并收集有关它们的信息。</p>
-<h2 id="代码实现"><a class="header" href="#代码实现">代码实现</a></h2>
+<p>在 eBPF 中，我们可以通过挂载特定的 kprobe 或者 tracepoint 来捕获和分析 hardirqs 和 softirqs。为了捕获 hardirqs 和 softirqs，需要在相关的内核函数上放置 eBPF 程序。这些函数包括：</p>
+<ul>
+<li>对于 hardirqs：irq_handler_entry 和 irq_handler_exit。</li>
+<li>对于 softirqs：softirq_entry 和 softirq_exit。</li>
+</ul>
+<p>当内核处理 hardirqs 或 softirqs 时，这些 eBPF 程序会被执行，从而收集相关信息，如中断向量、中断处理程序的执行时间等。收集到的信息可以用于分析内核中的性能问题和其他与中断处理相关的问题。</p>
+<p>为了捕获 hardirqs 和 softirqs，可以遵循以下步骤：</p>
+<ol>
+<li>在 eBPF 程序中定义用于存储中断信息的数据结构和映射。</li>
+<li>编写 eBPF 程序，将其挂载到相应的内核函数上，以捕获 hardirqs 或 softirqs。</li>
+<li>在 eBPF 程序中，收集中断处理程序的相关信息，并将这些信息存储在映射中。</li>
+<li>在用户空间应用程序中，读取映射中的数据以分析和展示中断处理信息。</li>
+</ol>
+<p>通过上述方法，我们可以在 eBPF 中使用 hardirqs 和 softirqs 捕获和分析内核中的中断事件，以识别潜在的性能问题和与中断处理相关的问题。</p>
+<h2 id="hardirqs-代码实现"><a class="header" href="#hardirqs-代码实现">hardirqs 代码实现</a></h2>
+<p>hardirqs 程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。</p>
 <pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2020 Wenbo Zhang
 #include &lt;vmlinux.h&gt;
@@ -1486,7 +1595,66 @@ int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 </code></pre>
-<p>这是一个 BPF（Berkeley Packet Filter）程序。BPF 程序是小型程序，可以直接在 Linux 内核中运行，用于过滤和操纵网络流量。这个特定的程序似乎旨在收集内核中中断处理程序的统计信息。它定义了一些 maps （可以在 BPF 程序和内核的其他部分之间共享的数据结构）和两个函数：handle_entry 和 handle_exit。当内核进入和退出中断处理程序时，分别执行这些函数。handle_entry 函数用于跟踪中断处理程序被执行的次数，而 handle_exit 则用于测量中断处理程序中花费的时间。</p>
+<p>这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。 </p>
+<ol>
+<li>包含必要的头文件和定义数据结构：</li>
+</ol>
+<pre><code class="language-c">
+#include &lt;vmlinux.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &quot;hardirqs.h&quot;
+#include &quot;bits.bpf.h&quot;
+#include &quot;maps.bpf.h&quot;
+</code></pre>
+<p>该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。 </p>
+<ol start="2">
+<li>定义全局变量和映射：</li>
+</ol>
+<pre><code class="language-c">
+#define MAX_ENTRIES 256
+
+const volatile bool filter_cg = false;
+const volatile bool targ_dist = false;
+const volatile bool targ_ns = false;
+const volatile bool do_count = false;
+
+...
+</code></pre>
+<p>该程序定义了一些全局变量，用于配置程序的行为。例如，<code>filter_cg</code> 控制是否过滤 cgroup，<code>targ_dist</code> 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。 </p>
+<ol start="3">
+<li>定义两个辅助函数 <code>handle_entry</code> 和 <code>handle_exit</code>：</li>
+</ol>
+<p>这两个函数分别在中断处理程序的入口和出口处被调用。<code>handle_entry</code> 记录开始时间戳或更新中断计数，<code>handle_exit</code> 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。 
+4. 定义 eBPF 程序的入口点：</p>
+<pre><code class="language-c">
+SEC(&quot;tp_btf/irq_handler_entry&quot;)
+int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
+{
+ return handle_entry(irq, action);
+}
+
+SEC(&quot;tp_btf/irq_handler_exit&quot;)
+int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
+{
+ return handle_exit(irq, action);
+}
+
+SEC(&quot;raw_tp/irq_handler_entry&quot;)
+int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
+{
+ return handle_entry(irq, action);
+}
+
+SEC(&quot;raw_tp/irq_handler_exit&quot;)
+int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
+{
+ return handle_exit(irq, action);
+}
+</code></pre>
+<p>这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。<code>tp_btf</code> 和 <code>raw_tp</code> 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。</p>
+<p>Softirq 代码也类似，这里就不再赘述了。</p>
 <h2 id="运行代码"><a class="header" href="#运行代码">运行代码</a></h2>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
 <p>要编译这个程序，请使用 ecc 工具：</p>
@@ -1498,8 +1666,9 @@ Packing ebpf object and config into package.json...
 <pre><code class="language-console">sudo ecli run ./package.json
 </code></pre>
 <h2 id="总结-9"><a class="header" href="#总结-9">总结</a></h2>
-<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
-<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<p>在本章节（eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件）中，我们学习了如何使用 eBPF 程序捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。我们详细讲解了示例代码，包括如何定义数据结构、映射以及 eBPF 程序入口点，以及如何在中断处理程序的入口和出口处调用辅助函数来记录执行信息。</p>
+<p>通过学习本章节内容，您应该已经掌握了如何在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件的方法，以及如何分析这些事件以识别内核中的性能问题和其他与中断处理相关的问题。这些技能对于分析和优化 Linux 内核的性能至关重要。</p>
+<p>为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf。此外，我们还为您提供了完整的教程和源代码，您可以在 https://github.com/eunomia-bpf/bpf-developer-tutorial 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程十一在-ebpf-中使用-bootstrap-开发用户态程序并跟踪-exec-和-exit-系统调用"><a class="header" href="#ebpf-入门开发实践教程十一在-ebpf-中使用-bootstrap-开发用户态程序并跟踪-exec-和-exit-系统调用">eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <h2 id="什么是bootstrap"><a class="header" href="#什么是bootstrap">什么是bootstrap?</a></h2>
