@@ -1,83 +1,89 @@
-## eBPF 入门实践教程：编写 eBPF 程序 profile 进行性能分析
+# eBPF 入门实践教程：编写 eBPF 程序 profile 进行性能分析
 
-### 背景
+## 背景
 
 `profile` 是一款用户追踪程序执行调用流程的工具，类似于perf中的 -g 指令。但是相较于perf而言，
 `profile`的功能更为细化，它可以选择用户需要追踪的层面，比如在用户态层面进行追踪，或是在内核态进行追踪。
 
-### 实现原理
+## 实现原理
 
-`profile` 的实现依赖于linux中的perf_event。在注入ebpf程序前，`profile` 工具会先将 perf_event 
+`profile` 的实现依赖于linux中的perf_event。在注入ebpf程序前，`profile` 工具会先将 perf_event
 注册好。
+
 ```c
 static int open_and_attach_perf_event(int freq, struct bpf_program *prog,
-				      struct bpf_link *links[])
+                      struct bpf_link *links[])
 {
-	struct perf_event_attr attr = {
-		.type = PERF_TYPE_SOFTWARE,
-		.freq = env.freq,
-		.sample_freq = env.sample_freq,
-		.config = PERF_COUNT_SW_CPU_CLOCK,
-	};
-	int i, fd;
+    struct perf_event_attr attr = {
+        .type = PERF_TYPE_SOFTWARE,
+        .freq = env.freq,
+        .sample_freq = env.sample_freq,
+        .config = PERF_COUNT_SW_CPU_CLOCK,
+    };
+    int i, fd;
 
-	for (i = 0; i < nr_cpus; i++) {
-		if (env.cpu != -1 && env.cpu != i)
-			continue;
+    for (i = 0; i < nr_cpus; i++) {
+        if (env.cpu != -1 && env.cpu != i)
+            continue;
 
-		fd = syscall(__NR_perf_event_open, &attr, -1, i, -1, 0);
-		if (fd < 0) {
-			/* Ignore CPU that is offline */
-			if (errno == ENODEV)
-				continue;
-			fprintf(stderr, "failed to init perf sampling: %s\n",
-				strerror(errno));
-			return -1;
-		}
-		links[i] = bpf_program__attach_perf_event(prog, fd);
-		if (!links[i]) {
-			fprintf(stderr, "failed to attach perf event on cpu: "
-				"%d\n", i);
-			links[i] = NULL;
-			close(fd);
-			return -1;
-		}
-	}
+        fd = syscall(__NR_perf_event_open, &attr, -1, i, -1, 0);
+        if (fd < 0) {
+            /* Ignore CPU that is offline */
+            if (errno == ENODEV)
+                continue;
+            fprintf(stderr, "failed to init perf sampling: %s\n",
+                strerror(errno));
+            return -1;
+        }
+        links[i] = bpf_program__attach_perf_event(prog, fd);
+        if (!links[i]) {
+            fprintf(stderr, "failed to attach perf event on cpu: "
+                "%d\n", i);
+            links[i] = NULL;
+            close(fd);
+            return -1;
+        }
+    }
 
-	return 0;
+    return 0;
 }
 ```
+
 其ebpf程序实现逻辑是对程序的堆栈进行定时采样，从而捕获程序的执行流程。
+
 ```c
 SEC("perf_event")
 int profile(void *ctx)
 {
-	int pid = bpf_get_current_pid_tgid() >> 32;
-	int cpu_id = bpf_get_smp_processor_id();
-	struct stacktrace_event *event;
-	int cp;
+    int pid = bpf_get_current_pid_tgid() >> 32;
+    int cpu_id = bpf_get_smp_processor_id();
+    struct stacktrace_event *event;
+    int cp;
 
-	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
-	if (!event)
-		return 1;
+    event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event)
+        return 1;
 
-	event->pid = pid;
-	event->cpu_id = cpu_id;
+    event->pid = pid;
+    event->cpu_id = cpu_id;
 
-	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
-		event->comm[0] = 0;
+    if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
+        event->comm[0] = 0;
 
-	event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
+    event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
 
-	event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+    event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
-	bpf_ringbuf_submit(event, 0);
+    bpf_ringbuf_submit(event, 0);
 
-	return 0;
+    return 0;
 }
 ```
+
 通过这种方式，它可以根据用户指令，简单的决定追踪用户态层面的执行流程或是内核态层面的执行流程。
-### 编译运行
+
+## 编译运行
+
 ```console
 $ git clone https://github.com/libbpf/libbpf-bootstrap.git --recurse-submodules 
 $ cd examples/c
@@ -105,4 +111,5 @@ Userspace:
 ```
 
 ### 总结
+
 `profile` 实现了对程序执行流程的分析，在debug等操作中可以极大的帮助开发者提高效率。
