@@ -147,7 +147,7 @@
                         <h1 id="ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录"><a class="header" href="#ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录">eBPF 入门开发实践教程九：捕获进程调度延迟，以直方图方式记录</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。</p>
-<h1 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h1>
+<h2 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h2>
 <p>runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。</p>
 <h2 id="runqlat-代码实现"><a class="header" href="#runqlat-代码实现">runqlat 代码实现</a></h2>
 <h3 id="runqlatbpfc"><a class="header" href="#runqlatbpfc">runqlat.bpf.c</a></h3>

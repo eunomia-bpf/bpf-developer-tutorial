@@ -981,9 +981,9 @@ TIME     PID     PPID    UID     COMM
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第八篇，在 eBPF 中使用 exitsnoop 监控进程退出事件。</p>
 <h2 id="ring-buffer"><a class="header" href="#ring-buffer">ring buffer</a></h2>
-<p>现在有一个新的 BPF 数据结构可用。BPF 环形缓冲区（ring buffer）。它解决了 BPF perf buffer（当今从内核向用户空间发送数据的事实上的标准）的内存效率和事件重排问题，同时达到或超过了它的性能。它既提供了与 perf buffer 兼容以方便迁移，又有新的保留/提交API，具有更好的可用性。另外，合成和真实世界的基准测试表明，在几乎所有的情况下，所以考虑将其作为从BPF程序向用户空间发送数据的默认选择。</p>
-<h3 id="bpf-ringbuf-vs-bpf-perfbuf"><a class="header" href="#bpf-ringbuf-vs-bpf-perfbuf">BPF ringbuf vs BPF perfbuf</a></h3>
-<p>今天，只要BPF程序需要将收集到的数据发送到用户空间进行后处理和记录，它通常会使用BPF perf buffer（perfbuf）来实现。Perfbuf 是每个CPU循环缓冲区的集合，它允许在内核和用户空间之间有效地交换数据。它在实践中效果很好，但由于其按CPU设计，它有两个主要的缺点，在实践中被证明是不方便的：内存的低效使用和事件的重新排序。</p>
+<p>现在有一个新的 BPF 数据结构可用，eBPF 环形缓冲区（ring buffer）。它解决了 BPF perf buffer（当今从内核向用户空间发送数据的事实上的标准）的内存效率和事件重排问题，同时达到或超过了它的性能。它既提供了与 perf buffer 兼容以方便迁移，又有新的保留/提交API，具有更好的可用性。另外，合成和真实世界的基准测试表明，在几乎所有的情况下，所以考虑将其作为从BPF程序向用户空间发送数据的默认选择。</p>
+<h3 id="ebpf-ringbuf-vs-ebpf-perfbuf"><a class="header" href="#ebpf-ringbuf-vs-ebpf-perfbuf">eBPF ringbuf vs eBPF perfbuf</a></h3>
+<p>只要 BPF 程序需要将收集到的数据发送到用户空间进行后处理和记录，它通常会使用 BPF perf buffer（perfbuf）来实现。Perfbuf 是每个CPU循环缓冲区的集合，它允许在内核和用户空间之间有效地交换数据。它在实践中效果很好，但由于其按CPU设计，它有两个主要的缺点，在实践中被证明是不方便的：内存的低效使用和事件的重新排序。</p>
 <p>为了解决这些问题，从Linux 5.8开始，BPF提供了一个新的BPF数据结构（BPF map）。BPF环形缓冲区（ringbuf）。它是一个多生产者、单消费者（MPSC）队列，可以同时在多个CPU上安全共享。</p>
 <p>BPF ringbuf 支持来自 BPF perfbuf 的熟悉的功能:</p>
 <ul>
@@ -1008,11 +1008,11 @@ TIME     PID     PPID    UID     COMM
 #define MAX_FILENAME_LEN 127
 
 struct event {
-	int pid;
-	int ppid;
-	unsigned exit_code;
-	unsigned long long duration_ns;
-	char comm[TASK_COMM_LEN];
+    int pid;
+    int ppid;
+    unsigned exit_code;
+    unsigned long long duration_ns;
+    char comm[TASK_COMM_LEN];
 };
 
 #endif /* __BOOTSTRAP_H */
@@ -1066,10 +1066,19 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
  return 0;
 }
 </code></pre>
-<p>这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件。</p>
-<p>该程序通过注册一个 tracepoint，来监控进程退出事件。Tracepoint 是一种内核特性，允许内核模块获取特定事件的通知。在本程序中，注册的 tracepoint 是“tp/sched/sched_process_exit”，表示该程序监控的是进程退出事件。</p>
-<p>当系统中发生进程退出事件时，BPF 程序会捕获该事件，并调用“handle_exit”函数来处理它。该函数首先检查当前退出事件是否是进程退出事件（而不是线程退出事件），然后在 BPF 环形缓冲区（“rb”）中保留一个事件结构体，并填充该结构体中的其他信息，例如进程 ID、进程名称、退出代码和退出信号等信息。最后，该函数还会调用 BPF 的“perf_event_output”函数，将捕获的事件发送给用户空间程序。</p>
-<p>总而言之，这段代码是一个 BPF 程序，用于监控 Linux 系统中的进程退出事件.</p>
+<p>这段代码展示了如何使用 exitsnoop 监控进程退出事件并使用 ring buffer 向用户态打印输出：</p>
+<ol>
+<li>首先，我们引入所需的头文件和 exitsnoop.h。</li>
+<li>定义一个名为 &quot;LICENSE&quot; 的全局变量，内容为 &quot;Dual BSD/GPL&quot;，这是 eBPF 程序的许可证要求。</li>
+<li>定义一个名为 rb 的 BPF_MAP_TYPE_RINGBUF 类型的映射，它将用于将内核空间的数据传输到用户空间。指定 max_entries 为 256 * 1024，代表 ring buffer 的最大容量。</li>
+<li>定义一个名为 handle_exit 的 eBPF 程序，它将在进程退出事件触发时执行。传入一个名为 ctx 的 trace_event_raw_sched_process_template 结构体指针作为参数。</li>
+<li>使用 bpf_get_current_pid_tgid() 函数获取当前任务的 PID 和 TID。对于主线程，PID 和 TID 相同；对于子线程，它们是不同的。我们只关心进程（主线程）的退出，因此在 PID 和 TID 不同时返回 0，忽略子线程退出事件。</li>
+<li>使用 bpf_ringbuf_reserve 函数为事件结构体 e 在 ring buffer 中预留空间。如果预留失败，返回 0。</li>
+<li>使用 bpf_get_current_task() 函数获取当前任务的 task_struct 结构指针。</li>
+<li>将进程相关信息填充到预留的事件结构体 e 中，包括进程持续时间、PID、PPID、退出代码以及进程名称。</li>
+<li>最后，使用 bpf_ringbuf_submit 函数将填充好的事件结构体 e 提交到 ring buffer，之后在用户空间进行处理和输出。</li>
+</ol>
+<p>这个示例展示了如何使用 exitsnoop 和 ring buffer 在 eBPF 程序中捕获进程退出事件并将相关信息传输到用户空间。这对于分析进程退出原因和监控系统行为非常有用。</p>
 <h2 id="compile-and-run"><a class="header" href="#compile-and-run">Compile and Run</a></h2>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
 <p>Compile:</p>
@@ -1095,12 +1104,12 @@ TIME     PID     PPID    EXIT_CODE  DURATION_NS  COMM
 21:40:09  42059  42054   0          0            cat
 </code></pre>
 <h2 id="总结-7"><a class="header" href="#总结-7">总结</a></h2>
-<p>本文介绍了如何使用 eunomia-bpf 开发一个简单的 BPF 程序，该程序可以监控 Linux 系统中的进程退出事件, 并将捕获的事件通过 ring buffer 发送给用户空间程序。在本文中，我们使用 eunomia-bpf 编译运行了这个例子。如果你想了解更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
-<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<p>本文介绍了如何使用 eunomia-bpf 开发一个简单的 BPF 程序，该程序可以监控 Linux 系统中的进程退出事件, 并将捕获的事件通过 ring buffer 发送给用户空间程序。在本文中，我们使用 eunomia-bpf 编译运行了这个例子。</p>
+<p>为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 。此外，我们还为您提供了完整的教程和源代码，您可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录"><a class="header" href="#ebpf-入门开发实践教程九捕获进程调度延迟以直方图方式记录">eBPF 入门开发实践教程九：捕获进程调度延迟，以直方图方式记录</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。</p>
-<h1 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h1>
+<h2 id="runqlat-原理"><a class="header" href="#runqlat-原理">runqlat 原理</a></h2>
 <p>runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。</p>
 <h2 id="runqlat-代码实现"><a class="header" href="#runqlat-代码实现">runqlat 代码实现</a></h2>
 <h3 id="runqlatbpfc"><a class="header" href="#runqlatbpfc">runqlat.bpf.c</a></h3>
@@ -1595,12 +1604,11 @@ int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 </code></pre>
-<p>这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。 </p>
+<p>这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。</p>
 <ol>
-<li>包含必要的头文件和定义数据结构：</li>
-</ol>
-<pre><code class="language-c">
-#include &lt;vmlinux.h&gt;
+<li>
+<p>包含必要的头文件和定义数据结构：</p>
+<pre><code class="language-c">#include &lt;vmlinux.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
@@ -1608,10 +1616,10 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 #include &quot;bits.bpf.h&quot;
 #include &quot;maps.bpf.h&quot;
 </code></pre>
-<p>该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。 </p>
-<ol start="2">
-<li>定义全局变量和映射：</li>
-</ol>
+<p>该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。</p>
+</li>
+<li>
+<p>定义全局变量和映射：</p>
 <pre><code class="language-c">
 #define MAX_ENTRIES 256
 
@@ -1622,38 +1630,42 @@ const volatile bool do_count = false;
 
 ...
 </code></pre>
-<p>该程序定义了一些全局变量，用于配置程序的行为。例如，<code>filter_cg</code> 控制是否过滤 cgroup，<code>targ_dist</code> 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。 </p>
-<ol start="3">
-<li>定义两个辅助函数 <code>handle_entry</code> 和 <code>handle_exit</code>：</li>
-</ol>
-<p>这两个函数分别在中断处理程序的入口和出口处被调用。<code>handle_entry</code> 记录开始时间戳或更新中断计数，<code>handle_exit</code> 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。 
-4. 定义 eBPF 程序的入口点：</p>
+<p>该程序定义了一些全局变量，用于配置程序的行为。例如，<code>filter_cg</code> 控制是否过滤 cgroup，<code>targ_dist</code> 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。</p>
+</li>
+<li>
+<p>定义两个辅助函数 <code>handle_entry</code> 和 <code>handle_exit</code>：</p>
+<p>这两个函数分别在中断处理程序的入口和出口处被调用。<code>handle_entry</code> 记录开始时间戳或更新中断计数，<code>handle_exit</code> 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。</p>
+</li>
+<li>
+<p>定义 eBPF 程序的入口点：</p>
 <pre><code class="language-c">
 SEC(&quot;tp_btf/irq_handler_entry&quot;)
 int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
 {
- return handle_entry(irq, action);
+return handle_entry(irq, action);
 }
 
 SEC(&quot;tp_btf/irq_handler_exit&quot;)
 int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
 {
- return handle_exit(irq, action);
+return handle_exit(irq, action);
 }
 
 SEC(&quot;raw_tp/irq_handler_entry&quot;)
 int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
 {
- return handle_entry(irq, action);
+return handle_entry(irq, action);
 }
 
 SEC(&quot;raw_tp/irq_handler_exit&quot;)
 int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 {
- return handle_exit(irq, action);
+return handle_exit(irq, action);
 }
 </code></pre>
 <p>这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。<code>tp_btf</code> 和 <code>raw_tp</code> 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。</p>
+</li>
+</ol>
 <p>Softirq 代码也类似，这里就不再赘述了。</p>
 <h2 id="运行代码"><a class="header" href="#运行代码">运行代码</a></h2>
 <p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
@@ -1668,14 +1680,32 @@ Packing ebpf object and config into package.json...
 <h2 id="总结-9"><a class="header" href="#总结-9">总结</a></h2>
 <p>在本章节（eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件）中，我们学习了如何使用 eBPF 程序捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。我们详细讲解了示例代码，包括如何定义数据结构、映射以及 eBPF 程序入口点，以及如何在中断处理程序的入口和出口处调用辅助函数来记录执行信息。</p>
 <p>通过学习本章节内容，您应该已经掌握了如何在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件的方法，以及如何分析这些事件以识别内核中的性能问题和其他与中断处理相关的问题。这些技能对于分析和优化 Linux 内核的性能至关重要。</p>
-<p>为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf。此外，我们还为您提供了完整的教程和源代码，您可以在 https://github.com/eunomia-bpf/bpf-developer-tutorial 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程十一在-ebpf-中使用-bootstrap-开发用户态程序并跟踪-exec-和-exit-系统调用"><a class="header" href="#ebpf-入门开发实践教程十一在-ebpf-中使用-bootstrap-开发用户态程序并跟踪-exec-和-exit-系统调用">eBPF 入门开发实践教程十一：在 eBPF 中使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></h1>
+<p>为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 。此外，我们还为您提供了完整的教程和源代码，您可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程十一在-ebpf-中使用-libbpf-开发用户态程序并跟踪-exec-和-exit-系统调用"><a class="header" href="#ebpf-入门开发实践教程十一在-ebpf-中使用-libbpf-开发用户态程序并跟踪-exec-和-exit-系统调用">eBPF 入门开发实践教程十一：在 eBPF 中使用 libbpf 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
-<h2 id="什么是bootstrap"><a class="header" href="#什么是bootstrap">什么是bootstrap?</a></h2>
-<p>Bootstrap是一个工具，它使用BPF（Berkeley Packet Filter）程序跟踪执行exec()系统调用（使用SEC（“tp/sched/sched_process_exec”）handle_exit BPF程序），这大致对应于新进程的生成（忽略fork（）部分）。此外，它还跟踪exit（）（使用SEC（“tp/sched/sched_process_exit”）handle_exit BPF程序）以了解每个进程何时退出。这两个BPF程序共同工作，允许捕获有关任何新进程的有趣信息，例如二进制文件的文件名，以及测量进程的生命周期并在进程死亡时收集有趣的统计信息，例如退出代码或消耗的资源量等。我认为这是深入了解内核内部并观察事物如何真正运作的良好起点。</p>
-<p>Bootstrap还使用argp API（libc的一部分）进行命令行参数解析。</p>
+<p>在本教程中，我们将了解内核态和用户态的 eBPF 程序是如何协同工作的。我们还将学习如何使用原生的 libbpf 开发用户态程序，将 eBPF 应用打包为可执行文件，实现跨内核版本分发。</p>
+<h2 id="libbpf-库以及为什么需要使用它"><a class="header" href="#libbpf-库以及为什么需要使用它">libbpf 库，以及为什么需要使用它</a></h2>
+<p>libbpf 是一个 C 语言库，伴随内核版本分发，用于辅助 eBPF 程序的加载和运行。它提供了用于与 eBPF 系统交互的一组 C API，使开发者能够更轻松地编写用户态程序来加载和管理 eBPF 程序。这些用户态程序通常用于分析、监控或优化系统性能。</p>
+<p>使用 libbpf 库有以下优势：</p>
+<ul>
+<li>它简化了 eBPF 程序的加载、更新和运行过程。</li>
+<li>它提供了一组易于使用的 API，使开发者能够专注于编写核心逻辑，而不是处理底层细节。</li>
+<li>它能够确保与内核中的 eBPF 子系统的兼容性，降低了维护成本。</li>
+</ul>
+<p>同时，libbpf 和 BTF（BPF Type Format）都是 eBPF 生态系统的重要组成部分。它们各自在实现跨内核版本兼容方面发挥着关键作用。BTF（BPF Type Format）是一种元数据格式，用于描述 eBPF 程序中的类型信息。BTF 的主要目的是提供一种结构化的方式，以描述内核中的数据结构，以便 eBPF 程序可以更轻松地访问和操作它们。</p>
+<p>BTF 在实现跨内核版本兼容方面的关键作用如下：</p>
+<ul>
+<li>BTF 允许 eBPF 程序访问内核数据结构的详细类型信息，而无需对特定内核版本进行硬编码。这使得 eBPF 程序可以适应不同版本的内核，从而实现跨内核版本兼容。</li>
+<li>通过使用 BPF CO-RE（Compile Once, Run Everywhere）技术，eBPF 程序可以利用 BTF 在编译时解析内核数据结构的类型信息，进而生成可以在不同内核版本上运行的 eBPF 程序。</li>
+</ul>
+<p>结合 libbpf 和 BTF，eBPF 程序可以在各种不同版本的内核上运行，而无需为每个内核版本单独编译。这极大地提高了 eBPF 生态系统的可移植性和兼容性，降低了开发和维护的难度。</p>
+<h2 id="什么是-bootstrap"><a class="header" href="#什么是-bootstrap">什么是 bootstrap</a></h2>
+<p>Bootstrap 是一个使用 libbpf 的完整应用，它利用 eBPF 程序来跟踪内核中的 exec() 系统调用（通过 SEC(&quot;tp/sched/sched_process_exec&quot;) handle_exec BPF 程序），这主要对应于新进程的创建（不包括 fork() 部分）。此外，它还跟踪进程的 exit() 系统调用（通过 SEC(&quot;tp/sched/sched_process_exit&quot;) handle_exit BPF 程序），以了解每个进程何时退出。</p>
+<p>这两个 BPF 程序共同工作，允许捕获关于新进程的有趣信息，例如二进制文件的文件名，以及测量进程的生命周期，并在进程结束时收集有趣的统计信息，例如退出代码或消耗的资源量等。这是深入了解内核内部并观察事物如何真正运作的良好起点。</p>
+<p>Bootstrap 还使用 argp API（libc 的一部分）进行命令行参数解析，使得用户可以通过命令行选项配置应用行为。这种方式提供了灵活性，让用户能够根据实际需求自定义程序行为。虽然这些功能使用 eunomia-bpf 工具也可以实现，但是这里我们使用 libbpf 可以在用户态提供更高的可扩展性，不过也带来了不少额外的复杂度。</p>
 <h2 id="bootstrap"><a class="header" href="#bootstrap">Bootstrap</a></h2>
-<p>TODO: 添加关于用户态的应用部分，以及关于 libbpf-boostrap 的完整介绍。也许可以参考类似：http://cn-sec.com/archives/1267522.html 的文档。</p>
+<p>Bootstrap 分为两个部分：内核态和用户态。内核态部分是一个 eBPF 程序，它跟踪 exec() 和 exit() 系统调用。用户态部分是一个 C 语言程序，它使用 libbpf 库来加载和运行内核态程序，并处理从内核态程序收集的数据。</p>
+<h3 id="内核态-ebpf-程序-bootstrapbpfc"><a class="header" href="#内核态-ebpf-程序-bootstrapbpfc">内核态 eBPF 程序 bootstrap.bpf.c</a></h3>
 <pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
 #include &quot;vmlinux.h&quot;
@@ -1687,15 +1717,15 @@ Packing ebpf object and config into package.json...
 char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
-	__type(key, pid_t);
-	__type(value, u64);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 8192);
+    __type(key, pid_t);
+    __type(value, u64);
 } exec_start SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
 } rb SEC(&quot;.maps&quot;);
 
 const volatile unsigned long long min_duration_ns = 0;
@@ -1703,123 +1733,503 @@ const volatile unsigned long long min_duration_ns = 0;
 SEC(&quot;tp/sched/sched_process_exec&quot;)
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
-	struct task_struct *task;
-	unsigned fname_off;
-	struct event *e;
-	pid_t pid;
-	u64 ts;
+    struct task_struct *task;
+    unsigned fname_off;
+    struct event *e;
+    pid_t pid;
+    u64 ts;
 
-	/* remember time exec() was executed for this PID */
-	pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-	ts = bpf_ktime_get_ns();
-	bpf_map_update_elem(&amp;exec_start, &amp;pid, &amp;ts, BPF_ANY);
+    /* remember time exec() was executed for this PID */
+    pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+    ts = bpf_ktime_get_ns();
+    bpf_map_update_elem(&amp;exec_start, &amp;pid, &amp;ts, BPF_ANY);
 
-	/* don't emit exec events when minimum duration is specified */
-	if (min_duration_ns)
-		return 0;
+    /* don't emit exec events when minimum duration is specified */
+    if (min_duration_ns)
+        return 0;
 
-	/* reserve sample from BPF ringbuf */
-	e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
-	if (!e)
-		return 0;
+    /* reserve sample from BPF ringbuf */
+    e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
+    if (!e)
+        return 0;
 
-	/* fill out the sample with data */
-	task = (struct task_struct *)bpf_get_current_task();
+    /* fill out the sample with data */
+    task = (struct task_struct *)bpf_get_current_task();
 
-	e-&gt;exit_event = false;
-	e-&gt;pid = pid;
-	e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
-	bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
+    e-&gt;exit_event = false;
+    e-&gt;pid = pid;
+    e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
+    bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
 
-	fname_off = ctx-&gt;__data_loc_filename &amp; 0xFFFF;
-	bpf_probe_read_str(&amp;e-&gt;filename, sizeof(e-&gt;filename), (void *)ctx + fname_off);
+    fname_off = ctx-&gt;__data_loc_filename &amp; 0xFFFF;
+    bpf_probe_read_str(&amp;e-&gt;filename, sizeof(e-&gt;filename), (void *)ctx + fname_off);
 
-	/* successfully submit it to user-space for post-processing */
-	bpf_ringbuf_submit(e, 0);
-	return 0;
+    /* successfully submit it to user-space for post-processing */
+    bpf_ringbuf_submit(e, 0);
+    return 0;
 }
 
 SEC(&quot;tp/sched/sched_process_exit&quot;)
 int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 {
-	struct task_struct *task;
-	struct event *e;
-	pid_t pid, tid;
-	u64 id, ts, *start_ts, duration_ns = 0;
-	
-	/* get PID and TID of exiting thread/process */
-	id = bpf_get_current_pid_tgid();
-	pid = id &gt;&gt; 32;
-	tid = (u32)id;
+    struct task_struct *task;
+    struct event *e;
+    pid_t pid, tid;
+    u64 id, ts, *start_ts, duration_ns = 0;
+    
+    /* get PID and TID of exiting thread/process */
+    id = bpf_get_current_pid_tgid();
+    pid = id &gt;&gt; 32;
+    tid = (u32)id;
 
-	/* ignore thread exits */
-	if (pid != tid)
-		return 0;
+    /* ignore thread exits */
+    if (pid != tid)
+        return 0;
 
-	/* if we recorded start of the process, calculate lifetime duration */
-	start_ts = bpf_map_lookup_elem(&amp;exec_start, &amp;pid);
-	if (start_ts)
-		duration_ns = bpf_ktime_get_ns() - *start_ts;
-	else if (min_duration_ns)
-		return 0;
-	bpf_map_delete_elem(&amp;exec_start, &amp;pid);
+    /* if we recorded start of the process, calculate lifetime duration */
+    start_ts = bpf_map_lookup_elem(&amp;exec_start, &amp;pid);
+    if (start_ts)
+        duration_ns = bpf_ktime_get_ns() - *start_ts;
+    else if (min_duration_ns)
+        return 0;
+    bpf_map_delete_elem(&amp;exec_start, &amp;pid);
 
-	/* if process didn't live long enough, return early */
-	if (min_duration_ns &amp;&amp; duration_ns &lt; min_duration_ns)
-		return 0;
+    /* if process didn't live long enough, return early */
+    if (min_duration_ns &amp;&amp; duration_ns &lt; min_duration_ns)
+        return 0;
 
-	/* reserve sample from BPF ringbuf */
-	e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
-	if (!e)
-		return 0;
+    /* reserve sample from BPF ringbuf */
+    e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
+    if (!e)
+        return 0;
 
-	/* fill out the sample with data */
-	task = (struct task_struct *)bpf_get_current_task();
+    /* fill out the sample with data */
+    task = (struct task_struct *)bpf_get_current_task();
 
-	e-&gt;exit_event = true;
-	e-&gt;duration_ns = duration_ns;
-	e-&gt;pid = pid;
-	e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
-	e-&gt;exit_code = (BPF_CORE_READ(task, exit_code) &gt;&gt; 8) &amp; 0xff;
-	bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
+    e-&gt;exit_event = true;
+    e-&gt;duration_ns = duration_ns;
+    e-&gt;pid = pid;
+    e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
+    e-&gt;exit_code = (BPF_CORE_READ(task, exit_code) &gt;&gt; 8) &amp; 0xff;
+    bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
 
-	/* send data to user-space for post-processing */
-	bpf_ringbuf_submit(e, 0);
-	return 0;
+    /* send data to user-space for post-processing */
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+</code></pre>
+<p>这段代码是一个内核态 eBPF 程序（bootstrap.bpf.c），主要用于跟踪 exec() 和 exit() 系统调用。它通过 eBPF 程序捕获进程的创建和退出事件，并将相关信息发送到用户态程序进行处理。下面是对代码的详细解释。</p>
+<p>首先，我们引入所需的头文件，定义 eBPF 程序的许可证以及两个 eBPF maps：exec_start 和 rb。exec_start 是一个哈希类型的 eBPF map，用于存储进程开始执行时的时间戳。rb 是一个环形缓冲区类型的 eBPF map，用于存储捕获的事件数据，并将其发送到用户态程序。</p>
+<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &quot;bootstrap.h&quot;
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 8192);
+    __type(key, pid_t);
+    __type(value, u64);
+} exec_start SEC(&quot;.maps&quot;);
+
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} rb SEC(&quot;.maps&quot;);
+
+const volatile unsigned long long min_duration_ns = 0;
+</code></pre>
+<p>接下来，我们定义了一个名为 handle_exec 的 eBPF 程序，它会在进程执行 exec() 系统调用时触发。首先，我们从当前进程中获取 PID，记录进程开始执行的时间戳，然后将其存储在 exec_start map 中。</p>
+<pre><code class="language-c">SEC(&quot;tp/sched/sched_process_exec&quot;)
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
+    // ...
+    pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+    ts = bpf_ktime_get_ns();
+    bpf_map_update_elem(&amp;exec_start, &amp;pid, &amp;ts, BPF_ANY);
+
+    // ...
+}
+</code></pre>
+<p>然后，我们从环形缓冲区 map rb 中预留一个事件结构，并填充相关数据，如进程 ID、父进程 ID、进程名等。之后，我们将这些数据发送到用户态程序进行处理。</p>
+<pre><code class="language-c">    // reserve sample from BPF ringbuf
+    e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
+    if (!e)
+        return 0;
+
+    // fill out the sample with data
+    task = (struct task_struct *)bpf_get_current_task();
+
+    e-&gt;exit_event = false;
+    e-&gt;pid = pid;
+    e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
+    bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
+
+    fname_off = ctx-&gt;__data_loc_filename &amp; 0xFFFF;
+    bpf_probe_read_str(&amp;e-&gt;filename, sizeof(e-&gt;filename), (void *)ctx + fname_off);
+
+    // successfully submit it to user-space for post-processing
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+</code></pre>
+<p>最后，我们定义了一个名为 handle_exit 的 eBPF 程序，它会在进程执行 exit() 系统调用时触发。首先，我们从当前进程中获取 PID 和 TID（线程 ID）。如果 PID 和 TID 不相等，说明这是一个线程退出，我们将忽略此事件。</p>
+<pre><code class="language-c">SEC(&quot;tp/sched/sched_process_exit&quot;)
+int handle_exit(struct trace_event_raw_sched_process_template* ctx)
+{
+    // ...
+    id = bpf_get_current_pid_tgid();
+    pid = id &gt;&gt; 32;
+    tid = (u32)id;
+
+    /* ignore thread exits */
+    if (pid != tid)
+        return 0;
+
+    // ...
+}
+</code></pre>
+<p>接着，我们查找之前存储在 exec_start map 中的进程开始执行的时间戳。如果找到了时间戳，我们将计算进程的生命周期（持续时间），然后从 exec_start map 中删除该记录。如果未找到时间戳且指定了最小持续时间，则直接返回。</p>
+<pre><code class="language-c">    // if we recorded start of the process, calculate lifetime duration
+    start_ts = bpf_map_lookup_elem(&amp;exec_start, &amp;pid);
+    if (start_ts)
+        duration_ns = bpf_ktime_get_ns() - *start_ts;
+    else if (min_duration_ns)
+        return 0;
+    bpf_map_delete_elem(&amp;exec_start, &amp;pid);
+
+    // if process didn't live long enough, return early
+    if (min_duration_ns &amp;&amp; duration_ns &lt; min_duration_ns)
+        return 0;
+</code></pre>
+<p>然后，我们从环形缓冲区 map rb 中预留一个事件结构，并填充相关数据，如进程 ID、父进程 ID、进程名、进程持续时间等。最后，我们将这些数据发送到用户态程序进行处理。</p>
+<pre><code class="language-c">    /* reserve sample from BPF ringbuf */
+    e = bpf_ringbuf_reserve(&amp;rb, sizeof(*e), 0);
+    if (!e)
+        return 0;
+
+    /* fill out the sample with data */
+    task = (struct task_struct *)bpf_get_current_task();
+
+    e-&gt;exit_event = true;
+    e-&gt;duration_ns = duration_ns;
+    e-&gt;pid = pid;
+    e-&gt;ppid = BPF_CORE_READ(task, real_parent, tgid);
+    e-&gt;exit_code = (BPF_CORE_READ(task, exit_code) &gt;&gt; 8) &amp; 0xff;
+    bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
+
+    /* send data to user-space for post-processing */
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+</code></pre>
+<p>这样，当进程执行 exec() 或 exit() 系统调用时，我们的 eBPF 程序会捕获相应的事件，并将详细信息发送到用户态程序进行后续处理。这使得我们可以轻松地监控进程的创建和退出，并获取有关进程的详细信息。</p>
+<p>除此之外，在 bootstrap.h 中，我们还定义了和用户态交互的数据结构：</p>
+<pre><code class="language-c">/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+/* Copyright (c) 2020 Facebook */
+#ifndef __BOOTSTRAP_H
+#define __BOOTSTRAP_H
+
+#define TASK_COMM_LEN 16
+#define MAX_FILENAME_LEN 127
+
+struct event {
+    int pid;
+    int ppid;
+    unsigned exit_code;
+    unsigned long long duration_ns;
+    char comm[TASK_COMM_LEN];
+    char filename[MAX_FILENAME_LEN];
+    bool exit_event;
+};
+
+#endif /* __BOOTSTRAP_H */
+</code></pre>
+<h3 id="用户态bootstrapc"><a class="header" href="#用户态bootstrapc">用户态，bootstrap.c</a></h3>
+<pre><code class="language-c">// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+/* Copyright (c) 2020 Facebook */
+#include &lt;argp.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;time.h&gt;
+#include &lt;sys/resource.h&gt;
+#include &lt;bpf/libbpf.h&gt;
+#include &quot;bootstrap.h&quot;
+#include &quot;bootstrap.skel.h&quot;
+
+static struct env {
+    bool verbose;
+    long min_duration_ms;
+} env;
+
+const char *argp_program_version = &quot;bootstrap 0.0&quot;;
+const char *argp_program_bug_address = &quot;&lt;bpf@vger.kernel.org&gt;&quot;;
+const char argp_program_doc[] =
+&quot;BPF bootstrap demo application.\n&quot;
+&quot;\n&quot;
+&quot;It traces process start and exits and shows associated \n&quot;
+&quot;information (filename, process duration, PID and PPID, etc).\n&quot;
+&quot;\n&quot;
+&quot;USAGE: ./bootstrap [-d &lt;min-duration-ms&gt;] [-v]\n&quot;;
+
+static const struct argp_option opts[] = {
+    { &quot;verbose&quot;, 'v', NULL, 0, &quot;Verbose debug output&quot; },
+    { &quot;duration&quot;, 'd', &quot;DURATION-MS&quot;, 0, &quot;Minimum process duration (ms) to report&quot; },
+    {},
+};
+
+static error_t parse_arg(int key, char *arg, struct argp_state *state)
+{
+    switch (key) {
+    case 'v':
+        env.verbose = true;
+        break;
+    case 'd':
+        errno = 0;
+        env.min_duration_ms = strtol(arg, NULL, 10);
+        if (errno || env.min_duration_ms &lt;= 0) {
+            fprintf(stderr, &quot;Invalid duration: %s\n&quot;, arg);
+            argp_usage(state);
+        }
+        break;
+    case ARGP_KEY_ARG:
+        argp_usage(state);
+        break;
+    default:
+        return ARGP_ERR_UNKNOWN;
+    }
+    return 0;
 }
 
+static const struct argp argp = {
+    .options = opts,
+    .parser = parse_arg,
+    .doc = argp_program_doc,
+};
 
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
+{
+    if (level == LIBBPF_DEBUG &amp;&amp; !env.verbose)
+        return 0;
+    return vfprintf(stderr, format, args);
+}
+
+static volatile bool exiting = false;
+
+static void sig_handler(int sig)
+{
+    exiting = true;
+}
+
+static int handle_event(void *ctx, void *data, size_t data_sz)
+{
+    const struct event *e = data;
+    struct tm *tm;
+    char ts[32];
+    time_t t;
+
+    time(&amp;t);
+    tm = localtime(&amp;t);
+    strftime(ts, sizeof(ts), &quot;%H:%M:%S&quot;, tm);
+
+    if (e-&gt;exit_event) {
+        printf(&quot;%-8s %-5s %-16s %-7d %-7d [%u]&quot;,
+               ts, &quot;EXIT&quot;, e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;exit_code);
+        if (e-&gt;duration_ns)
+            printf(&quot; (%llums)&quot;, e-&gt;duration_ns / 1000000);
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;%-8s %-5s %-16s %-7d %-7d %s\n&quot;,
+               ts, &quot;EXEC&quot;, e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;filename);
+    }
+
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    struct ring_buffer *rb = NULL;
+    struct bootstrap_bpf *skel;
+    int err;
+
+    /* Parse command line arguments */
+    err = argp_parse(&amp;argp, argc, argv, 0, NULL, NULL);
+    if (err)
+        return err;
+
+    /* Set up libbpf errors and debug info callback */
+    libbpf_set_print(libbpf_print_fn);
+
+    /* Cleaner handling of Ctrl-C */
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    /* Load and verify BPF application */
+    skel = bootstrap_bpf__open();
+    if (!skel) {
+        fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+        return 1;
+    }
+
+    /* Parameterize BPF code with minimum duration parameter */
+    skel-&gt;rodata-&gt;min_duration_ns = env.min_duration_ms * 1000000ULL;
+
+    /* Load &amp; verify BPF programs */
+    err = bootstrap_bpf__load(skel);
+    if (err) {
+        fprintf(stderr, &quot;Failed to load and verify BPF skeleton\n&quot;);
+        goto cleanup;
+    }
+
+    /* Attach tracepoints */
+    err = bootstrap_bpf__attach(skel);
+    if (err) {
+        fprintf(stderr, &quot;Failed to attach BPF skeleton\n&quot;);
+        goto cleanup;
+    }
+
+    /* Set up ring buffer polling */
+    rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, NULL, NULL);
+    if (!rb) {
+        err = -1;
+        fprintf(stderr, &quot;Failed to create ring buffer\n&quot;);
+        goto cleanup;
+    }
+
+    /* Process events */
+    printf(&quot;%-8s %-5s %-16s %-7s %-7s %s\n&quot;,
+           &quot;TIME&quot;, &quot;EVENT&quot;, &quot;COMM&quot;, &quot;PID&quot;, &quot;PPID&quot;, &quot;FILENAME/EXIT CODE&quot;);
+    while (!exiting) {
+        err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+        /* Ctrl-C will cause -EINTR */
+        if (err == -EINTR) {
+            err = 0;
+            break;
+        }
+        if (err &lt; 0) {
+            printf(&quot;Error polling perf buffer: %d\n&quot;, err);
+            break;
+        }
+    }
+
+cleanup:
+    /* Clean up */
+    ring_buffer__free(rb);
+    bootstrap_bpf__destroy(skel);
+
+    return err &lt; 0 ? -err : 0;
+}
 </code></pre>
-<p>这是一段使用BPF（Berkeley Packet Filter）的C程序，用于跟踪进程启动和退出事件，并显示有关它们的信息。BPF是一种强大的机制，允许您将称为BPF程序的小程序附加到Linux内核的各个部分。这些程序可用于过滤，监视或修改内核的行为。</p>
-<p>程序首先定义一些常量，并包含一些头文件。然后定义了一个名为env的struct，用于存储一些程序选项，例如详细模式和进程报告的最小持续时间。</p>
-<p>然后，程序定义了一个名为parse_arg的函数，用于解析传递给程序的命令行参数。它接受三个参数：一个表示正在解析的选项的整数key，一个表示选项参数的字符指针arg和一个表示当前解析状态的struct argp_state指针state。该函数处理选项并在env struct中设置相应的值。</p>
-<p>然后，程序定义了一个名为sig_handler的函数，当被调用时会将全局标志exiting设置为true。这用于在接收到信号时允许程序干净地退出。</p>
-<p>接下来，我们将继续描述这段代码中的其他部分。</p>
-<p>程序定义了一个名为exec_start的BPF map，它的类型为BPF_MAP_TYPE_HASH，最大条目数为8192，键类型为pid_t，值类型为u64。</p>
-<p>另外，程序还定义了一个名为rb的BPF map，它的类型为BPF_MAP_TYPE_RINGBUF，最大条目数为256 * 1024。</p>
-<p>程序还定义了一个名为min_duration_ns的常量，其值为0。</p>
-<p>程序定义了一个名为handle_exec的SEC（static evaluator of code）函数，它被附加到跟踪进程执行的BPF程序上。该函数记录为该PID执行exec（）的时间，并在指定了最小持续时间时不发出exec事件。如果未指定最小持续时间，则会从BPF ringbuf保留样本并使用数据填充样本，然后将其提交给用户空间进行后处理。</p>
-<p>程序还定义了一个名为handle_exit的SEC函数，它被附加到跟踪进程退出的BPF程序上。该函数会在确定PID和TID后计算进程的生命周期，然后根据min_duration_ns的值决定是否发出退出事件。如果进程的生命周期足够长，则会从BPF ringbuf保留样本并使用数据填充样本，然后将其提交给用户空间进行后处理。</p>
-<p>最后，主函数调用bpf_ringbuf_poll来轮询BPF ringbuf，并在接收到新的事件时处理该事件。这个函数会持续运行，直到全局标志exiting被设置为true，此时它会清理资源并退出。</p>
-<h2 id="install-dependencies"><a class="header" href="#install-dependencies">Install Dependencies</a></h2>
-<p>You will need <code>clang</code>, <code>libelf</code> and <code>zlib</code> to build the examples, package names may vary across distros.</p>
-<p>On Ubuntu/Debian, you need:</p>
-<pre><code class="language-shell">$ apt install clang libelf1 libelf-dev zlib1g-dev
+<p>这个用户态程序主要用于加载、验证、附加 eBPF 程序，以及接收 eBPF 程序收集的事件数据，并将其打印出来。我们将分析一些关键部分。</p>
+<p>首先，我们定义了一个 env 结构，用于存储命令行参数：</p>
+<pre><code class="language-c">static struct env {
+    bool verbose;
+    long min_duration_ms;
+} env;
 </code></pre>
-<p>On CentOS/Fedora, you need:</p>
-<pre><code class="language-shell">$ dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
+<p>接下来，我们使用 argp 库来解析命令行参数：</p>
+<pre><code class="language-c">static const struct argp_option opts[] = {
+    { &quot;verbose&quot;, 'v', NULL, 0, &quot;Verbose debug output&quot; },
+    { &quot;duration&quot;, 'd', &quot;DURATION-MS&quot;, 0, &quot;Minimum process duration (ms) to report&quot; },
+    {},
+};
+
+static error_t parse_arg(int key, char *arg, struct argp_state *state)
+{
+    // ...
+}
+
+static const struct argp argp = {
+    .options = opts,
+    .parser = parse_arg,
+    .doc = argp_program_doc,
+};
+</code></pre>
+<p>main() 函数中，首先解析命令行参数，然后设置 libbpf 的打印回调函数 libbpf_print_fn，以便在需要时输出调试信息：</p>
+<pre><code class="language-c">err = argp_parse(&amp;argp, argc, argv, 0, NULL, NULL);
+if (err)
+    return err;
+
+libbpf_set_print(libbpf_print_fn);
+</code></pre>
+<p>接下来，我们打开 eBPF 脚手架（skeleton）文件，将最小持续时间参数传递给 eBPF 程序，并加载和附加 eBPF 程序：</p>
+<pre><code class="language-c">skel = bootstrap_bpf__open();
+if (!skel) {
+    fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+    return 1;
+}
+
+skel-&gt;rodata-&gt;min_duration_ns = env.min_duration_ms * 1000000ULL;
+
+err = bootstrap_bpf__load(skel);
+if (err) {
+    fprintf(stderr, &quot;Failed to load and verify BPF skeleton\n&quot;);
+    goto cleanup;
+}
+
+err = bootstrap_bpf__attach(skel);
+if (err) {
+    fprintf(stderr, &quot;Failed to attach BPF skeleton\n&quot;);
+    goto cleanup;
+}
+</code></pre>
+<p>然后，我们创建一个环形缓冲区（ring buffer），用于接收 eBPF 程序发送的事件数据：</p>
+<pre><code class="language-c">rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, NULL, NULL);
+if (!rb) {
+    err = -1;
+    fprintf(stderr, &quot;Failed to create ring buffer\n&quot;);
+    goto cleanup;
+}
+</code></pre>
+<p>handle_event() 函数会处理从 eBPF 程序收到的事件。根据事件类型（进程执行或退出），它会提取并打印事件信息，如时间戳、进程名、进程 ID、父进程 ID、文件名或退出代码等。</p>
+<p>最后，我们使用 ring_buffer__poll() 函数轮询环形缓冲区，处理收到的事件数据：</p>
+<pre><code class="language-c">while (!exiting) {
+    err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+    // ...
+}
+</code></pre>
+<p>当程序收到 SIGINT 或 SIGTERM 信号时，它会最后完成清理、退出操作，关闭和卸载 eBPF 程序：</p>
+<pre><code class="language-c">cleanup:
+ /* Clean up */
+ ring_buffer__free(rb);
+ bootstrap_bpf__destroy(skel);
+
+ return err &lt; 0 ? -err : 0;
+}
+</code></pre>
+<h2 id="安装依赖"><a class="header" href="#安装依赖">安装依赖</a></h2>
+<p>构建示例需要 clang、libelf 和 zlib。包名在不同的发行版中可能会有所不同。</p>
+<p>在 Ubuntu/Debian 上，你需要执行以下命令：</p>
+<pre><code class="language-shell">sudo apt install clang libelf1 libelf-dev zlib1g-dev
+</code></pre>
+<p>在 CentOS/Fedora 上，你需要执行以下命令：</p>
+<pre><code class="language-shell">sudo dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
 </code></pre>
 <h2 id="编译运行-1"><a class="header" href="#编译运行-1">编译运行</a></h2>
 <p>编译运行上述代码：</p>
-<pre><code class="language-console">$ ecc bootstrap.bpf.c bootstrap.h
-Compiling bpf object...
-Packing ebpf object and config into package.json...
-$ sudo ecli run package.json
-Runing eBPF program...
+<pre><code class="language-console">$ make
+  BPF      .output/bootstrap.bpf.o
+  GEN-SKEL .output/bootstrap.skel.h
+  CC       .output/bootstrap.o
+  BINARY   bootstrap
+$ sudo ./bootstrap 
+[sudo] password for yunwei: 
+TIME     EVENT COMM             PID     PPID    FILENAME/EXIT CODE
+03:16:41 EXEC  sh               110688  80168   /bin/sh
+03:16:41 EXEC  which            110689  110688  /usr/bin/which
+03:16:41 EXIT  which            110689  110688  [0] (0ms)
+03:16:41 EXIT  sh               110688  80168   [0] (0ms)
+03:16:41 EXEC  sh               110690  80168   /bin/sh
+03:16:41 EXEC  ps               110691  110690  /usr/bin/ps
+03:16:41 EXIT  ps               110691  110690  [0] (49ms)
+03:16:41 EXIT  sh               110690  80168   [0] (51ms)
 </code></pre>
 <h2 id="总结-10"><a class="header" href="#总结-10">总结</a></h2>
-<p>这是一个使用BPF的C程序，用于跟踪进程的启动和退出事件，并显示有关这些事件的信息。它通过使用argp API来解析命令行参数，并使用BPF maps 存储进程的信息，包括进程的PID和执行文件的文件名。程序还使用了SEC函数来附加BPF程序，以监视进程的执行和退出事件。最后，程序在终端中打印出启动和退出的进程信息。</p>
-<p>编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：https://github.com/eunomia-bpf/eunomia-bpf</p>
+<p>通过这个实例，我们了解了如何将 eBPF 程序与用户态程序结合使用。这种结合为开发者提供了一个强大的工具集，可以实现跨内核和用户空间的高效数据收集和处理。通过使用 eBPF 和 libbpf，您可以构建更高效、可扩展和安全的监控和性能分析工具。</p>
+<p>在接下来的教程中，我们将继续深入探讨 eBPF 的高级特性，分享更多关于 eBPF 开发实践的内容。通过不断学习和实践，您将更好地理解和掌握 eBPF 技术，并将其应用于解决实际问题。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 。您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf入门实践教程使用-libbpf-bootstrap-开发程序统计-tcp-连接延时"><a class="header" href="#ebpf入门实践教程使用-libbpf-bootstrap-开发程序统计-tcp-连接延时">eBPF入门实践教程：使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></h1>
 <h2 id="背景"><a class="header" href="#背景">背景</a></h2>
 <p>在互联网后端日常开发接口的时候中，不管你使用的是C、Java、PHP还是Golang，都避免不了需要调用mysql、redis等组件来获取数据，可能还需要执行一些rpc远程调用，或者再调用一些其它restful api。 在这些调用的底层，基本都是在使用TCP协议进行传输。这是因为在传输层协议中，TCP协议具备可靠的连接，错误重传，拥塞控制等优点，所以目前应用比UDP更广泛一些。但相对而言，tcp 连接也有一些缺点，例如建立连接的延时较长等。因此也会出现像 QUIC ，即 快速UDP网络连接 ( Quick UDP Internet Connections )这样的替代方案。</p>
