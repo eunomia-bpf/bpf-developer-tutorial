@@ -145,7 +145,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="ebpf-入门开发实践教程一介绍-ebpf-的基本概念常见的开发工具"><a class="header" href="#ebpf-入门开发实践教程一介绍-ebpf-的基本概念常见的开发工具">eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具</a></h1>
+                        <h1 id="ebpf-入门开发实践教程零介绍-ebpf-的基本概念常见的开发工具"><a class="header" href="#ebpf-入门开发实践教程零介绍-ebpf-的基本概念常见的开发工具">eBPF 入门开发实践教程零：介绍 eBPF 的基本概念、常见的开发工具</a></h1>
 <h2 id="1-ebpf简介安全和有效地扩展内核"><a class="header" href="#1-ebpf简介安全和有效地扩展内核">1. eBPF简介：安全和有效地扩展内核</a></h2>
 <p>eBPF 是一项革命性的技术，起源于 Linux 内核，可以在操作系统的内核中运行沙盒程序。它被用来安全和有效地扩展内核的功能，而不需要改变内核的源代码或加载内核模块。eBPF 通过允许在操作系统内运行沙盒程序，应用程序开发人员可以在运行时，可编程地向操作系统动态添加额外的功能。然后，操作系统保证安全和执行效率，就像在即时编译（JIT）编译器和验证引擎的帮助下进行本地编译一样。eBPF 程序在内核版本之间是可移植的，并且可以自动更新，从而避免了工作负载中断和节点重启。</p>
 <p>今天，eBPF被广泛用于各类场景：在现代数据中心和云原生环境中，可以提供高性能的网络包处理和负载均衡；以非常低的资源开销，做到对多种细粒度指标的可观测性，帮助应用程序开发人员跟踪应用程序，为性能故障排除提供洞察力；保障应用程序和容器运行时的安全执行，等等。可能性是无穷的，而 eBPF 在操作系统内核中所释放的创新才刚刚开始[3]。</p>
@@ -274,7 +274,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 <li>BPF Compiler Collection (BCC)：<a href="https://github.com/iovisor/bcc">https://github.com/iovisor/bcc</a></li>
 <li>eunomia-bpf：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></li>
 </ul>
-<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<p>您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二hello-world基本框架和开发流程"><a class="header" href="#ebpf-入门开发实践教程二hello-world基本框架和开发流程">eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></h1>
 <p>在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。</p>
 <p>本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。</p>
@@ -411,7 +411,7 @@ Runing eBPF program...
 <li>在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。</li>
 </ul>
 <p>需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。</p>
-<p>本教程的文档和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
+<p>您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。本文会先讲解关于 kprobes 的基本概念和技术背景，然后介绍如何在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
@@ -464,7 +464,7 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
  return 0;
 }
 </code></pre>
-<p>这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件。这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。</p>
+<p>这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件，这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。</p>
 <p>首先，我们导入必要的头文件，如 vmlinux.h，bpf_helpers.h，bpf_tracing.h 和 bpf_core_read.h。接着，我们定义许可证，以允许程序在内核中运行。</p>
 <pre><code class="language-c">#include &quot;vmlinux.h&quot;
 #include &lt;bpf/bpf_helpers.h&gt;
