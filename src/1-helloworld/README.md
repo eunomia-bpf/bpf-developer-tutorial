@@ -177,4 +177,4 @@ eBPF 程序的开发和使用流程可以概括为如下几个步骤：
 
 需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。
 
-本教程的文档和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
+您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。

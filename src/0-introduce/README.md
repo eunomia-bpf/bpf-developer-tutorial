@@ -1,4 +1,4 @@
-# eBPF 入门开发实践教程一：介绍 eBPF 的基本概念、常见的开发工具
+# eBPF 入门开发实践教程零：介绍 eBPF 的基本概念、常见的开发工具
 
 ## 1. eBPF简介：安全和有效地扩展内核
 
@@ -165,4 +165,5 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 - BPF Compiler Collection (BCC)：<https://github.com/iovisor/bcc>
 - eunomia-bpf：<https://github.com/eunomia-bpf/eunomia-bpf>
 
-完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
+您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
+

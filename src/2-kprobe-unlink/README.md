@@ -62,7 +62,7 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 }
 ```
 
-这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件。这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。
+这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件，这个 eBPF 程序通过使用 kprobe（内核探针）在 do_unlinkat 函数的入口和退出处放置钩子，实现对该系统调用的跟踪。
 
 首先，我们导入必要的头文件，如 vmlinux.h，bpf_helpers.h，bpf_tracing.h 和 bpf_core_read.h。接着，我们定义许可证，以允许程序在内核中运行。
 
