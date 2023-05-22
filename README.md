@@ -40,7 +40,7 @@ Gitee 镜像： <https://gitee.com/yunwei37/bpf-developer-tutorial>
 - [lesson 18-further-reading](src/18-further-reading/README.md) 更进一步的相关资料？
 - [lesson 19-lsm-connect](src/19-lsm-connect/README.md) 使用 LSM 进行安全检测防御
 - [lesson 20-tc](src/20-tc/README.md) 使用 eBPF 进行 tc 流量控制
-- [lesson 21-xdp](src/20-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
+- [lesson 21-xdp](src/21-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
 
 
 ## GitHub 模板：轻松构建 eBPF 项目和开发环境，一键在线编译运行 eBPF 程序
