@@ -76,12 +76,12 @@ Packing ebpf object and config into package.json...
 并通过 `ecli` 运行：
 
 ```console
-$ sudo ecli run package.json
+sudo ecli run package.json
 ```
 
 可以通过如下方式查看程序的输出：
 
-```
+```console
 $ sudo cat /sys/kernel/tracing/trace_pipe
             node-1939    [000] d.s11  1601.190413: bpf_trace_printk: packet size is 177
             node-1939    [000] d.s11  1601.190479: bpf_trace_printk: packet size is 66
@@ -99,8 +99,6 @@ $ sudo cat /sys/kernel/tracing/trace_pipe
 
 ## 参考
 
-<http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/>
-
-<http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/>
-
-<https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass>
++ <http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/>
++ <http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/>
++ <https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass>

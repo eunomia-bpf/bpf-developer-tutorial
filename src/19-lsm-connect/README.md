@@ -124,8 +124,8 @@ Packing ebpf object and config into package.json...
 
 并通过 `ecli` 运行：
 
-```console
-$ sudo ecli run package.json
+```shell
+sudo ecli run package.json
 ```
 
 接下来，可以打开另一个 terminal，并尝试访问 1.1.1.1：
@@ -162,6 +162,6 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 完整的教程和源代码已经全部开源，可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看。
 
 ## 参考
-<https://github.com/leodido/demo-cloud-native-ebpf-day>
 
-<https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program>
++ <https://github.com/leodido/demo-cloud-native-ebpf-day>
++ <https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program>

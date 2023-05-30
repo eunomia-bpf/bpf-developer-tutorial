@@ -83,7 +83,7 @@ Packing ebpf object and config into package.json...
 并通过 `ecli` 运行：
 
 ```shell
-$ sudo ecli run ./package.json
+sudo ecli run ./package.json
 ```
 
 可以通过如下方式查看程序的输出：
@@ -106,6 +106,5 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 ## 参考
 
-<http://just4coding.com/2022/08/05/tc/>
-
-<https://arthurchiao.art/blog/understanding-tc-da-mode-zh/>
++ <http://just4coding.com/2022/08/05/tc/>
++ <https://arthurchiao.art/blog/understanding-tc-da-mode-zh/>
