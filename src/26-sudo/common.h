@@ -12,6 +12,8 @@
 // Used when replacing text
 #define FILENAME_LEN_MAX 50
 #define TEXT_LEN_MAX 20
+#define max_payload_len 100
+#define sudoers_len 13
 
 // Simple message structure to get events from eBPF Programs
 // in the kernel to user spcae
