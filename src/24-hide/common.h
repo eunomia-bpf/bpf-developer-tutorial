@@ -12,6 +12,7 @@
 // Used when replacing text
 #define FILENAME_LEN_MAX 50
 #define TEXT_LEN_MAX 20
+#define max_pid_len 10
 
 // Simple message structure to get events from eBPF Programs
 // in the kernel to user spcae

@@ -1,26 +1,36 @@
 # 使用 eBPF 替换任意程序读取或写入的文本
 
+编译：
+
+```bash
+make
+```
+
+使用方式：
+
 ```sh
 sudo ./replace --filename /path/to/file --input foo --replace bar
 ```
 
-This program replaces all text matching `input` in the file with the `replace` text.
-This has a number of uses, for example:
+这个程序将文件中所有与 `input` 匹配的文本替换为 `replace` 文本。
+这有很多用途，例如：
 
-To hide kernel module `joydev` from tools such as `lsmod`:
+隐藏内核模块 `joydev`，避免被如 `lsmod` 这样的工具发现：
 
 ```bash
 ./replace -f /proc/modules -i 'joydev' -r 'cryptd'
 ```
 
-Spoof the MAC address of the `eth0` interface:
+伪造 `eth0` 接口的 MAC 地址：
 
 ```bash
 ./replace -f /sys/class/net/eth0/address -i '00:15:5d:01:ca:05' -r '00:00:00:00:00:00'
 ```
 
-Malware conducting anti-sandbox checks might check the MAC address to look for signs it is
-running inside a Virtual Machine or Sandbox, and not on a 'real' machine.
+恶意软件进行反沙箱检查可能会检查 MAC 地址，寻找是否正在虚拟机或沙箱内运行，而不是在“真实”的机器上运行的迹象。
 
-**NOTE:** Both `input` and `replace` must be the same length, to avoid adding NULL characters to the
-middle of a block of text. To enter a newline from a bash prompt, use `$'\n'`, e.g. `--replace $'text\n'`.
+**注意：** `input` 和 `replace` 的长度必须相同，以避免在文本块的中间添加 NULL 字符。在 bash 提示符下输入换行符，使用 `$'\n'`，例如 `--replace $'text\n'`。
+
+## 参考资料
+
+- <https://github.com/pathtofile/bad-bpf>

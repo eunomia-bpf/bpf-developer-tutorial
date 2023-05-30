@@ -52,7 +52,6 @@ const volatile int target_ppid = 0;
 // These store the string represenation
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
-const int max_pid_len = 10;
 const volatile int pid_to_hide_len = 0;
 const volatile char pid_to_hide[max_pid_len];
 
