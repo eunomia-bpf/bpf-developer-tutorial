@@ -33,7 +33,7 @@ int bpf_sockmap(struct bpf_sock_ops *skops)
 	family = skops->family;
 	op = skops->op;
 
-	//printk("<<< op %d, port = %d --> %d\n", op, skops->local_port, skops->remote_port);
+	printk("<<< op %d, port = %d --> %d\n", op, skops->local_port, skops->remote_port);
 	switch (op) {
         case BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB:
         case BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB:

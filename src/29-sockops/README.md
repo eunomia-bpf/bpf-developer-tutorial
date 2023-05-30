@@ -70,7 +70,7 @@ iperf3-9516  [001] ..s1 22500.634536: 0: <<< ipv4 op = 5, port 4135 --> 19095
 sudo ./unload.sh
 ```
 
-## 参考资料和源代码来源
+## 参考资料
 
 - <https://github.com/zachidan/ebpf-sockops>
 - <https://github.com/merbridge/merbridge>
