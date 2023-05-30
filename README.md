@@ -59,7 +59,7 @@ Android:
 - [使用 bpf_send_signal 发送信号终止进程](src/25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](src/26-sudo/README.md)
 - [使用 eBPF 替换任意程序读取或写入的文本](src/27-replace/README.md)
-- [使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
+- [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
 
 持续更新中...
 

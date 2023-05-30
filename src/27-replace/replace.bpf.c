@@ -58,15 +58,13 @@ struct {
 const volatile int target_ppid = 0;
 
 // These store the name of the file to replace text in
-const int filename_len_max = 50;
 const volatile int filename_len = 0;
-const volatile char filename[filename_len_max];
+const volatile char filename[50];
 
 // These store the text to find and replace in the file
-const unsigned int text_len_max = 20;
 const volatile  unsigned int text_len = 0;
-const volatile char text_find[filename_len_max];
-const volatile char text_replace[filename_len_max];
+const volatile char text_find[FILENAME_LEN_MAX];
+const volatile char text_replace[FILENAME_LEN_MAX];
 
 SEC("tp/syscalls/sys_exit_close")
 int handle_close_exit(struct trace_event_raw_sys_exit *ctx)
@@ -102,7 +100,7 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx)
     }
 
     // Get filename from arguments
-    char check_filename[filename_len_max];
+    char check_filename[FILENAME_LEN_MAX];
     bpf_probe_read_user(&check_filename, filename_len, (char*)ctx->args[1]);
 
     // Check filename is our target
@@ -188,17 +186,15 @@ int find_possible_addrs(struct trace_event_raw_sys_exit *ctx)
         return 0;
     }
     long int buff_size = ctx->ret;
-    long int read_size = buff_size;
+    unsigned long int read_size = buff_size;
 
     bpf_printk("[TEXT_REPLACE] PID %d | read_size %lu | buff_addr 0x%lx\n", pid, read_size, buff_addr);
     // 64 may be to large for loop
-    const unsigned int local_buff_size = 32;
-    const unsigned int loop_size = 32;
-    char local_buff[local_buff_size] = { 0x00 };
+    char local_buff[LOCAL_BUFF_SIZE] = { 0x00 };
 
-    if (read_size > (local_buff_size+1)) {
+    if (read_size > (LOCAL_BUFF_SIZE+1)) {
         // Need to loop :-(
-        read_size = local_buff_size;
+        read_size = LOCAL_BUFF_SIZE;
     }
 
     // Read the data returned in chunks, and note every instance
@@ -209,7 +205,7 @@ int find_possible_addrs(struct trace_event_raw_sys_exit *ctx)
     for (unsigned int i = 0; i < loop_size; i++) {
         // Read in chunks from buffer
         bpf_probe_read(&local_buff, read_size, (void*)buff_addr);
-        for (unsigned int j = 0; j < local_buff_size; j++) {
+        for (unsigned int j = 0; j < LOCAL_BUFF_SIZE; j++) {
             // Look for the first char of our 'to find' text
             if (local_buff[j] == text_find[0]) {
                 name_addr = buff_addr+j;
@@ -220,7 +216,7 @@ int find_possible_addrs(struct trace_event_raw_sys_exit *ctx)
             }
         }
 
-        buff_addr += local_buff_size;
+        buff_addr += LOCAL_BUFF_SIZE;
     }
 
     // Tail-call into 'check_possible_addrs' to loop over possible addresses
@@ -267,12 +263,13 @@ int check_possible_addresses(struct trace_event_raw_sys_exit *ctx) {
             break;
         }
         bpf_probe_read_user(&name, text_len_max, (char*)name_addr);
-        for (j = 0; j < text_len_max; j++) {
-            if (name[j] != text_find[j]) {
-                break;
-            }
-        }
-        if (j >= name_len) {
+        // for (j = 0; j < text_len_max; j++) {
+        //     if (name[j] != text_find[j]) {
+        //         break;
+        //     }
+        // }
+        // we can use bpf_strncmp here, but it's not available in the kernel version older
+        if (bpf_strncmp(name, text_len_max, (const char *)text_find) == 0) {
             // ***********
             // We've found out text!
             // Add location to map to be overwritten

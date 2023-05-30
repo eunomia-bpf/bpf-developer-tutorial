@@ -16,6 +16,10 @@
 // Simple message structure to get events from eBPF Programs
 // in the kernel to user spcae
 #define TASK_COMM_LEN 16
+#define LOCAL_BUFF_SIZE 64
+#define loop_size 64
+#define text_len_max 20
+
 struct event {
     int pid;
     char comm[TASK_COMM_LEN];

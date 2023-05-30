@@ -1,9 +1,76 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include <argp.h>
 #include <unistd.h>
-#include "textreplace.skel.h"
-#include "common_um.h"
+#include "replace.skel.h"
 #include "common.h"
+
+
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <errno.h>
+#include <fcntl.h>
+
+static volatile sig_atomic_t exiting;
+
+void sig_int(int signo)
+{
+    exiting = 1;
+}
+
+static bool setup_sig_handler() {
+    // Add handlers for SIGINT and SIGTERM so we shutdown cleanly
+    __sighandler_t sighandler = signal(SIGINT, sig_int);
+    if (sighandler == SIG_ERR) {
+        fprintf(stderr, "can't set signal handler: %s\n", strerror(errno));
+        return false;
+    }
+    sighandler = signal(SIGTERM, sig_int);
+    if (sighandler == SIG_ERR) {
+        fprintf(stderr, "can't set signal handler: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
+{
+    return vfprintf(stderr, format, args);
+}
+
+static bool bump_memlock_rlimit(void)
+{
+    struct rlimit rlim_new = {
+        .rlim_cur    = RLIM_INFINITY,
+        .rlim_max    = RLIM_INFINITY,
+    };
+
+    if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
+        fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit! (hint: run as root)\n");
+        return false;
+    }
+    return true;
+}
+
+
+static bool setup() {
+    // Set up libbpf errors and debug info callback 
+    libbpf_set_print(libbpf_print_fn);
+
+    // Bump RLIMIT_MEMLOCK to allow BPF sub-system to do anything 
+    if (!bump_memlock_rlimit()) {
+        return false;
+    };
+
+    // Setup signal handler so we exit cleanly
+    if (!setup_sig_handler()) {
+        return false;
+    }
+
+    return true;
+}
 
 // Setup Argument stuff
 #define filename_len_max 50
@@ -98,7 +165,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 int main(int argc, char **argv)
 {
     struct ring_buffer *rb = NULL;
-    struct textreplace_bpf *skel;
+    struct replace_bpf *skel;
     int err;
 
     // Parse command line arguments
@@ -121,7 +188,7 @@ int main(int argc, char **argv)
     }
 
     // Open BPF application 
-    skel = textreplace_bpf__open();
+    skel = replace_bpf__open();
     if (!skel) {
         fprintf(stderr, "Failed to open BPF program: %s\n", strerror(errno));
         return 1;
@@ -137,7 +204,7 @@ int main(int argc, char **argv)
     skel->rodata->text_len = strlen(env.input);
 
     // Verify and load program
-    err = textreplace_bpf__load(skel);
+    err = replace_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
@@ -168,7 +235,7 @@ int main(int argc, char **argv)
     }
 
     // Attach tracepoint handler 
-    err = textreplace_bpf__attach( skel);
+    err = replace_bpf__attach( skel);
     if (err) {
         fprintf(stderr, "Failed to attach BPF program: %s\n", strerror(errno));
         goto cleanup;
@@ -197,6 +264,6 @@ int main(int argc, char **argv)
     }
 
 cleanup:
-    textreplace_bpf__destroy( skel);
+    replace_bpf__destroy( skel);
     return -err;
 }
