@@ -31,8 +31,8 @@
 - [lesson 11-bootstrap](src/11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
 - [lesson 12-profile](src/12-profile/README.md) 使用 eBPF 进行性能分析
 - [lesson 13-tcpconnlat](src/13-tcpconnlat/README.md) 记录 TCP 连接延迟，并使用 libbpf 在用户态处理数据
-- [lesson 14-tcpstates](src/14-tcpstates/README.md) 记录 TCP 连接状态
-- [lesson 15-tcprtt](src/15-tcprtt/README.md) 以直方图方式记录 TCP RTT，并使用 libbpf 在用户态采样 map 信息
+- [lesson 14-tcpstates](src/14-tcpstates/README.md) 记录 TCP 连接状态与 TCP RTT
+- [lesson 15-javagc](src/15-javagc/README.md) 使用 usdt 捕获用户态 Java GC 事件耗时
 - [lesson 16-memleak](src/16-memleak/README.md) 检测内存泄漏
 - [lesson 17-biopattern](src/17-biopattern/README.md) 捕获磁盘 IO 模式
 - [lesson 18-further-reading](src/18-further-reading/README.md) 更进一步的相关资料？
@@ -50,6 +50,9 @@
 - [使用 bpf_send_signal 发送信号终止进程](src/25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](src/26-sudo/README.md)
 - [使用 eBPF 替换任意程序读取或写入的文本](src/27-replace/README.md)
+- [使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
+
+持续更新中...
 
 ## 为什么要写这个教程？
 
