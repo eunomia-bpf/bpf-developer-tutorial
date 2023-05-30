@@ -103,10 +103,16 @@ int handle_tp(void *ctx)
 - `void *ctx`：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。
 - `return 0`;：必须这样，返回0 (如果要知道why, 参考 #139  <https://github.com/iovisor/bcc/issues/139>)。
 
-要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：
+要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：
+
+```shell
+sudo apt install libclang-14-dev
+```
+
+使用 ecc 编译程序：
 
 ```console
-$ ecc minimal.bpf.c
+$ ./ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 ```
@@ -120,17 +126,19 @@ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli run ./package.json
+$ sudo ecli run package.json
 Runing eBPF program...
 ```
 
 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
 
 ```console
-$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_write"
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 ```
+
+按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。
 
 ## eBPF 程序的基本框架
 
