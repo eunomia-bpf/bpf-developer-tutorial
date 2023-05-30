@@ -154,97 +154,97 @@
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &quot;tcpstates.h&quot;
 
-#define MAX_ENTRIES	10240
-#define AF_INET		2
-#define AF_INET6	10
+#define MAX_ENTRIES 10240
+#define AF_INET     2
+#define AF_INET6    10
 
 const volatile bool filter_by_sport = false;
 const volatile bool filter_by_dport = false;
 const volatile short target_family = 0;
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, __u16);
-	__type(value, __u16);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u16);
+    __type(value, __u16);
 } sports SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, __u16);
-	__type(value, __u16);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u16);
+    __type(value, __u16);
 } dports SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, struct sock *);
-	__type(value, __u64);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, struct sock *);
+    __type(value, __u64);
 } timestamps SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(__u32));
-	__uint(value_size, sizeof(__u32));
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(__u32));
 } events SEC(&quot;.maps&quot;);
 
 SEC(&quot;tracepoint/sock/inet_sock_set_state&quot;)
 int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
 {
-	struct sock *sk = (struct sock *)ctx-&gt;skaddr;
-	__u16 family = ctx-&gt;family;
-	__u16 sport = ctx-&gt;sport;
-	__u16 dport = ctx-&gt;dport;
-	__u64 *tsp, delta_us, ts;
-	struct event event = {};
+    struct sock *sk = (struct sock *)ctx-&gt;skaddr;
+    __u16 family = ctx-&gt;family;
+    __u16 sport = ctx-&gt;sport;
+    __u16 dport = ctx-&gt;dport;
+    __u64 *tsp, delta_us, ts;
+    struct event event = {};
 
-	if (ctx-&gt;protocol != IPPROTO_TCP)
-		return 0;
+    if (ctx-&gt;protocol != IPPROTO_TCP)
+        return 0;
 
-	if (target_family &amp;&amp; target_family != family)
-		return 0;
+    if (target_family &amp;&amp; target_family != family)
+        return 0;
 
-	if (filter_by_sport &amp;&amp; !bpf_map_lookup_elem(&amp;sports, &amp;sport))
-		return 0;
+    if (filter_by_sport &amp;&amp; !bpf_map_lookup_elem(&amp;sports, &amp;sport))
+        return 0;
 
-	if (filter_by_dport &amp;&amp; !bpf_map_lookup_elem(&amp;dports, &amp;dport))
-		return 0;
+    if (filter_by_dport &amp;&amp; !bpf_map_lookup_elem(&amp;dports, &amp;dport))
+        return 0;
 
-	tsp = bpf_map_lookup_elem(&amp;timestamps, &amp;sk);
-	ts = bpf_ktime_get_ns();
-	if (!tsp)
-		delta_us = 0;
-	else
-		delta_us = (ts - *tsp) / 1000;
+    tsp = bpf_map_lookup_elem(&amp;timestamps, &amp;sk);
+    ts = bpf_ktime_get_ns();
+    if (!tsp)
+        delta_us = 0;
+    else
+        delta_us = (ts - *tsp) / 1000;
 
-	event.skaddr = (__u64)sk;
-	event.ts_us = ts / 1000;
-	event.delta_us = delta_us;
-	event.pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-	event.oldstate = ctx-&gt;oldstate;
-	event.newstate = ctx-&gt;newstate;
-	event.family = family;
-	event.sport = sport;
-	event.dport = dport;
-	bpf_get_current_comm(&amp;event.task, sizeof(event.task));
+    event.skaddr = (__u64)sk;
+    event.ts_us = ts / 1000;
+    event.delta_us = delta_us;
+    event.pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+    event.oldstate = ctx-&gt;oldstate;
+    event.newstate = ctx-&gt;newstate;
+    event.family = family;
+    event.sport = sport;
+    event.dport = dport;
+    bpf_get_current_comm(&amp;event.task, sizeof(event.task));
 
-	if (family == AF_INET) {
-		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_rcv_saddr);
-		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_daddr);
-	} else { /* family == AF_INET6 */
-		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-	}
+    if (family == AF_INET) {
+        bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_rcv_saddr);
+        bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_daddr);
+    } else { /* family == AF_INET6 */
+        bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+        bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+    }
 
-	bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
+    bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
 
-	if (ctx-&gt;newstate == TCP_CLOSE)
-		bpf_map_delete_elem(&amp;timestamps, &amp;sk);
-	else
-		bpf_map_update_elem(&amp;timestamps, &amp;sk, &amp;ts, BPF_ANY);
+    if (ctx-&gt;newstate == TCP_CLOSE)
+        bpf_map_delete_elem(&amp;timestamps, &amp;sk);
+    else
+        bpf_map_update_elem(&amp;timestamps, &amp;sk, &amp;ts, BPF_ANY);
 
-	return 0;
+    return 0;
 }
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;

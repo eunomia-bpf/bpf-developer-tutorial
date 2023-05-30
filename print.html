@@ -274,7 +274,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 <li>BPF Compiler Collection (BCC)：<a href="https://github.com/iovisor/bcc">https://github.com/iovisor/bcc</a></li>
 <li>eunomia-bpf：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></li>
 </ul>
-<p>您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
+<p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二hello-world基本框架和开发流程"><a class="header" href="#ebpf-入门开发实践教程二hello-world基本框架和开发流程">eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></h1>
 <p>在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。</p>
 <p>本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。</p>
@@ -354,8 +354,11 @@ int handle_tp(void *ctx)
 <li><code>void *ctx</code>：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。</li>
 <li><code>return 0</code>;：必须这样，返回0 (如果要知道why, 参考 #139  <a href="https://github.com/iovisor/bcc/issues/139">https://github.com/iovisor/bcc/issues/139</a>)。</li>
 </ul>
-<p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：</p>
-<pre><code class="language-console">$ ecc minimal.bpf.c
+<p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：</p>
+<pre><code class="language-shell">sudo apt install libclang-14-dev
+</code></pre>
+<p>使用 ecc 编译程序：</p>
+<pre><code class="language-console">$ ./ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
@@ -363,14 +366,15 @@ Packing ebpf object and config into package.json...
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
 <p>然后使用 ecli 运行编译后的程序：</p>
-<pre><code class="language-console">$ sudo ecli run ./package.json
+<pre><code class="language-console">$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
-<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep &quot;BPF triggered sys_enter_write&quot;
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 </code></pre>
+<p>按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。</p>
 <h2 id="ebpf-程序的基本框架"><a class="header" href="#ebpf-程序的基本框架">eBPF 程序的基本框架</a></h2>
 <p>如上所述， eBPF 程序的基本框架包括：</p>
 <ul>
@@ -398,7 +402,7 @@ Runing eBPF program...
 <li>eBPF 开发所需的所有依赖项</li>
 </ul>
 <blockquote>
-<p>通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository</p>
+<p>通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：<a href="https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository">https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository</a></p>
 </blockquote>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
 <p>eBPF 程序的开发和使用流程可以概括为如下几个步骤：</p>
@@ -411,7 +415,7 @@ Runing eBPF program...
 <li>在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。</li>
 </ul>
 <p>需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。</p>
-<p>您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
+<p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。本文会先讲解关于 kprobes 的基本概念和技术背景，然后介绍如何在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
@@ -2377,97 +2381,97 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &quot;tcpstates.h&quot;
 
-#define MAX_ENTRIES	10240
-#define AF_INET		2
-#define AF_INET6	10
+#define MAX_ENTRIES 10240
+#define AF_INET     2
+#define AF_INET6    10
 
 const volatile bool filter_by_sport = false;
 const volatile bool filter_by_dport = false;
 const volatile short target_family = 0;
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, __u16);
-	__type(value, __u16);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u16);
+    __type(value, __u16);
 } sports SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, __u16);
-	__type(value, __u16);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, __u16);
+    __type(value, __u16);
 } dports SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_ENTRIES);
-	__type(key, struct sock *);
-	__type(value, __u64);
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, MAX_ENTRIES);
+    __type(key, struct sock *);
+    __type(value, __u64);
 } timestamps SEC(&quot;.maps&quot;);
 
 struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(__u32));
-	__uint(value_size, sizeof(__u32));
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(__u32));
 } events SEC(&quot;.maps&quot;);
 
 SEC(&quot;tracepoint/sock/inet_sock_set_state&quot;)
 int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
 {
-	struct sock *sk = (struct sock *)ctx-&gt;skaddr;
-	__u16 family = ctx-&gt;family;
-	__u16 sport = ctx-&gt;sport;
-	__u16 dport = ctx-&gt;dport;
-	__u64 *tsp, delta_us, ts;
-	struct event event = {};
+    struct sock *sk = (struct sock *)ctx-&gt;skaddr;
+    __u16 family = ctx-&gt;family;
+    __u16 sport = ctx-&gt;sport;
+    __u16 dport = ctx-&gt;dport;
+    __u64 *tsp, delta_us, ts;
+    struct event event = {};
 
-	if (ctx-&gt;protocol != IPPROTO_TCP)
-		return 0;
+    if (ctx-&gt;protocol != IPPROTO_TCP)
+        return 0;
 
-	if (target_family &amp;&amp; target_family != family)
-		return 0;
+    if (target_family &amp;&amp; target_family != family)
+        return 0;
 
-	if (filter_by_sport &amp;&amp; !bpf_map_lookup_elem(&amp;sports, &amp;sport))
-		return 0;
+    if (filter_by_sport &amp;&amp; !bpf_map_lookup_elem(&amp;sports, &amp;sport))
+        return 0;
 
-	if (filter_by_dport &amp;&amp; !bpf_map_lookup_elem(&amp;dports, &amp;dport))
-		return 0;
+    if (filter_by_dport &amp;&amp; !bpf_map_lookup_elem(&amp;dports, &amp;dport))
+        return 0;
 
-	tsp = bpf_map_lookup_elem(&amp;timestamps, &amp;sk);
-	ts = bpf_ktime_get_ns();
-	if (!tsp)
-		delta_us = 0;
-	else
-		delta_us = (ts - *tsp) / 1000;
+    tsp = bpf_map_lookup_elem(&amp;timestamps, &amp;sk);
+    ts = bpf_ktime_get_ns();
+    if (!tsp)
+        delta_us = 0;
+    else
+        delta_us = (ts - *tsp) / 1000;
 
-	event.skaddr = (__u64)sk;
-	event.ts_us = ts / 1000;
-	event.delta_us = delta_us;
-	event.pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-	event.oldstate = ctx-&gt;oldstate;
-	event.newstate = ctx-&gt;newstate;
-	event.family = family;
-	event.sport = sport;
-	event.dport = dport;
-	bpf_get_current_comm(&amp;event.task, sizeof(event.task));
+    event.skaddr = (__u64)sk;
+    event.ts_us = ts / 1000;
+    event.delta_us = delta_us;
+    event.pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+    event.oldstate = ctx-&gt;oldstate;
+    event.newstate = ctx-&gt;newstate;
+    event.family = family;
+    event.sport = sport;
+    event.dport = dport;
+    bpf_get_current_comm(&amp;event.task, sizeof(event.task));
 
-	if (family == AF_INET) {
-		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_rcv_saddr);
-		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_daddr);
-	} else { /* family == AF_INET6 */
-		bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-		bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-	}
+    if (family == AF_INET) {
+        bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_rcv_saddr);
+        bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_daddr);
+    } else { /* family == AF_INET6 */
+        bpf_probe_read_kernel(&amp;event.saddr, sizeof(event.saddr), &amp;sk-&gt;__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+        bpf_probe_read_kernel(&amp;event.daddr, sizeof(event.daddr), &amp;sk-&gt;__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+    }
 
-	bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
+    bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
 
-	if (ctx-&gt;newstate == TCP_CLOSE)
-		bpf_map_delete_elem(&amp;timestamps, &amp;sk);
-	else
-		bpf_map_update_elem(&amp;timestamps, &amp;sk, &amp;ts, BPF_ANY);
+    if (ctx-&gt;newstate == TCP_CLOSE)
+        bpf_map_delete_elem(&amp;timestamps, &amp;sk);
+    else
+        bpf_map_update_elem(&amp;timestamps, &amp;sk, &amp;ts, BPF_ANY);
 
-	return 0;
+    return 0;
 }
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
@@ -2601,181 +2605,8 @@ ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 
 <h2 id="总结-12"><a class="header" href="#总结-12">总结</a></h2>
 <p>这里的代码修改自 <a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c</a></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-tcprtt-测量-tcp-连接的往返时间"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-tcprtt-测量-tcp-连接的往返时间">eBPF 入门实践教程：编写 eBPF 程序 Tcprtt 测量 TCP 连接的往返时间</a></h1>
-<h2 id="背景-1"><a class="header" href="#背景-1">背景</a></h2>
-<p>网络质量在互联网社会中是一个很重要的因素。导致网络质量差的因素有很多，可能是硬件因素导致，也可能是程序
-写的不好导致。为了能更好地定位网络问题，<code>tcprtt</code> 工具被提出。它可以监测TCP链接的往返时间，从而分析
-网络质量，帮助用户定位问题来源。</p>
-<p>当有tcp链接建立时，该工具会自动根据当前系统的支持情况，选择合适的执行函数。
-在执行函数中，<code>tcprtt</code>会收集tcp链接的各项基本信息，包括地址，源端口，目标端口，耗时
-等等，并将其更新到直方图的map中。运行结束后通过用户态代码，展现给用户。</p>
-<h2 id="编写-ebpf-程序-1"><a class="header" href="#编写-ebpf-程序-1">编写 eBPF 程序</a></h2>
-<pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0
-// Copyright (c) 2021 Wenbo Zhang
-#include &lt;vmlinux.h&gt;
-#include &lt;bpf/bpf_helpers.h&gt;
-#include &lt;bpf/bpf_core_read.h&gt;
-#include &lt;bpf/bpf_tracing.h&gt;
-#include &lt;bpf/bpf_endian.h&gt;
-#include &quot;tcprtt.h&quot;
-#include &quot;bits.bpf.h&quot;
-#include &quot;maps.bpf.h&quot;
-
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
-
-const volatile bool targ_laddr_hist = false;
-const volatile bool targ_raddr_hist = false;
-const volatile bool targ_show_ext = false;
-const volatile __u16 targ_sport = 0;
-const volatile __u16 targ_dport = 0;
-const volatile __u32 targ_saddr = 0;
-const volatile __u32 targ_daddr = 0;
-const volatile bool targ_ms = false;
-
-#define MAX_ENTRIES	10240
-
-/// @sample {&quot;interval&quot;: 1000, &quot;type&quot; : &quot;log2_hist&quot;}
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAX_ENTRIES);
-    __type(key, u64);
-    __type(value, struct hist);
-} hists SEC(&quot;.maps&quot;);
-
-static struct hist zero;
-
-SEC(&quot;fentry/tcp_rcv_established&quot;)
-int BPF_PROG(tcp_rcv, struct sock *sk)
-{
-    const struct inet_sock *inet = (struct inet_sock *)(sk);
-    struct tcp_sock *ts;
-    struct hist *histp;
-    u64 key, slot;
-    u32 srtt;
-
-    if (targ_sport &amp;&amp; targ_sport != inet-&gt;inet_sport)
-        return 0;
-    if (targ_dport &amp;&amp; targ_dport != sk-&gt;__sk_common.skc_dport)
-        return 0;
-    if (targ_saddr &amp;&amp; targ_saddr != inet-&gt;inet_saddr)
-        return 0;
-    if (targ_daddr &amp;&amp; targ_daddr != sk-&gt;__sk_common.skc_daddr)
-        return 0;
-
-    if (targ_laddr_hist)
-        key = inet-&gt;inet_saddr;
-    else if (targ_raddr_hist)
-        key = inet-&gt;sk.__sk_common.skc_daddr;
-    else
-        key = 0;
-    histp = bpf_map_lookup_or_try_init(&amp;hists, &amp;key, &amp;zero);
-    if (!histp)
-        return 0;
-    ts = (struct tcp_sock *)(sk);
-    srtt = BPF_CORE_READ(ts, srtt_us) &gt;&gt; 3;
-    if (targ_ms)
-        srtt /= 1000U;
-    slot = log2l(srtt);
-    if (slot &gt;= MAX_SLOTS)
-        slot = MAX_SLOTS - 1;
-    __sync_fetch_and_add(&amp;histp-&gt;slots[slot], 1);
-    if (targ_show_ext) {
-        __sync_fetch_and_add(&amp;histp-&gt;latency, srtt);
-        __sync_fetch_and_add(&amp;histp-&gt;cnt, 1);
-    }
-    return 0;
-}
-
-</code></pre>
-<p>这段代码是基于eBPF的网络延迟分析工具，它通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布。下面是这段代码的主要工作原理：</p>
-<ol>
-<li>首先定义了一个名为&quot;hists&quot;的eBPF哈希表，用于保存RTT直方图数据。</li>
-<li>当tcp_rcv_established函数被调用时，它首先从传入的socket结构体中获取TCP相关信息，包括本地/远程IP地址、本地/远程端口号以及TCP状态信息等。</li>
-<li>接下来，代码会检查用户指定的条件是否匹配当前TCP连接。如果匹配失败，则直接返回。</li>
-<li>如果匹配成功，则从&quot;hists&quot;哈希表中查找与本地/远程IP地址匹配的直方图数据。如果该IP地址的直方图不存在，则创建一个新的直方图并插入哈希表中。</li>
-<li>接下来，代码会从socket结构体中获取当前TCP连接的RTT(srtt)，并根据用户设置的选项来将srtt值进行处理。如果用户设置了&quot;-ms&quot;选项，则将srtt值除以1000。</li>
-<li>接着，代码会将srtt值转换为直方图的槽位(slot)，并将该槽位的计数器+1。</li>
-<li>如果用户设置了&quot;-show-ext&quot;选项，则还会累加直方图的总延迟(latency)和计数(cnt)。</li>
-</ol>
-<h2 id="编译运行-4"><a class="header" href="#编译运行-4">编译运行</a></h2>
-<p>eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。</p>
-<p>Compile:</p>
-<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
-</code></pre>
-<p>或者</p>
-<pre><code class="language-console">$ ecc runqlat.bpf.c runqlat.h
-Compiling bpf object...
-Generating export types...
-Packing ebpf object and config into package.json...
-</code></pre>
-<p>Run:</p>
-<pre><code class="language-console">$ sudo ecli run package.json -h
-A simple eBPF program
-
-
-Usage: package.json [OPTIONS]
-
-Options:
-      --verbose                  Whether to show libbpf debug information
-      --targ_laddr_hist          Set value of `bool` variable targ_laddr_hist
-      --targ_raddr_hist          Set value of `bool` variable targ_raddr_hist
-      --targ_show_ext            Set value of `bool` variable targ_show_ext
-      --targ_sport &lt;targ_sport&gt;  Set value of `__u16` variable targ_sport
-      --targ_dport &lt;targ_dport&gt;  Set value of `__u16` variable targ_dport
-      --targ_saddr &lt;targ_saddr&gt;  Set value of `__u32` variable targ_saddr
-      --targ_daddr &lt;targ_daddr&gt;  Set value of `__u32` variable targ_daddr
-      --targ_ms                  Set value of `bool` variable targ_ms
-  -h, --help                     Print help
-  -V, --version                  Print version
-
-Built with eunomia-bpf framework.
-See https://github.com/eunomia-bpf/eunomia-bpf for more information.
-
-$ sudo ecli run package.json
-key =  0
-latency = 0
-cnt = 0
-
-     (unit)              : count    distribution
-         0 -&gt; 1          : 0        |                                        |
-         2 -&gt; 3          : 0        |                                        |
-         4 -&gt; 7          : 0        |                                        |
-         8 -&gt; 15         : 0        |                                        |
-        16 -&gt; 31         : 0        |                                        |
-        32 -&gt; 63         : 0        |                                        |
-        64 -&gt; 127        : 0        |                                        |
-       128 -&gt; 255        : 0        |                                        |
-       256 -&gt; 511        : 0        |                                        |
-       512 -&gt; 1023       : 4        |********************                    |
-      1024 -&gt; 2047       : 1        |*****                                   |
-      2048 -&gt; 4095       : 0        |                                        |
-      4096 -&gt; 8191       : 8        |****************************************|
-
-key =  0
-latency = 0
-cnt = 0
-
-     (unit)              : count    distribution
-         0 -&gt; 1          : 0        |                                        |
-         2 -&gt; 3          : 0        |                                        |
-         4 -&gt; 7          : 0        |                                        |
-         8 -&gt; 15         : 0        |                                        |
-        16 -&gt; 31         : 0        |                                        |
-        32 -&gt; 63         : 0        |                                        |
-        64 -&gt; 127        : 0        |                                        |
-       128 -&gt; 255        : 0        |                                        |
-       256 -&gt; 511        : 0        |                                        |
-       512 -&gt; 1023       : 11       |***************************             |
-      1024 -&gt; 2047       : 1        |**                                      |
-      2048 -&gt; 4095       : 0        |                                        |
-      4096 -&gt; 8191       : 16       |****************************************|
-      8192 -&gt; 16383      : 4        |**********                              |
-</code></pre>
-<h2 id="总结-13"><a class="header" href="#总结-13">总结</a></h2>
-<p>tcprtt是一个基于eBPF的TCP延迟分析工具。通过hooking TCP协议栈中的tcp_rcv_established函数来统计TCP连接的RTT分布，可以对指定的TCP连接进行RTT分布统计，并将结果保存到eBPF哈希表中。同时，这个工具支持多种条件过滤和RTT分布数据扩展功能，以便用户可以更好地进行网络性能分析和调优。</p>
-<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
-<p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-memleak-监控内存泄漏"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-memleak-监控内存泄漏">eBPF 入门实践教程：编写 eBPF 程序 Memleak 监控内存泄漏</a></h1>
-<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
+<h2 id="背景-1"><a class="header" href="#背景-1">背景</a></h2>
 <p>内存泄漏对于一个程序而言是一个很严重的问题。倘若放任一个存在内存泄漏的程序运行，久而久之
 系统的内存会慢慢被耗尽，导致程序运行速度显著下降。为了避免这一情况，<code>memleak</code>工具被提出。
 它可以跟踪并匹配内存分配和释放的请求，并且打印出已经被分配资源而又尚未释放的堆栈信息。</p>
@@ -2785,7 +2616,7 @@ cnt = 0
 内存的地址，分配得到的内存大小等基本数据。在free之后，<code>memeleak</code>则会去map中删除记录的对应的分配
 信息。对于用户态常用的分配函数 <code>malloc</code>, <code>calloc</code> 等，<code>memleak</code>使用了 uporbe 技术实现挂载，对于
 内核态的函数，比如 <code>kmalloc</code> 等，<code>memleak</code> 则使用了现有的 tracepoint 来实现。</p>
-<h2 id="编写-ebpf-程序-2"><a class="header" href="#编写-ebpf-程序-2">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-1"><a class="header" href="#编写-ebpf-程序-1">编写 eBPF 程序</a></h2>
 <pre><code class="language-c">struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, pid_t);
@@ -2980,7 +2811,7 @@ int BPF_KPROBE(free_enter, void *address)
 <p>gen_free_enter函数接收一个地址参数，该函数首先使用allocs map查找该地址对应的内存分配信息。如果未找到，则表示该地址没有被分配，该函数返回0。如果找到了对应的内存分配信息，则使用bpf_map_delete_elem从allocs map中删除该信息。</p>
 <p>接下来，调用update_statistics_del函数用于更新内存分配的统计信息，它接收堆栈ID和内存块大小作为参数。首先在combined_allocs map中查找堆栈ID对应的内存分配统计信息。如果没有找到，则输出一条日志，表示查找失败，并且函数直接返回。如果找到了对应的内存分配统计信息，则使用原子操作从内存分配统计信息中减去该内存块大小和1（表示减少了1个内存块）。这是因为堆栈ID对应的内存块数量减少了1，而堆栈ID对应的内存块总大小也减少了该内存块的大小。</p>
 <p>最后定义了一个bpf程序BPF_KPROBE(free_enter, void *address)会在进程调用free函数时执行。它会接收参数address，表示正在释放的内存块的地址，并调用gen_free_enter函数来处理该内存块的释放。</p>
-<h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
+<h2 id="编译运行-4"><a class="header" href="#编译运行-4">编译运行</a></h2>
 <pre><code class="language-console">$ git clone https://github.com/iovisor/bcc.git --recurse-submodules 
 $ cd libbpf-tools/
 $ make memleak
@@ -3000,26 +2831,26 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
         6 [&lt;ffffffff82000b62&gt;] &lt;null sym&gt;
 ...
 </code></pre>
-<h2 id="总结-14"><a class="header" href="#总结-14">总结</a></h2>
+<h2 id="总结-13"><a class="header" href="#总结-13">总结</a></h2>
 <p>memleak是一个内存泄漏监控工具，可以用来跟踪内存分配和释放时间对应的调用栈信息。随着时间的推移，这个工具可以显示长期不被释放的内存。</p>
 <p>这份代码来自于https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.bpf.c</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io">eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></h1>
-<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
+<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
 <p>Biopattern 可以统计随机/顺序磁盘I/O次数的比例。</p>
 <p>TODO</p>
 <h2 id="实现原理-2"><a class="header" href="#实现原理-2">实现原理</a></h2>
 <p>Biopattern 的ebpf代码在 tracepoint/block/block_rq_complete 挂载点下实现。在磁盘完成IO请求
 后，程序会经过此挂载点。Biopattern 内部存有一张以设备号为主键的哈希表，当程序经过挂载点时, Biopattern
 会获得操作信息，根据哈希表中该设备的上一次操作记录来判断本次操作是随机IO还是顺序IO，并更新操作计数。</p>
-<h2 id="编写-ebpf-程序-3"><a class="header" href="#编写-ebpf-程序-3">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-2"><a class="header" href="#编写-ebpf-程序-2">编写 eBPF 程序</a></h2>
 <p>TODO</p>
-<h3 id="总结-15"><a class="header" href="#总结-15">总结</a></h3>
+<h3 id="总结-14"><a class="header" href="#总结-14">总结</a></h3>
 <p>Biopattern 可以展现随机/顺序磁盘I/O次数的比例，对于开发者把握整体I/O情况有较大帮助。</p>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="更多的参考资料"><a class="header" href="#更多的参考资料">更多的参考资料</a></h1>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-lsm-进行安全检测防御"><a class="header" href="#ebpf-入门实践教程使用-lsm-进行安全检测防御">eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></h1>
-<h2 id="背景-4"><a class="header" href="#背景-4">背景</a></h2>
+<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
 <p>LSM 从 Linux 2.6 开始成为官方内核的一个安全框架，基于此的安全实现包括 SELinux 和 AppArmor 等。在 Linux 5.7 引入 BPF LSM 后，系统开发人员已经能够自由地实现函数粒度的安全检查能力，本文就提供了这样一个案例：限制通过 socket connect 函数对特定 IPv4 地址进行访问的 BPF LSM 程序。（可见其控制精度是很高的）</p>
 <h2 id="lsm-概述"><a class="header" href="#lsm-概述">LSM 概述</a></h2>
 <p>LSM（Linux Security Modules）是 Linux 内核中用于支持各种计算机安全模型的框架。LSM 在 Linux 内核安全相关的关键路径上预置了一批 hook 点，从而实现了内核和安全模块的解耦，使不同的安全模块可以自由地在内核中加载/卸载，无需修改原有的内核代码就可以加入安全检查功能。</p>
@@ -3045,7 +2876,7 @@ ndlock,lockdown,yama,integrity,apparmor
 <pre><code class="language-conf">GRUB_CMDLINE_LINUX=&quot;lsm=ndlock,lockdown,yama,integrity,apparmor,bpf&quot;
 </code></pre>
 <p>并通过 <code>update-grub2</code> 命令更新 grub 配置（不同系统的对应命令可能不同），然后重启系统。</p>
-<h2 id="编写-ebpf-程序-4"><a class="header" href="#编写-ebpf-程序-4">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-3"><a class="header" href="#编写-ebpf-程序-3">编写 eBPF 程序</a></h2>
 <pre><code class="language-C">// lsm-connect.bpf.c
 #include &quot;vmlinux.h&quot;
 #include &lt;bpf/bpf_core_read.h&gt;
@@ -3104,7 +2935,7 @@ int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, in
 <li>若请求地址为 1.1.1.1 则拒绝连接，否则允许连接；</li>
 </ul>
 <p>在程序运行期间，所有通过 socket 的连接操作都会被输出到 <code>/sys/kernel/debug/tracing/trace_pipe</code>。</p>
-<h2 id="编译运行-6"><a class="header" href="#编译运行-6">编译运行</a></h2>
+<h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
 <p>通过容器编译：</p>
 <pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
@@ -3114,7 +2945,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>并通过 <code>ecli</code> 运行：</p>
-<pre><code class="language-console">$ sudo ecli run package.json
+<pre><code class="language-shell">sudo ecli run package.json
 </code></pre>
 <p>接下来，可以打开另一个 terminal，并尝试访问 1.1.1.1：</p>
 <pre><code class="language-console">$ ping 1.1.1.1
@@ -3135,21 +2966,23 @@ Retrying.
             wget-7061    [000] d...1  6318.800698: bpf_trace_printk: lsm: found connect to 16843009
             wget-7061    [000] d...1  6318.800700: bpf_trace_printk: lsm: blocking 16843009
 </code></pre>
-<h2 id="总结-16"><a class="header" href="#总结-16">总结</a></h2>
+<h2 id="总结-15"><a class="header" href="#总结-15">总结</a></h2>
 <p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 &quot;cannot override a denial&quot; 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <h2 id="参考"><a class="header" href="#参考">参考</a></h2>
-<p><a href="https://github.com/leodido/demo-cloud-native-ebpf-day">https://github.com/leodido/demo-cloud-native-ebpf-day</a></p>
-<p><a href="https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program">https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program</a></p>
+<ul>
+<li><a href="https://github.com/leodido/demo-cloud-native-ebpf-day">https://github.com/leodido/demo-cloud-native-ebpf-day</a></li>
+<li><a href="https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program">https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program</a></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-ebpf-进行-tc-流量控制"><a class="header" href="#ebpf-入门实践教程使用-ebpf-进行-tc-流量控制">eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制</a></h1>
-<h2 id="背景-5"><a class="header" href="#背景-5">背景</a></h2>
+<h2 id="背景-4"><a class="header" href="#背景-4">背景</a></h2>
 <p>Linux 的流量控制子系统（Traffic Control, tc）在内核中存在了多年，类似于 iptables 和 netfilter 的关系，tc 也包括一个用户态的 tc 程序和内核态的 trafiic control 框架，主要用于从速率、顺序等方面控制数据包的发送和接收。从 Linux 4.1 开始，tc 增加了一些新的挂载点，并支持将 eBPF 程序作为 filter 加载到这些挂载点上。</p>
 <h2 id="tc-概述"><a class="header" href="#tc-概述">tc 概述</a></h2>
 <p>从协议栈上看，tc 位于链路层，其所在位置已经完成了 sk_buff 的分配，要晚于 xdp。为了实现对数据包发送和接收的控制，tc 使用队列结构来临时保存并组织数据包，在 tc 子系统中对应的数据结构和算法控制机制被抽象为 qdisc（Queueing discipline），其对外暴露数据包入队和出队的两个回调接口，并在内部隐藏排队算法实现。在 qdisc 中我们可以基于 filter 和 class 实现复杂的树形结构，其中 filter 被挂载到 qdisc 或 class 上用于实现具体的过滤逻辑，返回值决定了该数据包是否属于特定 class。</p>
 <p>当数据包到达顶层 qdisc 时，其入队接口被调用，其上挂载的 filter 被依次执行直到一个 filter 匹配成功；此后数据包被送入该 filter 指向的 class，进入该 class 配置的 qdisc 处理流程中。tc 框架提供了所谓 classifier-action 机制，即在数据包匹配到特定 filter 时执行该 filter 所挂载的 action 对数据包进行处理，实现了完整的数据包分类和处理机制。</p>
 <p>现有的 tc 为 eBPF 提供了 direct-action 模式，它使得一个作为 filter 加载的 eBPF 程序可以返回像 <code>TC_ACT_OK</code> 等 tc action 的返回值，而不是像传统的 filter 那样仅仅返回一个 classid 并把对数据包的处理交给 action 模块。现在，eBPF 程序可以被挂载到特定的 qdisc 上，并完成对数据包的分类和处理动作。</p>
-<h2 id="编写-ebpf-程序-5"><a class="header" href="#编写-ebpf-程序-5">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-4"><a class="header" href="#编写-ebpf-程序-4">编写 eBPF 程序</a></h2>
 <pre><code class="language-c">#include &lt;vmlinux.h&gt;
 #include &lt;bpf/bpf_endian.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
@@ -3192,7 +3025,7 @@ char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 </code></pre>
 <p>这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。关于 libbpf 中 tc 相关的 API 可以参考 <a href="https://patchwork.kernel.org/project/netdevbpf/patch/20210512103451.989420-3-memxor@gmail.com/">patchwork</a> 中的介绍。</p>
 <p>总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。</p>
-<h2 id="编译运行-7"><a class="header" href="#编译运行-7">编译运行</a></h2>
+<h2 id="编译运行-6"><a class="header" href="#编译运行-6">编译运行</a></h2>
 <p>通过容器编译：</p>
 <pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
@@ -3202,7 +3035,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>并通过 <code>ecli</code> 运行：</p>
-<pre><code class="language-shell">$ sudo ecli run ./package.json
+<pre><code class="language-shell">sudo ecli run ./package.json
 </code></pre>
 <p>可以通过如下方式查看程序的输出：</p>
 <pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
@@ -3211,13 +3044,15 @@ Packing ebpf object and config into package.json...
             sshd-1254728 [006] ..s1 8737831.674349: 0: Got IP packet: tot_len: 72, ttl: 64
             node-1254811 [007] ..s1 8737831.674550: 0: Got IP packet: tot_len: 71, ttl: 64
 </code></pre>
-<h2 id="总结-17"><a class="header" href="#总结-17">总结</a></h2>
+<h2 id="总结-16"><a class="header" href="#总结-16">总结</a></h2>
 <p>本文介绍了如何向 TC 流量控制子系统挂载 eBPF 类型的 filter 来实现对链路层数据包的排队处理。基于 eunomia-bpf 提供的通过注释向 libbpf 传递参数的方案，我们可以将自己编写的 tc BPF 程序以指定选项挂载到目标网络设备，并借助内核的 sk_buff 结构对数据包进行过滤处理。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>完整的教程和源代码已经全部开源，可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 中查看。</p>
 <h2 id="参考-1"><a class="header" href="#参考-1">参考</a></h2>
-<p><a href="http://just4coding.com/2022/08/05/tc/">http://just4coding.com/2022/08/05/tc/</a></p>
-<p><a href="https://arthurchiao.art/blog/understanding-tc-da-mode-zh/">https://arthurchiao.art/blog/understanding-tc-da-mode-zh/</a></p>
+<ul>
+<li><a href="http://just4coding.com/2022/08/05/tc/">http://just4coding.com/2022/08/05/tc/</a></li>
+<li><a href="https://arthurchiao.art/blog/understanding-tc-da-mode-zh/">https://arthurchiao.art/blog/understanding-tc-da-mode-zh/</a></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="bpf-features-by-linux-kernel-version"><a class="header" href="#bpf-features-by-linux-kernel-version">BPF Features by Linux Kernel Version</a></h1>
 <h2 id="ebpf-support"><a class="header" href="#ebpf-support">eBPF support</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Kernel version</th><th>Commit</th></tr></thead><tbody>

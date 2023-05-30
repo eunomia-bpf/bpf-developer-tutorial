@@ -223,8 +223,11 @@ int handle_tp(void *ctx)
 <li><code>void *ctx</code>：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。</li>
 <li><code>return 0</code>;：必须这样，返回0 (如果要知道why, 参考 #139  <a href="https://github.com/iovisor/bcc/issues/139">https://github.com/iovisor/bcc/issues/139</a>)。</li>
 </ul>
-<p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先使用 ecc 编译程序：</p>
-<pre><code class="language-console">$ ecc minimal.bpf.c
+<p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：</p>
+<pre><code class="language-shell">sudo apt install libclang-14-dev
+</code></pre>
+<p>使用 ecc 编译程序：</p>
+<pre><code class="language-console">$ ./ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
@@ -232,14 +235,15 @@ Packing ebpf object and config into package.json...
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
 </code></pre>
 <p>然后使用 ecli 运行编译后的程序：</p>
-<pre><code class="language-console">$ sudo ecli run ./package.json
+<pre><code class="language-console">$ sudo ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
-<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep &quot;BPF triggered sys_enter_write&quot;
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 </code></pre>
+<p>按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。</p>
 <h2 id="ebpf-程序的基本框架"><a class="header" href="#ebpf-程序的基本框架">eBPF 程序的基本框架</a></h2>
 <p>如上所述， eBPF 程序的基本框架包括：</p>
 <ul>
@@ -267,7 +271,7 @@ Runing eBPF program...
 <li>eBPF 开发所需的所有依赖项</li>
 </ul>
 <blockquote>
-<p>通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository</p>
+<p>通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：<a href="https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository">https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository</a></p>
 </blockquote>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
 <p>eBPF 程序的开发和使用流程可以概括为如下几个步骤：</p>
@@ -280,7 +284,7 @@ Runing eBPF program...
 <li>在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。</li>
 </ul>
 <p>需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。</p>
-<p>您还可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
+<p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 
                     </main>
 
