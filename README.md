@@ -44,8 +44,17 @@
 
 这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。将 eBPF 用户态与内核态的部分结合起来，可能能带来巨大的威力（同时也是安全隐患）。
 
+Android:
+
 - [在 Android 上使用 eBPF 程序](src/22-android/README.md)
-- [使用 eBPF 追踪 HTTP 请求或其他用户态协议](src/23-http/README.md)
+
+网络和追踪：
+
+- [使用 eBPF 追踪 HTTP 请求或其他七层协议](src/23-http/README.md)
+- [使用 sockops 加速网络请求转发](src/29-sockops/README.md)
+
+安全：
+
 - [使用 eBPF 隐藏进程或文件信息](src/24-hide/README.md)
 - [使用 bpf_send_signal 发送信号终止进程](src/25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](src/26-sudo/README.md)
