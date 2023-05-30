@@ -201,8 +201,8 @@ int BPF_PROG(find_possible_addrs, struct pt_regs *regs, long ret)
     long int read_size = buff_size;
 
     bpf_printk("[TEXT_REPLACE] PID %d | read_size %lu | buff_addr 0x%lx\n", pid, read_size, buff_addr);
-    const unsigned int local_buff_size = 64;
-    const unsigned int loop_size = 64;
+    const unsigned int local_buff_size = 32;
+    const unsigned int loop_size = 32;
     char local_buff[local_buff_size] = { 0x00 };
 
     if (read_size > (local_buff_size+1)) {
@@ -295,6 +295,8 @@ int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
                 break;
             }
         }
+        // for newer kernels, maybe use bpf_strncmp
+        // if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, name) == 0) {
         if (j >= name_len) {
             // ***********
             // We've found out text!
