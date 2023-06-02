@@ -578,6 +578,12 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222774 ssh          4  192.168.88.15    1.15.149.151     22    25.31
 ```
 
+源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat>
+
+参考资料：
+
+- [tcpconnlat](https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.c)
+
 ## 总结
 
 通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 来跟踪和统计 TCP 连接建立的延时。我们首先深入探讨了 eBPF 程序如何在内核态监听特定的内核函数，然后通过捕获这些函数的调用，从而得到连接建立的起始时间和结束时间，计算出延时。
