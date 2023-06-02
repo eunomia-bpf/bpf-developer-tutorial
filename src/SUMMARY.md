@@ -24,6 +24,17 @@
 - [eBPF 入门实践教程：使用 LSM 进行安全检测防御](19-lsm-connect/README.md)
 - [eBPF 入门实践教程：使用 eBPF 进行 tc 流量控制](20-tc/README.md)
 
+# eBPF 高级特性与进阶主题
+
+- [在 Android 上使用 eBPF 程序](22-android/README.md)
+- [使用 eBPF 追踪 HTTP 请求或其他七层协议](23-http/README.md)
+- [使用 sockops 加速网络请求转发](29-sockops/README.md)
+- [使用 eBPF 隐藏进程或文件信息](24-hide/README.md)
+- [使用 bpf_send_signal 发送信号终止进程](25-signal/README.md)
+- [使用 eBPF 添加 sudo 用户](26-sudo/README.md)
+- [使用 eBPF 替换任意程序读取或写入的文本](27-replace/README.md)
+- [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](28-detach/README.md)
+
 # bcc 开发者教程
 
 - [BPF Features by Linux Kernel Version](bcc-documents/kernel-versions.md)
