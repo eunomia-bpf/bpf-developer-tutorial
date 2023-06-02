@@ -1063,6 +1063,5 @@ int attach_uprobes(struct memleak_bpf *skel)
 	ATTACH_UPROBE(skel, aligned_alloc, aligned_alloc_enter);
 	ATTACH_URETPROBE(skel, aligned_alloc, aligned_alloc_exit);
 
-
 	return 0;
 }
