@@ -6,3 +6,4 @@ package.json
 package.yaml
 ecli
 javagc
+*.class

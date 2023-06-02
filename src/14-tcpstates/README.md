@@ -265,6 +265,24 @@ int BPF_PROG(tcp_rcv, struct sock *sk)
 3. 读取 TCP 连接的`srtt_us`字段，并将其转换为对数形式，存储到 histogram 中。
 4. 如果设置了`show_ext`参数，将 RTT 值和计数器累加到 histogram 的`latency`和`cnt`字段中。
 
+tcprtt 挂载到了内核态的 tcp_rcv_established 函数上：
+
+```c
+void tcp_rcv_established(struct sock *sk, struct sk_buff *skb);
+```
+
+这个函数是在内核中处理TCP接收数据的主要函数，主要在TCP连接处于`ESTABLISHED`状态时被调用。这个函数的处理逻辑包括一个快速路径和一个慢速路径。快速路径在以下几种情况下会被禁用：
+
+- 我们宣布了一个零窗口 - 零窗口探测只能在慢速路径中正确处理。
+- 收到了乱序的数据包。
+- 期待接收紧急数据。
+- 没有剩余的缓冲区空间。
+- 接收到了意外的TCP标志/窗口值/头部长度（通过检查TCP头部与预设标志进行检测）。
+- 数据在两个方向上都在传输。快速路径只支持纯发送者或纯接收者（这意味着序列号或确认值必须保持不变）。
+- 接收到了意外的TCP选项。
+
+当这些条件不满足时，它会进入一个标准的接收处理过程，这个过程遵循RFC793来处理所有情况。前三种情况可以通过正确的预设标志设置来保证，剩下的情况则需要内联检查。当一切都正常时，快速处理过程会在`tcp_data_queue`函数中被开启。
+
 ## 编译运行
 
 对于 tcpstates，可以通过以下命令编译和运行 libbpf 应用：
@@ -372,11 +390,15 @@ cnt = 0
       8192 -> 16383      : 4        |**********                              |
 ```
 
+源代码：
+
+- <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/14-tcpstates>
+
 参考资料：
 
 - [tcpstates](https://github.com/iovisor/bcc/blob/master/tools/tcpstates_example.txt)
 - [tcprtt](https://github.com/iovisor/bcc/blob/master/tools/tcprtt.py)
-- <https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c>
+- [libbpf-tools/tcpstates](<https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpstates.bpf.c>)
 
 ## 总结
 
