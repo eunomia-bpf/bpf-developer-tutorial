@@ -155,19 +155,19 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 > - eunomia-bpf 项目 Github 地址: <https://github.com/eunomia-bpf/eunomia-bpf>
 > - gitee 镜像: <https://gitee.com/anolis/eunomia>
 
-## 让 chatGPT 来帮助我们
+## 让 ChatGPT 来帮助我们
 
-本教程借助 chatGPT 来学习编写 eBPF 程序，同时我们尝试教会 chatGPT 编写 eBPF 程序，大概步骤如下：
+本教程借助 ChatGPT 来学习编写 eBPF 程序，同时我们尝试教会 ChatGPT 编写 eBPF 程序，大概步骤如下：
 
 1. 告诉它基本的 eBPF 编程相关的常识
 2. 告诉它一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序进行追踪，并且让它开始编写教程
 3. 手动调整教程，并纠正代码和文档中的错误
-4. 把修改后的代码再喂给 chatGPT，让它继续学习
-5. 尝试让 chatGPT 自动生成 eBPF 程序和对应的教程文档！例如
+4. 把修改后的代码再喂给 ChatGPT，让它继续学习
+5. 尝试让 ChatGPT 自动生成 eBPF 程序和对应的教程文档！例如
 
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
 
-完整的对话记录可以在这里找到: [chatGPT.md](chatGPT.md)
+完整的对话记录可以在这里找到: [ChatGPT.md](ChatGPT.md)
 
 我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：https://github.com/eunomia-bpf/GPTtrace
 
