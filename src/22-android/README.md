@@ -1,6 +1,6 @@
 # 在 Andorid 上使用 eBPF 程序
 
-> 摘要：本文主要记录了笔者在 Android Studio Emulator 中测试高版本 Android Kernel 对基于 libbpf 的 CO-RE 技术支持程度的探索过程、结果和遇到的问题。
+> 本文主要记录了笔者在 Android Studio Emulator 中测试高版本 Android Kernel 对基于 libbpf 的 CO-RE 技术支持程度的探索过程、结果和遇到的问题。
 > 测试采用的方式是在 Android Shell 环境下构建 Debian 环境，并基于此尝试构建 eunomia-bpf 工具链、运行其测试用例。
 
 ## 背景
@@ -144,6 +144,8 @@ Error: BpfError("load and attach ebpf program failed")
 目前在 Android 系统中使用 eBPF 工具基本上仍然需要构建完整的 Linux 运行环境，但 Android 内核本身对 eBPF 的支持已较为全面，本次测试证明较高版本的 Android 内核支持 BTF 调试信息和依赖 CO-RE 的 eBPF 程序的运行。
 
 Android 系统 eBPF 工具的发展需要官方新特性的加入，目前看来通过 Android APP 直接使用 eBPF 工具需要的工作量较大，同时由于 eBPF 工具需要 root 权限，普通 Android 用户的使用会面临较多困难。
+
+如果希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
 
 ## 参考
 
