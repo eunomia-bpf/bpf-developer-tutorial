@@ -203,7 +203,6 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
         bpf_ringbuf_submit(e, 0);
     }
 
-
     bpf_map_delete_elem(&map_to_patch, &pid_tgid);
     return 0;
 }
