@@ -129,11 +129,8 @@ $(patsubst %,$(OUTPUT)/%.o,$(BZS_APPS)): $(LIBBLAZESYM_HEADER)
 
 $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 
-uprobe_helpers.o: uprobe_helpers.c
-	$(call msg,CC,$@)
-	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
 # Build application binary
-$(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) uprobe_helpers.o | $(OUTPUT)
+$(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ)  | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
