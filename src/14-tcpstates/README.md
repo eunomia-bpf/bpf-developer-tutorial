@@ -402,8 +402,6 @@ cnt = 0
 
 ## 总结
 
-通过本篇 eBPF 入门实践教程，我们学习了如何使用tcpstates和tcprtt这两个 eBPF 示例程序，监控和分析 TCP 的连接状态和往返时间。我们了解了tcpstates和tcprtt的工作原理和实现方式，包括如何使用 BPF map 存储数据，如何在 eBPF 程序中获取和处理 TCP 连接信息，以及如何在用户态应用程序中解析和显示 eBPF 程序收集的数据。这些知识和技巧对于使用 eBPF 进行网络和性能分析是非常重要的。
+通过本篇 eBPF 入门实践教程，我们学习了如何使用tcpstates和tcprtt这两个 eBPF 示例程序，监控和分析 TCP 的连接状态和往返时间。我们了解了tcpstates和tcprtt的工作原理和实现方式，包括如何使用 BPF map 存储数据，如何在 eBPF 程序中获取和处理 TCP 连接信息，以及如何在用户态应用程序中解析和显示 eBPF 程序收集的数据。
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
-
-接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。

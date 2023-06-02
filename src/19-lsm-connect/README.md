@@ -155,6 +155,8 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
             wget-7061    [000] d...1  6318.800700: bpf_trace_printk: lsm: blocking 16843009
 ```
 
+完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect>
+
 ## 总结
 
 本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 `BPF_PROG` 宏定义函数，并通过 `SEC` 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 "cannot override a denial" 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。
