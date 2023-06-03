@@ -381,6 +381,8 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 
 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/24-hide>
 
+> 本文所示技术仅为概念验证，仅供学习使用，严禁用于不符合法律法规要求的场景。
+
 ## 编译运行，隐藏 PID
 
 首先，我们需要编译 eBPF 程序：
