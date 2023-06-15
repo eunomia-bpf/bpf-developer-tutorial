@@ -196,7 +196,7 @@ char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 <p>总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。</p>
 <h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
 <p>通过容器编译：</p>
-<pre><code class="language-console">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+<pre><code class="language-console">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 </code></pre>
 <p>或是通过 <code>ecc</code> 编译：</p>
 <pre><code class="language-console">$ ecc tc.bpf.c

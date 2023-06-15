@@ -186,7 +186,7 @@ Usage: ecc [OPTIONS] &lt;SOURCE_PATH&gt; [EXPORT_EVENT_HEADER]
 ....
 </code></pre>
 <p>也可以使用 docker 镜像进行编译：</p>
-<pre><code class="language-console">$ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
+<pre><code class="language-console">$ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
 export PATH=PATH:~/.eunomia/bin
 Compiling bpf object...
 Packing ebpf object and config into /src/package.json...
@@ -224,7 +224,7 @@ int handle_tp(void *ctx)
 <li><code>return 0</code>;：必须这样，返回0 (如果要知道why, 参考 #139  <a href="https://github.com/iovisor/bcc/issues/139">https://github.com/iovisor/bcc/issues/139</a>)。</li>
 </ul>
 <p>要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：</p>
-<pre><code class="language-shell">sudo apt install libclang-14-dev
+<pre><code class="language-shell">sudo apt install clang llvm
 </code></pre>
 <p>使用 ecc 编译程序：</p>
 <pre><code class="language-console">$ ./ecc minimal.bpf.c
@@ -232,7 +232,7 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 </code></pre>
 <p>或使用 docker 镜像进行编译：</p>
-<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 </code></pre>
 <p>然后使用 ecli 运行编译后的程序：</p>
 <pre><code class="language-console">$ sudo ecli run package.json

@@ -408,7 +408,7 @@ ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 
 </code></pre>
 <p>对于 tcprtt，我们可以使用 eunomia-bpf 编译运行这个例子：</p>
 <p>Compile:</p>
-<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+<pre><code class="language-shell">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 </code></pre>
 <p>或者</p>
 <pre><code class="language-console">$ ecc runqlat.bpf.c runqlat.h
