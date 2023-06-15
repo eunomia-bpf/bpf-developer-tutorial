@@ -10,7 +10,7 @@ eBPF 是一项革命性的技术，起源于 Linux 内核，可以在操作系�
 
 对于浏览器而言，JavaScript 的引入带来的可编程性开启了一场巨大的革命，使浏览器发展成为几乎独立的操作系统。现在让我们回到 eBPF：为了理解 eBPF 对 Linux 内核的可编程性影响，对 Linux 内核的结构以及它如何与应用程序和硬件进行交互有一个高层次的理解是有帮助的[4]。
 
-![kernel-arch](https://raw.githubusercontent.com/bestgopher/bpf-developer-tutorial/main/src/0-introduce/kernel-arch.webp)
+![kernel-arch](https://raw.githubusercontent.com/eunomia-bpf/bpf-developer-tutorial/main/src/0-introduce/kernel-arch.webp)
 
 Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个一致的API（系统调用），允许应用程序运行和共享资源。为了实现这个目的，我们维护了一系列子系统和层，以分配这些责任[5]。每个子系统通常允许某种程度的配置，以考虑到用户的不同需求。如果不能配置所需的行为，就需要改变内核，从历史上看，改变内核的行为，或者让用户编写的程序能够在内核中运行，就有两种选择:
 
@@ -22,7 +22,7 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 有了 eBPF，就有了一个新的选择，可以重新编程 Linux 内核的行为，而不需要改变内核的源代码或加载内核模块，同时保证在不同内核版本之间一定程度上的行为一致性和兼容性、以及安全性[6]。为了实现这个目的，eBPF 程序也需要有一套对应的 API，允许用户定义的应用程序运行和共享资源 --- 换句话说，某种意义上讲 eBPF 虚拟机也提供了一套类似于系统调用的机制，借助 eBPF 和用户态通信的机制，Wasm 虚拟机和用户态应用也可以获得这套“系统调用”的完整使用权，一方面能可编程地扩展传统的系统调用的能力，另一方面能在网络、文件系统等许多层次实现更高效的可编程 IO 处理。
 
-![new-os](https://github.com/bestgopher/bpf-developer-tutorial/blob/main/src/0-introduce/new-os-model.jpg)
+![new-os](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/0-introduce/new-os-model.jpg?raw=true)
 
 正如上图所示，当今的 Linux 内核正在向一个新的内核模型演化：用户定义的应用程序可以在内核态和用户态同时执行，用户态通过传统的系统调用访问系统资源，内核态则通过 BPF Helper Calls 和系统的各个部分完成交互。截止 2023 年初，内核中的 eBPF 虚拟机中已经有 220 多个Helper 系统接口，涵盖了非常多的应用场景。
 

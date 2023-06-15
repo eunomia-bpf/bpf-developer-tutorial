@@ -312,7 +312,7 @@ ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 
 Compile:
 
 ```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 或者

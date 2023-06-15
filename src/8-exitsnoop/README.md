@@ -125,7 +125,7 @@ eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发�
 Compile:
 
 ```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 Or
