@@ -153,7 +153,7 @@ Packing ebpf object and config into package.json...
 或使用 docker 镜像进行编译：
 
 ```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 然后使用 ecli 运行编译后的程序：
@@ -472,7 +472,7 @@ Packing ebpf object and config into package.json...
 > 或使用 docker 镜像进行编译：
 
 ```sh
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 > 然后使用 ecli 运行编译后的程序：
@@ -894,7 +894,7 @@ Packing ebpf object and config into package.json...
 或使用 docker 镜像进行编译：
 
 ```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 然后使用 ecli 运行编译后的程序：
@@ -1432,7 +1432,7 @@ char __license[] SEC("license") = "GPL";
 编译运行
 
 ```console
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 or compile with `ecc`:

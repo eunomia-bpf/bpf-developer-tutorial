@@ -69,7 +69,7 @@ char __license[] SEC("license") = "GPL";
 通过容器编译：
 
 ```console
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 或是通过 `ecc` 编译：

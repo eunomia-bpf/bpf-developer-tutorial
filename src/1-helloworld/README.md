@@ -61,7 +61,7 @@ Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
 也可以使用 docker 镜像进行编译：
 
 ```console
-$ docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
+$ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
 export PATH=PATH:~/.eunomia/bin
 Compiling bpf object...
 Packing ebpf object and config into /src/package.json...
@@ -106,7 +106,7 @@ int handle_tp(void *ctx)
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：
 
 ```shell
-sudo apt install libclang-14-dev
+sudo apt install clang llvm
 ```
 
 使用 ecc 编译程序：
@@ -120,7 +120,7 @@ Packing ebpf object and config into package.json...
 或使用 docker 镜像进行编译：
 
 ```shell
-docker run -it -v `pwd`/:/src/ yunwei37/ebpm:latest
+docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
 然后使用 ecli 运行编译后的程序：
