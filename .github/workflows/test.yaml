@@ -17,7 +17,7 @@ jobs:
       run: |
         wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc && chmod +x ./ecc
         wget https://aka.pw/bpf-ecli -O ecli && chmod +x ./ecli
-        ecc src/1-helloworld minimal.bpf.c
+        ./ecc src/1-helloworld minimal.bpf.c
         sudo timeout -s 2 3 ./ecli run src/1-helloworld/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: install deps
       run: |
