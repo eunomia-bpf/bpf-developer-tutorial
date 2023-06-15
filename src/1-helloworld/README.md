@@ -106,7 +106,7 @@ int handle_tp(void *ctx)
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：
 
 ```shell
-sudo apt install libclang-14-dev
+sudo apt install clang llvm
 ```
 
 使用 ecc 编译程序：
