@@ -72,8 +72,6 @@ Packing ebpf object and config into /src/package.json...
 我们会先从一个简单的 eBPF 程序开始，它会在内核中打印一条消息。我们会使用 eunomia-bpf 的编译器工具链将其编译为 bpf 字节码文件，然后使用 ecli 工具加载并运行该程序。作为示例，我们可以暂时省略用户态程序的部分。
 
 ```c
-
-```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #define BPF_NO_GLOBAL_DATA
 #include <linux/bpf.h>
@@ -92,7 +90,7 @@ int handle_tp(void *ctx)
  pid_t pid = bpf_get_current_pid_tgid() >> 32;
  if (pid_filter && pid != pid_filter)
   return 0;
- bpf_printk("BPF triggered from PID %d.\n", pid);
+ bpf_printk("BPF triggered sys_enter_write from PID %d.\n", pid);
  return 0;
 }
 ```
@@ -126,7 +124,7 @@ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 然后使用 ecli 运行编译后的程序：
 
 ```console
-$ sudo ecli run package.json
+$ sudo ./ecli run package.json
 Runing eBPF program...
 ```
 
@@ -139,6 +137,13 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_
 ```
 
 按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。
+
+注意：如果正在使用的 Linux 发行版例如 Ubuntu 默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：
+
+```console
+$ sudo su
+# echo 1 > /sys/kernel/debug/tracing/tracing_on
+```
 
 ## eBPF 程序的基本框架
 
