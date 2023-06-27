@@ -193,9 +193,7 @@ Packing ebpf object and config into /src/package.json...
 </code></pre>
 <h2 id="hello-world---minimal-ebpf-program"><a class="header" href="#hello-world---minimal-ebpf-program">Hello World - minimal eBPF program</a></h2>
 <p>我们会先从一个简单的 eBPF 程序开始，它会在内核中打印一条消息。我们会使用 eunomia-bpf 的编译器工具链将其编译为 bpf 字节码文件，然后使用 ecli 工具加载并运行该程序。作为示例，我们可以暂时省略用户态程序的部分。</p>
-<pre><code class="language-c">
-```c
-/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+<pre><code class="language-c">/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #define BPF_NO_GLOBAL_DATA
 #include &lt;linux/bpf.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
@@ -213,7 +211,7 @@ int handle_tp(void *ctx)
  pid_t pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
  if (pid_filter &amp;&amp; pid != pid_filter)
   return 0;
- bpf_printk(&quot;BPF triggered from PID %d.\n&quot;, pid);
+ bpf_printk(&quot;BPF triggered sys_enter_write from PID %d.\n&quot;, pid);
  return 0;
 }
 </code></pre>
@@ -235,7 +233,7 @@ Packing ebpf object and config into package.json...
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 </code></pre>
 <p>然后使用 ecli 运行编译后的程序：</p>
-<pre><code class="language-console">$ sudo ecli run package.json
+<pre><code class="language-console">$ sudo ./ecli run package.json
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
@@ -244,6 +242,10 @@ Runing eBPF program...
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 </code></pre>
 <p>按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。</p>
+<p>注意：如果正在使用的 Linux 发行版例如 Ubuntu 默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：</p>
+<pre><code class="language-console">$ sudo su
+# echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+</code></pre>
 <h2 id="ebpf-程序的基本框架"><a class="header" href="#ebpf-程序的基本框架">eBPF 程序的基本框架</a></h2>
 <p>如上所述， eBPF 程序的基本框架包括：</p>
 <ul>
