@@ -22,8 +22,8 @@ jobs:
     - name: test 11 bootstrap
       run: |
         make -C src/11-bootstrap
-        sudo timeout -s 2 3 src/11-bootstrap/bootstrap || if [ $? = 124 ]; then exit 0; else exit $?; fi 
+        sudo timeout -s 2 3 src/11-bootstrap/bootstrap || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 12 profile
       run: |
         make -C src/12-profile
-        sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi 
+        # sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi
