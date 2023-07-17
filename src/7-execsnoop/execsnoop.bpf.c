@@ -20,7 +20,6 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 
 	uid_t uid = (u32)bpf_get_current_uid_gid();
 	id = bpf_get_current_pid_tgid();
-	pid = (pid_t)id;
 	tgid = id >> 32;
 
 	event.pid = tgid;

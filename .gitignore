@@ -64,3 +64,6 @@ src/12-profile/profile
 /sockfilter
 /tc
 /ksyscall
+
+ecc
+ecli

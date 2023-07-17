@@ -15,7 +15,7 @@ jobs:
       with:
         submodules: 'recursive'
     - name: install deps
-      run: sudo apt install clang llvm
+      run: sudo apt install clang llvm-14-dev
     - name: install ecc and ecli
       run: |
         wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc && chmod +x ./ecc
@@ -31,4 +31,8 @@ jobs:
     - name: test 3 fentry
       run: |
         ./ecc src/2-kprobe-unlink/kprobe-link.bpf.c
-        sudo timeout -s 2 3 ./ecli run src/2-kprobe-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi        
+        sudo timeout -s 2 3 ./ecli run src/2-kprobe-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi 
+    - name: test 7 execsnoop
+      run: |
+        ./ecc src/7-execsnoop/execsnoop.bpf.c src/7-execsnoop/execsnoop.h
+        sudo timeout -s 2 3 ./ecli run src/7-execsnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi        
