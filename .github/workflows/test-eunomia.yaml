@@ -15,7 +15,7 @@ jobs:
       with:
         submodules: 'recursive'
     - name: install deps
-      run: sudo apt install clang llvm-14-dev
+      run: sudo apt install clang llvm-14-dev llvm
     - name: install ecc and ecli
       run: |
         wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc && chmod +x ./ecc
