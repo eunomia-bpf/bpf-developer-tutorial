@@ -1,0 +1,29 @@
+name: Test eunomia-bpf example CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron:  '0 0 * * 0'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+    - name: install deps
+      run: |
+        sudo apt-get install -y --no-install-recommends \
+        libelf1 libelf-dev zlib1g-dev libclang-13-dev \
+        make git clang llvm pkg-config build-essential
+    - name: test 11 bootstrap
+      run: |
+        make -C src/11-bootstrap
+        sudo timeout -s 2 3 src/11-bootstrap/bootstrap || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 12 profile
+      run: |
+        make -C src/12-profile
+        # sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi
