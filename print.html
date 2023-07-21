@@ -310,7 +310,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 <li>Linux 内核：由于eBPF是内核技术，因此您需要具备较新版本的Linux内核（推荐4.8及以上版本），以支持eBPF功能。</li>
 <li>LLVM 和 Clang：这些工具用于编译eBPF程序。安装最新版本的LLVM和Clang可以确保您获得最佳的eBPF支持。</li>
 </ul>
-<p>eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。当您选择了合适的开发框架后，如 BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以 BCC 工具为例，我们将介绍 eBPF 程序的基本开发流程：</p>
+<p>eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。</p>
 <p>当您选择了合适的开发框架后，如BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以BCC工具为例，我们将介绍eBPF程序的基本开发流程：</p>
 <ol>
 <li>安装BCC工具：根据您的Linux发行版，按照BCC官方文档的指南安装BCC工具和相关依赖。</li>
@@ -395,7 +395,7 @@ Runing eBPF program...
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 </code></pre>
 <p>按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。</p>
-<p>注意：如果正在使用的 Linux 发行版例如 Ubuntu 默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：</p>
+<p>注意：如果正在使用的 Linux 发行版（例如 Ubuntu ）默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：</p>
 <pre><code class="language-console">$ sudo su
 # echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
 </code></pre>
@@ -409,7 +409,7 @@ Runing eBPF program...
 <li>返回值</li>
 </ul>
 <h2 id="tracepoints"><a class="header" href="#tracepoints">tracepoints</a></h2>
-<p>跟踪点（tracepoints）是内核静态插桩技术，跟踪点在技术上只是放置在内核源代码中的跟踪函数，实际上就是在源码中插入的一些带有控制条件的探测点，这些探测点允许事后再添加处理函数。比如在内核中，最常见的静态跟踪方法就是 printk，即输出日志。又比如：在系统调用、调度程序事件、文件系统操作和磁盘 I/O 的开始和结束时都有跟踪点。 于 2009 年在 Linux 2.6.32 版本中首次提供。跟踪点是一种稳定的 API，数量有限。</p>
+<p>跟踪点（tracepoints）是内核静态插桩技术，在技术上只是放置在内核源代码中的跟踪函数，实际上就是在源码中插入的一些带有控制条件的探测点，这些探测点允许事后再添加处理函数。比如在内核中，最常见的静态跟踪方法就是 printk，即输出日志。又比如：在系统调用、调度程序事件、文件系统操作和磁盘 I/O 的开始和结束时都有跟踪点。跟踪点于 2009 年在 Linux 2.6.32 版本中首次提供。跟踪点是一种稳定的 API，数量有限。</p>
 <h2 id="github-模板轻松构建-ebpf-项目和开发环境"><a class="header" href="#github-模板轻松构建-ebpf-项目和开发环境">GitHub 模板：轻松构建 eBPF 项目和开发环境</a></h2>
 <p>面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 <code>Use this template</code> 按钮，即可开始使用。</p>
 <ul>
