@@ -850,8 +850,10 @@ static int probe_exit(void *ctx, int ret)
   return 0;
 
  eventp-&gt;ret = ret;
- bpf_printk(&quot;PID %d (%s) sent signal %d to PID %d, ret = %d&quot;,
-     eventp-&gt;pid, eventp-&gt;comm, eventp-&gt;sig, eventp-&gt;tpid, ret);
+ bpf_printk(&quot;PID %d (%s) sent signal %d &quot;,
+		   eventp-&gt;pid, eventp-&gt;comm, eventp-&gt;sig);
+ bpf_printk(&quot;to PID %d, ret = %d&quot;,
+		   eventp-&gt;tpid, ret);
 
 cleanup:
  bpf_map_delete_elem(&amp;values, &amp;tid);
@@ -892,11 +894,10 @@ Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
 <pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
-            node-3517    [003] d..31 82575.798191: bpf_trace_printk: PID 3517 (node) sent signal 0 to PID 3427, ret = 0
-            node-15194   [003] d..31 82575.849227: bpf_trace_printk: PID 15194 (node) sent signal 0 to PID 3427, ret = 0
-            node-30016   [003] d..31 82576.001361: bpf_trace_printk: PID 30016 (node) sent signal 0 to PID 3427, ret = 0
-    cpptools-srv-38617   [002] d..31 82576.461085: bpf_trace_printk: PID 38617 (cpptools-srv) sent signal 0 to PID 30496, ret = 0
-            node-30040   [002] d..31 82576.467720: bpf_trace_printk: PID 30016 (node) sent signal 0 to PID 3427, ret = 0
+	systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+ 	systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
+ 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+ 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
 </code></pre>
 <h2 id="总结-5"><a class="header" href="#总结-5">总结</a></h2>
 <p>本文主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。使用 hash map 需要定义一个结构体：</p>
