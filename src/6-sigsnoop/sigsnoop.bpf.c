@@ -48,8 +48,10 @@ static int probe_exit(void *ctx, int ret)
 		return 0;
 
 	eventp->ret = ret;
-	bpf_printk("PID %d (%s) sent signal %d to PID %d, ret = %d",
-		   eventp->pid, eventp->comm, eventp->sig, eventp->tpid, ret);
+	bpf_printk("PID %d (%s) sent signal %d ",
+		   eventp->pid, eventp->comm, eventp->sig);
+	bpf_printk("to PID %d, ret = %d",
+		   eventp->tpid, ret);
 
 cleanup:
 	bpf_map_delete_elem(&values, &tid);
