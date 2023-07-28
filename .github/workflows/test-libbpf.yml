@@ -17,7 +17,7 @@ jobs:
     - name: install deps
       run: |
         sudo apt-get install -y --no-install-recommends \
-        libelf1 libelf-dev zlib1g-dev libclang-13-dev \
+        libelf1 libelf-dev zlib1g-dev \
         make git clang llvm pkg-config build-essential
     - name: test 11 bootstrap
       run: |
