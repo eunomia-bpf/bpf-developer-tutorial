@@ -375,6 +375,7 @@ int memleak__kfree(void *ctx)
     return gen_free_enter(ptr);
 }
 ```
+
 上述代码片段定义了一个函数memleak__kfree，这是一个bpf程序，会在内核调用kfree函数时执行。首先，该函数检查是否存在kfree函数。如果存在，则会读取传递给kfree函数的参数（即要释放的内存块的地址），并保存到变量ptr中；否则，会读取传递给kmem_free函数的参数（即要释放的内存块的地址），并保存到变量ptr中。接着，该函数会调用之前定义的gen_free_enter函数来处理该内存块的释放。
 
 ```c
@@ -454,14 +455,14 @@ int attach_uprobes(struct memleak_bpf *skel)
 
 注意，一些内存分配函数可能并不存在或已弃用，比如valloc、pvalloc等，因此它们的附加可能会失败。在这种情况下，我们允许附加失败，并不会阻止程序的执行。这是因为我们更关注的是主流和常用的内存分配函数，而这些已经被弃用的函数往往在实际应用中较少使用。
 
-完整的源代码：https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak
+完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak>
+
+参考：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>
 
 ## 编译运行
 
 ```console
-$ git clone https://github.com/iovisor/bcc.git --recurse-submodules 
-$ cd libbpf-tools/
-$ make memleak
+$ make
 $ sudo ./memleak 
 using default object: libc.so.6
 using page size: 4096
