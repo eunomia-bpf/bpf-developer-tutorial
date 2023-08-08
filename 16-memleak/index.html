@@ -533,11 +533,10 @@ int memleak__kmem_cache_alloc(struct trace_event_raw_kmem_alloc *ctx)
 <p>这些挂载点包括常见的内存分配函数，如malloc、calloc、realloc、mmap、posix_memalign、memalign、free等，以及对应的退出点。另外，我们也观察一些可能的分配函数，如valloc、pvalloc、aligned_alloc等，尽管它们可能不总是存在。</p>
 <p>这些挂载点的目标是捕获所有可能的内存分配和释放事件，从而使我们的内存泄露检测工具能够获取到尽可能全面的数据。这种方法可以让我们不仅能跟踪到内存分配和释放，还能得到它们发生的上下文信息，例如调用栈和调用次数，从而帮助我们定位和修复内存泄露问题。</p>
 <p>注意，一些内存分配函数可能并不存在或已弃用，比如valloc、pvalloc等，因此它们的附加可能会失败。在这种情况下，我们允许附加失败，并不会阻止程序的执行。这是因为我们更关注的是主流和常用的内存分配函数，而这些已经被弃用的函数往往在实际应用中较少使用。</p>
-<p>完整的源代码：https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak</p>
+<p>完整的源代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak</a></p>
+<p>参考：<a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c</a></p>
 <h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
-<pre><code class="language-console">$ git clone https://github.com/iovisor/bcc.git --recurse-submodules 
-$ cd libbpf-tools/
-$ make memleak
+<pre><code class="language-console">$ make
 $ sudo ./memleak 
 using default object: libc.so.6
 using page size: 4096

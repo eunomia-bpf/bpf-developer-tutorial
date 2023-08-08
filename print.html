@@ -297,7 +297,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
 <li>eunomia-bpf：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></li>
 </ul>
 <p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二hello-world基本框架和开发流程"><a class="header" href="#ebpf-入门开发实践教程二hello-world基本框架和开发流程">eBPF 入门开发实践教程二：Hello World，基本框架和开发流程</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程一hello-world基本框架和开发流程"><a class="header" href="#ebpf-入门开发实践教程一hello-world基本框架和开发流程">eBPF 入门开发实践教程一：Hello World，基本框架和开发流程</a></h1>
 <p>在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。</p>
 <p>本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。</p>
 <p>在开发eBPF程序时，有多种开发框架可供选择，如 BCC（BPF Compiler Collection）libbpf、cilium/ebpf、eunomia-bpf 等。虽然不同工具的特点各异，但它们的基本开发流程大致相同。在接下来的内容中，我们将深入了解这些流程，并以 Hello World 程序为例，带领读者逐步掌握eBPF开发的基本技巧。</p>
@@ -3801,11 +3801,10 @@ int memleak__kmem_cache_alloc(struct trace_event_raw_kmem_alloc *ctx)
 <p>这些挂载点包括常见的内存分配函数，如malloc、calloc、realloc、mmap、posix_memalign、memalign、free等，以及对应的退出点。另外，我们也观察一些可能的分配函数，如valloc、pvalloc、aligned_alloc等，尽管它们可能不总是存在。</p>
 <p>这些挂载点的目标是捕获所有可能的内存分配和释放事件，从而使我们的内存泄露检测工具能够获取到尽可能全面的数据。这种方法可以让我们不仅能跟踪到内存分配和释放，还能得到它们发生的上下文信息，例如调用栈和调用次数，从而帮助我们定位和修复内存泄露问题。</p>
 <p>注意，一些内存分配函数可能并不存在或已弃用，比如valloc、pvalloc等，因此它们的附加可能会失败。在这种情况下，我们允许附加失败，并不会阻止程序的执行。这是因为我们更关注的是主流和常用的内存分配函数，而这些已经被弃用的函数往往在实际应用中较少使用。</p>
-<p>完整的源代码：https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak</p>
+<p>完整的源代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak</a></p>
+<p>参考：<a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c</a></p>
 <h2 id="编译运行-5"><a class="header" href="#编译运行-5">编译运行</a></h2>
-<pre><code class="language-console">$ git clone https://github.com/iovisor/bcc.git --recurse-submodules 
-$ cd libbpf-tools/
-$ make memleak
+<pre><code class="language-console">$ make
 $ sudo ./memleak 
 using default object: libc.so.6
 using page size: 4096
