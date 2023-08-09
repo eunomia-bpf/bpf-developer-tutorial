@@ -88,7 +88,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
 The above code defines an eBPF program for capturing system calls that send signals to processes, including kill, tkill, and tgkill. It captures the enter and exit events of system calls by using tracepoints, and executes specified probe functions such as `probe_entry` and `probe_exit` when these events occur.Instructions: Translate the following Chinese text to English 
-while maintaining the original formatting: "In the probe function, we use the bpf_map to store the captured event information, including the process ID of the sending signal, the process ID of the receiving signal, the signal value, and the return value of the system call. When the system call exits, we retrieve the event information stored in the bpf_map and use bpf_printk to print the process ID, process name, sent signal, and return value of the system call.
+while maintaining the original formatting: "In the probe function, we use the bpf_map to store the captured event information, including the process ID of the sending signal, the process ID of the receiving signal, the signal value, and the name of the executable for the current task. When the system call exits, we retrieve the event information stored in the bpf_map and use bpf_printk to print the process ID, process name, sent signal, and return value of the system call.
 
 Finally, we also need to use the SEC macro to define the probe and specify the name of the system call to be captured and the probe function to be executed.
 
