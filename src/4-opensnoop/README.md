@@ -23,7 +23,7 @@ SEC("tracepoint/syscalls/sys_enter_openat")
 int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
 {
     u64 id = bpf_get_current_pid_tgid();
-    u32 pid = id;
+    u32 pid = id >> 32;
 
     if (pid_target && pid_target != pid)
         return false;
@@ -42,7 +42,7 @@ char LICENSE[] SEC("license") = "GPL";
 2. 定义全局变量 `pid_target`，用于过滤指定进程 ID。这里设为 0 表示捕获所有进程的 sys_openat 调用。
 3. 使用 `SEC` 宏定义一个 eBPF 程序，关联到 tracepoint "tracepoint/syscalls/sys_enter_openat"。这个 tracepoint 会在进程发起 `sys_openat` 系统调用时触发。
 4. 实现 eBPF 程序 `tracepoint__syscalls__sys_enter_openat`，它接收一个类型为 `struct trace_event_raw_sys_enter` 的参数 `ctx`。这个结构体包含了关于系统调用的信息。
-5. 使用 `bpf_get_current_pid_tgid()` 函数获取当前进程的 PID 和 TGID（线程组 ID）。由于我们只关心 PID，所以将其赋值给 `u32` 类型的变量 `pid`。
+5. 使用 `bpf_get_current_pid_tgid()` 函数获取当前进程的 PID 和 TID（线程 ID）。由于我们只关心 PID，所以将其值右移 32 位赋值给 `u32` 类型的变量 `pid`。
 6. 检查 `pid_target` 变量是否与当前进程的 pid 相等。如果 `pid_target` 不为 0 且与当前进程的 pid 不相等，则返回 `false`，不对该进程的 `sys_openat` 调用进行捕获。
 7. 使用 `bpf_printk()` 函数打印捕获到的进程 ID 和 `sys_openat` 调用的相关信息。这些信息可以在用户空间通过 BPF 工具查看。
 8. 将程序许可证设置为 "GPL"，这是运行 eBPF 程序的必要条件。

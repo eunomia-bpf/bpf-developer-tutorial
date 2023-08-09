@@ -23,7 +23,7 @@ SEC("tracepoint/syscalls/sys_enter_openat")
 int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx)
 {
     u64 id = bpf_get_current_pid_tgid();
-    u32 pid = id;
+    u32 pid = id >> 32;
 
     if (pid_target && pid_target != pid)
         return false;
@@ -43,7 +43,7 @@ This eBPF program implements the following:
 2. Define the global variable `pid_target` for filtering a specified process ID. Setting it to 0 captures sys_openat calls from all processes.
 3. Use the `SEC` macro to define an eBPF program associated with the tracepoint "tracepoint/syscalls/sys_enter_openat". This tracepoint is triggered when a process initiates the `sys_openat` system call.
 4. Implement the eBPF program `tracepoint__syscalls__sys_enter_openat`, which takes a parameter `ctx` of type `struct trace_event_raw_sys_enter`. This structure contains information about the system call.
-5. Use the `bpf_get_current_pid_tgid()` function to retrieve the PID and TGID (Thread Group ID) of the current process. Since we only care about the PID, we assign it to the `u32` variable `pid`.
+5. Use the `bpf_get_current_pid_tgid()` function to retrieve the PID and TID (Thread  ID) of the current process. Since we only care about the PID, we shift its value 32 bits to the right and assign it to the variable `pid` of Type `u32`.
 6. Check if the `pid_target` variable is equal to the current process's PID. If `pid_target` is not 0 and is not equal to the current process's PID, return `false` to skip capturing the `sys_openat` call of that process.
 7. Use the `bpf_printk()` function to print the captured process ID and relevant information about the `sys_openat` call. These information can be viewed in user space using BPF tools.
 8. Set the program license to "GPL", which is a necessary condition for running eBPF programs.### Instructions
