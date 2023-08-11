@@ -1,4 +1,4 @@
-# eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出
+# eBPF 入门实践教程七：捕获进程执行事件，通过 perf event array 向用户态打印输出
 
 eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
 
