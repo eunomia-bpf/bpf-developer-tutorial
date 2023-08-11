@@ -21,12 +21,12 @@ eBPF 提供了两个环形缓冲区，可以用来将信息从 eBPF 程序传输
 #define TASK_COMM_LEN 16
 
 struct event {
- int pid;
- int ppid;
- int uid;
- int retval;
- bool is_exit;
- char comm[TASK_COMM_LEN];
+    int pid;
+    int ppid;
+    int uid;
+    int retval;
+    bool is_exit;
+    char comm[TASK_COMM_LEN];
 };
 
 #endif /* __EXECSNOOP_H */
@@ -42,31 +42,31 @@ struct event {
 #include "execsnoop.h"
 
 struct {
- __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
- __uint(key_size, sizeof(u32));
- __uint(value_size, sizeof(u32));
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
 SEC("tracepoint/syscalls/sys_enter_execve")
 int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
 {
- u64 id;
- pid_t pid, tgid;
- struct event event={0};
- struct task_struct *task;
+    u64 id;
+    pid_t pid, tgid;
+    struct event event={0};
+    struct task_struct *task;
 
- uid_t uid = (u32)bpf_get_current_uid_gid();
- id = bpf_get_current_pid_tgid();
- tgid = id >> 32;
+    uid_t uid = (u32)bpf_get_current_uid_gid();
+    id = bpf_get_current_pid_tgid();
+    tgid = id >> 32;
 
- event.pid = tgid;
- event.uid = uid;
- task = (struct task_struct*)bpf_get_current_task();
- event.ppid = BPF_CORE_READ(task, real_parent, tgid);
- char *cmd_ptr = (char *) BPF_CORE_READ(ctx, args[0]);
- bpf_probe_read_str(&event.comm, sizeof(event.comm), cmd_ptr);
- bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
- return 0;
+    event.pid = tgid;
+    event.uid = uid;
+    task = (struct task_struct*)bpf_get_current_task();
+    event.ppid = BPF_CORE_READ(task, real_parent, tgid);
+    char *cmd_ptr = (char *) BPF_CORE_READ(ctx, args[0]);
+    bpf_probe_read_str(&event.comm, sizeof(event.comm), cmd_ptr);
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    return 0;
 }
 
 char LICENSE[] SEC("license") = "GPL";
