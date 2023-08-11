@@ -63,7 +63,8 @@ int tracepoint_syscalls_sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
  event.uid = uid;
  task = (struct task_struct*)bpf_get_current_task();
  event.ppid = BPF_CORE_READ(task, real_parent, tgid);
- bpf_get_current_comm(&event.comm, sizeof(event.comm));
+ char *cmd_ptr = (char *) BPF_CORE_READ(ctx, args[0]);
+ bpf_probe_read_str(&event.comm, sizeof(event.comm), cmd_ptr);
  bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
  return 0;
 }
@@ -73,7 +74,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 This code defines an eBPF program for capturing the entry of the `execve` system call.
 
-In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_get_current_comm` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
+In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_probe_read_str` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
 
 With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
 
