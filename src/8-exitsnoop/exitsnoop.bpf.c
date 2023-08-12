@@ -19,7 +19,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 	struct task_struct *task;
 	struct event *e;
 	pid_t pid, tid;
-	u64 id, ts, *start_ts, duration_ns = 0;
+	u64 id, ts, *start_ts, start_time = 0;
 	
 	/* get PID and TID of exiting thread/process */
 	id = bpf_get_current_pid_tgid();
@@ -37,8 +37,9 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 
 	/* fill out the sample with data */
 	task = (struct task_struct *)bpf_get_current_task();
+	start_time = BPF_CORE_READ(task, start_time);
 
-	e->duration_ns = duration_ns;
+	e->duration_ns = bpf_ktime_get_ns() - start_time;
 	e->pid = pid;
 	e->ppid = BPF_CORE_READ(task, real_parent, tgid);
 	e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
