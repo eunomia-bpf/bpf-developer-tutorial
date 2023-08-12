@@ -484,6 +484,6 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
 
 通过本篇 eBPF 入门实践教程，您已经学习了如何编写 Memleak eBPF 监控程序，以实时监控程序的内存泄漏。您已经了解了 eBPF 在内存监控方面的应用，学会了使用 BPF API 编写 eBPF 程序，创建和使用 eBPF maps，并且明白了如何用 eBPF 工具监测和分析内存泄漏问题。我们展示了一个详细的例子，帮助您理解 eBPF 代码的运行流程和原理。
 
-您可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+您可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。希望这些知识和技巧能帮助您更好地了解和使用 eBPF，以解决实际工作中遇到的问题。

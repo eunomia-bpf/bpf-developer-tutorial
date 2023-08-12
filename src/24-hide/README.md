@@ -436,7 +436,7 @@ yunwei     31583  0.0  0.0  17712  2612 pts/1    S+   05:42   0:00 grep --color=
 
 通过本篇 eBPF 入门实践教程，我们深入了解了如何使用 eBPF 来隐藏进程或文件信息。我们学习了如何编写和加载 eBPF 程序，如何通过 eBPF 拦截系统调用并修改它们的行为，以及如何将这些知识应用到实际的网络安全和防御工作中。此外，我们也了解了 eBPF 的强大性，尤其是它能在不需要修改内核源代码或重启内核的情况下，允许用户在内核中执行自定义代码的能力。
 
-您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容，包括如何使用 eBPF 进行网络和系统性能分析，如何编写更复杂的 eBPF 程序以及如何将 eBPF 集成到您的应用中。希望你会在我们的教程中找到有用的信息，进一步提升你的 eBPF 开发技能。
 
