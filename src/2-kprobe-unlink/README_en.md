@@ -147,4 +147,4 @@ In this article's example, we learned how to use eBPF's kprobe and kretprobe to 
 
 This article is the second part of the introductory eBPF development tutorial. The next article will explain how to use fentry to monitor and capture the unlink system call in eBPF.
 
-If you'd like to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and complete tutorials.
+If you'd like to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
