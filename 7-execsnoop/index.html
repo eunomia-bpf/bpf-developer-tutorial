@@ -166,7 +166,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="ebpf-入门实践教程七捕获进程执行退出时间通过-perf-event-array-向用户态打印输出"><a class="header" href="#ebpf-入门实践教程七捕获进程执行退出时间通过-perf-event-array-向用户态打印输出">eBPF 入门实践教程七：捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></h1>
+                        <h1 id="ebpf-入门实践教程七捕获进程执行事件通过-perf-event-array-向用户态打印输出"><a class="header" href="#ebpf-入门实践教程七捕获进程执行事件通过-perf-event-array-向用户态打印输出">eBPF 入门实践教程七：捕获进程执行事件，通过 perf event array 向用户态打印输出</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第七篇，主要介绍如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，不需要再通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出。通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。</p>
 <h2 id="perf-buffer"><a class="header" href="#perf-buffer">perf buffer</a></h2>
@@ -180,12 +180,12 @@
 #define TASK_COMM_LEN 16
 
 struct event {
- int pid;
- int ppid;
- int uid;
- int retval;
- bool is_exit;
- char comm[TASK_COMM_LEN];
+    int pid;
+    int ppid;
+    int uid;
+    int retval;
+    bool is_exit;
+    char comm[TASK_COMM_LEN];
 };
 
 #endif /* __EXECSNOOP_H */
@@ -198,30 +198,31 @@ struct event {
 #include &quot;execsnoop.h&quot;
 
 struct {
- __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
- __uint(key_size, sizeof(u32));
- __uint(value_size, sizeof(u32));
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, sizeof(u32));
 } events SEC(&quot;.maps&quot;);
 
 SEC(&quot;tracepoint/syscalls/sys_enter_execve&quot;)
 int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
 {
- u64 id;
- pid_t pid, tgid;
- struct event event={0};
- struct task_struct *task;
+    u64 id;
+    pid_t pid, tgid;
+    struct event event={0};
+    struct task_struct *task;
 
- uid_t uid = (u32)bpf_get_current_uid_gid();
- id = bpf_get_current_pid_tgid();
- tgid = id &gt;&gt; 32;
+    uid_t uid = (u32)bpf_get_current_uid_gid();
+    id = bpf_get_current_pid_tgid();
+    tgid = id &gt;&gt; 32;
 
- event.pid = tgid;
- event.uid = uid;
- task = (struct task_struct*)bpf_get_current_task();
- event.ppid = BPF_CORE_READ(task, real_parent, tgid);
- bpf_get_current_comm(&amp;event.comm, sizeof(event.comm));
- bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
- return 0;
+    event.pid = tgid;
+    event.uid = uid;
+    task = (struct task_struct*)bpf_get_current_task();
+    event.ppid = BPF_CORE_READ(task, real_parent, tgid);
+    char *cmd_ptr = (char *) BPF_CORE_READ(ctx, args[0]);
+    bpf_probe_read_str(&amp;event.comm, sizeof(event.comm), cmd_ptr);
+    bpf_perf_event_output(ctx, &amp;events, BPF_F_CURRENT_CPU, &amp;event, sizeof(event));
+    return 0;
 }
 
 char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
