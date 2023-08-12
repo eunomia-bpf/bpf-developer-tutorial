@@ -1,4 +1,4 @@
-# eBPF Beginner's Practical Tutorial Seven: Capturing Process Execution/Exit Time, Printing Output to User Space via perf event array
+# eBPF Beginner's Practical Tutorial Seven: Capturing Process Execution Event, Printing Output to User Space via perf event array
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
@@ -21,12 +21,12 @@ Header file: execsnoop.h
 #define TASK_COMM_LEN 16
 
 struct event {
- int pid;
- int ppid;
- int uid;
- int retval;
- bool is_exit;
- char comm[TASK_COMM_LEN];
+    int pid;
+    int ppid;
+    int uid;
+    int retval;
+    bool is_exit;
+    char comm[TASK_COMM_LEN];
 };
 
 #endif /* __EXECSNOOP_H */
@@ -42,30 +42,31 @@ Source file: execsnoop.bpf.c
 #include "execsnoop.h"
 
 struct {
- __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
- __uint(key_size, sizeof(u32));
- __uint(value_size, sizeof(u32));
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
 SEC("tracepoint/syscalls/sys_enter_execve")
 int tracepoint_syscalls_sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
 {
- u64 id;
- pid_t pid, tgid;
- struct event event={0};
- struct task_struct *task;
+    u64 id;
+    pid_t pid, tgid;
+    struct event event={0};
+    struct task_struct *task;
 
- uid_t uid = (u32)bpf_get_current_uid_gid();
- id = bpf_get_current_pid_tgid();
- tgid = id >> 32;
+    uid_t uid = (u32)bpf_get_current_uid_gid();
+    id = bpf_get_current_pid_tgid();
+    tgid = id >> 32;
 
- event.pid = tgid;
- event.uid = uid;
- task = (struct task_struct*)bpf_get_current_task();
- event.ppid = BPF_CORE_READ(task, real_parent, tgid);
- bpf_get_current_comm(&event.comm, sizeof(event.comm));
- bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
- return 0;
+    event.pid = tgid;
+    event.uid = uid;
+    task = (struct task_struct*)bpf_get_current_task();
+    event.ppid = BPF_CORE_READ(task, real_parent, tgid);
+    char *cmd_ptr = (char *) BPF_CORE_READ(ctx, args[0]);
+    bpf_probe_read_str(&event.comm, sizeof(event.comm), cmd_ptr);
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    return 0;
 }
 
 char LICENSE[] SEC("license") = "GPL";
@@ -73,7 +74,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 This code defines an eBPF program for capturing the entry of the `execve` system call.
 
-In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_get_current_comm` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
+In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_probe_read_str` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
 
 With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
 
