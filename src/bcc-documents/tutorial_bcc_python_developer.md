@@ -1,16 +1,16 @@
-# bcc Python Developer Tutorial
+# bcc Python 开发者教程
 
-This tutorial is about developing [bcc](https://github.com/iovisor/bcc) tools and programs using the Python interface. There are two parts: observability then networking. Snippets are taken from various programs in bcc: see their files for licences.
+本教程介绍使用 Python 接口开发 [bcc](https://github.com/iovisor/bcc) 工具和程序。分为两个部分：可观测性和网络。代码片段取自 bcc 的各个程序，请查阅其文件以了解许可证情况。
 
-Also see the bcc developer's [reference_guide.md](reference_guide.md), and a tutorial for end-users of tools: [tutorial.md](tutorial.md). There is also a lua interface for bcc.
+还请参阅 bcc 开发者的[参考指南](reference_guide.md)，以及针对工具的用户的教程：[教程](tutorial.md)。还有适用于 bcc 的 lua 接口。
 
-## Observability
+## 可观测性
 
-This observability tutorial contains 17 lessons, and 46 enumerated things to learn.
+这个可观测性教程包含17个课程和46个要学习的枚举事项。
 
-### Lesson 1. Hello World
+### 第1课. 你好，世界
 
-Start by running [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py), while running some commands (eg, "ls") in another session. It should print "Hello, World!" for new processes. If not, start by fixing bcc: see [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md).
+首先运行 [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py)，同时在另一个会话中运行一些命令（例如，“ls”）。它应该会为新进程打印“Hello, World!”。如果没有打印，请先修复bcc：请参阅 [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md)。
 
 ```sh
 # ./examples/hello_world.py
@@ -19,67 +19,66 @@ Start by running [examples/hello_world.py](https://github.com/iovisor/bcc/tree/m
 [...]
 ```
 
-Here's the code for hello_world.py:
+以下是 hello_world.py 的代码示例：
 
 ```Python
 from bcc import BPF
 BPF(text='int kprobe__sys_clone(void *ctx) { bpf_trace_printk("Hello, World!\\n"); return 0; }').trace_print()
 ```
 
-There are six things to learn from this:
+从中可以学到六件事情：
 
-1. ```text='...'```: This defines a BPF program inline. The program is written in C.
+1. ```text='...'```：这定义了内联的 BPF 程序。该程序是用 C 编写的。
 
-1. ```kprobe__sys_clone()```: This is a short-cut for kernel dynamic tracing via kprobes. If the C function begins with ``kprobe__``, the rest is treated as a kernel function name to instrument, in this case, ```sys_clone()```.
+1. ```kprobe__sys_clone()```：这是通过 kprobes 动态跟踪内核的一种快捷方式。如果 C 函数以 ```kprobe__``` 开头，其余部分将被视为要定位的内核函数名称，本例中为 ```sys_clone()```。
 
-1. ```void *ctx```: ctx has arguments, but since we aren't using them here, we'll just cast it to ```void *```.
+1. ```void *ctx```：ctx 是参数，但由于我们在此处未使用它们，所以我们将其转换为 ```void*``` 类型。
+1. ```bpf_trace_printk()```: 用于将 printf() 打印到通用 trace_pipe (/sys/kernel/debug/tracing/trace_pipe) 的简单内核工具。 这对于一些快速示例是可以的，但有一些限制：最多只有 3 个参数，只能有一个 %s，并且 trace_pipe 是全局共享的，所以并发程序会有冲突的输出。更好的接口是通过 BPF_PERF_OUTPUT() 实现的，稍后会介绍。
 
-1. ```bpf_trace_printk()```: A simple kernel facility for printf() to the common trace_pipe (/sys/kernel/debug/tracing/trace_pipe). This is ok for some quick examples, but has limitations: 3 args max, 1 %s only, and trace_pipe is globally shared, so concurrent programs will have clashing output. A better interface is via BPF_PERF_OUTPUT(), covered later.
+1. ```return 0;```: 必要的规范性代码（如果想知道原因，请参见 [#139](https://github.com/iovisor/bcc/issues/139)）。
 
-1. ```return 0;```: Necessary formality (if you want to know why, see [#139](https://github.com/iovisor/bcc/issues/139)).
+1. ```.trace_print()```: 一个读取 trace_pipe 并打印输出的 bcc 程序。
 
-1. ```.trace_print()```: A bcc routine that reads trace_pipe and prints the output.
+### 第二课 sys_sync()
 
-### Lesson 2. sys_sync()
+编写一个跟踪 sys_sync() 内核函数的程序。运行时打印 "sys_sync() called"。在跟踪时，在另一个会话中运行 ```sync``` 进行测试。hello_world.py 程序中包含了这一切所需的内容。
 
-Write a program that traces the sys_sync() kernel function. Print "sys_sync() called" when it runs. Test by running ```sync``` in another session while tracing. The hello_world.py program has everything you need for this.
+通过在程序刚启动时打印 "Tracing sys_sync()... Ctrl-C to end." 来改进它。提示：它只是 Python 代码。
 
-Improve it by printing "Tracing sys_sync()... Ctrl-C to end." when the program first starts. Hint: it's just Python.
+### 第三课 hello_fields.py
 
-### Lesson 3. hello_fields.py
-
-This program is in [examples/tracing/hello_fields.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_fields.py). Sample output (run commands in another session):
+该程序位于 [examples/tracing/hello_fields.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_fields.py)。样本输出（在另一个会话中运行命令）：
 
 ```sh
 # examples/tracing/hello_fields.py
-TIME(s)            COMM             PID    MESSAGE
-24585001.174885999 sshd             1432   Hello, World!
-24585001.195710000 sshd             15780  Hello, World!
-24585001.991976000 systemd-udevd    484    Hello, World!
-24585002.276147000 bash             15787  Hello, World!
+时间(s)            进程名             进程 ID    消息
+24585001.174885999 sshd             1432   你好，世界！
+24585001.195710000 sshd             15780  你好，世界！
+24585001.991976000 systemd-udevd    484    你好，世界！
+24585002.276147000 bash             15787  你好，世界！
 ```
 
-Code:
+代码：
 
 ```Python
 from bcc import BPF
 
-# define BPF program
+# 定义 BPF 程序
 prog = """
 int hello(void *ctx) {
-    bpf_trace_printk("Hello, World!\\n");
+    bpf_trace_printk("你好，世界！\\n");
     return 0;
 }
 """
 
-# load BPF program
+# 加载 BPF 程序
 b = BPF(text=prog)
 b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")
 
-# header
-print("%-18s %-16s %-6s %s" % ("TIME(s)", "COMM", "PID", "MESSAGE"))
+# 头部
+print("%-18s %-16s %-6s %s" % ("时间(s)", "进程名", "进程 ID", "消息"))
 
-# format output
+# 格式化输出
 while 1:
     try:
         (task, pid, cpu, flags, ts, msg) = b.trace_fields()
@@ -88,36 +87,37 @@ while 1:
     print("%-18.9f %-16s %-6d %s" % (ts, task, pid, msg))
 ```
 
-This is similar to hello_world.py, and traces new processes via sys_clone() again, but has a few more things to learn:
+这与hello_world.py类似，并通过sys_clone()再次跟踪新进程，但是还有一些要学习的内容：
 
-1. ```prog =```: This time we declare the C program as a variable, and later refer to it. This is useful if you want to add some string substitutions based on command line arguments.
+1. `prog =`：这次我们将C程序声明为变量，然后引用它。如果您想根据命令行参数添加一些字符串替换，这将非常有用。
 
-1. ```hello()```: Now we're just declaring a C function, instead of the ```kprobe__``` shortcut. We'll refer to this later. All C functions declared in the BPF program are expected to be executed on a probe, hence they all need to take a ```pt_reg* ctx``` as first argument. If you need to define some helper function that will not be executed on a probe, they need to be defined as ```static inline``` in order to be inlined by the compiler. Sometimes you would also need to add ```_always_inline``` function attribute to it.
+1. `hello()`：现在我们只是声明了一个C函数，而不是使用`kprobe__`的快捷方式。我们稍后会引用它。在BPF程序中声明的所有C函数都希望在探测器上执行，因此它们都需要以`pt_reg* ctx`作为第一个参数。如果您需要定义一些不会在探测器上执行的辅助函数，则需要将其定义为`static inline`，以便由编译器内联。有时您还需要为其添加`_always_inline`函数属性。
 
-1. ```b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")```: Creates a kprobe for the kernel clone system call function, which will execute our defined hello() function. You can call attach_kprobe() more than once, and attach your C function to multiple kernel functions.
+1. `b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")`：为内核clone系统调用函数创建一个kprobe，该函数将执行我们定义的hello()函数。您可以多次调用attach_kprobe()，并将您的C函数附加到多个内核函数上。
 
-1. ```b.trace_fields()```: Returns a fixed set of fields from trace_pipe. Similar to trace_print(), this is handy for hacking, but for real tooling we should switch to BPF_PERF_OUTPUT().
+1. `b.trace_fields()`：从trace_pipe中返回一组固定的字段。与trace_print()类似，它对于编写脚本很方便，但是对于实际的工具化需求，我们应该切换到BPF_PERF_OUTPUT()。
 
 ### Lesson 4. sync_timing.py
 
-Remember the days of sysadmins typing ```sync``` three times on a slow console before ```reboot```, to give the first asynchronous sync time to complete? Then someone thought ```sync;sync;sync``` was clever, to run them all on one line, which became industry practice despite defeating the original purpose! And then sync became synchronous, so more reasons it was silly. Anyway.
+还记得以前系统管理员在缓慢的控制台上输入`sync`三次然后才重启吗？后来有人认为`sync;sync;sync`很聪明，将它们都写在一行上运行，尽管这违背了最初的目的！然后，sync变成了同步操作，所以更加愚蠢。无论如何。
 
-The following example times how quickly the ```do_sync``` function is called, and prints output if it has been called more recently than one second ago. A ```sync;sync;sync``` will print output for the 2nd and 3rd sync's:
+以下示例计算了`do_sync`函数被调用的速度，并且如果它在一秒钟之内被调用，则输出信息。`sync;sync;sync`将为第2个和第3个sync打印输出：
 
 ```sh
 # examples/tracing/sync_timing.py
-Tracing for quick sync's... Ctrl-C to end
-At time 0.00 s: multiple syncs detected, last 95 ms ago
-At time 0.10 s: multiple syncs detected, last 96 ms ago
+追踪快速sync... 按Ctrl-C结束"。
 ```
 
-This program is [examples/tracing/sync_timing.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/sync_timing.py):
+在时间0.00秒时：检测到多个同步，上次发生在95毫秒前
+在时间0.10秒时：检测到多个同步，上次发生在96毫秒前
+
+此程序是[examples/tracing/sync_timing.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/sync_timing.py)：
 
 ```Python
 from __future__ import print_function
 from bcc import BPF
 
-# load BPF program
+# 加载BPF程序
 b = BPF(text="""
 #include <uapi/linux/ptrace.h>
 
@@ -126,18 +126,18 @@ BPF_HASH(last);
 int do_trace(struct pt_regs *ctx) {
     u64 ts, *tsp, delta, key = 0;
 
-    // attempt to read stored timestamp
+    // 尝试读取存储的时间戳
     tsp = last.lookup(&key);
     if (tsp != NULL) {
         delta = bpf_ktime_get_ns() - *tsp;
         if (delta < 1000000000) {
-            // output if time is less than 1 second
+            // 时间小于1秒则输出
             bpf_trace_printk("%d\\n", delta / 1000000);
         }
         last.delete(&key);
     }
 
-    // update stored timestamp
+    // 更新存储的时间戳
     ts = bpf_ktime_get_ns();
     last.update(&key, &ts);
     return 0;
@@ -145,39 +145,38 @@ int do_trace(struct pt_regs *ctx) {
 """)
 
 b.attach_kprobe(event=b.get_syscall_fnname("sync"), fn_name="do_trace")
-print("Tracing for quick sync's... Ctrl-C to end")
+print("跟踪快速同步... 按Ctrl-C结束")
 
-# format output
+# 格式化输出
 start = 0
 while 1:
     (task, pid, cpu, flags, ts, ms) = b.trace_fields()
     if start == 0:
         start = ts
     ts = ts - start
-    print("At time %.2f s: multiple syncs detected, last %s ms ago" % (ts, ms))
+    print("在时间%.2f秒处：检测到多个同步，上次发生在%s毫秒前" % (ts, ms))
 ```
 
-Things to learn:
+学习内容：
 
-1. ```bpf_ktime_get_ns()```: Returns the time as nanoseconds.
-1. ```BPF_HASH(last)```: Creates a BPF map object that is a hash (associative array), called "last". We didn't specify any further arguments, so it defaults to key and value types of u64.
-1. ```key = 0```: We'll only store one key/value pair in this hash, where the key is hardwired to zero.
-1. ```last.lookup(&key)```: Lookup the key in the hash, and return a pointer to its value if it exists, else NULL. We pass the key in as an address to a pointer.
-1. ```if (tsp != NULL) {```: The verifier requires that pointer values derived from a map lookup must be checked for a null value before they can be dereferenced and used.
-1. ```last.delete(&key)```: Delete the key from the hash. This is currently required because of [a kernel bug in `.update()`](https://git.kernel.org/cgit/linux/kernel/git/davem/net.git/commit/?id=a6ed3ea65d9868fdf9eff84e6fe4f666b8d14b02) (fixed in 4.8.10).
-1. ```last.update(&key, &ts)```: Associate the value in the 2nd argument to the key, overwriting any previous value. This records the timestamp.
+1. ```bpf_ktime_get_ns()```: 返回时间，单位为纳秒。
+1. ```BPF_HASH(last)```: 创建一个BPF映射对象，类型为哈希（关联数组），名为"last"。我们没有指定其他参数，因此默认的键和值类型为u64。
+1. ```key = 0```: 我们只会在哈希中存储一个键值对，其中键被硬编码为零。
+1. ```last.lookup(&key)```: 在哈希中查找键，并如果存在则返回其值的指针，否则返回NULL。我们将键作为指针的地址传递给该函数。
+1. ```if (tsp != NULL) {```: 验证器要求在将从映射查找得到的指针值解引用使用之前，必须先检查其是否为null。1. ```last.delete(&key)```: 从哈希表中删除key。目前需要这样做是因为[`.update()`中存在一个内核错误](https://git.kernel.org/cgit/linux/kernel/git/davem/net.git/commit/?id=a6ed3ea65d9868fdf9eff84e6fe4f666b8d14b02)（在4.8.10中已经修复）。
+1. ```last.update(&key, &ts)```: 将第二个参数的值与key关联起来，覆盖之前的任何值。这会记录时间戳。
 
-### Lesson 5. sync_count.py
+### 第5课. sync_count.py
 
-Modify the sync_timing.py program (prior lesson) to store the count of all kernel sync system calls (both fast and slow), and print it with the output. This count can be recorded in the BPF program by adding a new key index to the existing hash.
+修改sync_timing.py程序（前一课）以存储所有内核同步系统调用（包括快速和慢速）的计数，并将其与输出一起打印出来。可以通过向现有哈希表添加一个新的键索引来在BPF程序中记录此计数。
 
-### Lesson 6. disksnoop.py
+### 第6课. disksnoop.py
 
-Browse the [examples/tracing/disksnoop.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/disksnoop.py) program to see what is new. Here is some sample output:
+浏览[examples/tracing/disksnoop.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/disksnoop.py)程序以了解新内容。以下是一些示例输出：
 
 ```sh
 # disksnoop.py
-TIME(s)            T  BYTES    LAT(ms)
+时间(s)            T  字节     延迟(ms)
 16458043.436012    W  4096        3.13
 16458043.437326    W  4096        4.44
 16458044.126545    R  4096       42.82
@@ -185,13 +184,13 @@ TIME(s)            T  BYTES    LAT(ms)
 [...]
 ```
 
-And a code snippet:
+以及代码片段：
 
 ```Python
 [...]
-REQ_WRITE = 1		# from include/linux/blk_types.h
+REQ_WRITE = 1  # 来自include/linux/blk_types.h
 
-# load BPF program
+# 加载BPF程序
 b = BPF(text="""
 #include <uapi/linux/ptrace.h>
 #include <linux/blk-mq.h>
@@ -199,67 +198,65 @@ b = BPF(text="""
 BPF_HASH(start, struct request *);
 
 void trace_start(struct pt_regs *ctx, struct request *req) {
-	// stash start timestamp by request ptr
-	u64 ts = bpf_ktime_get_ns();
+ // 使用请求指针存储开始时间戳
+ u64 ts = bpf_ktime_get_ns();
 
-	start.update(&req, &ts);
+ start.update(&req, &ts);
 }
 
 void trace_completion(struct pt_regs *ctx, struct request *req) {
-	u64 *tsp, delta;
+ u64 *tsp, delta;
 
-	tsp = start.lookup(&req);
-	if (tsp != 0) {
-		delta = bpf_ktime_get_ns() - *tsp;
-		bpf_trace_printk("%d %x %d\\n", req->__data_len,
-		    req->cmd_flags, delta / 1000);
-		start.delete(&req);
-	}
+ tsp = start.lookup(&req);
+ if (tsp != 0) {
+  delta = bpf_ktime_get_ns() - *tsp;
+  bpf_trace_printk("%d %x %d\\n", req->__data_len,
+      req->cmd_flags, delta / 1000);
+  start.delete(&req);
+ }
 }
 """)
 if BPF.get_kprobe_functions(b'blk_start_request'):
         b.attach_kprobe(event="blk_start_request", fn_name="trace_start")
 b.attach_kprobe(event="blk_mq_start_request", fn_name="trace_start")
 if BPF.get_kprobe_functions(b'__blk_account_io_done'):
-    b.attach_kprobe(event="__blk_account_io_done", fn_name="trace_completion")
-else:
-    b.attach_kprobe(event="blk_account_io_done", fn_name="trace_completion")
-[...]
+    b.attach_kprobe(event="__blk_account_io_done", fn_name="trace_completion") else: b.attach_kprobe(event="blk_account_io_done", fn_name="trace_completion") 
+    [...]
 ```
 
-Things to learn:
+学习内容：
 
-1. ```REQ_WRITE```: We're defining a kernel constant in the Python program because we'll use it there later. If we were using REQ_WRITE in the BPF program, it should just work (without needing to be defined) with the appropriate #includes.
-1. ```trace_start(struct pt_regs *ctx, struct request *req)```: This function will later be attached to kprobes. The arguments to kprobe functions are ```struct pt_regs *ctx```, for registers and BPF context, and then the actual arguments to the function. We'll attach this to blk_start_request(), where the first argument is ```struct request *```.
-1. ```start.update(&req, &ts)```: We're using the pointer to the request struct as a key in our hash. What? This is commonplace in tracing. Pointers to structs turn out to be great keys, as they are unique: two structs can't have the same pointer address. (Just be careful about when it gets free'd and reused.) So what we're really doing is tagging the request struct, which describes the disk I/O, with our own timestamp, so that we can time it. There's two common keys used for storing timestamps: pointers to structs, and, thread IDs (for timing function entry to return).
-1. ```req->__data_len```: We're dereferencing members of ```struct request```. See its definition in the kernel source for what members are there. bcc actually rewrites these expressions to be a series of ```bpf_probe_read_kernel()``` calls. Sometimes bcc can't handle a complex dereference, and you need to call ```bpf_probe_read_kernel()``` directly.
+1. ```REQ_WRITE```: 我们在Python程序中定义了一个内核常量，因为我们后面会在Python程序中使用它。如果我们在BPF程序中使用REQ_WRITE，它应该可以正常工作（无需定义），只需使用适当的```#includes```。
+2. ```trace_start(struct pt_regs *ctx, struct request*req)```: 这个函数将在后面附加到kprobe上。kprobe函数的参数是```struct pt_regs *ctx```，用于寄存器和BPF上下文，然后是函数的实际参数。我们将把它附加到blk_start_request()上，其中第一个参数是```struct request*```。
+3. ```start.update(&req, &ts)```: 我们使用请求结构的指针作为哈希中的键。这在跟踪中很常见。结构体指针是非常好的键，因为它们是唯一的：两个结构体不能具有相同的指针地址。（只需小心何时释放和重用指针。）所以我们实际上是给描述磁盘I/O的请求结构体打上我们自己的时间戳，以便我们可以计时。存储时间戳常用的两个键是结构体指针和线程ID（用于记录函数入口到返回的时间）。
+4. ```req->__data_len```: 我们在解引用```struct request```的成员。请参阅内核源代码中对其定义的部分以获得有关哪些成员可用的信息。bcc实际上会将这些表达式重写为一系列```bpf_probe_read_kernel()```调用。有时bcc无法处理复杂的解引用，此时您需要直接调用```bpf_probe_read_kernel()```。
 
-This is a pretty interesting program, and if you can understand all the code, you'll understand many important basics. We're still using the bpf_trace_printk() hack, so let's fix that next.
+这是一个非常有趣的程序，如果您能理解所有的代码，您就会理解很多重要的基础知识。我们仍然在使用```bpf_trace_printk()```的技巧，我们下一步要解决这个问题。
 
 ### Lesson 7. hello_perf_output.py
 
-Let's finally stop using bpf_trace_printk() and use the proper BPF_PERF_OUTPUT() interface. This will also mean we stop getting the free trace_field() members like PID and timestamp, and will need to fetch them directly. Sample output while commands are run in another session:
+让我们最终停止使用bpf_trace_printk()，并使用适当的BPF_PERF_OUTPUT()接口。这也意味着我们将停止获取免费的trace_field()成员，如PID和时间戳，并且需要直接获取它们。在另一个会话中运行命令时的示例输出
 
 ```sh
 # hello_perf_output.py
 TIME(s)            COMM             PID    MESSAGE
-0.000000000        bash             22986  Hello, perf_output!
-0.021080275        systemd-udevd    484    Hello, perf_output!
-0.021359520        systemd-udevd    484    Hello, perf_output!
-0.021590610        systemd-udevd    484    Hello, perf_output!
+0.000000000        bash             22986  你好，perf_output！
+0.021080275        systemd-udevd    484    你好，perf_output！
+0.021359520        systemd-udevd    484    你好，perf_output！
+0.021590610        systemd-udevd    484    你好，perf_output！
 [...]
 ```
 
-Code is [examples/tracing/hello_perf_output.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_perf_output.py):
+代码位于[examples/tracing/hello_perf_output.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_perf_output.py)：
 
 ```Python
 from bcc import BPF
 
-# define BPF program
+// 定义BPF程序
 prog = """
 #include <linux/sched.h>
 
-// define output data structure in C
+// 在C中定义输出数据结构
 struct data_t {
     u32 pid;
     u64 ts;
@@ -280,14 +277,14 @@ int hello(struct pt_regs *ctx) {
 }
 """
 
-# load BPF program
+// 加载BPF程序
 b = BPF(text=prog)
 b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")
 
-# header
+//标题
 print("%-18s %-16s %-6s %s" % ("TIME(s)", "COMM", "PID", "MESSAGE"))
 
-# process event
+//处理事件
 start = 0
 def print_event(cpu, data, size):
     global start
@@ -295,59 +292,56 @@ def print_event(cpu, data, size):
     if start == 0:
             start = event.ts
     time_s = (float(event.ts - start)) / 1000000000
-    print("%-18.9f %-16s %-6d %s" % (time_s, event.comm, event.pid,
-        "Hello, perf_output!"))
+    print("%-18.9f %-16s %-6d %s" % (time_s, event.comm, event.pid, "你好，perf_output！"))
 
-# loop with callback to print_event
+//循环并回调print_event
 b["events"].open_perf_buffer(print_event)
 while 1:
     b.perf_buffer_poll()
 ```
 
-Things to learn:
+学习的内容：
 
-1. ```struct data_t```: This defines the C struct we'll use to pass data from kernel to user space.
-1. ```BPF_PERF_OUTPUT(events)```: This names our output channel "events".
-1. ```struct data_t data = {};```: Create an empty data_t struct that we'll then populate.
-1. ```bpf_get_current_pid_tgid()```: Returns the process ID in the lower 32 bits (kernel's view of the PID, which in user space is usually presented as the thread ID), and the thread group ID in the upper 32 bits (what user space often thinks of as the PID). By directly setting this to a u32, we discard the upper 32 bits. Should you be presenting the PID or the TGID? For a multi-threaded app, the TGID will be the same, so you need the PID to differentiate them, if that's what you want. It's also a question of expectations for the end user.
-1. ```bpf_get_current_comm()```: Populates the first argument address with the current process name.
-1. ```events.perf_submit()```: Submit the event for user space to read via a perf ring buffer.
-1. ```def print_event()```: Define a Python function that will handle reading events from the ```events``` stream.
-1. ```b["events"].event(data)```: Now get the event as a Python object, auto-generated from the C declaration.
-1. ```b["events"].open_perf_buffer(print_event)```: Associate the Python ```print_event``` function with the ```events``` stream.
-1. ```while 1: b.perf_buffer_poll()```: Block waiting for events.
+1. ```struct data_t```: 这定义了一个C结构体，我们将用它来从内核传递数据到用户空间。1. `BPF_PERF_OUTPUT(events)`: 这里给我们的输出通道命名为"events"。
+1. `struct data_t data = {};`: 创建一个空的`data_t`结构体，我们将在之后填充它。
+1. `bpf_get_current_pid_tgid()`: 返回低32位的进程ID（内核视图中的PID，用户空间中通常被表示为线程ID），以及高32位的线程组ID（用户空间通常认为是PID）。通过直接将其设置为`u32`，我们丢弃了高32位。应该显示PID还是TGID？对于多线程应用程序，TGID将是相同的，所以如果你想要区分它们，你需要PID。这也是对最终用户期望的一个问题。
+1. `bpf_get_current_comm()`: 将当前进程的名称填充到第一个参数的地址中。
+1. `events.perf_submit()`: 通过perf环形缓冲区将事件提交给用户空间以供读取。
+1. `def print_event()`: 定义一个Python函数来处理从`events`流中读取的事件。
+1. `b["events"].event(data)`: 现在将事件作为一个Python对象获取，该对象是根据C声明自动生成的。
+1. `b["events"].open_perf_buffer(print_event)`: 将Python的`print_event`函数与`events`流关联起来。
+1. `while 1: b.perf_buffer_poll()`: 阻塞等待事件。
 
-### Lesson 8. sync_perf_output.py
+### 第八课。 sync_perf_output.py
 
-Rewrite sync_timing.py, from a prior lesson, to use ```BPF_PERF_OUTPUT```.
+重写之前的课程中的sync_timing.py，使用```BPF_PERF_OUTPUT```。
 
-### Lesson 9. bitehist.py
+### 第九课。 bitehist.py
 
-The following tool records a histogram of disk I/O sizes. Sample output:
+以下工具记录了磁盘I/O大小的直方图。样本输出：
 
 ```sh
 # bitehist.py
-Tracing... Hit Ctrl-C to end.
+跟踪中... 按Ctrl-C结束。
 ^C
      kbytes          : count     distribution
        0 -> 1        : 3        |                                      |
        2 -> 3        : 0        |                                      |
        4 -> 7        : 211      |**********                            |
        8 -> 15       : 0        |                                      |
-      16 -> 31       : 0        |                                      |
-      32 -> 63       : 0        |                                      |
+      16 -> 31       : 0        |                                      |".32 -> 63       : 0        |                                      |
       64 -> 127      : 1        |                                      |
      128 -> 255      : 800      |**************************************|
 ```
 
-Code is [examples/tracing/bitehist.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/bitehist.py):
+代码在[examples/tracing/bitehist.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/bitehist.py):
 
 ```Python
 from __future__ import print_function
 from bcc import BPF
 from time import sleep
 
-# load BPF program
+# 加载BPF程序
 b = BPF(text="""
 #include <uapi/linux/ptrace.h>
 #include <linux/blkdev.h>
@@ -356,55 +350,51 @@ BPF_HISTOGRAM(dist);
 
 int kprobe__blk_account_io_done(struct pt_regs *ctx, struct request *req)
 {
-	dist.increment(bpf_log2l(req->__data_len / 1024));
-	return 0;
+ dist.increment(bpf_log2l(req->__data_len / 1024));
+ return 0;
 }
 """)
 
-# header
-print("Tracing... Hit Ctrl-C to end.")
+# 头部
+print("跟踪中... 按Ctrl-C结束.")
 
-# trace until Ctrl-C
+# 跟踪直到按下Ctrl-C
 try:
-	sleep(99999999)
+ sleep(99999999)
 except KeyboardInterrupt:
-	print()
+ print()
 
-# output
+# 输出
 b["dist"].print_log2_hist("kbytes")
 ```
 
-A recap from earlier lessons:
+之前课程的总结：
 
-- ```kprobe__```: This prefix means the rest will be treated as a kernel function name that will be instrumented using kprobe.
-- ```struct pt_regs *ctx, struct request *req```: Arguments to kprobe. The ```ctx``` is registers and BPF context, the ```req``` is the first argument to the instrumented function: ```blk_account_io_done()```.
-- ```req->__data_len```: Dereferencing that member.
+- ```kprobe__```: 这个前缀意味着其余部分将被视为一个将使用kprobe进行插桩的内核函数名。
+- ```struct pt_regs *ctx, struct request*req```: kprobe的参数。```ctx``` 是寄存器和BPF上下文，```req``` 是被插桩函数 ```blk_account_io_done()``` 的第一个参数。
+- ```req->__data_len```: 解引用该成员。
 
-New things to learn:
+新知识：
 
-1. ```BPF_HISTOGRAM(dist)```: Defines a BPF map object that is a histogram, and names it "dist".
-1. ```dist.increment()```: Increments the histogram bucket index provided as first argument by one by default. Optionally, custom increments can be passed as the second argument.
-1. ```bpf_log2l()```: Returns the log-2 of the provided value. This becomes the index of our histogram, so that we're constructing a power-of-2 histogram.
-1. ```b["dist"].print_log2_hist("kbytes")```: Prints the "dist" histogram as power-of-2, with a column header of "kbytes". The only data transferred from kernel to user space is the bucket counts, making this efficient.
+1. ```BPF_HISTOGRAM(dist)```: 定义了一个名为 "dist" 的BPF映射对象，它是一个直方图。
+1. ```dist.increment()```: 默认情况下，将第一个参数提供的直方图桶索引加1。也可以作为第二个参数传递自定义的增量。
+1. ```bpf_log2l()```: 返回所提供值的对数值。这将成为我们直方图的索引，这样我们构建了一个以2为底的幂直方图。
+1. ```b["dist"].print_log2_hist("kbytes")```: 以2为底的幂形式打印 "dist" 直方图，列标题为 "kbytes"。这样只有桶计数从内核传输到用户空间，因此效率高。
 
-### Lesson 10. disklatency.py
+### Lesson 10. disklatency.py”。#### Lesson 11. vfsreadlat.py
 
-Write a program that times disk I/O, and prints a histogram of their latency. Disk I/O instrumentation and timing can be found in the disksnoop.py program from a prior lesson, and histogram code can be found in bitehist.py from a prior lesson.
-
-### Lesson 11. vfsreadlat.py
-
-This example is split into separate Python and C files. Example output:
+这个例子分为独立的Python和C文件。示例输出：
 
 ```sh
 # vfsreadlat.py 1
-Tracing... Hit Ctrl-C to end.
-     usecs               : count     distribution
+跟踪中... 按Ctrl-C停止。
+     微秒               : 数量     分布
          0 -> 1          : 0        |                                        |
          2 -> 3          : 2        |***********                             |
          4 -> 7          : 7        |****************************************|
          8 -> 15         : 4        |**********************                  |
 
-     usecs               : count     distribution
+     微秒               : 数量     分布
          0 -> 1          : 29       |****************************************|
          2 -> 3          : 28       |**************************************  |
          4 -> 7          : 4        |*****                                   |
@@ -419,8 +409,7 @@ Tracing... Hit Ctrl-C to end.
       2048 -> 4095       : 0        |                                        |
       4096 -> 8191       : 4        |*****                                   |
       8192 -> 16383      : 6        |********                                |
-     16384 -> 32767      : 9        |************                            |
-     32768 -> 65535      : 6        |********                                |
+     16384 -> 32767      : 9        |************                            |```.32768 -> 65535      : 6        |********                                |
      65536 -> 131071     : 2        |**                                      |
 
      usecs               : count     distribution
@@ -433,15 +422,17 @@ Tracing... Hit Ctrl-C to end.
 [...]
 ```
 
-Browse the code in [examples/tracing/vfsreadlat.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.py) and [examples/tracing/vfsreadlat.c](https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.c). Things to learn:
+浏览 [examples/tracing/vfsreadlat.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.py) 和 [examples/tracing/vfsreadlat.c](https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.c) 中的代码。
 
-1. ```b = BPF(src_file = "vfsreadlat.c")```: Read the BPF C program from a separate source file.
-1. ```b.attach_kretprobe(event="vfs_read", fn_name="do_return")```: Attaches the BPF C function ```do_return()``` to the return of the kernel function ```vfs_read()```. This is a kretprobe: instrumenting the return from a function, rather than its entry.
-1. ```b["dist"].clear()```: Clears the histogram.
+学习的内容:
+
+1. `b = BPF(src_file = "vfsreadlat.c")`: 从单独的源代码文件中读取 BPF C 程序。
+2. `b.attach_kretprobe(event="vfs_read", fn_name="do_return")`: 将 BPF C 函数 `do_return()` 链接到内核函数 `vfs_read()` 的返回值上。这是一个 kretprobe：用于检测函数返回值，而不是函数的入口。
+3. `b["dist"].clear()`: 清除直方图。
 
 ### Lesson 12. urandomread.py
 
-Tracing while a ```dd if=/dev/urandom of=/dev/null bs=8k count=5``` is run:
+当运行 `dd if=/dev/urandom of=/dev/null bs=8k count=5` 时进行跟踪：
 
 ```sh
 # urandomread.py
@@ -454,13 +445,13 @@ TIME(s)            COMM             PID    GOTBITS
 24652837.728888001 dd               24692  65536
 ```
 
-Hah! I caught smtp by accident. Code is [examples/tracing/urandomread.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/urandomread.py):
+哈！我意外地捕捉到了 smtp。代码在 [examples/tracing/urandomread.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/urandomread.py) 中：
 
 ```Python
-from __future__ import print_function
+from __future__ import print_function".```python
 from bcc import BPF
 
-# load BPF program
+# 加载BPF程序
 b = BPF(text="""
 TRACEPOINT_PROBE(random, urandom_read) {
     // args is from /sys/kernel/debug/tracing/events/random/urandom_read/format
@@ -481,42 +472,42 @@ while 1:
     print("%-18.9f %-16s %-6d %s" % (ts, task, pid, msg))
 ```
 
-Things to learn:
+要学到的东西：
 
-1. ```TRACEPOINT_PROBE(random, urandom_read)```: Instrument the kernel tracepoint ```random:urandom_read```. These have a stable API, and thus are recommend to use instead of kprobes, wherever possible. You can run ```perf list``` for a list of tracepoints. Linux >= 4.7 is required to attach BPF programs to tracepoints.
-1. ```args->got_bits```: ```args``` is auto-populated to be a structure of the tracepoint arguments. The comment above says where you can see that structure. Eg:
+1. ```TRACEPOINT_PROBE(random, urandom_read)```: 对内核跟踪点 ```random:urandom_read``` 进行注入。这些具有稳定的API，因此在可能的情况下建议使用它们来代替kprobe。您可以运行 ```perf list``` 来获取跟踪点列表。至少需要 Linux 版本 4.7 来将 BPF 程序附加到跟踪点上。
+2. ```args->got_bits```: ```args``` 是自动填充的跟踪点参数结构。上面的注释指出了可以查看这个结构的位置。例如：
 
 ```sh
 # cat /sys/kernel/debug/tracing/events/random/urandom_read/format
 name: urandom_read
 ID: 972
 format:
-	field:unsigned short common_type;	offset:0;	size:2;	signed:0;
-	field:unsigned char common_flags;	offset:2;	size:1;	signed:0;
-	field:unsigned char common_preempt_count;	offset:3;	size:1;	signed:0;
-	field:int common_pid;	offset:4;	size:4;	signed:1;
+ field:unsigned short common_type; offset:0; size:2; signed:0;
+ field:unsigned char common_flags; offset:2; size:1; signed:0;
+ field:unsigned char common_preempt_count; offset:3; size:1; signed:0;
+ field:int common_pid; offset:4; size:4; signed:1;
 
-	field:int got_bits;	offset:8;	size:4;	signed:1;
-	field:int pool_left;	offset:12;	size:4;	signed:1;
-	field:int input_left;	offset:16;	size:4;	signed:1;
+ field:int got_bits; offset:8; size:4; signed:1;
+ field:int pool_left; offset:12; size:4; signed:1;
+ field:int input_left; offset:16; size:4; signed:1;
 
 print fmt: "got_bits %d nonblocking_pool_entropy_left %d input_entropy_left %d", REC->got_bits, REC->pool_left, REC->input_left
 ```
 
-In this case, we were printing the ```got_bits``` member.
+在这种情况下，我们正在打印 ```got_bits``` 成员。
 
-### Lesson 13. disksnoop.py fixed
+### 第13课. disksnoop.py已修复
 
-Convert disksnoop.py from a previous lesson to use the ```block:block_rq_issue``` and ```block:block_rq_complete``` tracepoints.
+将上一课的 disksnoop.py 修改为使用 ```block:block_rq_issue``` 和 ```block:block_rq_complete``` 跟踪点。
 
-### Lesson 14. strlen_count.py
+### 第14课. strlen_count.py.
 
-This program instruments a user-level function, the ```strlen()``` library function, and frequency counts its string argument. Example output:
+这个程序对用户级函数进行插桩，其中包括 ```strlen()``` 库函数，并对其字符串参数进行频率统计。例如输出
 
 ```sh
 # strlen_count.py
-Tracing strlen()... Hit Ctrl-C to end.
-^C     COUNT STRING
+跟踪 strlen()... 按 Ctrl-C 结束。
+^C     数量 字符串
          1 " "
          1 "/bin/ls"
          1 "."
@@ -535,16 +526,16 @@ Tracing strlen()... Hit Ctrl-C to end.
        340 "\x01\x1b]0;root@bgregg-test: ~\x07\x02root@bgregg-test:~# "
 ```
 
-These are various strings that are being processed by this library function while tracing, along with their frequency counts. ```strlen()``` was called on "LC_ALL" 12 times, for example.
+这些是在跟踪时由此库函数处理的各种字符串以及它们的频率计数。例如，"LC_ALL" 被调用了12次。
 
-Code is [examples/tracing/strlen_count.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/strlen_count.py):
+代码在 [examples/tracing/strlen_count.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/strlen_count.py) 中：
 
 ```Python
 from __future__ import print_function
 from bcc import BPF
 from time import sleep
 
-# load BPF program
+# 载入 BPF 程序
 b = BPF(text="""
 #include <uapi/linux/ptrace.h>
 
@@ -561,7 +552,7 @@ int count(struct pt_regs *ctx) {
     u64 zero = 0, *val;
 
     bpf_probe_read_user(&key.c, sizeof(key.c), (void *)PT_REGS_PARM1(ctx));
-    // could also use `counts.increment(key)`
+    // 也可以使用 `counts.increment(key)`
     val = counts.lookup_or_try_init(&key, &zero);
     if (val) {
       (*val)++;
@@ -571,30 +562,29 @@ int count(struct pt_regs *ctx) {
 """)
 b.attach_uprobe(name="c", sym="strlen", fn_name="count")
 
-# header
-print("Tracing strlen()... Hit Ctrl-C to end.")
+# 头部
+print("跟踪 strlen()... 按 Ctrl-C 结束。")
 
-# sleep until Ctrl-C
+# 睡眠直到按下 Ctrl-C
 try:
     sleep(99999999)
 except KeyboardInterrupt:
     pass
 
-# print output
-print("%10s %s" % ("COUNT", "STRING"))
+# 打印输出
+print("%10s %s" % ("数量", "字符串"))
 counts = b.get_table("counts")
 for k, v in sorted(counts.items(), key=lambda counts: counts[1].value):
     print("%10d \"%s\"" % (v.value, k.c.encode('string-escape')))
 ```
 
-Things to learn:
+要学习的内容：1. ```PT_REGS_PARM1(ctx)```: 这个参数会获取传递给 ```strlen()``` 的第一个参数，也就是字符串。
 
-1. ```PT_REGS_PARM1(ctx)```: This fetches the first argument to ```strlen()```, which is the string.
-1. ```b.attach_uprobe(name="c", sym="strlen", fn_name="count")```: Attach to library "c" (if this is the main program, use its pathname), instrument the user-level function ```strlen()```, and on execution call our C function ```count()```.
+1. ```b.attach_uprobe(name="c", sym="strlen", fn_name="count")```: 附加到库 "c"（如果这是主程序，则使用其路径名），对用户级函数 ```strlen()``` 进行插装，并在执行时调用我们的 C 函数 ```count()```。
 
-### Lesson 15. nodejs_http_server.py
+### 第15课。nodejs_http_server.py
 
-This program instruments a user statically-defined tracing (USDT) probe, which is the user-level version of a kernel tracepoint. Sample output:
+本程序会对用户静态定义的跟踪 (USDT) 探测点进行插装，这是内核跟踪点的用户级版本。示例输出：
 
 ```sh
 # nodejs_http_server.py 24728
@@ -604,7 +594,7 @@ TIME(s)            COMM             PID    ARGS
 24653340.510164998 node             24728  path:/images/favicon.png
 ```
 
-Relevant code from [examples/tracing/nodejs_http_server.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/nodejs_http_server.py):
+来自 [examples/tracing/nodejs_http_server.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/nodejs_http_server.py) 的相关代码：
 
 ```Python
 from __future__ import print_function
@@ -641,29 +631,20 @@ if debug:
 b = BPF(text=bpf_text, usdt_contexts=[u])
 ```
 
-Things to learn:
+学习内容：
 
-1. ```bpf_usdt_readarg(6, ctx, &addr)```: Read the address of argument 6 from the USDT probe into ```addr```.
-1. ```bpf_probe_read_user(&path, sizeof(path), (void *)addr)```: Now the string ```addr``` points to into our ```path``` variable.
-1. ```u = USDT(pid=int(pid))```: Initialize USDT tracing for the given PID.
-1. ```u.enable_probe(probe="http__server__request", fn_name="do_trace")```: Attach our ```do_trace()``` BPF C function to the Node.js ```http__server__request``` USDT probe.
-1. ```b = BPF(text=bpf_text, usdt_contexts=[u])```: Need to pass in our USDT object, ```u```, to BPF object creation.
+1. ```bpf_usdt_readarg(6, ctx, &addr)```: 从 USDT 探测点中读取参数 6 的地址到 ```addr```。
+1. ```bpf_probe_read_user(&path, sizeof(path), (void *)addr)```: 现在字符串 ```addr``` 指向我们的 ```path``` 变量。
+1. ```u = USDT(pid=int(pid))```: 为给定的 PID 初始化 USDT 跟踪。1. ```u.enable_probe(probe="http__server__request", fn_name="do_trace")```: 将我们的 ```do_trace()``` BPF C 函数附加到 Node.js 的 ```http__server__request``` USDT 探针。
+1. ```b = BPF(text=bpf_text, usdt_contexts=[u])```: 需要将我们的 USDT 对象 ```u``` 传递给 BPF 对象的创建。
 
-### Lesson 16. task_switch.c
+### 第16课. task_switch.c
 
-This is an older tutorial included as a bonus lesson. Use this for recap and to reinforce what you've already learned.
+这是一个早期的教程，作为额外的课程包含其中。用它来复习和加深你已经学到的内容。
 
-This is a slightly more complex tracing example than Hello World. This program
-will be invoked for every task change in the kernel, and record in a BPF map
-the new and old pids.
+这是一个比 Hello World 更复杂的示例程序。该程序将在内核中每次任务切换时被调用，并在一个 BPF 映射中记录新旧进程的 pid。
 
-The C program below introduces a new concept: the prev argument. This
-argument is treated specially by the BCC frontend, such that accesses
-to this variable are read from the saved context that is passed by the
-kprobe infrastructure. The prototype of the args starting from
-position 1 should match the prototype of the kernel function being
-kprobed. If done so, the program will have seamless access to the
-function parameters.
+下面的 C 程序引入了一个新的概念：prev 参数。BCC 前端会特殊处理这个参数，从而使得对这个变量的访问从由 kprobe 基础设施传递的保存上下文中进行读取。从位置1开始的参数的原型应该与被 kprobed 的内核函数的原型匹配。如果这样做，程序就可以无缝访问函数参数。
 
 ```c
 #include <uapi/linux/ptrace.h>
@@ -691,34 +672,32 @@ int count_sched(struct pt_regs *ctx, struct task_struct *prev) {
 }
 ```
 
-The userspace component loads the file shown above, and attaches it to the
-`finish_task_switch` kernel function.
-The `[]` operator of the BPF object gives access to each BPF_HASH in the
-program, allowing pass-through access to the values residing in the kernel. Use
-the object as you would any other python dict object: read, update, and deletes
-are all allowed.
+用户空间组件加载上面显示的文件，并将其附加到 `finish_task_switch` 内核函数上。
+BPF 对象的 `[]` 运算符允许访问程序中的每个 BPF_HASH，允许对内核中的值进行通行访问。可以像使用任何其他 python dict 对象一样使用该对象：读取、更新和删除操作都是允许的。
+
 ```python
 from bcc import BPF
 from time import sleep
 
-b = BPF(src_file="task_switch.c")
+b = BPF(src_file="task_switch.c")".```markdown
+```Chinese
 b.attach_kprobe(event="finish_task_switch", fn_name="count_sched")
 
-# generate many schedule events
+# 生成多个调度事件
 for i in range(0, 100): sleep(0.01)
 
 for k, v in b["stats"].items():
     print("task_switch[%5d->%5d]=%u" % (k.prev_pid, k.curr_pid, v.value))
 ```
 
-These programs can be found in the files [examples/tracing/task_switch.c](https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.c) and [examples/tracing/task_switch.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.py) respectively.
+这些程序可以在文件 [examples/tracing/task_switch.c](https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.c) 和 [examples/tracing/task_switch.py](https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.py) 中找到。
 
-### Lesson 17. Further Study
+### 第17课. 进一步研究
 
-For further study, see Sasha Goldshtein's [linux-tracing-workshop](https://github.com/goldshtn/linux-tracing-workshop), which contains additional labs. There are also many tools in bcc /tools to study.
+要进行进一步研究，请参阅 Sasha Goldshtein 的 [linux-tracing-workshop](https://github.com/goldshtn/linux-tracing-workshop)，其中包含了额外的实验。bcc/tools 中还有许多工具可供研究。
 
-Please read [CONTRIBUTING-SCRIPTS.md](https://github.com/iovisor/bcc/tree/master/CONTRIBUTING-SCRIPTS.md) if you wish to contribute tools to bcc. At the bottom of the main [README.md](https://github.com/iovisor/bcc/tree/master/README.md), you'll also find methods for contacting us. Good luck, and happy tracing!
+如果您希望为 bcc 贡献工具，请阅读 [CONTRIBUTING-SCRIPTS.md](https://github.com/iovisor/bcc/tree/master/CONTRIBUTING-SCRIPTS.md)。在主要的 [README.md](https://github.com/iovisor/bcc/tree/master/README.md) 的底部，您还会找到与我们联系的方法。祝您好运，祝您成功追踪！
 
-## Networking
+## 网络
 
-To do.
+TODO

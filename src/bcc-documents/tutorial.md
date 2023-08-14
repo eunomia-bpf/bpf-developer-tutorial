@@ -1,16 +1,16 @@
-# bcc Tutorial
+# bcc 教程
 
-This tutorial covers how to use [bcc](https://github.com/iovisor/bcc) tools to quickly solve performance, troubleshooting, and networking issues. If you want to develop new bcc tools, see [tutorial_bcc_python_developer.md](tutorial_bcc_python_developer.md) for that tutorial.
+本教程介绍如何使用[bcc](https://github.com/iovisor/bcc)工具快速解决性能、故障排除和网络问题。如果你想开发新的bcc工具，请参考[tutorial_bcc_python_developer.md](tutorial_bcc_python_developer.md)教程。
 
-It is assumed for this tutorial that bcc is already installed, and you can run tools like execsnoop successfully. See [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md). This uses enhancements added to the Linux 4.x series.
+本教程假设bcc已经安装好，并且你可以成功运行像execsnoop这样的工具。参见[INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md)。这些功能是在Linux 4.x系列中增加的。
 
-## Observability
+## 可观察性
 
-Some quick wins.
+一些快速的收获。
 
-### 0. Before bcc
+### 0. 使用bcc之前
 
-Before using bcc, you should start with the Linux basics. One reference is the [Linux Performance Analysis in 60,000 Milliseconds](https://netflixtechblog.com/linux-performance-analysis-in-60-000-milliseconds-accc10403c55) post, which covers these commands:
+在使用bcc之前，你应该从Linux基础知识开始。可以参考[Linux Performance Analysis in 60,000 Milliseconds](https://netflixtechblog.com/linux-performance-analysis-in-60-000-milliseconds-accc10403c55)文章，其中介绍了以下命令：
 
 1. uptime
 1. dmesg | tail
@@ -23,13 +23,13 @@ Before using bcc, you should start with the Linux basics. One reference is the [
 1. sar -n TCP,ETCP 1
 1. top
 
-### 1. General Performance
+### 1. 性能分析
 
-Here is a generic checklist for performance investigations with bcc, first as a list, then in detail:
+这是一个用于性能调查的通用检查清单，首先有一个列表，然后详细描述：
 
 1. execsnoop
 1. opensnoop
-1. ext4slower (or btrfs\*, xfs\*, zfs\*)
+1. ext4slower（或btrfs\*，xfs\*，zfs\*）
 1. biolatency
 1. biosnoop
 1. cachestat
@@ -39,7 +39,7 @@ Here is a generic checklist for performance investigations with bcc, first as a 
 1. runqlat
 1. profile
 
-These tools may be installed on your system under /usr/share/bcc/tools, or you can run them from the bcc github repo under /tools where they have a .py extension. Browse the 50+ tools available for more analysis options.
+这些工具可能已经安装在你的系统的/usr/share/bcc/tools目录下，或者你可以从bcc github仓库的/tools目录中运行它们，这些工具使用.py扩展名。浏览50多个可用的工具，获得更多的分析选项。
 
 #### 1.1 execsnoop
 
@@ -53,11 +53,9 @@ run              9663     0 ./run
 [...]
 ```
 
-execsnoop prints one line of output for each new process. Check for short-lived processes. These can consume CPU resources, but not show up in most monitoring tools that periodically take snapshots of which processes are running.
+execsnoop对于每个新进程打印一行输出。检查短生命周期的进程。这些进程可能会消耗CPU资源，但不会在大多数周期性运行的进程监控工具中显示出来。它通过跟踪`exec()`来工作，而不是`fork()`，所以它可以捕获许多类型的新进程，但不是所有类型（例如，它不会看到启动工作进程的应用程序，该应用程序没有`exec()`其他任何内容）。
 
-It works by tracing exec(), not the fork(), so it will catch many types of new processes but not all (eg, it won't see an application launching working processes, that doesn't exec() anything else).
-
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/execsnoop_example.txt).
+更多[例子](https://github.com/iovisor/bcc/tree/master/tools/execsnoop_example.txt)。
 
 #### 1.2. opensnoop
 
@@ -76,18 +74,18 @@ PID    COMM               FD ERR PATH
 [...]
 ```
 
-opensnoop prints one line of output for each open() syscall, including details.
+opensnoop每次open() syscall执行时打印一行输出，包括详细信息。
 
-Files that are opened can tell you a lot about how applications work: identifying their data files, config files, and log files. Sometimes applications can misbehave, and perform poorly, when they are constantly attempting to read files that do not exist. opensnoop gives you a quick look.
+打开的文件可以告诉你很多关于应用程序的工作方式的信息：它们的数据文件、配置文件和日志文件。有时候应用程序可能会表现不正常，当它们不断尝试读取不存在的文件时则会表现得很差。opensnoop能够快速帮助你查看。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/opensnoop_example.txt).
+更多[例子](https://github.com/iovisor/bcc/tree/master/tools/opensnoop_example.txt)。
 
-#### 1.3. ext4slower (or btrfs\*, xfs\*, zfs\*)
+#### 1.3. ext4slower（或btrfs\*，xfs\*，zfs\*）
 
 ```sh
 # ./ext4slower
-Tracing ext4 operations slower than 10 ms
-TIME     COMM           PID    T BYTES   OFF_KB   LAT(ms) FILENAME
+追踪超过10毫秒的ext4操作
+时间     进程           进程ID    T 字节数   偏移KB   延迟(ms) 文件名
 06:35:01 cron           16464  R 1249    0          16.05 common-auth
 06:35:01 cron           16463  R 1249    0          16.04 common-auth
 06:35:01 cron           16465  R 1249    0          16.03 common-auth
@@ -95,21 +93,19 @@ TIME     COMM           PID    T BYTES   OFF_KB   LAT(ms) FILENAME
 06:35:01 cron           16464  R 4096    0          10.61 login.defs
 ```
 
-ext4slower traces the ext4 file system and times common operations, and then only prints those that exceed a threshold.
+ext4slower跟踪ext4文件系统，并计时常见操作，然后只打印超过阈值的操作。这对于识别或证明一种性能问题非常方便：通过文件系统单独显示较慢的磁盘 I/O。磁盘以异步方式处理 I/O，很难将该层的延迟与应用程序所经历的延迟关联起来。在内核堆栈中更高层的追踪，即在 VFS -> 文件系统接口中，会更接近应用程序遭受的延迟。使用此工具来判断文件系统的延迟是否超过了给定的阈值。
 
-This is great for identifying or exonerating one type of performance issue: show individually slow disk i/O via the file system. Disks process I/O asynchronously, and it can be difficult to associate latency at that layer with the latency applications experience. Tracing higher up in the kernel stack, at the VFS -> file system interface, will more closely match what an application suffers. Use this tool to identify if file system latency exceeds a given threshold.
+在 bcc 中存在其他文件系统的类似工具：btrfsslower、xfsslower 和 zfsslower。还有一个名为 fileslower 的工具，它在 VFS 层工作并跟踪所有内容（尽管会有更高的开销）。
 
-Similar tools exist in bcc for other file systems: btrfsslower, xfsslower, and zfsslower. There is also fileslower, which works at the VFS layer and traces everything (although at some higher overhead).
-
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/ext4slower_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/ext4slower_example.txt)。
 
 #### 1.4. biolatency
 
 ```sh
 # ./biolatency
-Tracing block device I/O... Hit Ctrl-C to end.
+跟踪块设备的 I/O... 按 Ctrl-C 结束。
 ^C
-     usecs           : count     distribution
+     微秒             : 数量      分布
        0 -> 1        : 0        |                                      |
        2 -> 3        : 0        |                                      |
        4 -> 7        : 0        |                                      |
@@ -124,16 +120,15 @@ Tracing block device I/O... Hit Ctrl-C to end.
     2048 -> 4095     : 47       |**********************************    |
     4096 -> 8191     : 52       |**************************************|
     8192 -> 16383    : 36       |**************************            |
-   16384 -> 32767    : 15       |**********                            |
-   32768 -> 65535    : 2        |*                                     |
+   16384 -> 32767    : 15       |**********                            |。32768 -> 65535    : 2        |*                                     |
    65536 -> 131071   : 2        |*                                     |
 ```
 
-biolatency traces disk I/O latency (time from device issue to completion), and when the tool ends (Ctrl-C, or a given interval), it prints a histogram summary of the latency.
+biolatency跟踪磁盘I/O延迟（从设备执行到完成的时间），当工具结束（Ctrl-C，或给定的间隔）时，它会打印延迟的直方图摘要。
 
-This is great for understanding disk I/O latency beyond the average times given by tools like iostat. I/O latency outliers will be visible at the end of the distribution, as well as multi-mode distributions.
+这对于了解超出iostat等工具提供的平均时间的磁盘I/O延迟非常有用。在分布的末尾将可见I/O延迟的异常值，以及多种模式的分布。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/biolatency_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/biolatency_example.txt)。
 
 #### 1.5. biosnoop
 
@@ -149,11 +144,11 @@ TIME(s)        COMM           PID    DISK    T  SECTOR    BYTES   LAT(ms)
 [...]
 ```
 
-biosnoop prints a line of output for each disk I/O, with details including latency (time from device issue to completion).
+biosnoop为每个磁盘I/O打印一行输出，其中包括延迟（从设备执行到完成的时间）等详细信息。
 
-This allows you to examine disk I/O in more detail, and look for time-ordered patterns (eg, reads queueing behind writes). Note that the output will be verbose if your system performs disk I/O at a high rate.
+这让您可以更详细地研究磁盘I/O，并寻找按时间排序的模式（例如，读取在写入后排队）。请注意，如果您的系统以高速率执行磁盘I/O，则输出将冗长。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/biosnoop_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/biosnoop_example.txt)。
 
 #### 1.6. cachestat
 
@@ -163,17 +158,18 @@ More [examples](https://github.com/iovisor/bcc/tree/master/tools/biosnoop_exampl
     1074       44       13      94.9%       2.9%            1        223
     2195      170        8      92.5%       6.8%            1        143
      182       53       56      53.6%       1.3%            1        143
-   62480    40960    20480      40.6%      19.8%            1        223
-       7        2        5      22.2%      22.2%            1        223
+   62480    40960    20480      40.6%      19.8%            1        223"。
+格式：仅返回翻译后的内容，不包括原始文本。```
+7        2        5      22.2%      22.2%            1        223
      348        0        0     100.0%       0.0%            1        223
 [...]
 ```
 
-cachestat prints a one line summary every second (or every custom interval) showing statistics from the file system cache.
+cachestat 每秒（或每个自定义时间间隔）打印一行摘要，显示文件系统缓存的统计信息。
 
-Use this to identify a low cache hit ratio, and a high rate of misses: which gives one lead for performance tuning.
+可以用它来识别低缓存命中率和高缺失率，这是性能调优的线索之一。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/cachestat_example.txt).
+更多 [示例](https://github.com/iovisor/bcc/tree/master/tools/cachestat_example.txt)。
 
 #### 1.7. tcpconnect
 
@@ -188,11 +184,11 @@ PID    COMM         IP SADDR            DADDR            DPORT
 [...]
 ```
 
-tcpconnect prints one line of output for every active TCP connection (eg, via connect()), with details including source and destination addresses.
+tcpconnect 每个活动的 TCP 连接（例如通过 connect()）打印一行输出，包括源地址和目标地址的详细信息。
 
-Look for unexpected connections that may point to inefficiencies in application configuration, or an intruder.
+寻找可能指向应用程序配置问题或入侵者的意外连接。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpconnect_example.txt).
+更多 [示例](https://github.com/iovisor/bcc/tree/master/tools/tcpconnect_example.txt)。
 
 #### 1.8. tcpaccept
 
@@ -205,36 +201,36 @@ PID    COMM         IP RADDR            LADDR            LPORT
 [...]
 ```
 
-tcpaccept prints one line of output for every passive TCP connection (eg, via accept()), with details including source and destination addresses.
+tcpaccept 每个被动的 TCP 连接（例如通过 accept()）打印一行输出，包括源地址和目标地址的详细信息。
 
-Look for unexpected connections that may point to inefficiencies in application configuration, or an intruder.
+寻找可能指向应用程序配置问题或入侵者的意外连接。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpaccept_example.txt).
+更多 [示例](https://github.com/iovisor/bcc/tree/master/tools/tcpaccept_example.txt)。
 
 #### 1.9. tcpretrans
 
 ```sh
-# ./tcpretrans
-TIME     PID    IP LADDR:LPORT          T> RADDR:RPORT          STATE
-01:55:05 0      4  10.153.223.157:22    R> 69.53.245.40:34619   ESTABLISHED
-01:55:05 0      4  10.153.223.157:22    R> 69.53.245.40:34619   ESTABLISHED
-01:55:17 0      4  10.153.223.157:22    R> 69.53.245.40:22957   ESTABLISHED
+# ./tcpretrans".
+```时间 PID IP LADDR:LPORT T> RADDR:RPORT 状态
+01:55:05 0 4 10.153.223.157:22 R> 69.53.245.40:34619 已建立
+01:55:05 0 4 10.153.223.157:22 R> 69.53.245.40:34619 已建立
+01:55:17 0 4 10.153.223.157:22 R> 69.53.245.40:22957 已建立
 [...]
 ```
 
-tcprerans prints one line of output for every TCP retransmit packet, with details including source and destination addresses, and kernel state of the TCP connection.
+tcpretrans为每个TCP重传数据包打印一行输出，其中包括源地址、目的地址以及TCP连接的内核状态。
 
-TCP retransmissions cause latency and throughput issues. For ESTABLISHED retransmits, look for patterns with networks. For SYN_SENT, this may point to target kernel CPU saturation and kernel packet drops.
+TCP重传会导致延迟和吞吐量问题。对于已建立的重传，可以查找与网络有关的模式。对于SYN_SENT，可能指向目标内核CPU饱和和内核数据包丢失。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/tcpretrans_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/tcpretrans_example.txt)。
 
 #### 1.10. runqlat
 
 ```sh
 # ./runqlat
-Tracing run queue latency... Hit Ctrl-C to end.
+跟踪运行队列延迟... 按Ctrl-C结束。
 ^C
-     usecs               : count     distribution
+     微秒数               : 计数     分布
          0 -> 1          : 233      |***********                             |
          2 -> 3          : 742      |************************************    |
          4 -> 7          : 203      |**********                              |
@@ -248,25 +244,22 @@ Tracing run queue latency... Hit Ctrl-C to end.
       1024 -> 2047       : 27       |*                                       |
       2048 -> 4095       : 30       |*                                       |
       4096 -> 8191       : 20       |                                        |
-      8192 -> 16383      : 29       |*                                       |
-     16384 -> 32767      : 809      |****************************************|
-     32768 -> 65535      : 64       |***                                     |
+      8192 -> 16383      : 29       |*                                       |".16384 -> 32767      : 809      |****************************************|
+32768 -> 65535      : 64       |***                                     |
 ```
 
-runqlat times how long threads were waiting on the CPU run queues, and prints this as a histogram.
+这可以帮助量化在CPU饱和期间等待获取CPU的时间损失。
 
-This can help quantify time lost waiting for a turn on CPU, during periods of CPU saturation.
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/runqlat_example.txt)。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/runqlat_example.txt).
-
-#### 1.11. profile
+#### 1.11. 分析
 
 ```sh
 # ./profile
-Sampling at 49 Hertz of all threads by user + kernel stack... Hit Ctrl-C to end.
+以每秒49次的频率对所有线程进行采样，包括用户和内核栈...按Ctrl-C结束。
 ^C
-    00007f31d76c3251 [unknown]
-    47a2c1e752bf47f7 [unknown]
+    00007f31d76c3251 [未知]
+    47a2c1e752bf47f7 [未知]
     -                sign-file (8877)
         1
 
@@ -284,7 +277,7 @@ Sampling at 49 Hertz of all threads by user + kernel stack... Hit Ctrl-C to end.
     0000000000400542 func_a
     0000000000400598 main
     00007f12a133e830 __libc_start_main
-    083e258d4c544155 [unknown]
+    083e258d4c544155 [未知]
     -                func_ab (13549)
         5
 
@@ -300,27 +293,25 @@ Sampling at 49 Hertz of all threads by user + kernel stack... Hit Ctrl-C to end.
         75
 ```
 
-profile is a CPU profiler, which takes samples of stack traces at timed intervals, and prints a summary of unique stack traces and a count of their occurrence.
+profile是一个CPU分析工具，它在定时间隔内采样堆栈跟踪，并打印唯一堆栈跟踪的摘要及其出现次数。
 
-Use this tool to understand the code paths that are consuming CPU resources.
+使用此工具来了解消耗CPU资源的代码路径。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/profile_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/profile_example.txt)。
 
-### 2. Observability with Generic Tools
+### 2. 使用通用工具进行可观察性
 
-In addition to the above tools for performance tuning, below is a checklist for bcc generic tools, first as a list, and in detail:
+除了上述用于性能调整的工具外，下面是一个bcc通用工具的清单，首先是一个列表，然后详细说明：
 
 1. trace
 1. argdist
-1. funccount
+1. funccount这些通用工具可能有助于解决您特定问题的可视化。
 
-These generic tools may be useful to provide visibility to solve your specific problems.
+#### 2.1. 跟踪
 
-#### 2.1. trace
+##### 示例 1
 
-##### Example 1
-
-Suppose you want to track file ownership change. There are three syscalls, `chown`, `fchown` and `lchown` which users can use to change file ownership. The corresponding syscall entry is `SyS_[f|l]chown`.  The following command can be used to print out syscall parameters and the calling process user id. You can use `id` command to find the uid of a particular user.
+假设您想要跟踪文件所有权更改。有三个系统调用，`chown`、`fchown`和`lchown`，用户可以使用它们来更改文件所有权。相应的系统调用入口是`SyS_[f|l]chown`。可以使用以下命令打印系统调用参数和调用进程的用户ID。您可以使用`id`命令查找特定用户的UID。
 
 ```sh
 $ trace.py \
@@ -335,19 +326,22 @@ PID    TID    COMM         FUNC             -
 1269255 1269255 python3.6    SyS_lchown       file = /tmp/dotsync-whx4fivm/tmp/.bash_profile, to_uid = 128203, to_gid = 100, from_uid = 128203
 ```
 
-##### Example 2
+##### 示例 2
 
-Suppose you want to count nonvoluntary context switches (`nvcsw`) in your bpf based performance monitoring tools and you do not know what is the proper method. `/proc/<pid>/status` already tells you the number (`nonvoluntary_ctxt_switches`) for a pid and you can use `trace.py` to do a quick experiment to verify your method. With kernel source code, the `nvcsw` is counted at file `linux/kernel/sched/core.c` function `__schedule` and under condition
+假设您想要统计基于bpf的性能监控工具中的非自愿上下文切换（`nvcsw`），而您不知道正确的方法是什么。`/proc/<pid>/status`已经告诉您进程的非自愿上下文切换（`nonvoluntary_ctxt_switches`）的数量，并且您可以使用`trace.py`进行快速实验以验证您的方法。根据内核源代码，`nvcsw`在文件`linux/kernel/sched/core.c`的`__schedule`函数中计数，并满足以下条件：
+
 ```c
-!(!preempt && prev->state) // i.e., preempt || !prev->state
+.!(!preempt && prev->state) // 即 preempt || !prev->state
 ```
 
-The `__schedule` function is marked as `notrace`, and the best place to evaluate the above condition seems in `sched/sched_switch` tracepoint called inside function `__schedule` and defined in `linux/include/trace/events/sched.h`. `trace.py` already has `args` being the pointer to the tracepoint `TP_STRUCT__entry`.  The above condition in function `__schedule` can be represented as
+`__schedule` 函数被标记为 `notrace` ，评估上述条件的最佳位置似乎在函数 `__schedule` 内部的 `sched/sched_switch` 跟踪点中，并且在 `linux/include/trace/events/sched.h` 中定义。`trace.py` 已经将 `args` 设置为跟踪点 `TP_STRUCT__entry` 的指针。函数 `__schedule` 中的上述条件可以表示为
+
 ```c
 args->prev_state == TASK_STATE_MAX || args->prev_state == 0
 ```
 
-The below command can be used to count the involuntary context switches (per process or per pid) and compare to `/proc/<pid>/status` or `/proc/<pid>/task/<task_id>/status` for correctness, as in typical cases, involuntary context switches are not very common.
+可以使用以下命令来计算非自愿上下文切换（每个进程或每个进程ID），并与 `/proc/<pid>/status` 或 `/proc/<pid>/task/<task_id>/status` 进行比较，以确保正确性，因为在典型情况下，非自愿上下文切换并不常见。
+
 ```sh
 $ trace.py -p 1134138 't:sched:sched_switch (args->prev_state == TASK_STATE_MAX || args->prev_state == 0)'
 PID    TID    COMM         FUNC
@@ -361,9 +355,9 @@ PID    TID    COMM         FUNC
 ...
 ```
 
-##### Example 3
+##### 示例 3
 
-This example is related to issue [1231](https://github.com/iovisor/bcc/issues/1231) and [1516](https://github.com/iovisor/bcc/issues/1516) where uprobe does not work at all in certain cases. First, you can do a `strace` as below
+此示例与问题 [1231](https://github.com/iovisor/bcc/issues/1231) 和 [1516](https://github.com/iovisor/bcc/issues/1516) 相关，其中在某些情况下，uprobes 完全无法工作。首先，你可以执行以下 `strace`
 
 ```sh
 $ strace trace.py 'r:bash:readline "%s", retval'
@@ -372,23 +366,29 @@ perf_event_open(0x7ffd968212f0, -1, 0, -1, 0x8 /* PERF_FLAG_??? */) = -1 EIO (In
 ...
 ```
 
-The `perf_event_open` syscall returns `-EIO`. Digging into kernel uprobe related codes in `/kernel/trace` and `/kernel/events` directories to search `EIO`, the function `uprobe_register` is the most suspicious. Let us find whether this function is called or not and what is the return value if it is called. In one terminal using the following command to print out the return value of uprobe_register,
+`perf_event_open`系统调用返回`-EIO`。在`/kernel/trace`和`/kernel/events`目录中查找与`EIO`相关的内核uprobe代码，函数`uprobe_register`最可疑。让我们找出是否调用了这个函数，如果调用了，返回值是什么。在一个终端中使用以下命令打印出`uprobe_register`的返回值：
+
 ```sh
-$ trace.py 'r::uprobe_register "ret = %d", retval'
+trace.py 'r::uprobe_register "ret = %d", retval'
 ```
-In another terminal run the same bash uretprobe tracing example, and you should get
+
+在另一个终端中运行相同的bash uretprobe跟踪示例，您应该得到：
+
 ```sh
 $ trace.py 'r::uprobe_register "ret = %d", retval'
 PID    TID    COMM         FUNC             -
 1041401 1041401 python2.7    uprobe_register  ret = -5
 ```
 
-The `-5` error code is EIO. This confirms that the following code in function `uprobe_register` is the most suspicious culprit.
+错误代码`-5`是EIO。这证实了函数`uprobe_register`中的以下代码是最可疑的罪魁祸首。
+
 ```c
  if (!inode->i_mapping->a_ops->readpage && !shmem_mapping(inode->i_mapping))
         return -EIO;
 ```
-The `shmem_mapping` function is defined as
+
+`shmem_mapping`函数定义如下：
+
 ```c
 bool shmem_mapping(struct address_space *mapping)
 {
@@ -396,7 +396,8 @@ bool shmem_mapping(struct address_space *mapping)
 }
 ```
 
-To confirm the theory, find what is `inode->i_mapping->a_ops` with the following command
+为了确认这个理论，使用以下命令找出`inode->i_mapping->a_ops`的值：
+
 ```sh
 $ trace.py -I 'linux/fs.h' 'p::uprobe_register(struct inode *inode) "a_ops = %llx", inode->i_mapping->a_ops'
 PID    TID    COMM         FUNC             -
@@ -405,18 +406,16 @@ PID    TID    COMM         FUNC             -
 ffffffff81a2adc0 R empty_aops
 ```
 
-The kernel symbol `empty_aops` does not have `readpage` defined and hence the above suspicious condition is true. Further examining the kernel source code shows that `overlayfs` does not provide its own `a_ops` while some other file systems (e.g., ext4) define their own `a_ops` (e.g., `ext4_da_aops`), and `ext4_da_aops` defines `readpage`. Hence, uprobe works fine on ext4 while not on overlayfs.
+内核符号`empty_aops`没有定义`readpage`，因此上述可疑条件为真。进一步检查内核源代码显示，`overlayfs`没有提供自己的`a_ops`，而其他一些文件系统（例如ext4）定义了自己的`a_ops`（例如`ext4_da_aops`），并且`ext4_da_aops`定义了`readpage`。因此，uprobe对于ext4正常工作，但在overlayfs上不正常工作。
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/trace_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/trace_example.txt)。
 
-#### 2.2. argdist
-
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/argdist_example.txt).
+#### 2.2. argdist"。更多[示例](https://github.com/iovisor/bcc/tree/master/tools/argdist_example.txt)
 
 #### 2.3. funccount
 
-More [examples](https://github.com/iovisor/bcc/tree/master/tools/funccount_example.txt).
+更多[示例](https://github.com/iovisor/bcc/tree/master/tools/funccount_example.txt).
 
-## Networking
+## 网络
 
 To do.
