@@ -166,50 +166,48 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="kernel-configuration-for-bpf-features"><a class="header" href="#kernel-configuration-for-bpf-features">Kernel Configuration for BPF Features</a></h1>
-<h2 id="bpf-related-kernel-configurations"><a class="header" href="#bpf-related-kernel-configurations">BPF Related Kernel Configurations</a></h2>
-<div class="table-wrapper"><table><thead><tr><th style="text-align: left">Functionalities</th><th style="text-align: left">Kernel Configuration</th><th style="text-align: left">Description</th></tr></thead><tbody>
-<tr><td style="text-align: left"><strong>Basic</strong></td><td style="text-align: left">CONFIG_BPF_SYSCALL</td><td style="text-align: left">Enable the bpf() system call</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_JIT</td><td style="text-align: left">BPF programs are normally handled by a BPF interpreter. This option allows the kernel to generate native code when a program is loaded into the kernel. This will significantly speed-up processing of BPF programs</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_BPF_JIT</td><td style="text-align: left">Enable BPF Just In Time compiler</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_EBPF_JIT</td><td style="text-align: left">Extended BPF JIT (eBPF)</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_CBPF_JIT</td><td style="text-align: left">Classic BPF JIT (cBPF)</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_MODULES</td><td style="text-align: left">Enable to build loadable kernel modules</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF</td><td style="text-align: left">BPF VM interpreter</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_EVENTS</td><td style="text-align: left">Allow the user to attach BPF programs to kprobe, uprobe, and tracepoint events</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PERF_EVENTS</td><td style="text-align: left">Kernel performance events and counters</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_PERF_EVENTS</td><td style="text-align: left">Enable perf events</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PROFILING</td><td style="text-align: left">Enable the extended profiling support mechanisms used by profilers</td></tr>
-<tr><td style="text-align: left"><strong>BTF</strong></td><td style="text-align: left">CONFIG_DEBUG_INFO_BTF</td><td style="text-align: left">Generate deduplicated BTF type information from DWARF debug info</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PAHOLE_HAS_SPLIT_BTF</td><td style="text-align: left">Generate BTF for each selected kernel module</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_DEBUG_INFO_BTF_MODULES</td><td style="text-align: left">Generate compact split BTF type information for kernel modules</td></tr>
-<tr><td style="text-align: left"><strong>Security</strong></td><td style="text-align: left">CONFIG_BPF_JIT_ALWAYS_ON</td><td style="text-align: left">Enable BPF JIT and removes BPF interpreter to avoid speculative execution</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_UNPRIV_DEFAULT_OFF</td><td style="text-align: left">Disable unprivileged BPF by default by setting</td></tr>
-<tr><td style="text-align: left"><strong>Cgroup</strong></td><td style="text-align: left">CONFIG_CGROUP_BPF</td><td style="text-align: left">Support for BPF programs attached to cgroups</td></tr>
-<tr><td style="text-align: left"><strong>Network</strong></td><td style="text-align: left">CONFIG_BPFILTER</td><td style="text-align: left">BPF based packet filtering framework (BPFILTER)</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPFILTER_UMH</td><td style="text-align: left">This builds bpfilter kernel module with embedded user mode helper</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_NET_CLS_BPF</td><td style="text-align: left">BPF-based classifier - to classify packets based on programmable BPF (JIT'ed) filters as an alternative to ematches</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_NET_ACT_BPF</td><td style="text-align: left">Execute BPF code on packets. The BPF code will decide if the packet should be dropped or not</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_STREAM_PARSER</td><td style="text-align: left">Enable this to allow a TCP stream parser to be used with BPF_MAP_TYPE_SOCKMAP</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_LWTUNNEL_BPF</td><td style="text-align: left">Allow to run BPF programs as a nexthop action following a route lookup for incoming and outgoing packets</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_NETFILTER_XT_MATCH_BPF</td><td style="text-align: left">BPF matching applies a linux socket filter to each packet and accepts those for which the filter returns non-zero</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_IPV6_SEG6_BPF</td><td style="text-align: left">To support  BPF seg6local hook. bpf: Add IPv6 Segment Routing helpersy. <a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee7">Reference</a></td></tr>
-<tr><td style="text-align: left"><strong>kprobes</strong></td><td style="text-align: left">CONFIG_KPROBE_EVENTS</td><td style="text-align: left">This allows the user to add tracing events (similar to tracepoints) on the fly via the ftrace interface</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_KPROBES</td><td style="text-align: left">Enable kprobes-based dynamic events</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_KPROBES</td><td style="text-align: left">Check if krpobes enabled</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_REGS_AND_STACK_ACCESS_API</td><td style="text-align: left">This symbol should be selected by an architecture if it supports the API needed to access registers and stack entries from pt_regs. For example the kprobes-based event tracer needs this API.</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_KPROBES_ON_FTRACE</td><td style="text-align: left">Have kprobes on function tracer if arch supports full passing of pt_regs to function tracing</td></tr>
-<tr><td style="text-align: left"><strong>kprobe multi</strong></td><td style="text-align: left">CONFIG_FPROBE</td><td style="text-align: left">Enable fprobe to attach the probe on multiple functions at once</td></tr>
-<tr><td style="text-align: left"><strong>kprobe override</strong></td><td style="text-align: left">CONFIG_BPF_KPROBE_OVERRIDE</td><td style="text-align: left">Enable BPF programs to override a kprobed function</td></tr>
-<tr><td style="text-align: left"><strong>uprobes</strong></td><td style="text-align: left">CONFIG_UPROBE_EVENTS</td><td style="text-align: left">Enable uprobes-based dynamic events</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_ARCH_SUPPORTS_UPROBES</td><td style="text-align: left">Arch specific uprobes support</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_UPROBES</td><td style="text-align: left">Uprobes is the user-space counterpart to kprobes: they enable instrumentation applications (such as 'perf probe') to establish unintrusive probes in user-space binaries and libraries, by executing handler functions when the probes are hit by user-space applications.</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_MMU</td><td style="text-align: left">MMU-based virtualised addressing space support by paged memory management</td></tr>
-<tr><td style="text-align: left"><strong>Tracepoints</strong></td><td style="text-align: left">CONFIG_TRACEPOINTS</td><td style="text-align: left">Enable inserting tracepoints in the kernel and connect to proble functions</td></tr>
-<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_SYSCALL_TRACEPOINTS</td><td style="text-align: left">Enable syscall enter/exit tracing</td></tr>
+                        <h1 id="bpf-特性的内核配置"><a class="header" href="#bpf-特性的内核配置">BPF 特性的内核配置</a></h1>
+<h2 id="与-bpf-相关的内核配置"><a class="header" href="#与-bpf-相关的内核配置">与 BPF 相关的内核配置</a></h2>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: left">功能</th><th style="text-align: left">内核配置</th><th style="text-align: left">描述</th></tr></thead><tbody>
+<tr><td style="text-align: left"><strong>基础</strong></td><td style="text-align: left">CONFIG_BPF_SYSCALL</td><td style="text-align: left">启用 bpf() 系统调用</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_JIT</td><td style="text-align: left">BPF 程序通常由 BPF 解释器处理。此选项允许内核在加载程序时生成本地代码。这将显著加速 BPF 程序的处理</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_BPF_JIT</td><td style="text-align: left">启用 BPF 即时编译器</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_EBPF_JIT</td><td style="text-align: left">扩展 BPF JIT (eBPF)</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_CBPF_JIT</td><td style="text-align: left">经典 BPF JIT (cBPF)</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_MODULES</td><td style="text-align: left">启用可加载内核模块的构建</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF</td><td style="text-align: left">BPF VM 解释器</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_EVENTS</td><td style="text-align: left">允许用户将 BPF 程序附加到 kprobe、uprobe 和 tracepoint 事件上</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PERF_EVENTS</td><td style="text-align: left">内核性能事件和计数器</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_PERF_EVENTS</td><td style="text-align: left">启用性能事件</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PROFILING</td><td style="text-align: left">启用分析器使用的扩展分析支持机制</td></tr>
+<tr><td style="text-align: left"><strong>BTF</strong></td><td style="text-align: left">CONFIG_DEBUG_INFO_BTF</td><td style="text-align: left">从 DWARF 调试信息生成去重的 BTF 类型信息</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_PAHOLE_HAS_SPLIT_BTF</td><td style="text-align: left">为每个选定的内核模块生成 BTF</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_DEBUG_INFO_BTF_MODULES</td><td style="text-align: left">为内核模块生成紧凑的分割 BTF 类型信息</td></tr>
+<tr><td style="text-align: left"><strong>安全</strong></td><td style="text-align: left">CONFIG_BPF_JIT_ALWAYS_ON</td><td style="text-align: left">启用 BPF JIT 并删除 BPF 解释器以避免猜测执行</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_UNPRIV_DEFAULT_OFF</td><td style="text-align: left">通过设置默认禁用非特权 BPF</td></tr>
+<tr><td style="text-align: left"><strong>Cgroup</strong></td><td style="text-align: left">CONFIG_CGROUP_BPF</td><td style="text-align: left">支持将 BPF 程序附加到 cgroup 上</td></tr>
+<tr><td style="text-align: left"><strong>网络</strong></td><td style="text-align: left">CONFIG_BPFILTER</td><td style="text-align: left">基于 BPF 的数据包过滤框架 (BPFILTER)</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPFILTER_UMH</td><td style="text-align: left">使用内嵌的用户模式助手构建 bpfilter 内核模块</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_NET_CLS_BPF</td><td style="text-align: left">基于可编程 BPF (JIT'ed) 过滤器进行数据包分类的基于 BPF 的分类器的替代方法</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_BPF_STREAM_PARSER</td><td style="text-align: left">启用此功能，允许使用BPF_MAP_TYPE_SOCKMAP与TCP流解析器配合使用</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_LWTUNNEL_BPF</td><td style="text-align: left">在路由查找入站和出站数据包后，允许作为下一跳操作运行BPF程序</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_NETFILTER_XT_MATCH_BPF</td><td style="text-align: left">BPF匹配将对每个数据包应用Linux套接字过滤器，并接受过滤器返回非零值的数据包</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_IPV6_SEG6_BPF</td><td style="text-align: left">为支持BPF seg6local挂钩，添加IPv6 Segement Routing助手 <a href="https://github.com/torvalds/linux/commit/fe94cc290f535709d3c5ebd1e472dfd0aec7ee7">参考</a></td></tr>
+<tr><td style="text-align: left"><strong>kprobes</strong></td><td style="text-align: left">CONFIG_KPROBE_EVENTS</td><td style="text-align: left">允许用户通过ftrace接口动态添加跟踪事件（类似于tracepoints）</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_KPROBES</td><td style="text-align: left">启用基于kprobes的动态事件</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_KPROBES</td><td style="text-align: left">检查是否启用了kprobes</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_REGS_AND_STACK_ACCESS_API</td><td style="text-align: left">如果架构支持从pt_regs访问寄存器和堆栈条目所需的API，则应该选择此符号。例如，基于kprobes的事件跟踪器需要此API</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_KPROBES_ON_FTRACE</td><td style="text-align: left">如果架构支持将pt_regs完全传递给函数跟踪，则在函数跟踪器上有kprobes</td></tr>
+<tr><td style="text-align: left"><strong>kprobe multi</strong></td><td style="text-align: left">CONFIG_FPROBE</td><td style="text-align: left">启用fprobe以一次性在多个函数上附加探测点</td></tr>
+<tr><td style="text-align: left"><strong>kprobe override</strong></td><td style="text-align: left">CONFIG_BPF_KPROBE_OVERRIDE</td><td style="text-align: left">启用BPF程序覆盖kprobed函数</td></tr>
+<tr><td style="text-align: left"><strong>uprobes</strong></td><td style="text-align: left">CONFIG_UPROBE_EVENTS</td><td style="text-align: left">启用基于uprobes的动态事件</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_ARCH_SUPPORTS_UPROBES</td><td style="text-align: left">架构特定的uprobes支持</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_UPROBES</td><td style="text-align: left">Uprobes是kprobes的用户空间对应项：它们允许仪器应用程序（如'perf probe'）在用户空间二进制文件和库中建立非侵入性探测点，并在用户空间应用程序触发探测点时执行处理函数。</td></tr>
+<tr><td style="text-align: left"><strong>Tracepoints</strong></td><td style="text-align: left">CONFIG_TRACEPOINTS</td><td style="text-align: left">启用在内核中插入Tracepoints并与问题函数连接</td></tr>
+<tr><td style="text-align: left"></td><td style="text-align: left">CONFIG_HAVE_SYSCALL_TRACEPOINTS</td><td style="text-align: left">启用系统调用进入/退出跟踪</td></tr>
 <tr><td style="text-align: left"><strong>Raw Tracepoints</strong></td><td style="text-align: left">Same as Tracepoints</td><td style="text-align: left"></td></tr>
-<tr><td style="text-align: left"><strong>LSM</strong></td><td style="text-align: left">CONFIG_BPF_LSM</td><td style="text-align: left">Enable instrumentation of the security hooks with BPF programs for implementing dynamic MAC and Audit Policies</td></tr>
-<tr><td style="text-align: left"><strong>LIRC</strong></td><td style="text-align: left">CONFIG_BPF_LIRC_MODE2</td><td style="text-align: left">Allow attaching BPF programs to a lirc device</td></tr>
+<tr><td style="text-align: left"><strong>LSM</strong></td><td style="text-align: left">CONFIG_BPF_LSM</td><td style="text-align: left">使用BPF程序对安全钩子进行仪器化，实现动态MAC和审计策略</td></tr>
+<tr><td style="text-align: left"><strong>LIRC</strong></td><td style="text-align: left">CONFIG_BPF_LIRC_MODE2</td><td style="text-align: left">允许将BPF程序附加到lirc设备</td></tr>
 </tbody></table>
 </div>
                     </main>

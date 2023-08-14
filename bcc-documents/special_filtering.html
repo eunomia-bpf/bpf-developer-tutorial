@@ -166,68 +166,56 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="special-filtering"><a class="header" href="#special-filtering">Special Filtering</a></h1>
-<p>Some tools have special filtering capabitilies, the main use case is to trace
-processes running in containers, but those mechanisms are generic and could
-be used in other cases as well.</p>
-<h2 id="filtering-by-cgroups"><a class="header" href="#filtering-by-cgroups">Filtering by cgroups</a></h2>
-<p>Some tools have an option to filter by cgroup by referencing a pinned BPF hash
-map managed externally.</p>
-<p>Examples of commands:</p>
+                        <h1 id="特殊过滤"><a class="header" href="#特殊过滤">特殊过滤</a></h1>
+<p>某些工具具有特殊的过滤能力，主要用例是跟踪运行在容器中的进程，但这些机制是通用的，也可以在其他情况下使用。</p>
+<h2 id="按-cgroups过滤"><a class="header" href="#按-cgroups过滤">按 cgroups过滤</a></h2>
+<p>某些工具有一个通过引用外部管理的固定的BPF哈希映射来按cgroup过滤的选项。</p>
+<p>命令示例：</p>
 <pre><code class="language-sh"># ./opensnoop --cgroupmap /sys/fs/bpf/test01
 # ./execsnoop --cgroupmap /sys/fs/bpf/test01
 # ./tcpconnect --cgroupmap /sys/fs/bpf/test01
 # ./tcpaccept --cgroupmap /sys/fs/bpf/test01
 # ./tcptracer --cgroupmap /sys/fs/bpf/test01
 </code></pre>
-<p>The commands above will only display results from processes that belong to one
-of the cgroups whose id, returned by <code>bpf_get_current_cgroup_id()</code>, is in the
-pinned BPF hash map.</p>
-<p>The BPF hash map can be created by:</p>
+<p>上述命令将仅显示属于一个或多个cgroup的进程的结果，这些cgroup的ID由<code>bpf_get_current_cgroup_id()</code>返回，并存在固定的BPF哈希映射中。</p>
+<p>通过以下方式创建BPF哈希映射：</p>
 <pre><code class="language-sh"># bpftool map create /sys/fs/bpf/test01 type hash key 8 value 8 entries 128 \
         name cgroupset flags 0
 </code></pre>
-<p>To get a shell in a new cgroup, you can use:</p>
+<p>要在新cgroup中获取一个shell，可以使用：</p>
 <pre><code class="language-sh"># systemd-run --pty --unit test bash
 </code></pre>
-<p>The shell will be running in the cgroup
-<code>/sys/fs/cgroup/unified/system.slice/test.service</code>.</p>
-<p>The cgroup id can be discovered using the <code>name_to_handle_at()</code> system call. In
-the examples/cgroupid, you will find an example of program to get the cgroup
-id.</p>
+<p>该shell将在cgroup<code>/sys/fs/cgroup/unified/system.slice/test.service</code>中运行。</p>
+<p>可以使用<code>name_to_handle_at()</code>系统调用来发现cgroup ID。在examples/cgroupid中，您可以找到一个获取cgroup ID的程序示例。</p>
 <pre><code class="language-sh"># cd examples/cgroupid
 # make
 # ./cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
 </code></pre>
-<p>or, using Docker:</p>
+<p>或者，使用Docker：</p>
 <pre><code class="language-sh"># cd examples/cgroupid
 # docker build -t cgroupid .
 # docker run --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup \
-	cgroupid cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
+ cgroupid cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
 </code></pre>
-<p>This prints the cgroup id as a hexadecimal string in the host endianness such
-as <code>77 16 00 00 01 00 00 00</code>.</p>
+<p>这将以主机的字节序(hexadecimal string)打印出cgroup ID，例如<code>77 16 00 00 01 00 00 00</code>。</p>
 <pre><code class="language-sh"># FILE=/sys/fs/bpf/test01
 # CGROUPID_HEX=&quot;77 16 00 00 01 00 00 00&quot;
 # bpftool map update pinned $FILE key hex $CGROUPID_HEX value hex 00 00 00 00 00 00 00 00 any
 </code></pre>
-<p>Now that the shell started by systemd-run has its cgroup id in the BPF hash
-map, bcc tools will display results from this shell. Cgroups can be added and
-removed from the BPF hash map without restarting the bcc tool.</p>
-<p>This feature is useful for integrating bcc tools in external projects.</p>
-<h2 id="filtering-by-mount-by-namespace"><a class="header" href="#filtering-by-mount-by-namespace">Filtering by mount by namespace</a></h2>
-<p>The BPF hash map can be created by:</p>
+<p>现在，通过systemd-run启动的shell的cgroup ID已经存在于BPF哈希映射中，bcc工具将显示来自该shell的结果。可以添加和。从BPF哈希映射中删除而不重新启动bcc工具。</p>
+<p>这个功能对于将bcc工具集成到外部项目中非常有用。</p>
+<h2 id="按命名空间选择挂载点进行过滤"><a class="header" href="#按命名空间选择挂载点进行过滤">按命名空间选择挂载点进行过滤</a></h2>
+<p>BPF哈希映射可以通过以下方式创建：</p>
 <pre><code class="language-sh"># bpftool map create /sys/fs/bpf/mnt_ns_set type hash key 8 value 4 entries 128 \
         name mnt_ns_set flags 0
 </code></pre>
-<p>Execute the <code>execsnoop</code> tool filtering only the mount namespaces
-in <code>/sys/fs/bpf/mnt_ns_set</code>:</p>
+<p>仅执行<code>execsnoop</code>工具，过滤挂载命名空间在<code>/sys/fs/bpf/mnt_ns_set</code>中：</p>
 <pre><code class="language-sh"># tools/execsnoop.py --mntnsmap /sys/fs/bpf/mnt_ns_set
 </code></pre>
-<p>Start a terminal in a new mount namespace:</p>
+<p>在新的挂载命名空间中启动一个终端：</p>
 <pre><code class="language-sh"># unshare -m bash
 </code></pre>
-<p>Update the hash map with the mount namespace ID of the terminal above:</p>
+<p>使用上述终端的挂载命名空间ID更新哈希映射：</p>
 <pre><code class="language-sh">FILE=/sys/fs/bpf/mnt_ns_set
 if [ $(printf '\1' | od -dAn) -eq 1 ]; then
  HOST_ENDIAN_CMD=tac
@@ -238,14 +226,15 @@ fi
 NS_ID_HEX=&quot;$(printf '%016x' $(stat -Lc '%i' /proc/self/ns/mnt) | sed 's/.\{2\}/&amp;\n/g' | $HOST_ENDIAN_CMD)&quot;
 bpftool map update pinned $FILE key hex $NS_ID_HEX value hex 00 00 00 00 any
 </code></pre>
-<p>Execute a command in this terminal:</p>
+<p>在这个终端中执行命令：</p>
 <pre><code class="language-sh"># ping kinvolk.io
 </code></pre>
-<p>You'll see how on the <code>execsnoop</code> terminal you started above the call is logged:</p>
+<p>你会看到在上述你启动的<code>execsnoop</code>终端中，这个调用被记录下来：</p>
 <pre><code class="language-sh"># tools/execsnoop.py --mntnsmap /sys/fs/bpf/mnt_ns_set
 [sudo] password for mvb:
 PCOMM            PID    PPID   RET ARGS
 ping             8096   7970     0 /bin/ping kinvolk.io
+```。
 </code></pre>
 
                     </main>
