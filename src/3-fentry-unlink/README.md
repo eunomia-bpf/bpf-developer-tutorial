@@ -86,4 +86,4 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令，并通过查看 `/sys/kernel/debug/tracing/trace_pipe` 文件查看 eBPF 程序的输出。更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。

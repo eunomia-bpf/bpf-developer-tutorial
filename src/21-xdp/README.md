@@ -93,7 +93,7 @@ $ sudo cat /sys/kernel/tracing/trace_pipe
 
 本文介绍了如何使用 xdp 来处理经过特定网络设备的包，基于 eunomia-bpf 提供的通过注释向 libbpf 传递参数的方案，我们可以将自己编写的 xdp BPF 程序以指定选项挂载到目标设备，并在网络包进入内核网络协议栈之前就对其进行处理，从而获取高性能的可编程包处理能力。
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 ## 参考资料
 

@@ -146,4 +146,4 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 本文是 eBPF 入门开发实践教程的第二篇。下一篇文章将介绍如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用。
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
