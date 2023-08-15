@@ -1,6 +1,6 @@
-# eBPF Beginner's Development Tutorial 0: Introduction to the Basic Concepts of eBPF and Common Development Tools
+# eBPF Tutorial by Example 0: Introduction to the Basic Concepts of eBPF and Development Tools
 
-## 1. Introduction to eBPF: Secure and Efficient Kernel Extension
+## Introduction to eBPF: Secure and Efficient Kernel Extension
 
 eBPF is a revolutionary technology that originated in the Linux kernel and allows sandbox programs to run in the kernel of an operating system. It is used to securely and efficiently extend the functionality of the kernel without the need to modify the kernel's source code or load kernel modules. By allowing the execution of sandbox programs in the operating system, eBPF enables application developers to dynamically add additional functionality to the operating system at runtime. The operating system then ensures security and execution efficiency, similar to performing native compilation with the help of a Just-In-Time (JIT) compiler and verification engine. eBPF programs are portable between kernel versions and can be automatically updated, avoiding workload interruptions and node restarts.
 

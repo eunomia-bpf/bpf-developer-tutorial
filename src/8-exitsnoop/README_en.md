@@ -1,8 +1,8 @@
-# eBPF Introductory Development Tutorial 8: Monitoring Process Exit Events with eBPF, Using Ring Buffer to Print Output to User Space
+# eBPF Tutorial by Example 8: Monitoring Process Exit Events, Print Output with Ring Buffer
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime in the kernel.
 
-This article is the eighth part of the eBPF Introductory Development Tutorial, focusing on monitoring process exit events with eBPF.
+This article is the eighth part of the eBPF Tutorial by Example, focusing on monitoring process exit events with eBPF.
 
 ## Ring Buffer
 
@@ -28,7 +28,7 @@ At the same time, the BPF ring buffer solves the following problems of the BPF p
 
 ## exitsnoop
 
-This article is the eighth part of the eBPF Introductory Development Tutorial, focusing on monitoring process exit events with eBPF and using the ring buffer to print output to user space.
+This article is the eighth part of the eBPF Tutorial by Example, focusing on monitoring process exit events with eBPF and using the ring buffer to print output to user space.
 
 The steps for printing output to user space using the ring buffer are similar to perf buffer. First, a header file needs to be defined:
 

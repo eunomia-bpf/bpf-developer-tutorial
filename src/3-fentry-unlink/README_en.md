@@ -1,8 +1,8 @@
-# eBPF Introductory Development Practice Tutorial 3: Detecting Captured Unlink System Calls in eBPF
+# eBPF Tutorial by Example 3: Detecting Captured Unlink System Calls in eBPF
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and execute user-defined code at runtime in the kernel.
 
-This article is the third part of the eBPF introductory development practice tutorial, focusing on capturing unlink system calls using fentry in eBPF.
+This article is the third part of the eBPF Tutorial by Example, focusing on capturing unlink system calls using fentry in eBPF.
 
 ## Fentry
 

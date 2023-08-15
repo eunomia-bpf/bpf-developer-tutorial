@@ -1,8 +1,8 @@
-# eBPF Introduction Tutorial 15: Capturing User-Space Java GC Event Duration Using USDT
+# eBPF Tutorial by Example 15: Capturing User-Space Java GC Event Duration Using USDT
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool widely used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without the need to restart the kernel or modify the kernel source code. This feature provides eBPF with high flexibility and performance, making it widely applicable in network and system performance analysis. Furthermore, eBPF also supports capturing user-space application behavior using User-Level Statically Defined Tracing (USDT).
 
-In this article of our eBPF introduction tutorial series, we will explore how to use eBPF and USDT to capture and analyze the duration of Java garbage collection (GC) events.
+In this article of our eBPF Tutorial by Example series, we will explore how to use eBPF and USDT to capture and analyze the duration of Java garbage collection (GC) events.
 
 ## Introduction to USDT
 

@@ -1,4 +1,4 @@
-# eBPF Introductory Practice Tutorial 20: Use eBPF for tc Traffic Control
+# eBPF Tutorial by Example 20: Use eBPF for tc Traffic Control
 
 ## Background
 

@@ -1,8 +1,8 @@
-# eBPF Getting Started Development Tutorial 4: Capturing the System Call Collection of Process Opening Files in eBPF and Using Global Variables to Filter Process PIDs
+# eBPF Tutorial by Example 4: Capturing Process Opening Files and Using Global Variables to Filter Process PIDs
 
 eBPF (Extended Berkeley Packet Filter) is a kernel execution environment that allows users to run secure and efficient programs in the kernel. It is commonly used for network filtering, performance analysis, security monitoring, and other scenarios. The power of eBPF lies in its ability to capture and modify network packets or system calls at runtime in the kernel, enabling monitoring and adjustment of the operating system's behavior.
 
-This article is the fourth part of the eBPF Getting Started Development Tutorial, mainly focusing on how to capture the system call collection of process opening files and filtering process PIDs using global variables in eBPF.
+This article is the fourth part of the eBPF Tutorial by Example, mainly focusing on how to capture the system call collection of process opening files and filtering process PIDs using global variables in eBPF.
 
 In Linux system, the interaction between processes and files is achieved through system calls. System calls serve as the interface between user space programs and kernel space programs, allowing user programs to request specific operations from the kernel. In this tutorial, we focus on the sys_openat system call, which is used to open files.
 

@@ -1,4 +1,4 @@
-# eBPF Beginner's Practical Tutorial 12: Using eBPF Program Profile for Performance Analysis
+# eBPF Tutorial by Example 12: Using eBPF Program Profile for Performance Analysis
 
 This tutorial will guide you on using libbpf and eBPF programs for performance analysis. We will leverage the perf mechanism in the kernel to learn how to capture the execution time of functions and view performance data.
 

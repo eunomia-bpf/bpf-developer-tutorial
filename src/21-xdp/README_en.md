@@ -1,4 +1,4 @@
-# eBPF Beginner Tutorial 21: Programmable Packet Processing with XDP
+# eBPF Tutorial by Example 21: Programmable Packet Processing with XDP
 
 ## Background
 

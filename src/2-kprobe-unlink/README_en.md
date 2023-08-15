@@ -1,8 +1,8 @@
-# eBPF Beginner's Development Practice Tutorial 2: Using kprobe to Monitor the unlink System Call in eBPF
+# eBPF Tutorial by Example 2: Using kprobe to Monitor the unlink System Call in eBPF
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime.
 
-This article is the second part of the eBPF beginner's development practice tutorial, focusing on using kprobe to capture the unlink system call in eBPF. The article will first explain the basic concepts and technical background of kprobes, and then introduce how to use kprobe to capture the unlink system call in eBPF.
+This article is the second part of the eBPF Tutorial by Example, focusing on using kprobe to capture the unlink system call in eBPF. The article will first explain the basic concepts and technical background of kprobes, and then introduce how to use kprobe to capture the unlink system call in eBPF.
 
 ## Background of kprobes Technology
 

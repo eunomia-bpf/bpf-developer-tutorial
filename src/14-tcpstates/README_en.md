@@ -1,8 +1,8 @@
-# eBPF Introductory Practice Tutorial 14: Recording TCP Connection Status and TCP RTT
+# eBPF Tutorial by Example 14: Recording TCP Connection Status and TCP RTT
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool widely used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without restarting the kernel or changing the kernel source code.
 
-In this article of our eBPF introductory practice tutorial series, we will introduce two sample programs: `tcpstates` and `tcprtt`. `tcpstates` is used to record the state changes of TCP connections, while `tcprtt` is used to record the Round-Trip Time (RTT) of TCP.
+In this article of our eBPF Tutorial by Example series, we will introduce two sample programs: `tcpstates` and `tcprtt`. `tcpstates` is used to record the state changes of TCP connections, while `tcprtt` is used to record the Round-Trip Time (RTT) of TCP.
 
 ## `tcprtt` and `tcpstates`
 

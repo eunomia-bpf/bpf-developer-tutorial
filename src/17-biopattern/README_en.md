@@ -1,4 +1,4 @@
-# eBPF Getting Started Tutorial: Writing eBPF Program Biopattern: Statistical Random/Sequential Disk I/O
+# eBPF Tutorial by Example: Writing eBPF Program Biopattern: Statistical Random/Sequential Disk I/O
 
 ## Background
 
