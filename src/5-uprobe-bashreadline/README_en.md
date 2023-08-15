@@ -1,8 +1,8 @@
-# eBPF Beginner's Development Tutorial 5: Capturing readline Function Calls in eBPF
+# eBPF Tutorial by Example 5: Capturing readline Function Calls with uprobe
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-This article is the fifth part of the eBPF beginner's development tutorial, which mainly introduces how to capture readline function calls in bash using uprobe.
+This article is the fifth part of the eBPF Tutorial by Example, which mainly introduces how to capture readline function calls in bash using uprobe.
 
 ## What is uprobe
 
@@ -118,7 +118,5 @@ You can see that we have successfully captured the `readline` function call of `
 ## Summary
 
 In the above code, we used the `SEC` macro to define an uprobe probe, which specifies the user space program (`bin/bash`) to be captured and the function (`readline`) to be captured. In addition, we used the `BPF_KRETPROBE` macro to define a callback function (`printret`) for handling the return value of the `readline` function. This function can retrieve the return value of the `readline` function and print it to the kernel log. In this way, we can use eBPF to capture the `readline` function call of `bash` and obtain the command line entered by the user in `bash`.
-
-For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
 
 If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> to get more examples and complete tutorials.

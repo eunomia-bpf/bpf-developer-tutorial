@@ -1,8 +1,8 @@
-# eBPF Beginner's Practical Tutorial Seven: Capturing Process Execution Event, Printing Output to User Space via perf event array
+# eBPF Tutorial by Example 7: Capturing Process Execution Event, Printing Output with perf event array
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-This article is the seventh part of the eBPF beginner's development tutorial and mainly introduces how to capture process execution events in the Linux kernel and print output to the user command line via a perf event array. This eliminates the need to view the output of eBPF programs by checking the `/sys/kernel/debug/tracing/trace_pipe` file. After sending information to user space via the perf event array, complex data processing and analysis can be performed.
+This article is the seventh part of the eBPF Tutorial by Example and mainly introduces how to capture process execution events in the Linux kernel and print output to the user command line via a perf event array. This eliminates the need to view the output of eBPF programs by checking the `/sys/kernel/debug/tracing/trace_pipe` file. After sending information to user space via the perf event array, complex data processing and analysis can be performed.
 
 ## perf buffer
 
@@ -78,7 +78,7 @@ In the entry program, we first obtain the process ID and user ID of the current 
 
 With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
 
-"eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its goal is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf). We use eunomia-bpf to compile and execute this example.
+We use eunomia-bpf to compile and execute this example. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
 
 Compile using a container:
 

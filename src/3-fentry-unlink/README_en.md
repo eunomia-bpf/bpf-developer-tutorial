@@ -1,8 +1,8 @@
-# eBPF Introductory Development Practice Tutorial 3: Detecting Captured Unlink System Calls in eBPF
+# eBPF Tutorial by Example 3: Monitoring unlink System Calls with fentry
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and execute user-defined code at runtime in the kernel.
 
-This article is the third part of the eBPF introductory development practice tutorial, focusing on capturing unlink system calls using fentry in eBPF.
+This article is the third part of the eBPF Tutorial by Example, focusing on capturing unlink system calls using fentry in eBPF.
 
 ## Fentry
 
@@ -83,6 +83,6 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 This program is an eBPF program that captures the `do_unlinkat` and `do_unlinkat_exit` functions using fentry and fexit, and uses `bpf_get_current_pid_tgid` and `bpf_printk` functions to obtain the ID, filename, and return value of the process calling do_unlinkat, and print them in the kernel log.
 
-To compile this program, you can use the ecc tool, and to run it, you can use the ecli command, and view the output of the eBPF program by checking the `/sys/kernel/debug/tracing/trace_pipe` file. For more examples and detailed development guide, please refer to the official documentation of eunomia-bpf: [here](https://github.com/eunomia-bpf/eunomia-bpf)
+To compile this program, you can use the ecc tool, and to run it, you can use the ecli command, and view the output of the eBPF program by checking the `/sys/kernel/debug/tracing/trace_pipe` file.
 
-If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository [here](https://github.com/eunomia-bpf/bpf-developer-tutorial) for more examples and complete tutorials.".
+If you'd like to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.

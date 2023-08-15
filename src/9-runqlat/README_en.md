@@ -1,4 +1,4 @@
-# eBPF Beginner's Development Tutorial 9: Capturing Process Scheduling Latency and Recording as Histogram
+# eBPF Tutorial by Example 9: Capturing Process Scheduling Latency and Recording as Histogram
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime.
 
@@ -43,8 +43,10 @@ Tracing run queue latency... Hit Ctrl-C to end.
        128 -> 255        : 6        |                                        |
        256 -> 511        : 3        |                                        |
        512 -> 1023       : 5        |                                        |
-      1024 -> 2047       : 27       |*                                       |".
-format: Return only the translated content, not including the original text.## runqlat Code Implementation
+      1024 -> 2047       : 27       |*                                       |
+```
+
+## runqlat Code Implementation
 
 ### runqlat.bpf.c
 
@@ -98,7 +100,6 @@ struct {
 
 static int trace_enqueue(u32 tgid, u32 pid)
 {
-``````cpp
 u64 ts;
 
 if (!pid)
@@ -182,52 +183,124 @@ return 0;
 SEC("raw_tp/sched_wakeup")
 int BPF_PROG(handle_sched_wakeup, struct task_struct *p)
 {
-if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+ if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
   return 0;
 
-return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
+ return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
 SEC("raw_tp/sched_wakeup_new")
-```# BPF_PROG(handle_sched_wakeup_new, struct task_struct *p) Definition
+int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
+{
+ if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+  return 0;
 
-The code defines a function named `BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)`. It takes a handle and a `task_struct` pointer as parameters. The function checks if a filter condition `filter_cg` is true and whether the current task is under the cgroup using the `bpf_current_task_under_cgroup` function with the `cgroup_map` parameter. If the filter condition is true and the task is not under the cgroup, the function returns 0. Otherwise, it calls the `trace_enqueue` function with the `BPF_CORE_READ(p, tgid)` and `BPF_CORE_READ(p, pid)` values and returns the result.
+ return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
+}
 
-## SEC("raw_tp/sched_switch") Definition
+SEC("raw_tp/sched_switch")
+int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct task_struct *next)
+{
+ return handle_switch(preempt, prev, next);
+}
 
-The code defines another function named `BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct task_struct *next)`. It is associated with the `raw_tp/sched_switch` security section. It takes a boolean parameter `preempt` and two `task_struct` pointers named `prev` and `next`. The function calls the `handle_switch` function with the `preempt`, `prev`, and `next` parameters and returns the result.
+char LICENSE[] SEC("license") = "GPL";
+```
 
-## LICENSE Declaration
-
-The code declares a character array named `LICENSE` and assigns it the value "GPL". It is associated with the `license` security section.
-
-## Constants and Global Variables
+#### Constants and Global Variables
 
 The code defines several constants and volatile global variables used for filtering corresponding tracing targets. These variables include:
+
+```c
+#define MAX_ENTRIES 10240
+#define TASK_RUNNING  0
+
+const volatile bool filter_cg = false;
+const volatile bool targ_per_process = false;
+const volatile bool targ_per_thread = false;
+const volatile bool targ_per_pidns = false;
+const volatile bool targ_ms = false;
+const volatile pid_t targ_tgid = 0;
+```
 
 - `MAX_ENTRIES`: The maximum number of map entries.
 - `TASK_RUNNING`: The task status value.
 - `filter_cg`, `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: Boolean variables for filtering and target options. These options can be set by user-space programs to customize the behavior of the eBPF program.
 
-## eBPF Maps
+#### eBPF Maps
 
 The code defines several eBPF maps including:
+
+```c
+struct {
+ __uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
+ __type(key, u32);
+ __type(value, u32);
+ __uint(max_entries, 1);
+} cgroup_map SEC(".maps");
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, u64);
+} start SEC(".maps");
+
+static struct hist zero;
+
+struct {
+ __uint(type, BPF_MAP_TYPE_HASH);
+ __uint(max_entries, MAX_ENTRIES);
+ __type(key, u32);
+ __type(value, struct hist);
+} hists SEC(".maps");
+```
+
 - `cgroup_map`: A cgroup array map used for filtering cgroups.
 - `start`: A hash map used to store timestamps when processes are enqueued.
 - `hists`: A hash map used to store histogram data for recording process scheduling delays.
 
-## Helper Functions
+#### Helper Functions
 
 The code includes two helper functions:
+
 - `trace_enqueue`: This function is used to record the timestamp when a process is enqueued. It takes the `tgid` and `pid` values as parameters. If the `pid` value is 0 or the `targ_tgid` value is not 0 and not equal to `tgid`, the function returns 0. Otherwise, it retrieves the current timestamp using `bpf_ktime_get_ns` and updates the `start` map with the `pid` key and the timestamp value.
+
+```c
+static int trace_enqueue(u32 tgid, u32 pid)
+{
+ u64 ts;
+
+ if (!pid)
+  return 0;
+ if (targ_tgid && targ_tgid != tgid)
+  return 0;
+
+ ts = bpf_ktime_get_ns();
+ bpf_map_update_elem(&start, &pid, &ts, BPF_ANY);
+ return 0;
+}
+```
+
 - `pid_namespace`: This function is used to get the PID namespace of a process. It takes a `task_struct` pointer as a parameter and returns the PID namespace of the process. The function retrieves the PID namespace by following `task_active_pid_ns()` and `pid->numbers[pid->level].ns`.
 
-Please note that the translation of function names and variable names may require further context.```
-level = BPF_CORE_READ(pid, level);
-bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
-inum = BPF_CORE_READ(upid.ns, ns.inum);
+```c
+static unsigned int pid_namespace(struct task_struct *task)
+{
+ struct pid *pid;
+ unsigned int level;
+ struct upid upid;
+ unsigned int inum;
 
-return inum;
+ /*  get the pid namespace by following task_active_pid_ns(),
+  *  pid->numbers[pid->level].ns
+  */
+ pid = BPF_CORE_READ(task, thread_pid);
+ level = BPF_CORE_READ(pid, level);
+ bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
+ inum = BPF_CORE_READ(upid.ns, ns.inum);
+
+ return inum;
 }
 ```
 
@@ -280,10 +353,7 @@ struct hist {
 
 ## Compilation and Execution
 
-`eunomia-bpf` is an open-source eBPF dynamic loading runtime and development toolkit combined with Wasm.
-Its purpose is to simplify the development, build, distribution, and execution of eBPF programs.
-You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the `ecc` compilation toolkit and `ecli` runtime.
-We will use `eunomia-bpf` to compile and run this example.
+We will use `eunomia-bpf` to compile and run this example. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the `ecc` compilation toolkit and `ecli` runtime.
 
 Compile:
 
@@ -354,11 +424,11 @@ comm = cpptools
         64 -> 127        : 8        |*****************************           |
        128 -> 255        : 3        |**********                              |
 
-``` 
+```
 
 Complete source code can be found at: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/9-runqlat>
 
-References: 
+References:
 
 - <https://www.brendangregg.com/blog/2016-10-08/linux-bcc-runqlat.html>
 - <https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.c>
@@ -368,7 +438,5 @@ References:
 runqlat is a Linux kernel BPF program that summarizes scheduler run queue latency using a bar chart to show the length of time tasks wait to run on a CPU. To compile this program, you can use the `ecc` tool and to run it, you can use the `ecli` command.
 
 runqlat is a tool for monitoring process scheduling latency in the Linux kernel. It can help you understand the time processes spend waiting to run in the kernel and optimize process scheduling based on this information to improve system performance. The original source code can be found in libbpf-tools: <https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
-
-For more examples and detailed development guide, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
 
 If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.

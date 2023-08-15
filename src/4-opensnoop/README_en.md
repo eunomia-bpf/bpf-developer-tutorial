@@ -1,8 +1,8 @@
-# eBPF Getting Started Development Tutorial 4: Capturing the System Call Collection of Process Opening Files in eBPF and Using Global Variables to Filter Process PIDs
+# eBPF Tutorial by Example 4: Capturing Process Opening Files and Filter with Global Variables
 
 eBPF (Extended Berkeley Packet Filter) is a kernel execution environment that allows users to run secure and efficient programs in the kernel. It is commonly used for network filtering, performance analysis, security monitoring, and other scenarios. The power of eBPF lies in its ability to capture and modify network packets or system calls at runtime in the kernel, enabling monitoring and adjustment of the operating system's behavior.
 
-This article is the fourth part of the eBPF Getting Started Development Tutorial, mainly focusing on how to capture the system call collection of process opening files and filtering process PIDs using global variables in eBPF.
+This article is the fourth part of the eBPF Tutorial by Example, mainly focusing on how to capture the system call collection of process opening files and filtering process PIDs using global variables in eBPF.
 
 In Linux system, the interaction between processes and files is achieved through system calls. System calls serve as the interface between user space programs and kernel space programs, allowing user programs to request specific operations from the kernel. In this tutorial, we focus on the sys_openat system call, which is used to open files.
 
@@ -118,7 +118,5 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe".\-3840345 [010] d... 3220701.10
 This article introduces how to use eBPF programs to capture the system calls for process file opening. In an eBPF program, we can capture the system calls for process file opening by defining functions `tracepoint__syscalls__sys_enter_open` and `tracepoint__syscalls__sys_enter_openat` and attaching them to the tracepoints `sys_enter_open` and `sys_enter_openat` using the `SEC` macro. We can use the `bpf_get_current_pid_tgid` function to get the process ID that calls the open or openat system call, and print it out in the kernel log using the `bpf_printk` function. In an eBPF program, we can also filter the output by defining a global variable `pid_target` to specify the pid of the process to be captured, only outputting the information of the specified process.
 
 By learning this tutorial, you should have a deeper understanding of how to capture and filter system calls for specific processes in eBPF. This method has widespread applications in system monitoring, performance analysis, and security auditing.
-
-For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
 
 If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and a complete tutorial.
