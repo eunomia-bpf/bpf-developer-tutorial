@@ -20,7 +20,6 @@
 #include <bpf/libbpf.h>
 #include <limits.h>
 #include "trace_helpers.h"
-#include "uprobe_helpers.h"
 
 #define min(x, y) ({				\
 	typeof(x) _min1 = (x);			\

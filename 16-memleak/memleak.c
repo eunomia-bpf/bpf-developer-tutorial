@@ -22,11 +22,8 @@
 
 #include "memleak.h"
 #include "memleak.skel.h"
-#include "trace_helpers.h"
 
-#ifdef USE_BLAZESYM
 #include "blazesym.h"
-#endif
 
 static struct env {
 	int interval;
@@ -86,6 +83,10 @@ struct allocation {
 	struct allocation_node* allocations;
 };
 
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC 1000000000L
+#endif
+
 #define __ATTACH_UPROBE(skel, sym_name, prog_name, is_retprobe) \
 	do { \
 		LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, \
@@ -132,13 +133,8 @@ static int event_notify(int fd, uint64_t event);
 
 static pid_t fork_sync_exec(const char *command, int fd);
 
-#ifdef USE_BLAZESYM
 static void print_stack_frame_by_blazesym(size_t frame, uint64_t addr, const blazesym_csym *sym);
 static void print_stack_frames_by_blazesym();
-#else
-static void print_stack_frames_by_ksyms();
-static void print_stack_frames_by_syms_cache();
-#endif
 static int print_stack_frames(struct allocation *allocs, size_t nr_allocs, int stack_traces_fd);
 
 static int alloc_size_compare(const void *a, const void *b);
@@ -146,7 +142,6 @@ static int alloc_size_compare(const void *a, const void *b);
 static int print_outstanding_allocs(int allocs_fd, int stack_traces_fd);
 static int print_outstanding_combined_allocs(int combined_allocs_fd, int stack_traces_fd);
 
-static bool has_kernel_node_tracepoints();
 static void disable_kernel_node_tracepoints(struct memleak_bpf *skel);
 static void disable_kernel_percpu_tracepoints(struct memleak_bpf *skel);
 static void disable_kernel_tracepoints(struct memleak_bpf *skel);
@@ -210,13 +205,8 @@ static struct sigaction sig_action = {
 
 static int child_exec_event_fd = -1;
 
-#ifdef USE_BLAZESYM
 static blazesym *symbolizer;
 static sym_src_cfg src_cfg;
-#else
-struct syms_cache *syms_cache;
-struct ksyms *ksyms;
-#endif
 static void (*print_stack_frames_func)();
 
 static uint64_t *stack;
@@ -224,6 +214,14 @@ static uint64_t *stack;
 static struct allocation *allocs;
 
 static const char default_object[] = "libc.so.6";
+
+unsigned long long get_ktime_ns(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * NSEC_PER_SEC + ts.tv_nsec;
+}
 
 int main(int argc, char *argv[])
 {
@@ -304,7 +302,6 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 
-#ifdef USE_BLAZESYM
 	if (env.pid < 0) {
 		src_cfg.src_type = SRC_T_KERNEL;
 		src_cfg.params.kernel.kallsyms = NULL;
@@ -313,7 +310,6 @@ int main(int argc, char *argv[])
 		src_cfg.src_type = SRC_T_PROCESS;
 		src_cfg.params.process.pid = env.pid;
 	}
-#endif
 
 	// allocate space for storing "allocation" structs
 	if (env.combined_only)
@@ -352,8 +348,7 @@ int main(int argc, char *argv[])
 
 	// disable kernel tracepoints based on settings or availability
 	if (env.kernel_trace) {
-		if (!has_kernel_node_tracepoints())
-			disable_kernel_node_tracepoints(skel);
+		disable_kernel_node_tracepoints(skel);
 
 		if (!env.percpu)
 			disable_kernel_percpu_tracepoints(skel);
@@ -400,7 +395,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-#ifdef USE_BLAZESYM
 	symbolizer = blazesym_new();
 	if (!symbolizer) {
 		fprintf(stderr, "Failed to load blazesym\n");
@@ -409,28 +403,6 @@ int main(int argc, char *argv[])
 		goto cleanup;
 	}
 	print_stack_frames_func = print_stack_frames_by_blazesym;
-#else
-	if (env.kernel_trace) {
-		ksyms = ksyms__load();
-		if (!ksyms) {
-			fprintf(stderr, "Failed to load ksyms\n");
-			ret = -ENOMEM;
-
-			goto cleanup;
-		}
-		print_stack_frames_func = print_stack_frames_by_ksyms;
-	} else {
-		syms_cache = syms_cache__new(0);
-		if (!syms_cache) {
-			fprintf(stderr, "Failed to create syms_cache\n");
-			ret = -ENOMEM;
-
-			goto cleanup;
-		}
-		print_stack_frames_func = print_stack_frames_by_syms_cache;
-	}
-#endif
-
 	printf("Tracing outstanding memory allocs...  Hit Ctrl-C to end\n");
 
 	// main loop
@@ -467,14 +439,7 @@ int main(int argc, char *argv[])
 	}
 
 cleanup:
-#ifdef USE_BLAZESYM
 	blazesym_free(symbolizer);
-#else
-	if (syms_cache)
-		syms_cache__free(syms_cache);
-	if (ksyms)
-		ksyms__free(ksyms);
-#endif
 	memleak_bpf__destroy(skel);
 
 	free(allocs);
@@ -671,7 +636,6 @@ pid_t fork_sync_exec(const char *command, int fd)
 	return pid;
 }
 
-#if USE_BLAZESYM
 void print_stack_frame_by_blazesym(size_t frame, uint64_t addr, const blazesym_csym *sym)
 {
 	if (!sym)
@@ -721,51 +685,6 @@ void print_stack_frames_by_blazesym()
 
 	blazesym_result_free(result);
 }
-#else
-void print_stack_frames_by_ksyms()
-{
-	for (size_t i = 0; i < env.perf_max_stack_depth; ++i) {
-		const uint64_t addr = stack[i];
-
-		if (addr == 0)
-			break;
-
-		const struct ksym *ksym = ksyms__map_addr(ksyms, addr);
-		if (ksym)
-			printf("\t%zu [<%016lx>] %s+0x%lx\n", i, addr, ksym->name, addr - ksym->addr);
-		else
-			printf("\t%zu [<%016lx>] <%s>\n", i, addr, "null sym");
-	}
-}
-
-void print_stack_frames_by_syms_cache()
-{
-	const struct syms *syms = syms_cache__get_syms(syms_cache, env.pid);
-	if (!syms) {
-		fprintf(stderr, "Failed to get syms\n");
-		return;
-	}
-
-	for (size_t i = 0; i < env.perf_max_stack_depth; ++i) {
-		const uint64_t addr = stack[i];
-
-		if (addr == 0)
-			break;
-
-		char *dso_name;
-		uint64_t dso_offset;
-		const struct sym *sym = syms__map_addr_dso(syms, addr, &dso_name, &dso_offset);
-		if (sym) {
-			printf("\t%zu [<%016lx>] %s+0x%lx", i, addr, sym->name, sym->offset);
-			if (dso_name)
-				printf(" [%s]", dso_name);
-			printf("\n");
-		} else {
-			printf("\t%zu [<%016lx>] <%s>\n", i, addr, "null sym");
-		}
-	}
-}
-#endif
 
 int print_stack_frames(struct allocation *allocs, size_t nr_allocs, int stack_traces_fd)
 {
@@ -992,12 +911,6 @@ int print_outstanding_combined_allocs(int combined_allocs_fd, int stack_traces_f
 	print_stack_frames(allocs, nr_allocs, stack_traces_fd);
 
 	return 0;
-}
-
-bool has_kernel_node_tracepoints()
-{
-	return tracepoint_exists("kmem", "kmalloc_node") &&
-		tracepoint_exists("kmem", "kmem_cache_alloc_node");
 }
 
 void disable_kernel_node_tracepoints(struct memleak_bpf *skel)
