@@ -27,3 +27,19 @@ jobs:
       run: |
         make -C src/12-profile
         # sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 13 tcpconnlat
+      run: |
+        make -C src/13-tcpconnlat
+        # sudo timeout -s 2 3 src/13-tcpconnlat/tcpconnlat || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 14 tcpstates
+      run: |
+        make -C src/14-tcpstates
+        # sudo timeout -s 2 3 src/14-tcpstates/tcpstates || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 16 memleak
+      run: |
+        make -C src/16-memleak
+        # sudo timeout -s 2 3 src/16-memleak/memleak || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 17 biopattern
+      run: |
+        make -C src/17-biopattern
+        # sudo timeout -s 2 3 src/17-biopattern/biopattern || if [ $? = 124 ]; then exit 0; else exit $?; fi
