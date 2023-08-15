@@ -689,8 +689,7 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 <p>通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 来跟踪和统计 TCP 连接建立的延时。我们首先深入探讨了 eBPF 程序如何在内核态监听特定的内核函数，然后通过捕获这些函数的调用，从而得到连接建立的起始时间和结束时间，计算出延时。</p>
 <p>我们还进一步了解了如何使用 BPF maps 来在内核态存储和查询数据，从而在 eBPF 程序的多个部分之间共享数据。同时，我们也探讨了如何使用 perf events 来将数据从内核态发送到用户态，以便进一步处理和展示。</p>
 <p>在用户态，我们介绍了如何使用 libbpf 库的 API，例如 perf_buffer__poll，来接收和处理内核态发送过来的数据。我们还讲解了如何对这些数据进行解析和打印，使得它们能以人类可读的形式显示出来。</p>
-<p>如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 。您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程。</p>
-<p>接下来的教程将进一步探讨 eBPF 的高级特性，例如如何使用 eBPF 来追踪网络包的传输路径，如何利用 eBPF 对系统的性能进行细粒度的监控等等。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术，希望这些内容对您在 eBPF 开发道路上的学习和实践有所帮助。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a> 。您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 
                     </main>
 

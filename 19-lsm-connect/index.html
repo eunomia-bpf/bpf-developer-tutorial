@@ -287,7 +287,7 @@ Retrying.
 <p>完整源代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect</a></p>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
 <p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 &quot;cannot override a denial&quot; 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
-<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 <h2 id="参考"><a class="header" href="#参考">参考</a></h2>
 <ul>
 <li><a href="https://github.com/leodido/demo-cloud-native-ebpf-day">https://github.com/leodido/demo-cloud-native-ebpf-day</a></li>

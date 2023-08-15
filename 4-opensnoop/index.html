@@ -253,7 +253,7 @@ Runing eBPF program...
 <p>本文介绍了如何使用 eBPF 程序来捕获进程打开文件的系统调用。在 eBPF 程序中，我们可以通过定义 <code>tracepoint__syscalls__sys_enter_open</code> 和 <code>tracepoint__syscalls__sys_enter_openat</code> 函数并使用 <code>SEC</code> 宏把它们附加到 sys_enter_open 和 sys_enter_openat 两个 tracepoint 来捕获进程打开文件的系统调用。我们可以使用 <code>bpf_get_current_pid_tgid</code> 函数获取调用 open 或 openat 系统调用的进程 ID，并使用 <code>bpf_printk</code> 函数在内核日志中打印出来。在 eBPF 程序中，我们还可以通过定义一个全局变量 <code>pid_target</code> 来指定要捕获的进程的 pid，从而过滤输出，只输出指定的进程的信息。</p>
 <p>通过学习本教程，您应该对如何在 eBPF 中捕获和过滤特定进程的系统调用有了更深入的了解。这种方法在系统监控、性能分析和安全审计等场景中具有广泛的应用。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
-<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 
                     </main>
 
