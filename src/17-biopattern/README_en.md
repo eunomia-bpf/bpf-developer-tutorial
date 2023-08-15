@@ -127,27 +127,27 @@ char LICENSE[] SEC("license") = "GPL";
 
 1. Global variable definitions
 
-   ```c
+```c
    const volatile bool filter_dev = false; 
    const volatile __u32 targ_dev = 0;
-   ```
+```
 
-   These two global variables are used for device filtering. `filter_dev` determines whether device filtering is enabled or not, and `targ_dev` is the identifier of the target device we want to track.
+These two global variables are used for device filtering. `filter_dev` determines whether device filtering is enabled or not, and `targ_dev` is the identifier of the target device we want to track.
 
 2. BPF map definition
 
-   ```c
+```c
    struct { __uint(type, BPF_MAP_TYPE_HASH); 
             __uint(max_entries, 64); __type(key, u32); 
             __type(value, struct counter); 
     } counters SEC(".maps").
-   ```
+```
 
-   This part of the code defines a BPF map of type hash table. The key of the map is the identifier of the device, and the value is a `counter` struct, which is used to store the I/O statistics of the device.
+This part of the code defines a BPF map of type hash table. The key of the map is the identifier of the device, and the value is a `counter` struct, which is used to store the I/O statistics of the device.
 
 3. The tracepoint function
 
-   ```c
+```c
     SEC("tracepoint/block/block_rq_complete")
     int handle__block_rq_complete(void *args)
     {
@@ -184,22 +184,22 @@ char LICENSE[] SEC("license") = "GPL";
         counterp->last_sector = sector + nr_sector;
         return 0;
     }
-   ```
+```
 
-   In Linux, a trace point called `block_rq_complete` is triggered every time an I/O request for a block device completes. This provides an opportunity to capture these events with eBPF and further analyse the I/O patterns.
+In Linux, a trace point called `block_rq_complete` is triggered every time an I/O request for a block device completes. This provides an opportunity to capture these events with eBPF and further analyse the I/O patterns.
 
-   Main Logic Analysis:
+Main Logic Analysis:
 
-   - **Extracting I/O request information**: get information about the I/O request from the incoming parameters. There are two possible context structures depending on the return value of `has_block_rq_completion`. This is because different versions of the Linux kernel may have different tracepoint definitions. In either case, we extract the sector number `(sector)`, the number of sectors `(nr_sector)` and the device identifier `(dev)` from the context.
+- **Extracting I/O request information**: get information about the I/O request from the incoming parameters. There are two possible context structures depending on the return value of `has_block_rq_completion`. This is because different versions of the Linux kernel may have different tracepoint definitions. In either case, we extract the sector number `(sector)`, the number of sectors `(nr_sector)` and the device identifier `(dev)` from the context.
 
-   - **Device filtering**: If device filtering is enabled `(filter_dev` is `true` ) and the current device is not the target device `(targ_dev` ), it is returned directly. This allows the user to track only specific devices, not all devices.
+- **Device filtering**: If device filtering is enabled `(filter_dev` is `true` ) and the current device is not the target device `(targ_dev` ), it is returned directly. This allows the user to track only specific devices, not all devices.
 
-   - **Statistics update**:
+- **Statistics update**:
 
-     - **Lookup or initialise statistics**: use the `bpf_map_lookup_or_try_init` function to lookup or initialise statistics related to the current device. If there is no statistics for the current device in the map, it will be initialised using the `zero` structure.
-     - **Determine the I/O mode**: Based on the sector number of the current I/O request and the previous I/O request, we can determine whether the current request is random or sequential. If the sector numbers of the two requests are the same, then it is sequential; otherwise, it is random. We then use the `__sync_fetch_and_add` function to update the corresponding statistics. This is an atomic operation that ensures data consistency in a concurrent environment.
-     - **Update the amount of data**: we also update the total amount of data for the device, which is done by multiplying the number of sectors `(nr_sector` ) by 512 (the number of bytes per sector).
-     - **Update the sector number of the last I/O request**: for the next comparison, we update the value of `last_sector`.
+  - **Lookup or initialise statistics**: use the `bpf_map_lookup_or_try_init` function to lookup or initialise statistics related to the current device. If there is no statistics for the current device in the map, it will be initialised using the `zero` structure.
+- **Determine the I/O mode**: Based on the sector number of the current I/O request and the previous I/O request, we can determine whether the current request is random or sequential. If the sector numbers of the two requests are the same, then it is sequential; otherwise, it is random. We then use the `__sync_fetch_and_add` function to update the corresponding statistics. This is an atomic operation that ensures data consistency in a concurrent environment.
+- **Update the amount of data**: we also update the total amount of data for the device, which is done by multiplying the number of sectors `(nr_sector` ) by 512 (the number of bytes per sector).
+- **Update the sector number of the last I/O request**: for the next comparison, we update the value of `last_sector`.
 
 In some versions of the Linux kernel, the naming and structure of the tracepoint has changed due to the introduction of a new tracepoint, `block_rq_error`. This means that the structural name of the former `block_rq_complete` tracepoint has been changed from `trace_event_raw_block_rq_complete` to `trace_event_raw_block_rq_completion`, a change which may cause compatibility issues with eBPF programs on different versions of the kernel. This change may cause compatibility issues with eBPF programs on different versions of the kernel.
 
@@ -207,7 +207,7 @@ To address this issue, the `biopattern` utility introduces a mechanism to dynami
 
 1. **Define two trace point structures**:
 
-    ```c
+```c
     struct trace_event_raw_block_rq_complete___x {
         dev_t dev;
         sector_t sector;
@@ -219,22 +219,22 @@ To address this issue, the `biopattern` utility introduces a mechanism to dynami
         sector_t sector;
         unsigned int nr_sector;
     } __attribute__((preserve_access_index));
-    ```
+```
 
-   Two tracepoint structures are defined here, corresponding to different versions of the kernel. Each structure contains a device identifier `(dev` ), sector number `(sector` ), and number of sectors `(nr_sector` ).
+Two tracepoint structures are defined here, corresponding to different versions of the kernel. Each structure contains a device identifier `(dev` ), sector number `(sector` ), and number of sectors `(nr_sector` ).
 
 2. **Dynamic detection of trackpoint structures**:
 
-    ```c
+```c
     static __always_inline bool has_block_rq_completion()
     {
         if (bpf_core_type_exists(struct trace_event_raw_block_rq_completion___x))
             return true;
         return false;
     }
-    ```
+```
 
-   The `has_block_rq_completion` function uses the `bpf_core_type_exists` function to detect the presence of the structure `trace_event_raw_block_rq_completion___x` in the current kernel. If it exists, the function returns `true`, indicating that the current kernel is using the new tracepoint structure; otherwise, it returns `false`, indicating that it is using the old structure. The two different definitions are handled separately in the corresponding eBPF code, which is a common solution for adapting to changes between kernel versions.
+The `has_block_rq_completion` function uses the `bpf_core_type_exists` function to detect the presence of the structure `trace_event_raw_block_rq_completion___x` in the current kernel. If it exists, the function returns `true`, indicating that the current kernel is using the new tracepoint structure; otherwise, it returns `false`, indicating that it is using the old structure. The two different definitions are handled separately in the corresponding eBPF code, which is a common solution for adapting to changes between kernel versions.
 
 ### User State Code
 
@@ -242,7 +242,7 @@ The `biopattern` tool's userland code is responsible for reading statistics from
 
 1. Main loop
 
-   ```c
+```c
     /* main: poll */
     while (1) {
         sleep(env.interval);
@@ -254,17 +254,17 @@ The `biopattern` tool's userland code is responsible for reading statistics from
         if (exiting || --env.times == 0)
             break;
     }
-    ```
+```
 
-   This is the main loop of the `biopattern` utility, and its workflow is as follows:
+This is the main loop of the `biopattern` utility, and its workflow is as follows:
 
-   - **Wait**: use the `sleep` function to wait for the specified interval `(env.interval` ).
-   - `print_map`: call `print_map` function to print the statistics in BPF map.
-   - **Exit condition**: if an exit signal is received `(exiting` is `true` ) or if the specified number of runs is reached `(env.times` reaches 0), the loop exits.
+- **Wait**: use the `sleep` function to wait for the specified interval `(env.interval` ).
+- `print_map`: call `print_map` function to print the statistics in BPF map.
+- **Exit condition**: if an exit signal is received `(exiting` is `true` ) or if the specified number of runs is reached `(env.times` reaches 0), the loop exits.
 
 2. Print mapping function
 
-      ```c
+```c
     static int print_map(struct bpf_map *counters, struct partitions *partitions)
     {
         __u32 total, lookup_key = -1, next_key;
@@ -311,14 +311,14 @@ The `biopattern` tool's userland code is responsible for reading statistics from
 
         return 0;
     }
-    ```
+```
 
-   The `print_map` function is responsible for reading statistics from the BPF map and printing them to the console. The main logic is as follows:
+The `print_map` function is responsible for reading statistics from the BPF map and printing them to the console. The main logic is as follows:
 
-   - **Traverse the BPF map**: Use the `bpf_map_get_next_key` and `bpf_map_lookup_elem` functions to traverse the BPF map and get the statistics for each device.
-   - **Calculate totals**: Calculate the total number of random and sequential I/Os for each device.
-   - **Print statistics**: If timestamp is enabled `(env.timestamp` is `true` ), the current time is printed first. Next, the device name, percentage of random I/O, percentage of sequential I/O, total I/O, and total data in KB are printed.
-   - **Cleaning up the BPF map**: For the next count, use the `bpf_map_get_next_key` and `bpf_map_delete_elem` functions to clean up all entries in the BPF map.
+- **Traverse the BPF map**: Use the `bpf_map_get_next_key` and `bpf_map_lookup_elem` functions to traverse the BPF map and get the statistics for each device.
+- **Calculate totals**: Calculate the total number of random and sequential I/Os for each device.
+- **Print statistics**: If timestamp is enabled `(env.timestamp` is `true` ), the current time is printed first. Next, the device name, percentage of random I/O, percentage of sequential I/O, total I/O, and total data in KB are printed.
+- **Cleaning up the BPF map**: For the next count, use the `bpf_map_get_next_key` and `bpf_map_delete_elem` functions to clean up all entries in the BPF map.
 
 ## Summary
 

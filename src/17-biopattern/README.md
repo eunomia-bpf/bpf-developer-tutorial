@@ -127,29 +127,29 @@ char LICENSE[] SEC("license") = "GPL";
 
 1. 全局变量定义
 
-    ```c
+```c
     const volatile bool filter_dev = false;
     const volatile __u32 targ_dev = 0;
-    ```
+```
 
-    这两个全局变量用于设备过滤。`filter_dev` 决定是否启用设备过滤，而 `targ_dev` 是我们想要追踪的目标设备的标识符。
+这两个全局变量用于设备过滤。`filter_dev` 决定是否启用设备过滤，而 `targ_dev` 是我们想要追踪的目标设备的标识符。
 
-2. BPF map 定义
+BPF map 定义：
 
-    ```c
+```c
     struct {
         __uint(type, BPF_MAP_TYPE_HASH);
         __uint(max_entries, 64);
         __type(key, u32);
         __type(value, struct counter);
     } counters SEC(".maps");
-    ```
+```
 
-    这部分代码定义了一个 BPF map，类型为哈希表。该映射的键是设备的标识符，而值是一个 `counter` 结构体，用于存储设备的 I/O 统计信息。
+这部分代码定义了一个 BPF map，类型为哈希表。该映射的键是设备的标识符，而值是一个 `counter` 结构体，用于存储设备的 I/O 统计信息。
 
-3. 追踪点函数
+追踪点函数：
 
-    ```c
+```c
     SEC("tracepoint/block/block_rq_complete")
     int handle__block_rq_complete(void *args)
     {
@@ -186,15 +186,15 @@ char LICENSE[] SEC("license") = "GPL";
         counterp->last_sector = sector + nr_sector;
         return 0;
     }
-    ```
+```
 
-    在 Linux 中，每次块设备的 I/O 请求完成时，都会触发一个名为 `block_rq_complete` 的追踪点。这为我们提供了一个机会，通过 eBPF 来捕获这些事件，并进一步分析 I/O 的模式。
+在 Linux 中，每次块设备的 I/O 请求完成时，都会触发一个名为 `block_rq_complete` 的追踪点。这为我们提供了一个机会，通过 eBPF 来捕获这些事件，并进一步分析 I/O 的模式。
 
-    主要逻辑分析：
+主要逻辑分析：
 
-    - **提取 I/O 请求信息**：从传入的参数中获取 I/O 请求的相关信息。这里有两种可能的上下文结构，取决于 `has_block_rq_completion` 的返回值。这是因为不同版本的 Linux 内核可能会有不同的追踪点定义。无论哪种情况，我们都从上下文中提取出扇区号 (`sector`)、扇区数量 (`nr_sector`) 和设备标识符 (`dev`)。
-    - **设备过滤**：如果启用了设备过滤 (`filter_dev` 为 `true`)，并且当前设备不是目标设备 (`targ_dev`)，则直接返回。这允许用户只追踪特定的设备，而不是所有设备。
-    - **统计信息更新**：
+- **提取 I/O 请求信息**：从传入的参数中获取 I/O 请求的相关信息。这里有两种可能的上下文结构，取决于 `has_block_rq_completion` 的返回值。这是因为不同版本的 Linux 内核可能会有不同的追踪点定义。无论哪种情况，我们都从上下文中提取出扇区号 (`sector`)、扇区数量 (`nr_sector`) 和设备标识符 (`dev`)。
+- **设备过滤**：如果启用了设备过滤 (`filter_dev` 为 `true`)，并且当前设备不是目标设备 (`targ_dev`)，则直接返回。这允许用户只追踪特定的设备，而不是所有设备。
+- **统计信息更新**：
       - **查找或初始化统计信息**：使用 `bpf_map_lookup_or_try_init` 函数查找或初始化与当前设备相关的统计信息。如果映射中没有当前设备的统计信息，它会使用 `zero` 结构体进行初始化。
       - **判断 I/O 模式**：根据当前 I/O 请求与上一个 I/O 请求的扇区号，我们可以判断当前请求是随机的还是顺序的。如果两次请求的扇区号相同，那么它是顺序的；否则，它是随机的。然后，我们使用 `__sync_fetch_and_add` 函数更新相应的统计信息。这是一个原子操作，确保在并发环境中数据的一致性。
       - **更新数据量**：我们还更新了该设备的总数据量，这是通过将扇区数量 (`nr_sector`) 乘以 512（每个扇区的字节数）来实现的。
@@ -206,7 +206,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 1. **定义两种追踪点结构**：
 
-    ```c
+```c
     struct trace_event_raw_block_rq_complete___x {
         dev_t dev;
         sector_t sector;
@@ -218,30 +218,30 @@ char LICENSE[] SEC("license") = "GPL";
         sector_t sector;
         unsigned int nr_sector;
     } __attribute__((preserve_access_index));
-    ```
+```
 
-    这里定义了两种追踪点结构，分别对应于不同版本的内核。每种结构都包含设备标识符 (`dev`)、扇区号 (`sector`) 和扇区数量 (`nr_sector`)。
+这里定义了两种追踪点结构，分别对应于不同版本的内核。每种结构都包含设备标识符 (`dev`)、扇区号 (`sector`) 和扇区数量 (`nr_sector`)。
 
-2. **动态检测追踪点结构**：
+**动态检测追踪点结构**：
 
-    ```c
+```c
     static __always_inline bool has_block_rq_completion()
     {
         if (bpf_core_type_exists(struct trace_event_raw_block_rq_completion___x))
             return true;
         return false;
     }
-    ```
+```
 
-    `has_block_rq_completion` 函数使用 `bpf_core_type_exists` 函数来检测当前内核是否存在 `trace_event_raw_block_rq_completion___x` 结构。如果存在，函数返回 `true`，表示当前内核使用的是新的追踪点结构；否则，返回 `false`，表示使用的是旧的结构。在对应的 eBPF 代码中，会根据两种不同的定义分别进行处理，这也是适配不同内核版本之间的变更常见的方案。
+`has_block_rq_completion` 函数使用 `bpf_core_type_exists` 函数来检测当前内核是否存在 `trace_event_raw_block_rq_completion___x` 结构。如果存在，函数返回 `true`，表示当前内核使用的是新的追踪点结构；否则，返回 `false`，表示使用的是旧的结构。在对应的 eBPF 代码中，会根据两种不同的定义分别进行处理，这也是适配不同内核版本之间的变更常见的方案。
 
 ### 用户态代码
 
 `biopattern` 工具的用户态代码负责从 BPF 映射中读取统计数据，并将其展示给用户。通过这种方式，系统管理员可以实时监控每个设备的 I/O 模式，从而更好地理解和优化系统的 I/O 性能。
 
-1. 主循环
+主循环：
 
-    ```c
+```c
     /* main: poll */
     while (1) {
         sleep(env.interval);
@@ -253,16 +253,17 @@ char LICENSE[] SEC("license") = "GPL";
         if (exiting || --env.times == 0)
             break;
     }
-    ```
+```
 
-    这是 `biopattern` 工具的主循环，它的工作流程如下：
-    - **等待**：使用 `sleep` 函数等待指定的时间间隔 (`env.interval`)。
-    - **打印映射**：调用 `print_map` 函数打印 BPF 映射中的统计数据。
-    - **退出条件**：如果收到退出信号 (`exiting` 为 `true`) 或者达到指定的运行次数 (`env.times` 达到 0)，则退出循环。
+这是 `biopattern` 工具的主循环，它的工作流程如下：
 
-2. 打印映射函数
+- **等待**：使用 `sleep` 函数等待指定的时间间隔 (`env.interval`)。
+- **打印映射**：调用 `print_map` 函数打印 BPF 映射中的统计数据。
+- **退出条件**：如果收到退出信号 (`exiting` 为 `true`) 或者达到指定的运行次数 (`env.times` 达到 0)，则退出循环。
 
-    ```c
+打印映射函数：
+
+```c
     static int print_map(struct bpf_map *counters, struct partitions *partitions)
     {
         __u32 total, lookup_key = -1, next_key;
@@ -309,14 +310,14 @@ char LICENSE[] SEC("license") = "GPL";
 
         return 0;
     }
-    ```
+```
 
-    `print_map` 函数负责从 BPF 映射中读取统计数据，并将其打印到控制台。其主要逻辑如下：
+`print_map` 函数负责从 BPF 映射中读取统计数据，并将其打印到控制台。其主要逻辑如下：
 
-    - **遍历 BPF 映射**：使用 `bpf_map_get_next_key` 和 `bpf_map_lookup_elem` 函数遍历 BPF 映射，获取每个设备的统计数据。
-    - **计算总数**：计算每个设备的随机和顺序 I/O 的总数。
-    - **打印统计数据**：如果启用了时间戳 (`env.timestamp` 为 `true`)，则首先打印当前时间。接着，打印设备名称、随机 I/O 的百分比、顺序 I/O 的百分比、总 I/O 数量和总数据量（以 KB 为单位）。
-    - **清理 BPF 映射**：为了下一次的统计，使用 `bpf_map_get_next_key` 和 `bpf_map_delete_elem` 函数清理 BPF 映射中的所有条目。
+- **遍历 BPF 映射**：使用 `bpf_map_get_next_key` 和 `bpf_map_lookup_elem` 函数遍历 BPF 映射，获取每个设备的统计数据。
+- **计算总数**：计算每个设备的随机和顺序 I/O 的总数。
+- **打印统计数据**：如果启用了时间戳 (`env.timestamp` 为 `true`)，则首先打印当前时间。接着，打印设备名称、随机 I/O 的百分比、顺序 I/O 的百分比、总 I/O 数量和总数据量（以 KB 为单位）。
+- **清理 BPF 映射**：为了下一次的统计，使用 `bpf_map_get_next_key` 和 `bpf_map_delete_elem` 函数清理 BPF 映射中的所有条目。
 
 ## 总结
 
