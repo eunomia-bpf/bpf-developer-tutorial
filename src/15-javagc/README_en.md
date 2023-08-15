@@ -98,10 +98,9 @@ struct {
 } data_map SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-``````cpp
-__type(key, int);
-__type(value, int);
+    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY)
+    __type(key, int);
+    __type(value, int);
 } perf_map SEC(".maps");
 
 __u32 time;

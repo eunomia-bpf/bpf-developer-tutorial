@@ -234,7 +234,7 @@ This code is an eBPF program used to capture and analyze the execution informati
 
 The code for Softirq is similar, and I won't elaborate on it here.
 
-## Run code.Translated content:
+## Run code.Translated content
 
 "eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
 
@@ -258,4 +258,4 @@ In this chapter (eBPF Tutorial by Example Ten: Capturing Interrupt Events in eBP
 
 By studying the content of this chapter, you should have mastered the methods of capturing interrupt events with hardirqs or softirqs in eBPF, as well as how to analyze these events to identify performance issues and other problems related to interrupt handling in the kernel. These skills are crucial for analyzing and optimizing the performance of the Linux kernel.
 
-To better understand and practice eBPF programming, we recommend reading the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>. In addition, we provide a complete tutorial and source code for you to view and learn from at <https://github.com/eunomia-bpf/bpf-developer-tutorial>. We hope this tutorial can help you get started with eBPF development smoothly and provide useful references for your further learning and practice."
+To better understand and practice eBPF programming, we recommend reading the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>. In addition, we provide a complete tutorial and source code for you to view and learn from at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
