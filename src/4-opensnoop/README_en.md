@@ -47,7 +47,7 @@ This eBPF program implements the following:
 6. Check if the `pid_target` variable is equal to the current process's PID. If `pid_target` is not 0 and is not equal to the current process's PID, return `false` to skip capturing the `sys_openat` call of that process.
 7. Use the `bpf_printk()` function to print the captured process ID and relevant information about the `sys_openat` call. These information can be viewed in user space using BPF tools.
 8. Set the program license to "GPL", which is a necessary condition for running eBPF programs.### Instructions
-Translate the following Chinese text to English while maintaining the original formatting: 
+Translate the following Chinese text to English while maintaining the original formatting:
 
 "This eBPF program can be loaded into the kernel and executed using tools like libbpf or eunomia-bpf. It captures the sys_openat system call of the specified process (or all processes) and outputs relevant information in user-space.
 
@@ -121,4 +121,4 @@ By learning this tutorial, you should have a deeper understanding of how to capt
 
 For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
 
-If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and a complete tutorial.
+If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and a complete tutorial.

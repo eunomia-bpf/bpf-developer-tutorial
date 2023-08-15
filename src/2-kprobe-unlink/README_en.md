@@ -23,7 +23,7 @@ Features and Usage Restrictions of kprobes:
 5. kprobes avoids calling the callback function of another probe point again when processing the probe point function. For example, if a probe point is registered on the `printk()` function and the callback function may call `printk()` again, the callback for the `printk` probe point will not be triggered again. Only the `nmissed` field in the `kprobe` structure will be incremented.
 6. mutex locks and dynamic memory allocation are not used in the registration and removal process of kprobes.
 
-format: markdown7. During the execution of kprobes callback functions, kernel preemption is disabled, and it may also be executed with interrupts disabled, which depends on the CPU architecture. Therefore, regardless of the situation, do not call functions that will give up the CPU in the callback function (such as semaphore, mutex lock, etc.);
+7. During the execution of kprobes callback functions, kernel preemption is disabled, and it may also be executed with interrupts disabled, which depends on the CPU architecture. Therefore, regardless of the situation, do not call functions that will give up the CPU in the callback function (such as semaphore, mutex lock, etc.);
 8. kretprobe is implemented by replacing the return address with the pre-defined trampoline address, so stack backtraces and gcc inline function `__builtin_return_address()` will return the address of the trampoline instead of the actual return address of the probed function;
 9. If the number of function calls and return calls of a function are unequal, registering kretprobe on such a function may not achieve the expected effect, for example, the `do_exit()` function will have problems, while the `do_execve()` function and `do_fork()` function will not;
 10. When entering and exiting a function, if the CPU is running on a stack that does not belong to the current task, registering kretprobe on that function may have unpredictable consequences. Therefore, kprobes does not support registering kretprobe for the `__switch_to()` function under the X86_64 architecture and will directly return `-EINVAL`.
@@ -86,8 +86,8 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
     const char *filename;
 
     pid = bpf_get_current_pid_tgid() >> 32;
-    filename = BPF_CORE_READ(name, name);".```
-bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
+    filename = BPF_CORE_READ(name, name);
+    bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
     return 0;
 }
 ```
@@ -147,4 +147,4 @@ In this article's example, we learned how to use eBPF's kprobe and kretprobe to 
 
 This article is the second part of the introductory eBPF development tutorial. The next article will explain how to use fentry to monitor and capture the unlink system call in eBPF.
 
-If you'd like to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and complete tutorials.
+If you'd like to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.

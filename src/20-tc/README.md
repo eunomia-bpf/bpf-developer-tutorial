@@ -100,7 +100,7 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 本文介绍了如何向 TC 流量控制子系统挂载 eBPF 类型的 filter 来实现对链路层数据包的排队处理。基于 eunomia-bpf 提供的通过注释向 libbpf 传递参数的方案，我们可以将自己编写的 tc BPF 程序以指定选项挂载到目标网络设备，并借助内核的 sk_buff 结构对数据包进行过滤处理。
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 ## 参考
 

@@ -596,6 +596,4 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 
 在用户态，我们介绍了如何使用 libbpf 库的 API，例如 perf_buffer__poll，来接收和处理内核态发送过来的数据。我们还讲解了如何对这些数据进行解析和打印，使得它们能以人类可读的形式显示出来。
 
-如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
-
-接下来的教程将进一步探讨 eBPF 的高级特性，例如如何使用 eBPF 来追踪网络包的传输路径，如何利用 eBPF 对系统的性能进行细粒度的监控等等。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术，希望这些内容对您在 eBPF 开发道路上的学习和实践有所帮助。
+如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。

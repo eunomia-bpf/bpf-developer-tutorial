@@ -328,6 +328,6 @@ static int event_handler(void *_ctx, void *data, size_t size)
 
 通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 程序进行性能分析。在这个过程中，我们详细讲解了如何创建 eBPF 程序，监控进程的性能，并从 ring buffer 中获取数据以分析栈回溯。我们还学习了如何使用 perf_event_open() 函数设置性能监控，并将 BPF 程序附加到性能事件上。在本教程中，我们还展示了如何编写 eBPF 程序来捕获进程的内核和用户空间栈信息，进而分析程序性能瓶颈。通过这个例子，您可以了解到 eBPF 在性能分析方面的强大功能。
 
-如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术，希望这些内容对您在 eBPF 开发道路上的学习和实践有所帮助。

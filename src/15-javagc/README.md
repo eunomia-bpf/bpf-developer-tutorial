@@ -322,4 +322,4 @@ TIME     CPU     PID     GC TIME
 
 此外，我们也介绍了一些关于 Java GC、USDT 和 eBPF 的基础知识和实践技巧，这些知识和技巧对于想要在网络和系统性能分析领域深入研究的开发者来说是非常有价值的。
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。

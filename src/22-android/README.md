@@ -145,7 +145,7 @@ Error: BpfError("load and attach ebpf program failed")
 
 Android 系统 eBPF 工具的发展需要官方新特性的加入，目前看来通过 Android APP 直接使用 eBPF 工具需要的工作量较大，同时由于 eBPF 工具需要 root 权限，普通 Android 用户的使用会面临较多困难。
 
-如果希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+如果希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 ## 参考
 

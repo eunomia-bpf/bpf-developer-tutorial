@@ -107,7 +107,9 @@ To compile and run this program, you can use the ecc tool and ecli command. Firs
 sudo apt install clang llvm
 ```
 
-Compile the program using ecc:".```console
+Compile the program using ecc:
+
+```console
 $ ./ecc minimal.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
@@ -187,4 +189,4 @@ The development and usage process of eBPF programs can be summarized in the foll
 
 It should be noted that the execution of BPF programs occurs in the kernel space, so special tools and techniques are needed to write, compile, and debug BPF programs. eunomia-bpf is an open-source BPF compiler and toolkit that can help developers write and run BPF programs quickly and easily.
 
-You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and complete tutorials, all of which are open-source. We will continue to share more about eBPF development practices to help you better understand and master eBPF technology.
+You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials, all of which are open-source. We will continue to share more about eBPF development practices to help you better understand and master eBPF technology.

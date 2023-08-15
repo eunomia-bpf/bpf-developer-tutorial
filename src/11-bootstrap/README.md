@@ -626,4 +626,4 @@ TIME     EVENT COMM             PID     PPID    FILENAME/EXIT CODE
 
 在接下来的教程中，我们将继续深入探讨 eBPF 的高级特性，分享更多关于 eBPF 开发实践的内容。通过不断学习和实践，您将更好地理解和掌握 eBPF 技术，并将其应用于解决实际问题。
 
-如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程。
+如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。

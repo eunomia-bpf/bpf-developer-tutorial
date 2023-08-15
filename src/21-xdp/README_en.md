@@ -93,7 +93,7 @@ $ sudo cat /sys/kernel/tracing/trace_pipe
 
 This article introduces how to use XDP to process packets passing through a specific network device. With eunomia-bpf's annotation-based approach for passing parameters to libbpf, we can mount our custom XDP BPF program onto the target device with specified options. This allows packet processing even before they enter the kernel's network protocol stack, achieving high-performance programmable packet processing.
 
-For those interested in further exploring eBPF, visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and a comprehensive guide.
+For those interested in further exploring eBPF, visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and a comprehensive guide.
 
 ## References
 

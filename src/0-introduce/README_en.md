@@ -114,7 +114,7 @@ The eBPF Go library provides a general-purpose eBPF library that decouples the p
 
 `libbpf-bootstrap` combines years of practice from the BPF community and provides a modern and convenient workflow for developers, achieving the goal of one-time compilation and reuse.
 
-BPF programs based on `libbpf-bootstrap` have certain naming conventions for the source files. The file for generating kernel space bytecode ends with `.bpf.c`, and the file for loading bytecode in user space ends with `.c`, and the prefixes of these two files must be the same.Instructions: Translate the following Chinese text to English 
+BPF programs based on `libbpf-bootstrap` have certain naming conventions for the source files. The file for generating kernel space bytecode ends with `.bpf.c`, and the file for loading bytecode in user space ends with `.c`, and the prefixes of these two files must be the same.Instructions: Translate the following Chinese text to English
 while maintaining the original formatting: "Based on `libbpf-bootstrap`, BPF programs will compile `*.bpf.c` files into corresponding `.o` files,
 and then generate the `skeleton` file based on this file, i.e. `*.skel.h`. This file will contain some data structures defined in the kernel space,
 as well as the key functions used to load kernel space code. After the user-space code includes this file, it can call the corresponding loading function to load the bytecode into the kernel. Similarly, `libbpf-bootstrap` also has a comprehensive introduction tutorial that users can refer to [here](https://nakryiko.com/posts/libbpf-bootstrap/) for detailed introductory operations.
@@ -142,4 +142,4 @@ eunomia-bpf consists of a compilation toolchain and a runtime library. Compared 
 - BPF Compiler Collection (BCC): <https://github.com/iovisor/bcc>
 - eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
 
-You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> for more examples and complete tutorial source code. All content is open source. We will continue to share more content about eBPF development practices to help you better understand and master eBPF technology.".
+You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorial source code. All content is open source. We will continue to share more content about eBPF development practices to help you better understand and master eBPF technology.".

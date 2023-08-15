@@ -165,4 +165,4 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 - BPF Compiler Collection (BCC)：<https://github.com/iovisor/bcc>
 - eunomia-bpf：<https://github.com/eunomia-bpf/eunomia-bpf>
 
-您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程源代码，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
+您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程源代码。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
