@@ -25,7 +25,7 @@ In the above output, the most time is spent in the ESTABLISHED state, which indi
 
 In our upcoming tutorials, we will delve deeper into these two tools, explaining their implementation principles, and hopefully, these contents will help you in your work with eBPF for network and performance analysis.
 
-## tcpstate
+## tcpstate eBPF code
 
 Due to space constraints, here we mainly discuss and analyze the corresponding eBPF kernel-mode code implementation. The following is the eBPF code for tcpstate:
 
@@ -108,7 +108,8 @@ int handle_set_state(struct trace_event_raw_inet_sock_set_state *ctx)
     } else { /* family == AF_INET6 */
         bpf_probe_read_kernel(&event.saddr, sizeof(event.saddr), &sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
         bpf_probe_read_kernel(&event.daddr, sizeof(event.daddr), &sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-    }.`bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    }
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &event, sizeof(event));
 
     if (ctx->newstate == TCP_CLOSE)
         bpf_map_delete_elem(&timestamps, &sk);
@@ -135,7 +136,7 @@ In the `handle_set_state` function, it first determines whether the current TCP 
 
 Finally, based on the new state of the TCP connection, the program performs different operations: if the new state is TCP_CLOSE, it means the connection has been closed and the program deletes the timestamp of that connection from the `timestamps` map; otherwise, the program updates the timestamp of the connection.
 
-## User-Space Processing
+## User-Space Processing for tcpstate
 
 The user-space part is mainly about loading the eBPF program using libbpf and receiving event data from the kernel using perf_event:
 
@@ -184,7 +185,7 @@ In summary, the user-space part of the processing involves the following steps:
 
 The above is the main implementation logic of the user-space part of the `tcpstates` program. Through this chapter, you should have gained a deeper understanding of how to handle kernel events in user space. In the next chapter, we will introduce more knowledge about using eBPF for network monitoring.
 
-### tcprtt
+### tcprtt kernel eBPF code
 
 In this section, we will analyze the kernel BPF code of the `tcprtt` eBPF program. `tcprtt` is a program used to measure TCP Round Trip Time (RTT) and stores the RTT information in a histogram.
 
@@ -233,16 +234,7 @@ int BPF_PROG(tcp_rcv, struct sock *sk)
     slot = log2l(srtt);
     if (slot >= MAX_SLOTS)
         slot = MAX_SLOTS - 1;
-```
-
-The code above declares a map called `hists`, which is a hash map used to store the histogram data. The `hists` map has a maximum number of entries defined as `MAX_ENTRIES`.
-
-The function `BPF_PROG(tcp_rcv, struct sock *sk)` is the entry point of the eBPF program for handling the `tcp_rcv_established` event. Within this function, the program retrieves various information from the network socket and checks if filtering conditions are met. Then, it performs operations on the histogram data structure. Finally, the program calculates the slot for the RTT value and updates the histogram accordingly.
-
-This is the main code logic of the `tcprtt` eBPF program in kernel mode. The eBPF program measures the RTT of TCP connections and maintains a histogram to collect and analyze the RTT data.Instructions:
-
-```c
-__sync_fetch_and_add(&histp->slots[slot], 1);
+    __sync_fetch_and_add(&histp->slots[slot], 1);
     if (targ_show_ext) {
         __sync_fetch_and_add(&histp->latency, srtt);
         __sync_fetch_and_add(&histp->cnt, 1);
@@ -250,6 +242,12 @@ __sync_fetch_and_add(&histp->slots[slot], 1);
     return 0;
 }
 ```
+
+The code above declares a map called `hists`, which is a hash map used to store the histogram data. The `hists` map has a maximum number of entries defined as `MAX_ENTRIES`.
+
+The function `BPF_PROG(tcp_rcv, struct sock *sk)` is the entry point of the eBPF program for handling the `tcp_rcv_established` event. Within this function, the program retrieves various information from the network socket and checks if filtering conditions are met. Then, it performs operations on the histogram data structure. Finally, the program calculates the slot for the RTT value and updates the histogram accordingly.
+
+This is the main code logic of the `tcprtt` eBPF program in kernel mode. The eBPF program measures the RTT of TCP connections and maintains a histogram to collect and analyze the RTT data.Instructions:
 
 First, we define a hash type eBPF map called `hists`, which is used to store statistics information about RTT. In this map, the key is a 64-bit integer, and the value is a `hist` structure that contains an array to store the count of different RTT intervals.
 

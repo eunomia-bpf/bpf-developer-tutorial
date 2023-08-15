@@ -302,26 +302,101 @@ int BPF_KRETPROBE(pvalloc_exit)
 	return gen_alloc_exit(ctx);
 }
 
-SEC("tracepoint/kmem/kmalloc")
-int memleak__kmalloc(struct trace_event_raw_kmem_alloc *ctx)
+/**
+ * commit 11e9734bcb6a("mm/slab_common: unify NUMA and UMA version of
+ * tracepoints") drops kmem_alloc event class, rename kmem_alloc_node to
+ * kmem_alloc, so `trace_event_raw_kmem_alloc_node` is not existed any more.
+ * see:
+ *    https://github.com/torvalds/linux/commit/11e9734bcb6a
+ */
+struct trace_event_raw_kmem_alloc_node___x {
+	const void *ptr;
+	size_t bytes_alloc;
+} __attribute__((preserve_access_index));
+
+static __always_inline bool has_kmem_alloc_node(void)
 {
+	if (bpf_core_type_exists(struct trace_event_raw_kmem_alloc_node___x))
+		return true;
+	return false;
+}
+
+
+/**
+ * commit 2c1d697fb8ba("mm/slab_common: drop kmem_alloc & avoid dereferencing
+ * fields when not using") drops kmem_alloc event class. As a result,
+ * `trace_event_raw_kmem_alloc` is removed, `trace_event_raw_kmalloc` and
+ * `trace_event_raw_kmem_cache_alloc` are added.
+ * see:
+ *    https://github.com/torvalds/linux/commit/2c1d697fb8ba
+ */
+struct trace_event_raw_kmem_alloc___x {
+	const void *ptr;
+	size_t bytes_alloc;
+} __attribute__((preserve_access_index));
+
+struct trace_event_raw_kmalloc___x {
+	const void *ptr;
+	size_t bytes_alloc;
+} __attribute__((preserve_access_index));
+
+struct trace_event_raw_kmem_cache_alloc___x {
+	const void *ptr;
+	size_t bytes_alloc;
+} __attribute__((preserve_access_index));
+
+static __always_inline bool has_kmem_alloc(void)
+{
+	if (bpf_core_type_exists(struct trace_event_raw_kmem_alloc___x))
+		return true;
+	return false;
+}
+
+SEC("tracepoint/kmem/kmalloc")
+int memleak__kmalloc(void *ctx)
+{
+	const void *ptr;
+	size_t bytes_alloc;
+
+	if (has_kmem_alloc()) {
+		struct trace_event_raw_kmem_alloc___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
+	} else {
+		struct trace_event_raw_kmalloc___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
+	}
+
 	if (wa_missing_free)
-		gen_free_enter(ctx->ptr);
+		gen_free_enter(ptr);
 
-	gen_alloc_enter(ctx->bytes_alloc);
+	gen_alloc_enter(bytes_alloc);
 
-	return gen_alloc_exit2(ctx, (u64)(ctx->ptr));
+	return gen_alloc_exit2(ctx, (u64)ptr);
 }
 
 SEC("tracepoint/kmem/kmalloc_node")
-int memleak__kmalloc_node(struct trace_event_raw_kmem_alloc_node *ctx)
+int memleak__kmalloc_node(void *ctx)
 {
-	if (wa_missing_free)
-		gen_free_enter(ctx->ptr);
+	const void *ptr;
+	size_t bytes_alloc;
 
-	gen_alloc_enter(ctx->bytes_alloc);
+	if (has_kmem_alloc_node()) {
+		struct trace_event_raw_kmem_alloc_node___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
 
-	return gen_alloc_exit2(ctx, (u64)(ctx->ptr));
+		if (wa_missing_free)
+			gen_free_enter(ptr);
+
+		gen_alloc_enter( bytes_alloc);
+
+		return gen_alloc_exit2(ctx, (u64)ptr);
+	} else {
+		/* tracepoint is disabled if not exist, avoid compile warning */
+		return 0;
+	}
 }
 
 SEC("tracepoint/kmem/kfree")
@@ -341,25 +416,50 @@ int memleak__kfree(void *ctx)
 }
 
 SEC("tracepoint/kmem/kmem_cache_alloc")
-int memleak__kmem_cache_alloc(struct trace_event_raw_kmem_alloc *ctx)
+int memleak__kmem_cache_alloc(void *ctx)
 {
+	const void *ptr;
+	size_t bytes_alloc;
+
+	if (has_kmem_alloc()) {
+		struct trace_event_raw_kmem_alloc___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
+	} else {
+		struct trace_event_raw_kmem_cache_alloc___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
+	}
+
 	if (wa_missing_free)
-		gen_free_enter(ctx->ptr);
+		gen_free_enter(ptr);
 
-	gen_alloc_enter(ctx->bytes_alloc);
+	gen_alloc_enter(bytes_alloc);
 
-	return gen_alloc_exit2(ctx, (u64)(ctx->ptr));
+	return gen_alloc_exit2(ctx, (u64)ptr);
 }
 
 SEC("tracepoint/kmem/kmem_cache_alloc_node")
-int memleak__kmem_cache_alloc_node(struct trace_event_raw_kmem_alloc_node *ctx)
+int memleak__kmem_cache_alloc_node(void *ctx)
 {
-	if (wa_missing_free)
-		gen_free_enter(ctx->ptr);
+	const void *ptr;
+	size_t bytes_alloc;
 
-	gen_alloc_enter(ctx->bytes_alloc);
+	if (has_kmem_alloc_node()) {
+		struct trace_event_raw_kmem_alloc_node___x *args = ctx;
+		ptr = BPF_CORE_READ(args, ptr);
+		bytes_alloc = BPF_CORE_READ(args, bytes_alloc);
 
-	return gen_alloc_exit2(ctx, (u64)(ctx->ptr));
+		if (wa_missing_free)
+			gen_free_enter(ptr);
+
+		gen_alloc_enter(bytes_alloc);
+
+		return gen_alloc_exit2(ctx, (u64)ptr);
+	} else {
+		/* tracepoint is disabled if not exist, avoid compile warning */
+		return 0;
+	}
 }
 
 SEC("tracepoint/kmem/kmem_cache_free")

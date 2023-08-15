@@ -24,13 +24,13 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = memleak # minimal minimal_legacy uprobe kprobe fentry usdt sockfilter tc ksyscall
+APPS = # minimal minimal_legacy bootstrap uprobe kprobe fentry usdt sockfilter tc ksyscall
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
 BZS_APPS :=
 else
-BZS_APPS := # profile
+BZS_APPS := memleak
 APPS += $(BZS_APPS)
 # Required by libblazesym
 ALL_LDFLAGS += -lrt -ldl -lpthread -lm
