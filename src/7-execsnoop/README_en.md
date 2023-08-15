@@ -78,7 +78,7 @@ In the entry program, we first obtain the process ID and user ID of the current 
 
 With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
 
-"eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its goal is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf). We use eunomia-bpf to compile and execute this example.
+We use eunomia-bpf to compile and execute this example. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
 
 Compile using a container:
 

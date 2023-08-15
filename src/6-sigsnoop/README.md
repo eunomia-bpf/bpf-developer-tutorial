@@ -60,9 +60,9 @@ static int probe_exit(void *ctx, int ret)
 
  eventp->ret = ret;
  bpf_printk("PID %d (%s) sent signal %d ",
-		   eventp->pid, eventp->comm, eventp->sig);
+           eventp->pid, eventp->comm, eventp->sig);
  bpf_printk("to PID %d, ret = %d",
-		   eventp->tpid, ret);
+           eventp->tpid, ret);
 
 cleanup:
  bpf_map_delete_elem(&values, &tid);
@@ -116,10 +116,10 @@ Runing eBPF program...
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
-	systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
+    systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
 ```
 
 ## 总结

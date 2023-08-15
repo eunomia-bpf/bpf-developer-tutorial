@@ -2,7 +2,7 @@
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-This article is the sixth part of the eBPF Tutorial by Example, which mainly introduces how to implement an eBPF tool that captures a collection of system calls that send signals to processes and uses a hash map to store state.
+This article is the sixth part of the eBPF Tutorial by Example. It mainly introduces how to implement an eBPF tool that captures a collection of system calls that send signals to processes and uses a hash map to store state.
 
 ## sigsnoop
 
@@ -60,9 +60,9 @@ static int probe_exit(void *ctx, int ret)
 
  eventp->ret = ret;
  bpf_printk("PID %d (%s) sent signal %d ",
-		   eventp->pid, eventp->comm, eventp->sig);
+           eventp->pid, eventp->comm, eventp->sig);
  bpf_printk("to PID %d, ret = %d",
-		   eventp->tpid, ret);
+           eventp->tpid, ret);
 
 cleanup:
  bpf_map_delete_elem(&values, &tid);
@@ -115,10 +115,10 @@ After running this program, you can view the output of the eBPF program by check
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
-	systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
+    systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
 ```
 
 ## Summary
@@ -136,6 +136,4 @@ struct {
 
 And using corresponding APIs for access, such as bpf_map_lookup_elem, bpf_map_update_elem, bpf_map_delete_elem, etc.
 
-For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
-
-If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> to get more examples and complete tutorials."
+If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> to get more examples and complete tutorials.

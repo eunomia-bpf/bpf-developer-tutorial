@@ -119,6 +119,4 @@ This article introduces how to use eBPF programs to capture the system calls for
 
 By learning this tutorial, you should have a deeper understanding of how to capture and filter system calls for specific processes in eBPF. This method has widespread applications in system monitoring, performance analysis, and security auditing.
 
-For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
-
 If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and a complete tutorial.

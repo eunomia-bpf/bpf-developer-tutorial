@@ -325,3 +325,6 @@ The `biopattern` tool's userland code is responsible for reading statistics from
 In this tutorial, we have taken an in-depth look at how to use the eBPF tool biopattern to monitor and count random and sequential disk I/O in real-time. we started by understanding the importance of random and sequential disk I/O and their impact on system performance. We then describe in detail how biopattern works, including how to define and use BPF maps, how to deal with tracepoint variations in different versions of the Linux kernel, and how to capture and analyse disk I/O events in an eBPF program.
 
 You can visit our tutorial code repository [at https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [at https://eunomia.dev/zh/tutorials/](https://eunomia.dev/zh/tutorials/) for more examples and a complete tutorial.
+
+- Source repo：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/17-biopattern>
+- bcc tool：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/biopattern.c>
