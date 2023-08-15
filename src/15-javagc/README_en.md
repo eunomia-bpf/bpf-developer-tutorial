@@ -20,7 +20,7 @@ Tracing uprobe cmd (p:cmd /opt/bin/mysqld:0x2dbd40 +0(%dx):string). Ctrl-C to en
 [...]
 ```
 
-Here, we use the `uprobe `tool, which leverages Linux's built-in functionalities: ftrace (tracing framework) and uprobes (User-Level Dynamic Tracing, requires a relatively new Linux version, around 4.0 or later). Other tracing frameworks such as perf_events and SystemTap can also achieve this functionality.
+Here, we use the `uprobe` tool, which leverages Linux's built-in functionalities: ftrace (tracing framework) and uprobes (User-Level Dynamic Tracing, requires a relatively new Linux version, around 4.0 or later). Other tracing frameworks such as perf_events and SystemTap can also achieve this functionality.
 
 Many other MySQL functions can be traced to obtain more information. We can list and count the number of these functions:
 

@@ -442,4 +442,3 @@ Through this eBPF introductory tutorial, you have learned how to write a Memleak
 
 You can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
 
-The next tutorial will further explore advanced features of eBPF, and we will continue to share more content related to eBPF development practices. We hope that this knowledge and skills will help you better understand and use eBPF to solve problems encountered in practical work.

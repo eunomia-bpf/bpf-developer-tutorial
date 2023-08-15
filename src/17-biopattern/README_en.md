@@ -125,7 +125,7 @@ int handle__block_rq_complete(void *args)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-1. Global variable definitions
+Global variable definitions:
 
 ```c
    const volatile bool filter_dev = false; 
@@ -134,7 +134,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 These two global variables are used for device filtering. `filter_dev` determines whether device filtering is enabled or not, and `targ_dev` is the identifier of the target device we want to track.
 
-2. BPF map definition
+BPF map definition:
 
 ```c
    struct { __uint(type, BPF_MAP_TYPE_HASH); 
@@ -145,7 +145,7 @@ These two global variables are used for device filtering. `filter_dev` determine
 
 This part of the code defines a BPF map of type hash table. The key of the map is the identifier of the device, and the value is a `counter` struct, which is used to store the I/O statistics of the device.
 
-3. The tracepoint function
+The tracepoint function:
 
 ```c
     SEC("tracepoint/block/block_rq_complete")
@@ -223,7 +223,7 @@ To address this issue, the `biopattern` utility introduces a mechanism to dynami
 
 Two tracepoint structures are defined here, corresponding to different versions of the kernel. Each structure contains a device identifier `(dev` ), sector number `(sector` ), and number of sectors `(nr_sector` ).
 
-2. **Dynamic detection of trackpoint structures**:
+**Dynamic detection of trackpoint structures**:
 
 ```c
     static __always_inline bool has_block_rq_completion()
@@ -262,7 +262,7 @@ This is the main loop of the `biopattern` utility, and its workflow is as follow
 - `print_map`: call `print_map` function to print the statistics in BPF map.
 - **Exit condition**: if an exit signal is received `(exiting` is `true` ) or if the specified number of runs is reached `(env.times` reaches 0), the loop exits.
 
-2. Print mapping function
+Print mapping function:
 
 ```c
     static int print_map(struct bpf_map *counters, struct partitions *partitions)
