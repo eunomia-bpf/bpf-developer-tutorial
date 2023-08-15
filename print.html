@@ -439,7 +439,7 @@ Runing eBPF program...
 <li>在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。</li>
 </ul>
 <p>需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。</p>
-<p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
+<p>您还可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用"><a class="header" href="#ebpf-入门开发实践教程二在-ebpf-中使用-kprobe-监测捕获-unlink-系统调用">eBPF 入门开发实践教程二：在 eBPF 中使用 kprobe 监测捕获 unlink 系统调用</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
 <p>本文是 eBPF 入门开发实践教程的第二篇，在 eBPF 中使用 kprobe 捕获 unlink 系统调用。本文会先讲解关于 kprobes 的基本概念和技术背景，然后介绍如何在 eBPF 中使用 kprobe 捕获 unlink 系统调用。</p>
@@ -851,9 +851,9 @@ static int probe_exit(void *ctx, int ret)
 
  eventp-&gt;ret = ret;
  bpf_printk(&quot;PID %d (%s) sent signal %d &quot;,
-		   eventp-&gt;pid, eventp-&gt;comm, eventp-&gt;sig);
+           eventp-&gt;pid, eventp-&gt;comm, eventp-&gt;sig);
  bpf_printk(&quot;to PID %d, ret = %d&quot;,
-		   eventp-&gt;tpid, ret);
+           eventp-&gt;tpid, ret);
 
 cleanup:
  bpf_map_delete_elem(&amp;values, &amp;tid);
@@ -894,10 +894,10 @@ Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
 <pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe
-	systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
- 	systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
+    systemd-journal-363     [000] d...1   672.563868: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563869: bpf_trace_printk: to PID 1400, ret = 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: PID 363 (systemd-journal) sent signal 0
+     systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
 </code></pre>
 <h2 id="总结-5"><a class="header" href="#总结-5">总结</a></h2>
 <p>本文主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。使用 hash map 需要定义一个结构体：</p>
@@ -1520,7 +1520,6 @@ comm = cpptools
 <h2 id="总结-8"><a class="header" href="#总结-8">总结</a></h2>
 <p>runqlat 是一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度。编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令。</p>
 <p>runqlat 是一种用于监控Linux内核中进程调度延迟的工具。它可以帮助您了解进程在内核中等待执行的时间，并根据这些信息优化进程调度，提高系统的性能。可以在 libbpf-tools 中找到最初的源代码：<a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c</a></p>
-<p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
 <p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门开发实践教程十在-ebpf-中使用-hardirqs-或-softirqs-捕获中断事件"><a class="header" href="#ebpf-入门开发实践教程十在-ebpf-中使用-hardirqs-或-softirqs-捕获中断事件">eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件</a></h1>
 <p>eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。</p>
@@ -3827,24 +3826,293 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
 <p>通过本篇 eBPF 入门实践教程，您已经学习了如何编写 Memleak eBPF 监控程序，以实时监控程序的内存泄漏。您已经了解了 eBPF 在内存监控方面的应用，学会了使用 BPF API 编写 eBPF 程序，创建和使用 eBPF maps，并且明白了如何用 eBPF 工具监测和分析内存泄漏问题。我们展示了一个详细的例子，帮助您理解 eBPF 代码的运行流程和原理。</p>
 <p>您可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 <p>接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。希望这些知识和技巧能帮助您更好地了解和使用 eBPF，以解决实际工作中遇到的问题。</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io"><a class="header" href="#ebpf-入门实践教程编写-ebpf-程序-biopattern-统计随机顺序磁盘-io">eBPF 入门实践教程：编写 eBPF 程序 Biopattern: 统计随机/顺序磁盘 I/O</a></h1>
-<h2 id="背景-1"><a class="header" href="#背景-1">背景</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程十七编写-ebpf-程序统计随机顺序磁盘-io"><a class="header" href="#ebpf-入门实践教程十七编写-ebpf-程序统计随机顺序磁盘-io">eBPF 入门实践教程十七：编写 eBPF 程序统计随机/顺序磁盘 I/O</a></h1>
+<p>eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一种新技术，允许用户在内核空间中执行自定义程序，而无需更改内核代码。这为系统管理员和开发者提供了强大的工具，可以深入了解和监控系统的行为，从而进行优化。</p>
+<p>在本篇教程中，我们将探索如何使用 eBPF 编写程序来统计随机和顺序的磁盘 I/O。磁盘 I/O 是计算机性能的关键指标之一，特别是在数据密集型应用中。</p>
+<h2 id="随机顺序磁盘-io"><a class="header" href="#随机顺序磁盘-io">随机/顺序磁盘 I/O</a></h2>
+<p>随着技术的进步和数据量的爆炸性增长，磁盘 I/O 成为了系统性能的关键瓶颈。应用程序的性能很大程度上取决于其如何与存储层进行交互。因此，深入了解和优化磁盘 I/O，特别是随机和顺序的 I/O，变得尤为重要。</p>
+<ol>
+<li>
+<p><strong>随机 I/O</strong>：随机 I/O 发生在应用程序从磁盘的非连续位置读取或写入数据时。这种 I/O 模式的主要特点是磁盘头需要频繁地在不同的位置之间移动，导致其通常比顺序 I/O 的速度慢。典型的产生随机 I/O 的场景包括数据库查询、文件系统的元数据操作以及虚拟化环境中的并发任务。</p>
+</li>
+<li>
+<p><strong>顺序 I/O</strong>：与随机 I/O 相反，顺序 I/O 是当应用程序连续地读取或写入磁盘上的数据块。这种 I/O 模式的优势在于磁盘头可以在一个方向上连续移动，从而大大提高了数据的读写速度。视频播放、大型文件的下载或上传以及连续的日志记录都是产生顺序 I/O 的典型应用。</p>
+</li>
+</ol>
+<p>为了实现存储性能的最优化，了解随机和顺序的磁盘 I/O 是至关重要的。例如，随机 I/O 敏感的应用程序在 SSD 上的性能通常远超于传统硬盘，因为 SSD 在处理随机 I/O 时几乎没有寻址延迟。相反，对于大量顺序 I/O 的应用，如何最大化磁盘的连续读写速度则更为关键。</p>
+<p>在本教程的后续部分，我们将详细探讨如何使用 eBPF 工具来实时监控和统计这两种类型的磁盘 I/O。这不仅可以帮助我们更好地理解系统的 I/O 行为，还可以为进一步的性能优化提供有力的数据支持。</p>
+<h2 id="biopattern"><a class="header" href="#biopattern">Biopattern</a></h2>
 <p>Biopattern 可以统计随机/顺序磁盘I/O次数的比例。</p>
-<p>TODO</p>
-<h2 id="实现原理-1"><a class="header" href="#实现原理-1">实现原理</a></h2>
-<p>Biopattern 的ebpf代码在 tracepoint/block/block_rq_complete 挂载点下实现。在磁盘完成IO请求
-后，程序会经过此挂载点。Biopattern 内部存有一张以设备号为主键的哈希表，当程序经过挂载点时, Biopattern
-会获得操作信息，根据哈希表中该设备的上一次操作记录来判断本次操作是随机IO还是顺序IO，并更新操作计数。</p>
-<h2 id="编写-ebpf-程序-1"><a class="header" href="#编写-ebpf-程序-1">编写 eBPF 程序</a></h2>
-<p>TODO</p>
-<h3 id="总结-15"><a class="header" href="#总结-15">总结</a></h3>
-<p>Biopattern 可以展现随机/顺序磁盘I/O次数的比例，对于开发者把握整体I/O情况有较大帮助。</p>
-<p>TODO</p>
+<p>首先，确保你已经正确安装了 libbpf 和相关的工具集，可以在这里找到对应的源代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">bpf-developer-tutorial</a></p>
+<p>导航到 <code>biopattern</code> 的源代码目录，并使用 <code>make</code> 命令进行编译：</p>
+<pre><code class="language-bash">cd ~/bpf-developer-tutorial/src/17-biopattern
+make
+</code></pre>
+<p>编译成功后，你应该可以在当前目录下看到 <code>biopattern</code> 的可执行文件。基本的运行命令如下：</p>
+<pre><code class="language-bash">sudo ./biopattern [interval] [count]
+</code></pre>
+<p>例如，要每秒打印一次输出，并持续10秒，你可以运行：</p>
+<pre><code class="language-console">$ sudo ./biopattern 1 10
+Tracing block device I/O requested seeks... Hit Ctrl-C to end.
+DISK     %RND  %SEQ    COUNT     KBYTES
+sr0         0   100        3          0
+sr1         0   100        8          0
+sda         0   100        1          4
+sda       100     0       26        136
+sda         0   100        1          4
+</code></pre>
+<p>输出列的含义如下：</p>
+<ul>
+<li><code>DISK</code>：被追踪的磁盘名称。</li>
+<li><code>%RND</code>：随机 I/O 的百分比。</li>
+<li><code>%SEQ</code>：顺序 I/O 的百分比。</li>
+<li><code>COUNT</code>：在指定的时间间隔内的 I/O 请求次数。</li>
+<li><code>KBYTES</code>：在指定的时间间隔内读写的数据量（以 KB 为单位）。</li>
+</ul>
+<p>从上述输出中，我们可以得出以下结论：</p>
+<ul>
+<li><code>sr0</code> 和 <code>sr1</code> 设备在观测期间主要进行了顺序 I/O，但数据量很小。</li>
+<li><code>sda</code> 设备在某些时间段内只进行了随机 I/O，而在其他时间段内只进行了顺序 I/O。</li>
+</ul>
+<p>这些信息可以帮助我们了解系统的 I/O 模式，从而进行针对性的优化。</p>
+<h2 id="ebpf-biopattern-实现原理"><a class="header" href="#ebpf-biopattern-实现原理">eBPF Biopattern 实现原理</a></h2>
+<p>首先，让我们看一下 biopattern 的核心 eBPF 内核态代码：</p>
+<pre><code class="language-c">#include &lt;vmlinux.h&gt;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &quot;biopattern.h&quot;
+#include &quot;maps.bpf.h&quot;
+#include &quot;core_fixes.bpf.h&quot;
+
+const volatile bool filter_dev = false;
+const volatile __u32 targ_dev = 0;
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 64);
+    __type(key, u32);
+    __type(value, struct counter);
+} counters SEC(&quot;.maps&quot;);
+
+SEC(&quot;tracepoint/block/block_rq_complete&quot;)
+int handle__block_rq_complete(void *args)
+{
+    struct counter *counterp, zero = {};
+    sector_t sector;
+    u32 nr_sector;
+    u32 dev;
+
+    if (has_block_rq_completion()) {
+        struct trace_event_raw_block_rq_completion___x *ctx = args;
+        sector = BPF_CORE_READ(ctx, sector);
+        nr_sector = BPF_CORE_READ(ctx, nr_sector);
+        dev = BPF_CORE_READ(ctx, dev);
+    } else {
+        struct trace_event_raw_block_rq_complete___x *ctx = args;
+        sector = BPF_CORE_READ(ctx, sector);
+        nr_sector = BPF_CORE_READ(ctx, nr_sector);
+        dev = BPF_CORE_READ(ctx, dev);
+    }
+
+    if (filter_dev &amp;&amp; targ_dev != dev)
+        return 0;
+
+    counterp = bpf_map_lookup_or_try_init(&amp;counters, &amp;dev, &amp;zero);
+    if (!counterp)
+        return 0;
+    if (counterp-&gt;last_sector) {
+        if (counterp-&gt;last_sector == sector)
+            __sync_fetch_and_add(&amp;counterp-&gt;sequential, 1);
+        else
+            __sync_fetch_and_add(&amp;counterp-&gt;random, 1);
+        __sync_fetch_and_add(&amp;counterp-&gt;bytes, nr_sector * 512);
+    }
+    counterp-&gt;last_sector = sector + nr_sector;
+    return 0;
+}
+
+char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+</code></pre>
+<ol>
+<li>全局变量定义</li>
+</ol>
+<pre><code class="language-c">    const volatile bool filter_dev = false;
+    const volatile __u32 targ_dev = 0;
+</code></pre>
+<p>这两个全局变量用于设备过滤。<code>filter_dev</code> 决定是否启用设备过滤，而 <code>targ_dev</code> 是我们想要追踪的目标设备的标识符。</p>
+<p>BPF map 定义：</p>
+<pre><code class="language-c">    struct {
+        __uint(type, BPF_MAP_TYPE_HASH);
+        __uint(max_entries, 64);
+        __type(key, u32);
+        __type(value, struct counter);
+    } counters SEC(&quot;.maps&quot;);
+</code></pre>
+<p>这部分代码定义了一个 BPF map，类型为哈希表。该映射的键是设备的标识符，而值是一个 <code>counter</code> 结构体，用于存储设备的 I/O 统计信息。</p>
+<p>追踪点函数：</p>
+<pre><code class="language-c">    SEC(&quot;tracepoint/block/block_rq_complete&quot;)
+    int handle__block_rq_complete(void *args)
+    {
+        struct counter *counterp, zero = {};
+        sector_t sector;
+        u32 nr_sector;
+        u32 dev;
+
+        if (has_block_rq_completion()) {
+            struct trace_event_raw_block_rq_completion___x *ctx = args;
+            sector = BPF_CORE_READ(ctx, sector);
+            nr_sector = BPF_CORE_READ(ctx, nr_sector);
+            dev = BPF_CORE_READ(ctx, dev);
+        } else {
+            struct trace_event_raw_block_rq_complete___x *ctx = args;
+            sector = BPF_CORE_READ(ctx, sector);
+            nr_sector = BPF_CORE_READ(ctx, nr_sector);
+            dev = BPF_CORE_READ(ctx, dev);
+        }
+
+        if (filter_dev &amp;&amp; targ_dev != dev)
+            return 0;
+
+        counterp = bpf_map_lookup_or_try_init(&amp;counters, &amp;dev, &amp;zero);
+        if (!counterp)
+            return 0;
+        if (counterp-&gt;last_sector) {
+            if (counterp-&gt;last_sector == sector)
+                __sync_fetch_and_add(&amp;counterp-&gt;sequential, 1);
+            else
+                __sync_fetch_and_add(&amp;counterp-&gt;random, 1);
+            __sync_fetch_and_add(&amp;counterp-&gt;bytes, nr_sector * 512);
+        }
+        counterp-&gt;last_sector = sector + nr_sector;
+        return 0;
+    }
+</code></pre>
+<p>在 Linux 中，每次块设备的 I/O 请求完成时，都会触发一个名为 <code>block_rq_complete</code> 的追踪点。这为我们提供了一个机会，通过 eBPF 来捕获这些事件，并进一步分析 I/O 的模式。</p>
+<p>主要逻辑分析：</p>
+<ul>
+<li><strong>提取 I/O 请求信息</strong>：从传入的参数中获取 I/O 请求的相关信息。这里有两种可能的上下文结构，取决于 <code>has_block_rq_completion</code> 的返回值。这是因为不同版本的 Linux 内核可能会有不同的追踪点定义。无论哪种情况，我们都从上下文中提取出扇区号 (<code>sector</code>)、扇区数量 (<code>nr_sector</code>) 和设备标识符 (<code>dev</code>)。</li>
+<li><strong>设备过滤</strong>：如果启用了设备过滤 (<code>filter_dev</code> 为 <code>true</code>)，并且当前设备不是目标设备 (<code>targ_dev</code>)，则直接返回。这允许用户只追踪特定的设备，而不是所有设备。</li>
+<li><strong>统计信息更新</strong>：
+- <strong>查找或初始化统计信息</strong>：使用 <code>bpf_map_lookup_or_try_init</code> 函数查找或初始化与当前设备相关的统计信息。如果映射中没有当前设备的统计信息，它会使用 <code>zero</code> 结构体进行初始化。
+- <strong>判断 I/O 模式</strong>：根据当前 I/O 请求与上一个 I/O 请求的扇区号，我们可以判断当前请求是随机的还是顺序的。如果两次请求的扇区号相同，那么它是顺序的；否则，它是随机的。然后，我们使用 <code>__sync_fetch_and_add</code> 函数更新相应的统计信息。这是一个原子操作，确保在并发环境中数据的一致性。
+- <strong>更新数据量</strong>：我们还更新了该设备的总数据量，这是通过将扇区数量 (<code>nr_sector</code>) 乘以 512（每个扇区的字节数）来实现的。
+- <strong>更新最后一个 I/O 请求的扇区号</strong>：为了下一次的比较，我们更新了 <code>last_sector</code> 的值。</li>
+</ul>
+<p>在 Linux 内核的某些版本中，由于引入了一个新的追踪点 <code>block_rq_error</code>，追踪点的命名和结构发生了变化。这意味着，原先的 <code>block_rq_complete</code> 追踪点的结构名称从 <code>trace_event_raw_block_rq_complete</code> 更改为 <code>trace_event_raw_block_rq_completion</code>。这种变化可能会导致 eBPF 程序在不同版本的内核上出现兼容性问题。</p>
+<p>为了解决这个问题，<code>biopattern</code> 工具引入了一种机制来动态检测当前内核使用的是哪种追踪点结构，即 <code>has_block_rq_completion</code> 函数。</p>
+<ol>
+<li><strong>定义两种追踪点结构</strong>：</li>
+</ol>
+<pre><code class="language-c">    struct trace_event_raw_block_rq_complete___x {
+        dev_t dev;
+        sector_t sector;
+        unsigned int nr_sector;
+    } __attribute__((preserve_access_index));
+
+    struct trace_event_raw_block_rq_completion___x {
+        dev_t dev;
+        sector_t sector;
+        unsigned int nr_sector;
+    } __attribute__((preserve_access_index));
+</code></pre>
+<p>这里定义了两种追踪点结构，分别对应于不同版本的内核。每种结构都包含设备标识符 (<code>dev</code>)、扇区号 (<code>sector</code>) 和扇区数量 (<code>nr_sector</code>)。</p>
+<p><strong>动态检测追踪点结构</strong>：</p>
+<pre><code class="language-c">    static __always_inline bool has_block_rq_completion()
+    {
+        if (bpf_core_type_exists(struct trace_event_raw_block_rq_completion___x))
+            return true;
+        return false;
+    }
+</code></pre>
+<p><code>has_block_rq_completion</code> 函数使用 <code>bpf_core_type_exists</code> 函数来检测当前内核是否存在 <code>trace_event_raw_block_rq_completion___x</code> 结构。如果存在，函数返回 <code>true</code>，表示当前内核使用的是新的追踪点结构；否则，返回 <code>false</code>，表示使用的是旧的结构。在对应的 eBPF 代码中，会根据两种不同的定义分别进行处理，这也是适配不同内核版本之间的变更常见的方案。</p>
+<h3 id="用户态代码"><a class="header" href="#用户态代码">用户态代码</a></h3>
+<p><code>biopattern</code> 工具的用户态代码负责从 BPF 映射中读取统计数据，并将其展示给用户。通过这种方式，系统管理员可以实时监控每个设备的 I/O 模式，从而更好地理解和优化系统的 I/O 性能。</p>
+<p>主循环：</p>
+<pre><code class="language-c">    /* main: poll */
+    while (1) {
+        sleep(env.interval);
+
+        err = print_map(obj-&gt;maps.counters, partitions);
+        if (err)
+            break;
+
+        if (exiting || --env.times == 0)
+            break;
+    }
+</code></pre>
+<p>这是 <code>biopattern</code> 工具的主循环，它的工作流程如下：</p>
+<ul>
+<li><strong>等待</strong>：使用 <code>sleep</code> 函数等待指定的时间间隔 (<code>env.interval</code>)。</li>
+<li><strong>打印映射</strong>：调用 <code>print_map</code> 函数打印 BPF 映射中的统计数据。</li>
+<li><strong>退出条件</strong>：如果收到退出信号 (<code>exiting</code> 为 <code>true</code>) 或者达到指定的运行次数 (<code>env.times</code> 达到 0)，则退出循环。</li>
+</ul>
+<p>打印映射函数：</p>
+<pre><code class="language-c">    static int print_map(struct bpf_map *counters, struct partitions *partitions)
+    {
+        __u32 total, lookup_key = -1, next_key;
+        int err, fd = bpf_map__fd(counters);
+        const struct partition *partition;
+        struct counter counter;
+        struct tm *tm;
+        char ts[32];
+        time_t t;
+
+        while (!bpf_map_get_next_key(fd, &amp;lookup_key, &amp;next_key)) {
+            err = bpf_map_lookup_elem(fd, &amp;next_key, &amp;counter);
+            if (err &lt; 0) {
+                fprintf(stderr, &quot;failed to lookup counters: %d\n&quot;, err);
+                return -1;
+            }
+            lookup_key = next_key;
+            total = counter.sequential + counter.random;
+            if (!total)
+                continue;
+            if (env.timestamp) {
+                time(&amp;t);
+                tm = localtime(&amp;t);
+                strftime(ts, sizeof(ts), &quot;%H:%M:%S&quot;, tm);
+                printf(&quot;%-9s &quot;, ts);
+            }
+            partition = partitions__get_by_dev(partitions, next_key);
+            printf(&quot;%-7s %5ld %5ld %8d %10lld\n&quot;,
+                partition ? partition-&gt;name : &quot;Unknown&quot;,
+                counter.random * 100L / total,
+                counter.sequential * 100L / total, total,
+                counter.bytes / 1024);
+        }
+
+        lookup_key = -1;
+        while (!bpf_map_get_next_key(fd, &amp;lookup_key, &amp;next_key)) {
+            err = bpf_map_delete_elem(fd, &amp;next_key);
+            if (err &lt; 0) {
+                fprintf(stderr, &quot;failed to cleanup counters: %d\n&quot;, err);
+                return -1;
+            }
+            lookup_key = next_key;
+        }
+
+        return 0;
+    }
+</code></pre>
+<p><code>print_map</code> 函数负责从 BPF 映射中读取统计数据，并将其打印到控制台。其主要逻辑如下：</p>
+<ul>
+<li><strong>遍历 BPF 映射</strong>：使用 <code>bpf_map_get_next_key</code> 和 <code>bpf_map_lookup_elem</code> 函数遍历 BPF 映射，获取每个设备的统计数据。</li>
+<li><strong>计算总数</strong>：计算每个设备的随机和顺序 I/O 的总数。</li>
+<li><strong>打印统计数据</strong>：如果启用了时间戳 (<code>env.timestamp</code> 为 <code>true</code>)，则首先打印当前时间。接着，打印设备名称、随机 I/O 的百分比、顺序 I/O 的百分比、总 I/O 数量和总数据量（以 KB 为单位）。</li>
+<li><strong>清理 BPF 映射</strong>：为了下一次的统计，使用 <code>bpf_map_get_next_key</code> 和 <code>bpf_map_delete_elem</code> 函数清理 BPF 映射中的所有条目。</li>
+</ul>
+<h2 id="总结-15"><a class="header" href="#总结-15">总结</a></h2>
+<p>在本教程中，我们深入探讨了如何使用 eBPF 工具 biopattern 来实时监控和统计随机和顺序的磁盘 I/O。我们首先了解了随机和顺序磁盘 I/O 的重要性，以及它们对系统性能的影响。接着，我们详细介绍了 biopattern 的工作原理，包括如何定义和使用 BPF maps，如何处理不同版本的 Linux 内核中的追踪点变化，以及如何在 eBPF 程序中捕获和分析磁盘 I/O 事件。</p>
+<p>您可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
+<ul>
+<li>完整代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/17-biopattern">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/17-biopattern</a></li>
+<li>bcc 工具：<a href="https://github.com/iovisor/bcc/blob/master/libbpf-tools/biopattern.c">https://github.com/iovisor/bcc/blob/master/libbpf-tools/biopattern.c</a></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="更多的参考资料"><a class="header" href="#更多的参考资料">更多的参考资料</a></h1>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程使用-lsm-进行安全检测防御"><a class="header" href="#ebpf-入门实践教程使用-lsm-进行安全检测防御">eBPF 入门实践教程：使用 LSM 进行安全检测防御</a></h1>
 <p>eBPF (扩展的伯克利数据包过滤器) 是一项强大的网络和性能分析工具，被广泛应用在 Linux 内核上。eBPF 使得开发者能够动态地加载、更新和运行用户定义的代码，而无需重启内核或更改内核源代码。这个特性使得 eBPF 能够提供极高的灵活性和性能，使其在网络和系统性能分析方面具有广泛的应用。安全方面的 eBPF 应用也是如此，本文将介绍如何使用 eBPF LSM（Linux Security Modules）机制实现一个简单的安全检查程序。</p>
-<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
+<h2 id="背景-1"><a class="header" href="#背景-1">背景</a></h2>
 <p>LSM 从 Linux 2.6 开始成为官方内核的一个安全框架，基于此的安全实现包括 SELinux 和 AppArmor 等。在 Linux 5.7 引入 BPF LSM 后，系统开发人员已经能够自由地实现函数粒度的安全检查能力，本文就提供了这样一个案例：限制通过 socket connect 函数对特定 IPv4 地址进行访问的 BPF LSM 程序。（可见其控制精度是很高的）</p>
 <h2 id="lsm-概述"><a class="header" href="#lsm-概述">LSM 概述</a></h2>
 <p>LSM（Linux Security Modules）是 Linux 内核中用于支持各种计算机安全模型的框架。LSM 在 Linux 内核安全相关的关键路径上预置了一批 hook 点，从而实现了内核和安全模块的解耦，使不同的安全模块可以自由地在内核中加载/卸载，无需修改原有的内核代码就可以加入安全检查功能。</p>
@@ -3870,7 +4138,7 @@ ndlock,lockdown,yama,integrity,apparmor
 <pre><code class="language-conf">GRUB_CMDLINE_LINUX=&quot;lsm=ndlock,lockdown,yama,integrity,apparmor,bpf&quot;
 </code></pre>
 <p>并通过 <code>update-grub2</code> 命令更新 grub 配置（不同系统的对应命令可能不同），然后重启系统。</p>
-<h2 id="编写-ebpf-程序-2"><a class="header" href="#编写-ebpf-程序-2">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-1"><a class="header" href="#编写-ebpf-程序-1">编写 eBPF 程序</a></h2>
 <pre><code class="language-C">// lsm-connect.bpf.c
 #include &quot;vmlinux.h&quot;
 #include &lt;bpf/bpf_core_read.h&gt;
@@ -3970,13 +4238,13 @@ Retrying.
 <li><a href="https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program">https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ebpf-入门实践教程二十使用-ebpf-进行-tc-流量控制"><a class="header" href="#ebpf-入门实践教程二十使用-ebpf-进行-tc-流量控制">eBPF 入门实践教程二十：使用 eBPF 进行 tc 流量控制</a></h1>
-<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
+<h2 id="背景-2"><a class="header" href="#背景-2">背景</a></h2>
 <p>Linux 的流量控制子系统（Traffic Control, tc）在内核中存在了多年，类似于 iptables 和 netfilter 的关系，tc 也包括一个用户态的 tc 程序和内核态的 trafiic control 框架，主要用于从速率、顺序等方面控制数据包的发送和接收。从 Linux 4.1 开始，tc 增加了一些新的挂载点，并支持将 eBPF 程序作为 filter 加载到这些挂载点上。</p>
 <h2 id="tc-概述"><a class="header" href="#tc-概述">tc 概述</a></h2>
 <p>从协议栈上看，tc 位于链路层，其所在位置已经完成了 sk_buff 的分配，要晚于 xdp。为了实现对数据包发送和接收的控制，tc 使用队列结构来临时保存并组织数据包，在 tc 子系统中对应的数据结构和算法控制机制被抽象为 qdisc（Queueing discipline），其对外暴露数据包入队和出队的两个回调接口，并在内部隐藏排队算法实现。在 qdisc 中我们可以基于 filter 和 class 实现复杂的树形结构，其中 filter 被挂载到 qdisc 或 class 上用于实现具体的过滤逻辑，返回值决定了该数据包是否属于特定 class。</p>
 <p>当数据包到达顶层 qdisc 时，其入队接口被调用，其上挂载的 filter 被依次执行直到一个 filter 匹配成功；此后数据包被送入该 filter 指向的 class，进入该 class 配置的 qdisc 处理流程中。tc 框架提供了所谓 classifier-action 机制，即在数据包匹配到特定 filter 时执行该 filter 所挂载的 action 对数据包进行处理，实现了完整的数据包分类和处理机制。</p>
 <p>现有的 tc 为 eBPF 提供了 direct-action 模式，它使得一个作为 filter 加载的 eBPF 程序可以返回像 <code>TC_ACT_OK</code> 等 tc action 的返回值，而不是像传统的 filter 那样仅仅返回一个 classid 并把对数据包的处理交给 action 模块。现在，eBPF 程序可以被挂载到特定的 qdisc 上，并完成对数据包的分类和处理动作。</p>
-<h2 id="编写-ebpf-程序-3"><a class="header" href="#编写-ebpf-程序-3">编写 eBPF 程序</a></h2>
+<h2 id="编写-ebpf-程序-2"><a class="header" href="#编写-ebpf-程序-2">编写 eBPF 程序</a></h2>
 <pre><code class="language-c">#include &lt;vmlinux.h&gt;
 #include &lt;bpf/bpf_endian.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
@@ -4051,7 +4319,7 @@ Packing ebpf object and config into package.json...
 <p>本文主要记录了笔者在 Android Studio Emulator 中测试高版本 Android Kernel 对基于 libbpf 的 CO-RE 技术支持程度的探索过程、结果和遇到的问题。
 测试采用的方式是在 Android Shell 环境下构建 Debian 环境，并基于此尝试构建 eunomia-bpf 工具链、运行其测试用例。</p>
 </blockquote>
-<h2 id="背景-4"><a class="header" href="#背景-4">背景</a></h2>
+<h2 id="背景-3"><a class="header" href="#背景-3">背景</a></h2>
 <p>截至目前（2023-04），Android 还未对 eBPF 程序的动态加载做出较好的支持，无论是以 bcc 为代表的带编译器分发方案，还是基于 btf 和 libbpf 的 CO-RE 方案，都在较大程度上离不开 Linux 环境的支持，无法在 Android 系统上很好地运行<sup class="footnote-reference"><a href="#WeiShu">1</a></sup>。</p>
 <p>虽然如此，在 Android 平台上尝试 eBPF 也已经有了一些成功案例，除谷歌官方提供的修改 <code>Android.bp</code> 以将 eBPF 程序随整个系统一同构建并挂载的方案<sup class="footnote-reference"><a href="#Google">2</a></sup>，也有人提出基于 Android 内核构建 Linux 环境进而运行 eBPF 工具链的思路，并开发了相关工具。</p>
 <p>目前已有的资料，大多基于 adeb/eadb 在 Android 内核基础上构建 Linux 沙箱，并对 bcc 和 bpftrace 相关工具链进行测试，而对 CO-RE 方案的测试工作较少。在 Android 上使用 bcc 工具目前有较多参考资料，如：</p>
