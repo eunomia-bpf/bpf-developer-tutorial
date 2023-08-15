@@ -32,7 +32,28 @@ jobs:
       run: |
         ./ecc src/2-kprobe-unlink/kprobe-link.bpf.c
         sudo timeout -s 2 3 ./ecli run src/2-kprobe-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 4 opensnoop
+      run: |
+        ./ecc src/4-opensnoop/opensnoop.bpf.c
+        sudo timeout -s 2 3 ./ecli run src/4-opensnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 5 bashreadline
+      run: |
+        ./ecc src/5-uprobe-bashreadline/bashreadline.bpf.c
+        sudo timeout -s 2 3 ./ecli run src/5-uprobe-bashreadline/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 6 sigsnoop
+      run: |
+        ./ecc src/6-sigsnoop/sigsnoop.bpf.c
+        sudo timeout -s 2 3 ./ecli run src/6-sigsnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 7 execsnoop
       run: |
         ./ecc src/7-execsnoop/execsnoop.bpf.c src/7-execsnoop/execsnoop.h
         sudo timeout -s 2 3 ./ecli run src/7-execsnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 8 exitsnoop
+      run: |
+        ./ecc src/8-exitsnoop/exitsnoop.bpf.c src/8-exitsnoop/exitsnoop.h
+        sudo timeout -s 2 3 ./ecli run src/8-exitsnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 9 runqlat
+      run: |
+        ./ecc src/9-runqlat/runqlat.bpf.c src/9-runqlat/runqlat.h
+        sudo timeout -s 2 3 ./ecli run src/9-runqlat/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+  
