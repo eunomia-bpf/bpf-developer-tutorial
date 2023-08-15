@@ -323,4 +323,3 @@ char LICENSE[] SEC("license") = "GPL";
 在本教程中，我们深入探讨了如何使用 eBPF 工具 biopattern 来实时监控和统计随机和顺序的磁盘 I/O。我们首先了解了随机和顺序磁盘 I/O 的重要性，以及它们对系统性能的影响。接着，我们详细介绍了 biopattern 的工作原理，包括如何定义和使用 BPF maps，如何处理不同版本的 Linux 内核中的追踪点变化，以及如何在 eBPF 程序中捕获和分析磁盘 I/O 事件。
 
 您可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
-

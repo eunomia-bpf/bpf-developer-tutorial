@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 0: Introduction to the Basic Concepts of eBPF and Development Tools
+# eBPF Tutorial by Example 0: Introduction to Core Concepts and Tools
 
 ## Introduction to eBPF: Secure and Efficient Kernel Extension
 
