@@ -602,6 +602,7 @@ sudo dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
 编译运行上述代码：
 
 ```console
+$ git submodule update --init --recursive
 $ make
   BPF      .output/bootstrap.bpf.o
   GEN-SKEL .output/bootstrap.skel.h
