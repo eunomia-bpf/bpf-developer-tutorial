@@ -1,0 +1,68 @@
+name: Test and trigger downstream tutorial sync
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout website repo
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository_owner }}/eunomia.dev
+          ref: main
+          path: ./.
+
+      - name: Checkout main repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository_owner }}/eunomia-bpf
+          ref: master
+          path: eunomia-bpf
+
+      - name: Checkout this repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository_owner }}/bpf-developer-tutorial
+          ref: ${{ github.ref }}
+          path: tutorial
+
+      - name: Change suffix
+        run: |
+          find ./tutorial -type f -name "*.md" ! -name "*_en*" -exec bash -c 'mv "$1" "${1%.md}.zh.md"' bash {} \;
+          find ./tutorial -type f -name "*_en*.md" -exec bash -c 'mv "$1" "${1//_en/}"' bash {} \;
+
+      - name: Merge changes
+        run: |
+          cp -rf eunomia-bpf/documents/src docs
+          mkdir docs/tutorials
+          cp -rf tutorial/src/* docs/tutorials
+          mv tutorial/README.zh.md docs/tutorials/SUMMARY.zh.md
+          mv tutorial/README.md docs/tutorials/SUMMARY.md
+          mv tutorial/src/SUMMARY.zh.md docs/tutorials/index.zh.md
+          mv tutorial/src/SUMMARY.md docs/tutorials/index.md
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.x
+
+      - name: Install dependents
+        run: |
+          pip install mkdocs-material=="9.*" mkdocs-static-i18n=="0.53"
+
+      - name: Test page build
+        run: |
+          mkdocs build -v
+
+      - name: Trigger sync workflow
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT }}
+          repository: ${{ github.repository_owner }}/eunomia.dev
+          event-type: trigger-tutorial-sync
