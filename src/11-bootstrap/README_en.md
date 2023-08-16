@@ -191,7 +191,9 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 
     // ...
 }
-```Then, we reserve an event structure from the circular buffer map `rb` and fill in the relevant data, such as the process ID, parent process ID, and process name. Afterwards, we send this data to the user-mode program for processing.
+```
+
+Then, we reserve an event structure from the circular buffer map `rb` and fill in the relevant data, such as the process ID, parent process ID, and process name. Afterwards, we send this data to the user-mode program for processing.
 
 ```c
     // reserve sample from BPF ringbuf
@@ -515,8 +517,9 @@ In the main() function, we first parse the command line arguments, and then set 
 ```c
 err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
 if (err)
-    return err;```c
+    return err;
 libbpf_set_print(libbpf_print_fn);
+```
 
 Next, we open the eBPF skeleton file, pass the minimum duration parameter to the eBPF program, and load and attach the eBPF program:
 
@@ -597,6 +600,7 @@ sudo dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
 Compile and run the above code:
 
 ```console
+$ git submodule update --init --recursive
 $ make
   BPF      .output/bootstrap.bpf.o
   GEN-SKEL .output/bootstrap.skel.h
