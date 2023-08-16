@@ -2281,7 +2281,8 @@ if (!rb) {
 </code></pre>
 <h2 id="编译运行-1"><a class="header" href="#编译运行-1">编译运行</a></h2>
 <p>编译运行上述代码：</p>
-<pre><code class="language-console">$ make
+<pre><code class="language-console">$ git submodule update --init --recursive
+$ make
   BPF      .output/bootstrap.bpf.o
   GEN-SKEL .output/bootstrap.skel.h
   CC       .output/bootstrap.o
