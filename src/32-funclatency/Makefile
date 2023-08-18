@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 OUTPUT := .output
 CLANG ?= clang
-LIBBPF_SRC := $(abspath ../../libbpf/src)
-BPFTOOL_SRC := $(abspath ../../bpftool/src)
+LIBBPF_SRC := $(abspath ../third_party/libbpf/src)
+BPFTOOL_SRC := $(abspath ../third_party/bpftool/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 BPFTOOL_OUTPUT ?= $(abspath $(OUTPUT)/bpftool)
 BPFTOOL ?= $(BPFTOOL_OUTPUT)/funclatency/bpftool
-LIBBLAZESYM_SRC := $(abspath ../../blazesym/)
+LIBBLAZESYM_SRC := $(abspath ../third_party/blazesym/)
 LIBBLAZESYM_OBJ := $(abspath $(OUTPUT)/libblazesym.a)
 LIBBLAZESYM_HEADER := $(abspath $(OUTPUT)/blazesym.h)
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
@@ -16,11 +16,11 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 			 | sed 's/mips.*/mips/' \
 			 | sed 's/riscv64/riscv/' \
 			 | sed 's/loongarch64/loongarch/')
-VMLINUX := ../../vmlinux/$(ARCH)/vmlinux.h
+VMLINUX := ../third_party/vmlinux/$(ARCH)/vmlinux.h
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
-INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
+INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 

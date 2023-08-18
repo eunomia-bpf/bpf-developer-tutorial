@@ -1,9 +1,9 @@
-[submodule "libbpf"]
-	path = libbpf
-	url = https://github.com/libbpf/libbpf.git
-[submodule "bpftool"]
-	path = bpftool
-	url = https://github.com/libbpf/bpftool
-[submodule "blazesym"]
-	path = blazesym
+[submodule "src/third_party/blazesym"]
+	path = src/third_party/blazesym
 	url = https://github.com/libbpf/blazesym
+[submodule "src/third_party/libbpf"]
+	path = src/third_party/libbpf
+	url = https://github.com/libbpf/libbpf.git
+[submodule "src/third_party/bpftool"]
+	path = src/third_party/bpftool
+	url = https://github.com/libbpf/bpftool
