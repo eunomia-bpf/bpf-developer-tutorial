@@ -7,6 +7,3 @@
 [submodule "src/third_party/bpftool"]
 	path = src/third_party/bpftool
 	url = https://github.com/libbpf/bpftool
-[submodule "src/third_party/blazesym"]
-	path = src/third_party/blazesym
-	url = https://github.com/libbpf/blazesym
