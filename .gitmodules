@@ -1,4 +1,4 @@
-[submodule "blazesym"]
+[submodule "src/third_party/blazesym"]
 	path = src/third_party/blazesym
 	url = https://github.com/libbpf/blazesym
 [submodule "src/third_party/libbpf"]
