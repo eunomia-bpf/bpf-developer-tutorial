@@ -17,6 +17,8 @@ libbpf 是一个用于与 eBPF 交互的 C 库。它提供了创建、加载和�
 
 在本示例中，可以通过 libbpf 库编译运行它（以 Ubuntu/Debian 为例）：
 
+**NOTE:** 首先需要安装 `cargo` 才能编译得到 `profile`, 安装方法可以参考[Cargo 手册](https://rustwiki.org/en/cargo/getting-started/installation.html)  
+
 ```console
 $ git submodule update --init --recursive
 $ sudo apt install clang libelf1 libelf-dev zlib1g-dev
