@@ -17,6 +17,8 @@ This information helps developers locate performance bottlenecks and optimize co
 
 In this example, you can compile and run it with the libbpf library (using Ubuntu/Debian as an example):
 
+**NOTE:** To compile the `profile`, you first need to install `Cargo`, as shown in ["The Cargo Book"](https://rustwiki.org/en/cargo/getting-started/installation.html)
+
 ```console
 $ git submodule update --init --recursive
 $ sudo apt install clang libelf1 libelf-dev zlib1g-dev
