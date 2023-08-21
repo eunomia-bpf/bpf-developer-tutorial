@@ -1,0 +1,648 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据 - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">eBPF 实践教程：基于 libbpf 和 CO-RE</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> 介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> 使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> 使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> 捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> 使用 uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> 捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> 使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> 一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> 使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> 使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> 使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">14.</strong> 使用 libbpf-bootstrap 记录 TCP 连接状态与 TCP RTT</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">15.</strong> 使用 USDT 捕获用户态 Java GC 事件耗时</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">16.</strong> 编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">17.</strong> 编写 eBPF 程序 Biopattern 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">18.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">19.</strong> 使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">20.</strong> 使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF 高级特性与进阶主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">21.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">22.</strong> 使用 eBPF 追踪 HTTP 请求或其他七层协议</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">23.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">24.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">25.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">26.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">28.</strong> BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html" class="active"><strong aria-hidden="true">29.</strong> 使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc tutorial</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">30.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">31.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">32.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">33.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">34.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">35.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf-实践教程使用-ebpf-用户态捕获多种库的-ssltls-明文数据"><a class="header" href="#ebpf-实践教程使用-ebpf-用户态捕获多种库的-ssltls-明文数据">eBPF 实践教程：使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据</a></h1>
+<p>随着TLS在现代网络环境中的广泛应用，跟踪微服务RPC消息已经变得愈加棘手。传统的流量嗅探技术常常受限于只能获取到加密后的数据，导致无法真正观察到通信的原始内容。这种限制为系统的调试和分析带来了不小的障碍。</p>
+<p>但现在，我们有了新的解决方案。</p>
+<p>eBPF技术，通过其能力在用户空间进行探测，提供了一种方法重新获得明文数据，使得我们可以直观地查看加密前的通信内容。然而，每个应用可能使用不同的库，每个库都有多个版本，这种多样性给跟踪带来了复杂性。</p>
+<p>在本教程中，我们将带您了解一种跨多种条件的技术，它不仅可以同时跟踪 GnuTLS 和 OpenSSL 等用户态库，而且相比以往，大大降低了对新版本库的维护工作。</p>
+<h2 id="背景知识"><a class="header" href="#背景知识">背景知识</a></h2>
+<p>在深入本教程的主题之前，我们需要理解一些核心概念，这些概念将为我们后面的讨论提供基础。</p>
+<h3 id="ssl-和-tls"><a class="header" href="#ssl-和-tls">SSL 和 TLS</a></h3>
+<p>SSL (Secure Sockets Layer): 由 Netscape 在 1990 年代早期开发，为网络上的两台机器之间提供数据加密传输。然而，由于某些已知的安全问题，SSL的使用已被其后继者TLS所替代。</p>
+<p>TLS (Transport Layer Security): 是 SSL 的继任者，旨在提供更强大和更安全的数据加密方式。TLS 工作通过一个握手过程，在这个过程中，客户端和服务器之间会选择一个加密算法和相应的密钥。一旦握手完成，数据传输开始，所有数据都使用选择的算法和密钥加密。</p>
+<h3 id="tls-的工作原理"><a class="header" href="#tls-的工作原理">TLS 的工作原理</a></h3>
+<p>Transport Layer Security (TLS) 是一个密码学协议，旨在为计算机网络上的通信提供安全性。它主要目标是通过密码学，例如证书的使用，为两个或更多通信的计算机应用程序提供安全性，包括隐私（机密性）、完整性和真实性。TLS 由两个子层组成：TLS 记录协议和TLS 握手协议。</p>
+<h4 id="握手过程"><a class="header" href="#握手过程">握手过程</a></h4>
+<p>当客户端与启用了TLS的服务器连接并请求建立安全连接时，握手过程开始。握手允许客户端和服务器通过不对称密码来建立连接的安全性参数：</p>
+<ol>
+<li><strong>初始握手</strong>：客户端连接到启用了TLS的服务器，请求安全连接，并提供它支持的密码套件列表（加密算法和哈希函数）。</li>
+<li><strong>选择密码套件</strong>：从提供的列表中，服务器选择它也支持的密码套件和哈希函数，并通知客户端已做出的决定。</li>
+<li><strong>提供数字证书</strong>：通常，服务器接下来会提供形式为数字证书的身份验证。此证书包含服务器名称、信任的证书授权机构（为证书的真实性提供担保）以及服务器的公共加密密钥。</li>
+<li><strong>验证证书</strong>：客户端在继续之前确认证书的有效性。</li>
+<li><strong>生成会话密钥</strong>：为了生成用于安全连接的会话密钥，客户端有以下两种方法：
+<ul>
+<li>使用服务器的公钥加密一个随机数（PreMasterSecret）并将结果发送到服务器（只有服务器才能使用其私钥解密）；双方然后使用该随机数生成一个独特的会话密钥，用于会话期间的数据加密和解密。</li>
+<li>使用Diffie-Hellman 密钥交换（或其变体椭圆曲线DH）来安全地生成一个随机且独特的会话密钥，用于加密和解密，该密钥具有前向保密的额外属性：即使在未来公开了服务器的私钥，也不能用它来解密当前的会话，即使第三方拦截并记录了会话。</li>
+</ul>
+</li>
+</ol>
+<p>一旦上述步骤成功完成，握手过程便结束，加密的连接开始。此连接使用会话密钥进行加密和解密，直到连接关闭。如果上述任何步骤失败，则TLS握手失败，连接将不会建立。</p>
+<h4 id="osi模型中的tls"><a class="header" href="#osi模型中的tls">OSI模型中的TLS</a></h4>
+<p>TLS和SSL不完全适合OSI模型或TCP/IP模型的任何单一层次。TLS在“某些可靠的传输协议（例如，TCP）之上运行”，这意味着它位于传输层之上。它为更高的层提供加密，这通常是表示层的功能。但是，使用TLS的应用程序通常视其为传输层，即使使用TLS的应用程序必须积极控制启动TLS握手和交换的认证证书的处理。</p>
+<h3 id="ebpf-和-uprobe"><a class="header" href="#ebpf-和-uprobe">eBPF 和 uprobe</a></h3>
+<p>eBPF (Extended Berkeley Packet Filter): 是一种内核技术，允许用户在内核空间中运行预定义的程序，不需要修改内核源代码或重新加载模块。它创建了一个桥梁，使得用户空间和内核空间可以交互，从而为系统监控、性能分析和网络流量分析等任务提供了无前例的能力。</p>
+<p>uprobes: 是eBPF的一个重要特性，允许我们在用户空间应用程序中动态地插入探测点，特别适用于跟踪SSL/TLS库中的函数调用。</p>
+<h3 id="用户态库"><a class="header" href="#用户态库">用户态库</a></h3>
+<p>SSL/TLS协议的实现主要依赖于用户态库。以下是一些常见的库：</p>
+<ul>
+<li>OpenSSL: 一个开源的、功能齐全的加密库，广泛应用于许多开源和商业项目中。</li>
+<li>BoringSSL: 是Google维护的OpenSSL的一个分支，重点是简化和优化，适用于Google的需求。</li>
+<li>GnuTLS: 是GNU项目的一部分，提供了SSL，TLS和DTLS协议的实现。与OpenSSL和BoringSSL相比，GnuTLS在API设计、模块结构和许可证上有所不同。</li>
+</ul>
+<h2 id="openssl-api-分析"><a class="header" href="#openssl-api-分析">OpenSSL API 分析</a></h2>
+<p>OpenSSL 是一个广泛应用的开源库，提供了 SSL 和 TLS 协议的完整实现，并广泛用于各种应用程序中以确保数据传输的安全性。其中，SSL_read() 和 SSL_write() 是两个核心的 API 函数，用于从 TLS/SSL 连接中读取和写入数据。本章节，我们将深入这两个函数，帮助你理解其工作机制。</p>
+<h3 id="1-ssl_read-函数"><a class="header" href="#1-ssl_read-函数">1. SSL_read 函数</a></h3>
+<p>当我们想从一个已建立的 SSL 连接中读取数据时，可以使用 <code>SSL_read</code> 或 <code>SSL_read_ex</code> 函数。</p>
+<h4 id="函数原型"><a class="header" href="#函数原型">函数原型</a></h4>
+<pre><code class="language-c">int SSL_read_ex(SSL *ssl, void *buf, size_t num, size_t *readbytes);
+int SSL_read(SSL *ssl, void *buf, int num);
+</code></pre>
+<p><code>SSL_read</code> 和 <code>SSL_read_ex</code> 试图从指定的 <code>ssl</code> 中读取最多 <code>num</code> 字节的数据到缓冲区 <code>buf</code> 中。成功时，<code>SSL_read_ex</code> 会在 <code>*readbytes</code> 中存储实际读取到的字节数。</p>
+<h3 id="2-ssl_write-函数"><a class="header" href="#2-ssl_write-函数">2. SSL_write 函数</a></h3>
+<p>当我们想往一个已建立的 SSL 连接中写入数据时，可以使用 <code>SSL_write</code> 或 <code>SSL_write_ex</code> 函数。</p>
+<p>函数原型：</p>
+<pre><code class="language-c">int SSL_write_ex(SSL *s, const void *buf, size_t num, size_t *written);
+int SSL_write(SSL *ssl, const void *buf, int num);
+</code></pre>
+<p><code>SSL_write</code> 和 <code>SSL_write_ex</code> 会从缓冲区 <code>buf</code> 中将最多 <code>num</code> 字节的数据写入到指定的 <code>ssl</code> 连接中。成功时，<code>SSL_write_ex</code> 会在 <code>*written</code> 中存储实际写入的字节数。</p>
+<h2 id="ebpf-内核态代码编写"><a class="header" href="#ebpf-内核态代码编写">eBPF 内核态代码编写</a></h2>
+<p>eBPF (扩展伯克利数据包过滤器) 是 Linux 内核中的一个功能强大的编程框架，它允许开发者在不修改内核源代码的情况下，为 Linux 内核动态插入自定义的程序。在我们的例子中，我们使用 eBPF 来 hook ssl_read 和 ssl_write 函数，从而在数据读取或写入 SSL 连接时执行自定义操作。</p>
+<h3 id="数据结构"><a class="header" href="#数据结构">数据结构</a></h3>
+<p>首先，我们定义了一个数据结构 probe_SSL_data_t 用于在内核态和用户态之间传输数据：</p>
+<pre><code class="language-c">#define MAX_BUF_SIZE 8192
+#define TASK_COMM_LEN 16
+
+struct probe_SSL_data_t {
+    __u64 timestamp_ns;  // 时间戳（纳秒）
+    __u64 delta_ns;      // 函数执行时间
+    __u32 pid;           // 进程 ID
+    __u32 tid;           // 线程 ID
+    __u32 uid;           // 用户 ID
+    __u32 len;           // 读/写数据的长度
+    int buf_filled;      // 缓冲区是否填充完整
+    int rw;              // 读或写（0为读，1为写）
+    char comm[TASK_COMM_LEN]; // 进程名
+    __u8 buf[MAX_BUF_SIZE];  // 数据缓冲区
+    int is_handshake;    // 是否是握手数据
+};
+</code></pre>
+<h3 id="hook-函数"><a class="header" href="#hook-函数">Hook 函数</a></h3>
+<p>我们的目标是 hook 到 <code>SSL_read</code> 和 <code>SSL_write</code> 函数。我们定义了一个函数 <code>SSL_exit</code> 来处理这两个函数的返回值。该函数会根据当前进程和线程的 ID，确定是否需要追踪并收集数据。</p>
+<pre><code class="language-c">static int SSL_exit(struct pt_regs *ctx, int rw) {
+    int ret = 0;
+    u32 zero = 0;
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    u32 pid = pid_tgid &gt;&gt; 32;
+    u32 tid = (u32)pid_tgid;
+    u32 uid = bpf_get_current_uid_gid();
+    u64 ts = bpf_ktime_get_ns();
+
+    if (!trace_allowed(uid, pid)) {
+        return 0;
+    }
+
+    /* store arg info for later lookup */
+    u64 *bufp = bpf_map_lookup_elem(&amp;bufs, &amp;tid);
+    if (bufp == 0)
+        return 0;
+
+    u64 *tsp = bpf_map_lookup_elem(&amp;start_ns, &amp;tid);
+    if (!tsp)
+        return 0;
+    u64 delta_ns = ts - *tsp;
+
+    int len = PT_REGS_RC(ctx);
+    if (len &lt;= 0)  // no data
+        return 0;
+
+    struct probe_SSL_data_t *data = bpf_map_lookup_elem(&amp;ssl_data, &amp;zero);
+    if (!data)
+        return 0;
+
+    data-&gt;timestamp_ns = ts;
+    data-&gt;delta_ns = delta_ns;
+    data-&gt;pid = pid;
+    data-&gt;tid = tid;
+    data-&gt;uid = uid;
+    data-&gt;len = (u32)len;
+    data-&gt;buf_filled = 0;
+    data-&gt;rw = rw;
+    data-&gt;is_handshake = false;
+    u32 buf_copy_size = min((size_t)MAX_BUF_SIZE, (size_t)len);
+
+    bpf_get_current_comm(&amp;data-&gt;comm, sizeof(data-&gt;comm));
+
+    if (bufp != 0)
+        ret = bpf_probe_read_user(&amp;data-&gt;buf, buf_copy_size, (char *)*bufp);
+
+    bpf_map_delete_elem(&amp;bufs, &amp;tid);
+    bpf_map_delete_elem(&amp;start_ns, &amp;tid);
+
+    if (!ret)
+        data-&gt;buf_filled = 1;
+    else
+        buf_copy_size = 0;
+
+    bpf_perf_event_output(ctx, &amp;perf_SSL_events, BPF_F_CURRENT_CPU, data,
+                            EVENT_SIZE(buf_copy_size));
+    return 0;
+}
+</code></pre>
+<p>这里的 <code>rw</code> 参数标识是读还是写。0 代表读，1 代表写。</p>
+<h4 id="数据收集流程"><a class="header" href="#数据收集流程">数据收集流程</a></h4>
+<ol>
+<li>获取当前进程和线程的 ID，以及当前用户的 ID。</li>
+<li>通过 <code>trace_allowed</code> 判断是否允许追踪该进程。</li>
+<li>获取起始时间，以计算函数的执行时间。</li>
+<li>尝试从 <code>bufs</code> 和 <code>start_ns</code> maps 中查找相关的数据。</li>
+<li>如果成功读取了数据，则创建或查找 <code>probe_SSL_data_t</code> 结构来填充数据。</li>
+<li>将数据从用户空间复制到缓冲区，并确保不超过预定的大小。</li>
+<li>最后，将数据发送到用户空间。</li>
+</ol>
+<p>注意：我们使用了两个用户返回探针 <code>uretprobe</code> 来分别 hook <code>SSL_read</code> 和 <code>SSL_write</code> 的返回：</p>
+<pre><code class="language-c">SEC(&quot;uretprobe/SSL_read&quot;)
+int BPF_URETPROBE(probe_SSL_read_exit) {
+    return (SSL_exit(ctx, 0));  // 0 表示读操作
+}
+
+SEC(&quot;uretprobe/SSL_write&quot;)
+int BPF_URETPROBE(probe_SSL_write_exit) {
+    return (SSL_exit(ctx, 1));  // 1 表示写操作
+}
+</code></pre>
+<h3 id="hook到握手过程"><a class="header" href="#hook到握手过程">Hook到握手过程</a></h3>
+<p>在 SSL/TLS 中，握手（handshake）是一个特殊的过程，用于在客户端和服务器之间建立安全的连接。为了分析此过程，我们 hook 到了 <code>do_handshake</code> 函数，以跟踪握手的开始和结束。</p>
+<h4 id="进入握手"><a class="header" href="#进入握手">进入握手</a></h4>
+<p>我们使用 <code>uprobe</code> 为 <code>do_handshake</code> 设置一个 probe：</p>
+<pre><code class="language-c">
+SEC(&quot;uprobe/do_handshake&quot;)
+int BPF_UPROBE(probe_SSL_do_handshake_enter, void *ssl) {
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    u32 pid = pid_tgid &gt;&gt; 32;
+    u32 tid = (u32)pid_tgid;
+    u64 ts = bpf_ktime_get_ns();
+    u32 uid = bpf_get_current_uid_gid();
+
+    if (!trace_allowed(uid, pid)) {
+        return 0;
+    }
+
+    /* store arg info for later lookup */
+    bpf_map_update_elem(&amp;start_ns, &amp;tid, &amp;ts, BPF_ANY);
+    return 0;
+}
+</code></pre>
+<p>这段代码的主要功能如下：</p>
+<ol>
+<li>获取当前的 <code>pid</code>, <code>tid</code>, <code>ts</code> 和 <code>uid</code>。</li>
+<li>使用 <code>trace_allowed</code> 检查进程是否被允许追踪。</li>
+<li>将当前时间戳存储在 <code>start_ns</code> 映射中，用于稍后计算握手过程的持续时间。</li>
+</ol>
+<h4 id="退出握手"><a class="header" href="#退出握手">退出握手</a></h4>
+<p>同样，我们为 <code>do_handshake</code> 的返回设置了一个 <code>uretprobe</code>：</p>
+<pre><code class="language-c">
+SEC(&quot;uretprobe/do_handshake&quot;)
+int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
+    u32 zero = 0;
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+    u32 pid = pid_tgid &gt;&gt; 32;
+    u32 tid = (u32)pid_tgid;
+    u32 uid = bpf_get_current_uid_gid();
+    u64 ts = bpf_ktime_get_ns();
+    int ret = 0;
+
+    /* use kernel terminology here for tgid/pid: */
+    u32 tgid = pid_tgid &gt;&gt; 32;
+
+    /* store arg info for later lookup */
+    if (!trace_allowed(tgid, pid)) {
+        return 0;
+    }
+
+    u64 *tsp = bpf_map_lookup_elem(&amp;start_ns, &amp;tid);
+    if (tsp == 0)
+        return 0;
+
+    ret = PT_REGS_RC(ctx);
+    if (ret &lt;= 0)  // handshake failed
+        return 0;
+
+    struct probe_SSL_data_t *data = bpf_map_lookup_elem(&amp;ssl_data, &amp;zero);
+    if (!data)
+        return 0;
+
+    data-&gt;timestamp_ns = ts;
+    data-&gt;delta_ns = ts - *tsp;
+    data-&gt;pid = pid;
+    data-&gt;tid = tid;
+    data-&gt;uid = uid;
+    data-&gt;len = ret;
+    data-&gt;buf_filled = 0;
+    data-&gt;rw = 2;
+    data-&gt;is_handshake = true;
+    bpf_get_current_comm(&amp;data-&gt;comm, sizeof(data-&gt;comm));
+    bpf_map_delete_elem(&amp;start_ns, &amp;tid);
+
+    bpf_perf_event_output(ctx, &amp;perf_SSL_events, BPF_F_CURRENT_CPU, data,
+                            EVENT_SIZE(0));
+    return 0;
+}
+</code></pre>
+<p>此函数的逻辑如下：</p>
+<ol>
+<li>获取当前的 <code>pid</code>, <code>tid</code>, <code>ts</code> 和 <code>uid</code>。</li>
+<li>使用 <code>trace_allowed</code> 再次检查是否允许追踪。</li>
+<li>查找 <code>start_ns</code> 映射中的时间戳，用于计算握手的持续时间。</li>
+<li>使用 <code>PT_REGS_RC(ctx)</code> 获取 <code>do_handshake</code> 的返回值，判断握手是否成功。</li>
+<li>查找或初始化与当前线程关联的 <code>probe_SSL_data_t</code> 数据结构。</li>
+<li>更新数据结构的字段，包括时间戳、持续时间、进程信息等。</li>
+<li>通过 <code>bpf_perf_event_output</code> 将数据发送到用户态。</li>
+</ol>
+<p>我们的 eBPF 代码不仅跟踪了 <code>ssl_read</code> 和 <code>ssl_write</code> 的数据传输，还特别关注了 SSL/TLS 的握手过程。这些信息对于深入了解和优化安全连接的性能至关重要。</p>
+<p>通过这些 hook 函数，我们可以获得关于握手成功与否、握手所需的时间以及相关的进程信息的数据。这为我们提供了关于系统 SSL/TLS 行为的深入见解，可以帮助我们在需要时进行更深入的分析和优化。</p>
+<h2 id="用户态辅助代码分析"><a class="header" href="#用户态辅助代码分析">用户态辅助代码分析</a></h2>
+<h2 id="用户态辅助代码分析与解读"><a class="header" href="#用户态辅助代码分析与解读">用户态辅助代码分析与解读</a></h2>
+<p>在 eBPF 的生态系统中，用户态和内核态代码经常协同工作。内核态代码负责数据的采集，而用户态代码则负责设置、管理和处理这些数据。在本节中，我们将解读上述用户态代码如何配合 eBPF 追踪 SSL/TLS 交互。</p>
+<h3 id="1-支持的库挂载"><a class="header" href="#1-支持的库挂载">1. 支持的库挂载</a></h3>
+<p>上述代码片段中，根据环境变量 <code>env</code> 的设定，程序可以选择针对三种常见的加密库（OpenSSL、GnuTLS 和 NSS）进行挂载。这意味着我们可以在同一个工具中对多种库的调用进行追踪。</p>
+<p>为了实现这一功能，首先利用 <code>find_library_path</code> 函数确定库的路径。然后，根据库的类型，调用对应的 <code>attach_</code> 函数来将 eBPF 程序挂载到库函数上。</p>
+<pre><code class="language-c">    if (env.openssl) {
+        char *openssl_path = find_library_path(&quot;libssl.so&quot;);
+        printf(&quot;OpenSSL path: %s\n&quot;, openssl_path);
+        attach_openssl(obj, &quot;/lib/x86_64-linux-gnu/libssl.so.3&quot;);
+    }
+    if (env.gnutls) {
+        char *gnutls_path = find_library_path(&quot;libgnutls.so&quot;);
+        printf(&quot;GnuTLS path: %s\n&quot;, gnutls_path);
+        attach_gnutls(obj, gnutls_path);
+    }
+    if (env.nss) {
+        char *nss_path = find_library_path(&quot;libnspr4.so&quot;);
+        printf(&quot;NSS path: %s\n&quot;, nss_path);
+        attach_nss(obj, nss_path);
+    }
+</code></pre>
+<p>这里主要包含 OpenSSL、GnuTLS 和 NSS 三个库的挂载逻辑。NSS 是为组织设计的一套安全库，支持创建安全的客户端和服务器应用程序。它们最初是由 Netscape 开发的，现在由 Mozilla 维护。其他两个库前面已经介绍过了，这里不再赘述。</p>
+<h3 id="2-详细挂载逻辑"><a class="header" href="#2-详细挂载逻辑">2. 详细挂载逻辑</a></h3>
+<p>具体的 attach 函数如下：</p>
+<pre><code class="language-c">#define __ATTACH_UPROBE(skel, binary_path, sym_name, prog_name, is_retprobe)   \
+    do {                                                                       \
+      LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = #sym_name,        \
+                  .retprobe = is_retprobe);                                    \
+      skel-&gt;links.prog_name = bpf_program__attach_uprobe_opts(                 \
+          skel-&gt;progs.prog_name, env.pid, binary_path, 0, &amp;uprobe_opts);       \
+    } while (false)
+    
+int attach_openssl(struct sslsniff_bpf *skel, const char *lib) {
+    ATTACH_UPROBE_CHECKED(skel, lib, SSL_write, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, SSL_write, probe_SSL_write_exit);
+    ATTACH_UPROBE_CHECKED(skel, lib, SSL_read, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, SSL_read, probe_SSL_read_exit);
+
+    if (env.latency &amp;&amp; env.handshake) {
+        ATTACH_UPROBE_CHECKED(skel, lib, SSL_do_handshake,
+                            probe_SSL_do_handshake_enter);
+        ATTACH_URETPROBE_CHECKED(skel, lib, SSL_do_handshake,
+                                probe_SSL_do_handshake_exit);
+    }
+
+    return 0;
+}
+
+int attach_gnutls(struct sslsniff_bpf *skel, const char *lib) {
+    ATTACH_UPROBE_CHECKED(skel, lib, gnutls_record_send, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, gnutls_record_send, probe_SSL_write_exit);
+    ATTACH_UPROBE_CHECKED(skel, lib, gnutls_record_recv, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, gnutls_record_recv, probe_SSL_read_exit);
+
+    return 0;
+}
+
+int attach_nss(struct sslsniff_bpf *skel, const char *lib) {
+    ATTACH_UPROBE_CHECKED(skel, lib, PR_Write, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, PR_Write, probe_SSL_write_exit);
+    ATTACH_UPROBE_CHECKED(skel, lib, PR_Send, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, PR_Send, probe_SSL_write_exit);
+    ATTACH_UPROBE_CHECKED(skel, lib, PR_Read, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, PR_Read, probe_SSL_read_exit);
+    ATTACH_UPROBE_CHECKED(skel, lib, PR_Recv, probe_SSL_rw_enter);
+    ATTACH_URETPROBE_CHECKED(skel, lib, PR_Recv, probe_SSL_read_exit);
+
+    return 0;
+}
+</code></pre>
+<p>我们进一步观察 <code>attach_</code> 函数，可以看到它们都使用了 <code>ATTACH_UPROBE_CHECKED</code> 和 <code>ATTACH_URETPROBE_CHECKED</code> 宏来实现具体的挂载逻辑。这两个宏分别用于设置 uprobe（函数入口）和 uretprobe（函数返回）。</p>
+<p>考虑到不同的库有不同的 API 函数名称（例如，OpenSSL 使用 <code>SSL_write</code>，而 GnuTLS 使用 <code>gnutls_record_send</code>），所以我们需要为每个库写一个独立的 <code>attach_</code> 函数。</p>
+<p>例如，在 <code>attach_openssl</code> 函数中，我们为 <code>SSL_write</code> 和 <code>SSL_read</code> 设置了 probe。如果用户还希望追踪握手的延迟 (<code>env.latency</code>) 和握手过程 (<code>env.handshake</code>)，那么我们还会为 <code>SSL_do_handshake</code> 设置 probe。</p>
+<p>在eBPF生态系统中，perf_buffer是一个用于从内核态传输数据到用户态的高效机制。这对于内核态eBPF程序来说是十分有用的，因为它们不能直接与用户态进行交互。使用perf_buffer，我们可以在内核态eBPF程序中收集数据，然后在用户态异步地读取这些数据。我们使用 <code>perf_buffer__poll</code> 函数来读取内核态上报的数据，如下所示：</p>
+<pre><code class="language-c">    while (!exiting) {
+        err = perf_buffer__poll(pb, PERF_POLL_TIMEOUT_MS);
+        if (err &lt; 0 &amp;&amp; err != -EINTR) {
+            warn(&quot;error polling perf buffer: %s\n&quot;, strerror(-err));
+            goto cleanup;
+        }
+        err = 0;
+    }
+</code></pre>
+<p>最后，在 print_event 函数中，我们将数据打印到标准输出：</p>
+<pre><code class="language-c">// Function to print the event from the perf buffer
+void print_event(struct probe_SSL_data_t *event, const char *evt) {
+    ...
+    if (buf_size != 0) {
+        if (env.hexdump) {
+            // 2 characters for each byte + null terminator
+            char hex_data[MAX_BUF_SIZE * 2 + 1] = {0};  
+            buf_to_hex((uint8_t *)buf, buf_size, hex_data);
+            
+            printf(&quot;\n%s\n&quot;, s_mark);
+            for (size_t i = 0; i &lt; strlen(hex_data); i += 32) {
+                printf(&quot;%.32s\n&quot;, hex_data + i);
+            }
+            printf(&quot;%s\n\n&quot;, e_mark);
+        } else {
+            printf(&quot;\n%s\n%s\n%s\n\n&quot;, s_mark, buf, e_mark);
+        }
+    }
+}
+</code></pre>
+<p>完整的源代码可以在这里查看：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/30-sslsniff">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/30-sslsniff</a></p>
+<h2 id="编译与运行"><a class="header" href="#编译与运行">编译与运行</a></h2>
+<p>要开始使用 <code>sslsniff</code>，首先要进行编译：</p>
+<pre><code class="language-sh">make
+</code></pre>
+<p>完成后，请按照以下步骤操作：</p>
+<h3 id="启动-sslsniff"><a class="header" href="#启动-sslsniff"><strong>启动 sslsniff</strong></a></h3>
+<p>在一个终端中，执行以下命令来启动 <code>sslsniff</code>：</p>
+<pre><code class="language-sh">sudo ./sslsniff
+</code></pre>
+<h3 id="执行-curl-命令"><a class="header" href="#执行-curl-命令"><strong>执行 CURL 命令</strong></a></h3>
+<p>在另一个终端中，执行：</p>
+<pre><code class="language-console">curl https://example.com
+</code></pre>
+<p>正常情况下，你会看到类似以下的输出：</p>
+<pre><code class="language-html">    &lt;!doctype html&gt;
+    &lt;html&gt;
+    &lt;head&gt;
+        &lt;title&gt;Example Domain&lt;/title&gt;
+        ...
+    &lt;body&gt;
+    &lt;div&gt;
+        ...
+    &lt;/div&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+</code></pre>
+<h3 id="sslsniff-输出"><a class="header" href="#sslsniff-输出"><strong>sslsniff 输出</strong></a></h3>
+<p>当执行 <code>curl</code> 命令后，<code>sslsniff</code> 会显示以下内容：</p>
+<pre><code class="language-txt">    READ/RECV    0.132786160        curl             47458   1256  
+    ----- DATA -----
+    &lt;!doctype html&gt;
+    ...
+    &lt;div&gt;
+        &lt;h1&gt;Example Domain&lt;/h1&gt;
+        ...
+    &lt;/div&gt;
+    &lt;/body&gt;
+    &lt;/html&gt;
+
+    ----- END DATA -----
+</code></pre>
+<p><strong>注意</strong>：显示的 HTML 内容可能会因 <code>example.com</code> 页面的不同而有所不同。</p>
+<h3 id="显示延迟和握手过程"><a class="header" href="#显示延迟和握手过程">显示延迟和握手过程</a></h3>
+<p>要查看延迟和握手过程，请执行以下命令：</p>
+<pre><code class="language-console">$ sudo ./sslsniff -l --handshake
+OpenSSL path: /lib/x86_64-linux-gnu/libssl.so.3
+GnuTLS path: /lib/x86_64-linux-gnu/libgnutls.so.30
+NSS path: /lib/x86_64-linux-gnu/libnspr4.so
+FUNC         TIME(s)            COMM             PID     LEN     LAT(ms)
+HANDSHAKE    0.000000000        curl             6460    1      1.384  WRITE/SEND   0.000115400        curl             6460    24     0.014 
+</code></pre>
+<h3 id="16进制输出"><a class="header" href="#16进制输出">16进制输出</a></h3>
+<p>要以16进制格式显示数据，请执行以下命令：</p>
+<pre><code class="language-console">$ sudo ./sslsniff --hexdump
+WRITE/SEND   0.000000000        curl             16104   24    
+----- DATA -----
+505249202a20485454502f322e300d0a
+0d0a534d0d0a0d0a
+----- END DATA -----
+
+...
+</code></pre>
+<h2 id="总结"><a class="header" href="#总结">总结</a></h2>
+<p>eBPF 是一个非常强大的技术，它可以帮助我们深入了解系统的工作原理。本教程是一个简单的示例，展示了如何使用 eBPF 来监控 SSL/TLS 通信。如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 和教程网站 <a href="https://eunomia.dev/zh/tutorials/%E3%80%82">https://eunomia.dev/zh/tutorials/。</a></p>
+<p>参考资料：</p>
+<ul>
+<li><a href="https://github.com/iovisor/bcc/pull/4706">https://github.com/iovisor/bcc/pull/4706</a></li>
+<li><a href="https://github.com/openssl/openssl">https://github.com/openssl/openssl</a></li>
+<li><a href="https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html">https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html</a></li>
+<li><a href="https://github.com/iovisor/bcc/blob/master/tools/sslsniff_example.txt">https://github.com/iovisor/bcc/blob/master/tools/sslsniff_example.txt</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Transport_Layer_Security">https://en.wikipedia.org/wiki/Transport_Layer_Security</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../28-detach/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../bcc-documents/kernel-versions.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../28-detach/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../bcc-documents/kernel-versions.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
