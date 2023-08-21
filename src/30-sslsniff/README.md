@@ -75,7 +75,7 @@ int SSL_read(SSL *ssl, void *buf, int num);
 
 当我们想往一个已建立的 SSL 连接中写入数据时，可以使用 `SSL_write` 或 `SSL_write_ex` 函数。
 
-#### 函数原型
+函数原型：
 
 ```c
 int SSL_write_ex(SSL *s, const void *buf, size_t num, size_t *written);
