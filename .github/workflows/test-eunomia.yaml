@@ -64,3 +64,7 @@ jobs:
       run: |
         ./ecc src/20-tc/tc.bpf.c
         sudo timeout -s 2 3 ./ecli run src/20-tc/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 25 signal
+      run: |
+        ./ecc src/25-signal/signal.bpf.c src/25-signal/signal.h
+        sudo timeout -s 2 3 ./ecli run src/25-signal/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi

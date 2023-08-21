@@ -43,3 +43,7 @@ jobs:
       run: |
         make -C src/17-biopattern
         # sudo timeout -s 2 3 src/17-biopattern/biopattern || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 30 sslsniff
+      run: |
+        make -C src/30-sslsniff
+        # sudo timeout -s 2 3 src/30-sslsniff/sslsniff || if [ $? = 124 ]; then exit 0; else exit $?; fi
