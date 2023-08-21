@@ -33,6 +33,7 @@
 - [使用 eBPF 添加 sudo 用户](26-sudo/README.md)
 - [使用 eBPF 替换任意程序读取或写入的文本](27-replace/README.md)
 - [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](28-detach/README.md)
+- []
 
 # bcc tutorial
 
