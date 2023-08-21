@@ -67,7 +67,6 @@ struct event {
 
 ### 2. eBPF 程序 (`signal.bpf.c`)
 
-
 signal.bpf.c
 
 ```c
@@ -160,7 +159,7 @@ eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发�
 使用方式：
 
 ```console
-$ sudo ./ecli package.json
+sudo ./ecli package.json
 ```
 
 这个程序会对任何试图使用 `ptrace` 系统调用的程序，例如 `strace`，发出 `SIG_KILL` 信号。
@@ -179,15 +178,15 @@ TIME     PID    COMM   SUCCESS
 13:54:45  8857  strace true
 ```
 
-完整的源代码可以参考：
+完整的源代码可以参考：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/25-signal>
 
 ## 总结
 
 通过这个实例，我们深入了解了如何将 eBPF 程序与用户态程序相结合，实现对系统调用的监控和干预。eBPF 提供了一种在内核空间执行程序的机制，这种技术不仅限于监控，还可用于性能优化、安全防御、系统诊断等多种场景。对于开发者来说，这为Linux系统的性能调优和故障排查提供了一种强大且灵活的工具。
 
-最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 https://github.com/eunomia-bpf/bpf-developer-tutorial 和教程网站 https://eunomia.dev/zh/tutorials/。
+最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/。>
 
 ## 参考资料
 
 - <https://github.com/pathtofile/bad-bpf>
-- https://www.mail-archive.com/netdev@vger.kernel.org/msg296358.html
+- <https://www.mail-archive.com/netdev@vger.kernel.org/msg296358.html>
