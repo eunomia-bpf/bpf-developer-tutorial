@@ -2837,9 +2837,7 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 ffff9fd7e8192000 22384 curl       100.66.100.185  0     52.33.159.26    80    CLOSE       -&gt; SYN_SENT    0.000
 ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    SYN_SENT    -&gt; ESTABLISHED 1.373
 ffff9fd7e8192000 22384 curl       100.66.100.185  63446 52.33.159.26    80    ESTABLISHED -&gt; FIN_WAIT1   176.042
-ffff9fd7e819
-
-2000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT1   -&gt; FIN_WAIT2   0.536
+ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT1   -&gt; FIN_WAIT2   0.536
 ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT2   -&gt; CLOSE       0.006
 </code></pre>
 <p>以上输出中，最多的时间被花在了 ESTABLISHED 状态，也就是连接已经建立并在传输数据的状态，这个状态到 FIN_WAIT1 状态（开始关闭连接的状态）的转变过程中耗费了 176.042 毫秒。</p>
@@ -3093,7 +3091,7 @@ ffff9bf7109d6900 88750   node       127.0.0.1       39755 127.0.0.1       50966 
 <pre><code class="language-shell">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 </code></pre>
 <p>或者</p>
-<pre><code class="language-console">$ ecc runqlat.bpf.c runqlat.h
+<pre><code class="language-console">$ ecc tcprtt.bpf.c tcprtt.h
 Compiling bpf object...
 Generating export types...
 Packing ebpf object and config into package.json...
