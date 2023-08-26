@@ -17,9 +17,7 @@ SKADDR           C-PID C-COMM     LADDR           LPORT RADDR           RPORT OL
 ffff9fd7e8192000 22384 curl       100.66.100.185  0     52.33.159.26    80    CLOSE       -> SYN_SENT    0.000
 ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    SYN_SENT    -> ESTABLISHED 1.373
 ffff9fd7e8192000 22384 curl       100.66.100.185  63446 52.33.159.26    80    ESTABLISHED -> FIN_WAIT1   176.042
-ffff9fd7e819
-
-2000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT1   -> FIN_WAIT2   0.536
+ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT1   -> FIN_WAIT2   0.536
 ffff9fd7e8192000 0     swapper/5  100.66.100.185  63446 52.33.159.26    80    FIN_WAIT2   -> CLOSE       0.006
 ```
 
@@ -318,7 +316,7 @@ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 或者
 
 ```console
-$ ecc runqlat.bpf.c runqlat.h
+$ ecc tcprtt.bpf.c tcprtt.h
 Compiling bpf object...
 Generating export types...
 Packing ebpf object and config into package.json...
