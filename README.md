@@ -1,21 +1,24 @@
-# eBPF 开发者教程与知识库：Learn eBPF by example tools
+# eBPF 开发者教程与知识库：eBPF Tutorial by Example
 
 [![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee 镜像](https://gitee.com/yunwei37/bpf-developer-tutorial)
+[English Version](README_en.md)
+
+Dive straight into eBPF development with this concise tutorial, built around the powerful CO-RE (Compile Once, Run Everywhere) philosophy. Whether you're a newbie or a pro, we've got you covered with:
+
+- 🛠 **Practical Examples:** Start coding with bite-sized examples, some as short as just 20 lines!
+- 🔍 **Focused Learning:** We prioritize hands-on learning, skipping the lengthy theory. Each directory offers an independent eBPF tool example.
+- 💼 **Modern Frameworks:** Get comfortable with the latest eBPF frameworks such as libbpf, Cilium, libbpf-rs, and eunomia-bpf.
+- 🌐 **Multi-language Support:** Play with code samples in C, Go, and Rust.
+- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, click [here](README_en.md) or check the README_en.md inside each directory.
 
 这是一个基于 `CO-RE`（一次编译，到处运行）的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践，包括基本概念、代码实例、实际应用等内容。和 BCC 不同的是，我们使用 libbpf、Cilium、libbpf-rs、eunomia-bpf 等框架进行开发，包含 C、Go、Rust 等语言的示例。
 
 本教程不会进行复杂的概念讲解和场景介绍，主要希望提供一些 eBPF 小工具的案例（**非常短小，从二十行代码开始入门！**），来帮助 eBPF 应用的开发者快速上手 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
 
 教程关注于可观测性、网络、安全等等方面的 eBPF 示例。
-
-This is a development tutorial for eBPF based on CO-RE (Compile Once, Run Everywhere). It provides practical eBPF development practices from beginner to advanced, including basic concepts, code examples, and real-world applications. Unlike BCC, we use frameworks like libbpf, Cilium, libbpf-rs, and eunomia-bpf for development, with examples in languages such as C, Go, and Rust.
-
-This tutorial does not cover complex concepts and scenario introductions. Its main purpose is to provide examples of eBPF tools (**very short, starting with twenty lines of code!**) to help eBPF application developers quickly grasp eBPF development methods and techniques. The tutorial content can be found in the directory, with each directory being an independent eBPF tool example.
-
-The tutorial is in Chinese and English versions. For English version, please refer to [README_en.md](README_en.md) and the README_en.md in each directory.
 
 ## 目录
 
@@ -56,6 +59,7 @@ Android:
 
 网络和追踪：
 
+- [使用 uprobe 捕获多种库的 SSL/TLS 明文数据](src/30-sslsniff/README.md)
 - [使用 eBPF 追踪 HTTP 请求或其他七层协议](src/23-http/README.md)
 - [使用 sockops 加速网络请求转发](src/29-sockops/README.md)
 
@@ -175,6 +179,6 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 
 完整的对话记录可以在这里找到: [ChatGPT.md](ChatGPT.md)
 
-我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：https://github.com/eunomia-bpf/GPTtrace
+我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：<https://github.com/eunomia-bpf/GPTtrace>
 
 ![ebpf-chatgpt-signal](https://github.com/eunomia-bpf/GPTtrace/blob/main/doc/result.gif)
