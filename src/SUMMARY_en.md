@@ -2,13 +2,11 @@
 
 [![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
 
-Dive straight into eBPF development with this concise tutorial, built around the powerful CO-RE (Compile Once, Run Everywhere) philosophy. Whether you're a newbie or a pro, we've got you covered with:
+This is a development tutorial for eBPF based on CO-RE (Compile Once, Run Everywhere). It provides practical eBPF development practices from beginner to advanced, including basic concepts, code examples, and real-world applications. Unlike BCC, we use frameworks like libbpf, Cilium, libbpf-rs, and eunomia-bpf for development, with examples in languages such as C, Go, and Rust.
 
-- 🛠 **Practical Examples:** Start coding with bite-sized examples, some as short as just 20 lines!
-- 🔍 **Focused Learning:** We prioritize hands-on learning, skipping the lengthy theory. Each directory offers an independent eBPF tool example.
-- 💼 **Modern Frameworks:** Get comfortable with the latest eBPF frameworks such as libbpf, Cilium, libbpf-rs, and eunomia-bpf.
-- 🌐 **Multi-language Support:** Play with code samples in C, Go, and Rust.
-- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, click [here](README_en.md) or check the README_en.md inside each directory.
+This tutorial does not cover complex concepts and scenario introductions. Its main purpose is to provide examples of eBPF tools (**very short, starting with twenty lines of code!**) to help eBPF application developers quickly grasp eBPF development methods and techniques. The tutorial content can be found in the directory, with each directory being an independent eBPF tool example.
+
+# Table of Contents
 
 - [Introduction to basic concepts of eBPF and common development tools](0-introduce/README.md)
 - [eBPF Hello World, basic framework and development process](1-helloworld/README.md)
