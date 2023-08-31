@@ -1,4 +1,4 @@
-# Terminate Malicious Processes Using bpf_send_signal
+# eBPF Practical Tutorial: Terminate Malicious Processes Using bpf_send_signal
 
 Compile:
 

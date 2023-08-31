@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 16: Memleak for Monitoring Memory Leaks
+# eBPF Tutorial by Example 16: Monitoring Memory Leaks
 
 eBPF (extended Berkeley Packet Filter) is a powerful network and performance analysis tool that is widely used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without restarting the kernel or modifying its source code.
 

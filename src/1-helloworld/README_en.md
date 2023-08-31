@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 1 Hello World, Basic Framework and Development Process
+# eBPF Tutorial by Example 1: Hello World, Framework and Development
 
 In this blog post, we will delve into the basic framework and development process of eBPF (Extended Berkeley Packet Filter). eBPF is a powerful network and performance analysis tool that runs on the Linux kernel, providing developers with the ability to dynamically load, update, and run user-defined code at kernel runtime. This enables developers to implement efficient, secure kernel-level network monitoring, performance analysis, and troubleshooting functionalities.
 

@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 4: Capturing Process Opening Files and Filter with Global Variables
+# eBPF Tutorial by Example 4: Capturing Opening Files and Filter with Global Variables
 
 eBPF (Extended Berkeley Packet Filter) is a kernel execution environment that allows users to run secure and efficient programs in the kernel. It is commonly used for network filtering, performance analysis, security monitoring, and other scenarios. The power of eBPF lies in its ability to capture and modify network packets or system calls at runtime in the kernel, enabling monitoring and adjustment of the operating system's behavior.
 

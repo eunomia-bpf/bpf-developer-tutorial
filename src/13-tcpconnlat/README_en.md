@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 13: Statistics of TCP Connection Delay and Data Processing in User Space Using libbpf
+# eBPF Tutorial by Example 13: Statistics of TCP Connection Delay with libbpf
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without restarting the kernel or changing the kernel source code.
 

@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 10: Capturing Interrupt Events Using hardirqs or softirqs
+# eBPF Tutorial by Example 10: Capturing Interrupts with hardirqs or softirqs
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime in the kernel.
 
@@ -63,7 +63,6 @@ struct {
  __uint(max_entries, 1);
  __type(key, u32);
  __type(value, u64);
-``````c
 } start SEC(".maps");
 
 struct {
@@ -159,7 +158,7 @@ int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
 }
 
 SEC("raw_tp/irq_handler_exit")
-```int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
+int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 {
  return handle_exit(irq, action);
 }
@@ -171,7 +170,7 @@ This code is an eBPF program used to capture and analyze the execution informati
 
 1. Include necessary header files and define data structures:
 
-    ```c
+```c
     #include <vmlinux.h>
     #include <bpf/bpf_core_read.h>
     #include <bpf/bpf_helpers.h>
@@ -179,13 +178,13 @@ This code is an eBPF program used to capture and analyze the execution informati
     #include "hardirqs.h"
     #include "bits.bpf.h"
     #include "maps.bpf.h"
-    ```
+```
 
-    This program includes the standard header files required for eBPF development, as well as custom header files for defining data structures and maps.
+This program includes the standard header files required for eBPF development, as well as custom header files for defining data structures and maps.
 
 2. Define global variables and maps:
 
-    ```c
+```c
     #define MAX_ENTRIES 256
 
     const volatile bool filter_cg = false;
@@ -194,17 +193,17 @@ This code is an eBPF program used to capture and analyze the execution informati
     const volatile bool do_count = false;
 
     ...
-    ```
+```
 
-    This program defines some global variables that are used to configure the behavior of the program. For example, `filter_cg` controls whether to filter cgroups, `targ_dist` controls whether to display the distribution of execution time, etc. Additionally, the program defines three maps for storing cgroup information, start timestamps, and interrupt handler information.
+This program defines some global variables that are used to configure the behavior of the program. For example, `filter_cg` controls whether to filter cgroups, `targ_dist` controls whether to display the distribution of execution time, etc. Additionally, the program defines three maps for storing cgroup information, start timestamps, and interrupt handler information.
 
 3. Define two helper functions `handle_entry` and `handle_exit`:
 
-    These two functions are called at the entry and exit points of the interrupt handler. `handle_entry` records the start timestamp or updates the interrupt count, while `handle_exit` calculates the execution time of the interrupt handler and stores the result in the corresponding information map.
+These two functions are called at the entry and exit points of the interrupt handler. `handle_entry` records the start timestamp or updates the interrupt count, while `handle_exit` calculates the execution time of the interrupt handler and stores the result in the corresponding information map.
 
 4. Define the entry points of the eBPF program:
 
-    ```c
+```c
     SEC("tp_btf/irq_handler_entry")
     int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
     {
@@ -228,15 +227,15 @@ This code is an eBPF program used to capture and analyze the execution informati
     {
     return handle_exit(irq, action);
     }
-    ```
+```
 
-    Here, four entry points of the eBPF program are defined, which are used to capture the entry and exit events of the interrupt handler. `tp_btf` and `raw_tp` represent capturing events using BPF Type Format (BTF) and raw tracepoints, respectively. This ensures that the program can be ported and run on different kernel versions.
+Here, four entry points of the eBPF program are defined, which are used to capture the entry and exit events of the interrupt handler. `tp_btf` and `raw_tp` represent capturing events using BPF Type Format (BTF) and raw tracepoints, respectively. This ensures that the program can be ported and run on different kernel versions.
 
 The code for Softirq is similar, and I won't elaborate on it here.
 
 ## Run code.Translated content
 
-"eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
 
 To compile this program, use the ecc tool:
 

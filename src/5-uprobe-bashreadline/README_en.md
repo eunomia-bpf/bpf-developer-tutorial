@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 5: Capturing readline Function Calls with uprobe
+# eBPF Tutorial by Example 5: Capturing readline Function Calls with Uprobe
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 

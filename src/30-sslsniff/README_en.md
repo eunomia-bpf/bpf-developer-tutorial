@@ -1,4 +1,4 @@
-# eBPF Practical Tutorial: Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe
+# eBPF Practical Tutorial: Capturing SSL/TLS Plain Text Data Using uprobe
 
 With the widespread use of TLS in modern network environments, tracing microservices RPC messages has become increasingly challenging. Traditional traffic sniffing techniques often face limitations in accessing only encrypted data, preventing a genuine observation of the original communication content. This restriction poses significant obstacles to system debugging and analysis.
 

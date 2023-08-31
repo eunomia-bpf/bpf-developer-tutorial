@@ -1,6 +1,14 @@
-# Summary
+# eBPF Tutorial by Example: Learning CO-RE eBPF Step by Step with Tools
 
-# eBPF Practice Tutorial: Based on libbpf and CO-RE
+[![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
+
+Dive straight into eBPF development with this concise tutorial, built around the powerful CO-RE (Compile Once, Run Everywhere) philosophy. Whether you're a newbie or a pro, we've got you covered with:
+
+- 🛠 **Practical Examples:** Start coding with bite-sized examples, some as short as just 20 lines!
+- 🔍 **Focused Learning:** We prioritize hands-on learning, skipping the lengthy theory. Each directory offers an independent eBPF tool example.
+- 💼 **Modern Frameworks:** Get comfortable with the latest eBPF frameworks such as libbpf, Cilium, libbpf-rs, and eunomia-bpf.
+- 🌐 **Multi-language Support:** Play with code samples in C, Go, and Rust.
+- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, click [here](README_en.md) or check the README_en.md inside each directory.
 
 - [Introduction to basic concepts of eBPF and common development tools](0-introduce/README.md)
 - [eBPF Hello World, basic framework and development process](1-helloworld/README.md)
@@ -27,7 +35,7 @@
 
 - [Using eBPF programs on Android](22-android/README.md)
 - [Tracing HTTP requests or other layer 7 protocols using eBPF](23-http/README.md)
-- [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README_en.md)
+- [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README.md)
 - [Accelerating network request forwarding using sockops](29-sockops/README.md)
 - [Hiding process or file information using eBPF](24-hide/README.md)
 - [Terminating processes by sending signals using bpf_send_signal](25-signal/README.md)
