@@ -1,4 +1,18 @@
-# eBPF Tutorial by Example: Based on libbpf and CO-RE
+# eBPF Tutorial by Example: Learning CO-RE eBPF Step by Step with Tools
+
+[![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
+
+[GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
+[Gitee](https://gitee.com/yunwei37/bpf-developer-tutorial)
+[*中文版*]([README_en.md](https://eunomia.dev/zh/tutorials/))
+
+Dive straight into eBPF development with this concise tutorial, built around the powerful CO-RE (Compile Once, Run Everywhere) philosophy. Whether you're a newbie or a pro, we've got you covered with:
+
+- 🛠 **Practical Examples:** Start coding with bite-sized examples, some as short as just 20 lines!
+- 🔍 **Focused Learning:** We prioritize hands-on learning, skipping the lengthy theory. Each directory offers an independent eBPF tool example.
+- 💼 **Modern Frameworks:** Get comfortable with the latest eBPF frameworks such as libbpf, Cilium, libbpf-rs, and eunomia-bpf.
+- 🌐 **Multi-language Support:** Play with code samples in C, Go, and Rust.
+- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, click [here](README_en.md) or check the README_en.md inside each directory.
 
 - [Introduction to basic concepts of eBPF and common development tools](0-introduce/README.md)
 - [eBPF Hello World, basic framework and development process](1-helloworld/README.md)
@@ -40,3 +54,5 @@
 - [bcc Reference Guide](bcc-documents/reference_guide.md)
 - [Special Filtering](bcc-documents/special_filtering.md)
 - [bcc Tutorial](bcc-documents/tutorial.md)".- [bcc Python Developer Tutorial](bcc-documents/tutorial_bcc_python_developer.md)
+
+Open source code repository: <https://github.com/eunomia-bpf/bpf-developer-tutorial>
