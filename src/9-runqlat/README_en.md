@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 9: Capturing Process Scheduling Latency and Recording as Histogram
+# eBPF Tutorial by Example 9: Capturing Scheduling Latency and Recording as Histogram
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime.
 

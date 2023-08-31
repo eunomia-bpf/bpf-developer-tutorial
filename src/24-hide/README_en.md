@@ -1,4 +1,4 @@
-# eBPF Development Practice: Hiding Process or File Information with eBPF
+# eBPF Practical Tutorial: Hiding Process or File Information
 
 eBPF (Extended Berkeley Packet Filter) is a powerful feature in the Linux kernel that allows you to run, load, and update user-defined code without having to change the kernel source code or reboot the kernel. This capability allows eBPF to be used in a wide range of applications such as network and system performance analysis, packet filtering, and security policies.
 

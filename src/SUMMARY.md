@@ -1,6 +1,4 @@
-# Summary
-
-# eBPF 实践教程：基于 libbpf 和 CO-RE
+# eBPF 开发实践教程：基于 libbpf 和 CO-RE
 
 - [介绍 eBPF 的基本概念、常见的开发工具](0-introduce/README.md)
 - [eBPF Hello World，基本框架和开发流程](1-helloworld/README.md)
@@ -36,7 +34,7 @@
 - [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](28-detach/README.md)
 - [使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据](30-sslsniff/README.md)
 
-# bcc tutorial
+# bcc 教程与文档
 
 - [BPF Features by Linux Kernel Version](bcc-documents/kernel-versions.md)
 - [Kernel Configuration for BPF Features](bcc-documents/kernel_config.md)

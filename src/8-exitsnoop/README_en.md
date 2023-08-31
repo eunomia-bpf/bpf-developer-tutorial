@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 8: Monitoring Process Exit Events, Print Output with Ring Buffer
+# eBPF Tutorial by Example 8: Monitoring Process Exit Events, Output with Ring Buffer
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime in the kernel.
 

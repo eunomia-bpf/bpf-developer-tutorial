@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 11: Using libbpf to Develop User-Space Programs in eBPF and Trace exec() and exit() System Calls
+# eBPF Tutorial by Example 11: Develop User-Space Programs with libbpf and Trace exec() and exit()
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code during kernel runtime.
 

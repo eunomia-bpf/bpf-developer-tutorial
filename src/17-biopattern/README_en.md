@@ -1,4 +1,4 @@
-# eBPF Getting Started Hands-On Tutorial 17: Count Random/Sequential Disk I/O
+# eBPF Tutorial by Example 17: Count Random/Sequential Disk I/O
 
 eBPF (Extended Berkeley Packet Filter) is a new technology in the Linux kernel that allows users to execute custom programmes in kernel space without changing the kernel code. This provides system administrators and developers with powerful tools to gain insight into and monitor system behaviour for optimisation.
 

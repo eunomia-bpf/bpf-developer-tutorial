@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 7: Capturing Process Execution Event, Printing Output with perf event array
+# eBPF Tutorial by Example 7: Capturing Process Execution, Output with perf event array
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 

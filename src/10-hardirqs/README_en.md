@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 10: Capturing Interrupt Events Using hardirqs or softirqs
+# eBPF Tutorial by Example 10: Capturing Interrupts with hardirqs or softirqs
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime in the kernel.
 

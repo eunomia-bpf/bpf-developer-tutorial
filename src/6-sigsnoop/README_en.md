@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example 6: Capturing Process Signal Sending and Using a Hash Map to Store State
+# eBPF Tutorial by Example 6: Capturing Signal Sending and Store State with Hash Maps
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
