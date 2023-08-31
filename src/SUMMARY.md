@@ -1,8 +1,5 @@
 # eBPF 开发实践教程：基于 CO-RE，通过小工具快速上手 eBPF 开发
 
-[GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
-[Gitee](https://gitee.com/yunwei37/bpf-developer-tutorial)
-
 这是一个基于 `CO-RE`（一次编译，到处运行）的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践，包括基本概念、代码实例、实际应用等内容。和 BCC 不同的是，我们使用 libbpf、Cilium、libbpf-rs、eunomia-bpf 等框架进行开发，包含 C、Go、Rust 等语言的示例。
 
 本教程不会进行复杂的概念讲解和场景介绍，主要希望提供一些 eBPF 小工具的案例（**非常短小，从二十行代码开始入门！**），来帮助 eBPF 应用的开发者快速上手 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
@@ -51,5 +48,3 @@
 - [Special Filtering](bcc-documents/special_filtering.md)
 - [bcc Tutorial](bcc-documents/tutorial.md)
 - [bcc Python Developer Tutorial](bcc-documents/tutorial_bcc_python_developer.md)
-
-Github 仓库地址：<https://github.com/eunomia-bpf/bpf-developer-tutorial>
