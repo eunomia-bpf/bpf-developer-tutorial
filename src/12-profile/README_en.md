@@ -162,17 +162,19 @@ Use the `bpf_get_stack()` function to get kernel stack information. Store the re
 
 ```c
 event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
-```Using the `bpf_get_stack()` function with the `BPF_F_USER_STACK` flag retrieves information about the user space stack. Store the result in `event->ustack` and its size in `event->ustack_sz`.
+```
+
+Using the `bpf_get_stack()` function with the `BPF_F_USER_STACK` flag retrieves information about the user space stack. Store the result in `event->ustack` and its size in `event->ustack_sz`.
 
 8. Submit the event to the Ring Buffer:
 
-    ```c
+```c
     bpf_ringbuf_submit(event, 0);
-    ```
+```
 
-    Finally, use the `bpf_ringbuf_submit()` function to submit the event to the Ring Buffer for the user space program to read and process.
+Finally, use the `bpf_ringbuf_submit()` function to submit the event to the Ring Buffer for the user space program to read and process.
 
-    This kernel mode eBPF program captures the program's execution flow by sampling the kernel stack and user space stack of the program periodically. These data are stored in the Ring Buffer for the user mode `profile` program to read.
+This kernel mode eBPF program captures the program's execution flow by sampling the kernel stack and user space stack of the program periodically. These data are stored in the Ring Buffer for the user mode `profile` program to read.
 
 ### User Mode Section
 
@@ -286,7 +288,7 @@ static void show_stack_trace(__u64 *stack, int stack_sz, pid_t pid)
     blazesym_result_free(result);
 }
 
-``` /* Receive events from the ring buffer. */".```c
+/* Receive events from the ring buffer. */
 static int event_handler(void *_ctx, void *data, size_t size)
 {
     struct stacktrace_event *event = data;
