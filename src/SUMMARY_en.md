@@ -6,6 +6,8 @@ This is a development tutorial for eBPF based on CO-RE (Compile Once, Run Everyw
 
 This tutorial does not cover complex concepts and scenario introductions. Its main purpose is to provide examples of eBPF tools (**very short, starting with twenty lines of code!**) to help eBPF application developers quickly grasp eBPF development methods and techniques. The tutorial content can be found in the directory, with each directory being an independent eBPF tool example.
 
+For the complete source code of the tutorial, please refer to the repo [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) on GitHub.
+
 # Table of Contents
 
 - [Introduction to basic concepts of eBPF and common development tools](0-introduce/README.md)

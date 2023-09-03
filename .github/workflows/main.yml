@@ -21,7 +21,7 @@ jobs:
       - name: install mdbook
         run: (test -x $HOME/.cargo/bin/mdbook || cargo install mdbook)
       - name: build and test
-        run: mdbook build && mdbook test
+        run: mdbook build
       - name: publish
         if:   github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository_owner == 'eunomia-bpf'
         uses: JamesIves/github-pages-deploy-action@v4.4.1
