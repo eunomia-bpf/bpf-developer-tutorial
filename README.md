@@ -12,7 +12,9 @@ Dive straight into eBPF development with this concise tutorial, built around the
 - 🔍 **Focused Learning:** We prioritize hands-on learning, skipping the lengthy theory. Each directory offers an independent eBPF tool example.
 - 💼 **Modern Frameworks:** Get comfortable with the latest eBPF frameworks such as libbpf, Cilium, libbpf-rs, and eunomia-bpf.
 - 🌐 **Multi-language Support:** Play with code samples in C, Go, and Rust.
-- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, click [here](README_en.md) or check the README_en.md inside each directory.
+- 🌍 **Bilingual Content:** This tutorial is available in both Chinese and English. For the English version, check the README_en.md inside each directory.
+
+#### [**Check out the English version here**](README_en.md)
 
 这是一个基于 `CO-RE`（一次编译，到处运行）的 eBPF 的开发教程，提供了从入门到进阶的 eBPF 开发实践，包括基本概念、代码实例、实际应用等内容。和 BCC 不同的是，我们使用 libbpf、Cilium、libbpf-rs、eunomia-bpf 等框架进行开发，包含 C、Go、Rust 等语言的示例。
 
