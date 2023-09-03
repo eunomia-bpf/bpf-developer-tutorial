@@ -4,7 +4,10 @@
 
 本教程不会进行复杂的概念讲解和场景介绍，主要希望提供一些 eBPF 小工具的案例（**非常短小，从二十行代码开始入门！**），来帮助 eBPF 应用的开发者快速上手 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
 
-教程关注于可观测性、网络、安全等等方面的 eBPF 示例:
+教程关注于可观测性、网络、安全等等方面的 eBPF 示例。完整的代码和教程可以在 [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) GitHub 开源仓库中找到。
+
+
+# 目录
 
 - [介绍 eBPF 的基本概念、常见的开发工具](0-introduce/README.md)
 - [eBPF Hello World，基本框架和开发流程](1-helloworld/README.md)
