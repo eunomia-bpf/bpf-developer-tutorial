@@ -2,7 +2,7 @@
 #include <argp.h>
 #include <unistd.h>
 #include "replace.skel.h"
-#include "common.h"
+#include "replace.h"
 
 
 #include <bpf/bpf.h>

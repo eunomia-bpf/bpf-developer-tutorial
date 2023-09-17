@@ -26,14 +26,4 @@ struct event {
     bool success;
 };
 
-struct tr_file {
-    char filename[FILENAME_LEN_MAX];
-    unsigned int filename_len;
-};
-
-struct tr_text {
-    char text[TEXT_LEN_MAX];
-    unsigned int text_len;
-};
-
 #endif  // BAD_BPF_COMMON_H

@@ -160,6 +160,7 @@ eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发�
 
 ```console
 $ sudo ./ecli package.json
+TIME     PID    COMM   SUCCESS
 ```
 
 这个程序会对任何试图使用 `ptrace` 系统调用的程序，例如 `strace`，发出 `SIG_KILL` 信号。
