@@ -3,7 +3,7 @@
 #ifndef __SOCKFILTER_H
 #define __SOCKFILTER_H
 
-#define MAX_BUF_SIZE 8192
+#define MAX_BUF_SIZE 64
 
 struct so_event {
 	__be32 src_addr;
