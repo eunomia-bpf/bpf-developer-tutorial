@@ -66,7 +66,7 @@ int socket_handler(struct __sk_buff *skb)
 
 	if (ip_is_fragment(skb, nhoff))
 		return 0;
-	
+
 	// ip4 header lengths are variable
 	// access ihl as a u8 (linux/include/linux/skbuff.h)
 	bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
@@ -81,35 +81,37 @@ int socket_handler(struct __sk_buff *skb)
 
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &ip_proto, 1);
 
-	if (ip_proto != IPPROTO_TCP) {
+	if (ip_proto != IPPROTO_TCP)
+	{
 		return 0;
 	}
 
 	tcp_hdr_len = nhoff + hdr_len;
 	bpf_skb_load_bytes(skb, nhoff + 0, &verlen, 1);
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, tot_len), &tlen, sizeof(tlen));
-	
+
 	__u8 doff;
 	bpf_skb_load_bytes(skb, tcp_hdr_len + offsetof(struct __tcphdr, ack_seq) + 4, &doff, sizeof(doff)); // read the first byte past __tcphdr->ack_seq, we can't do offsetof bit fields
-	doff &= 0xf0;																						 // clean-up res1
-	doff >>= 4;																							 // move the upper 4 bits to low
-	doff *= 4;																							 // convert to bytes length
-	
+	doff &= 0xf0;																						// clean-up res1
+	doff >>= 4;																							// move the upper 4 bits to low
+	doff *= 4;																							// convert to bytes length
+
 	payload_offset = ETH_HLEN + hdr_len + doff;
 	payload_length = __bpf_ntohs(tlen) - hdr_len - doff;
 
 	char line_buffer[7];
-	if (payload_length < 7 || payload_offset < 0) {
+	if (payload_length < 7 || payload_offset < 0)
+	{
 		return 0;
 	}
 	bpf_skb_load_bytes(skb, payload_offset, line_buffer, 7);
 	bpf_printk("%d len %d buffer: %s", payload_offset, payload_length, line_buffer);
-	if (bpf_strncmp(line_buffer, 3, "GET") == 0) {
-	} else if (bpf_strncmp(line_buffer, 4, "POST") == 0) {
-	} else if (bpf_strncmp(line_buffer, 3, "PUT") == 0) {
-	} else if (bpf_strncmp(line_buffer, 6, "DELETE") == 0) {
-	} else if (bpf_strncmp(line_buffer, 4, "HTTP") == 0) {
-	} else {
+	if (bpf_strncmp(line_buffer, 3, "GET") != 0 &&
+		bpf_strncmp(line_buffer, 4, "POST") != 0 &&
+		bpf_strncmp(line_buffer, 3, "PUT") != 0 &&
+		bpf_strncmp(line_buffer, 6, "DELETE") != 0 &&
+		bpf_strncmp(line_buffer, 4, "HTTP") != 0)
+	{
 		return 0;
 	}
 
@@ -125,7 +127,7 @@ int socket_handler(struct __sk_buff *skb)
 
 	e->payload_length = payload_length;
 	bpf_skb_load_bytes(skb, payload_offset, e->payload, MAX_BUF_SIZE);
-	
+
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, saddr), &(e->src_addr), 4);
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, daddr), &(e->dst_addr), 4);
 	bpf_ringbuf_submit(e, 0);
