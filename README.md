@@ -62,7 +62,7 @@ Android:
 网络和追踪：
 
 - [使用 uprobe 捕获多种库的 SSL/TLS 明文数据](src/30-sslsniff/README.md)
-- [使用 eBPF 追踪 HTTP 请求或其他七层协议](src/23-http/README.md)
+- [使用 eBPF socket filter 或 syscall trace 追踪 HTTP 请求和其他七层协议](src/23-http/README.md)
 - [使用 sockops 加速网络请求转发](src/29-sockops/README.md)
 
 安全：
