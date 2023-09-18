@@ -1,3 +1,4 @@
+#define BPF_NO_GLOBAL_DATA
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 

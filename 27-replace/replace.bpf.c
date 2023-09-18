@@ -3,7 +3,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include "common.h"
+#include "replace.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -268,7 +268,8 @@ int check_possible_addresses(struct trace_event_raw_sys_exit *ctx) {
         //         break;
         //     }
         // }
-        // we can use bpf_strncmp here, but it's not available in the kernel version older
+        // we can use bpf_strncmp here,
+        // but it's not available in the kernel version older than 5.17
         if (bpf_strncmp(name, text_len_max, (const char *)text_find) == 0) {
             // ***********
             // We've found out text!
