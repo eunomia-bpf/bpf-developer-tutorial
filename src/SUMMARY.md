@@ -33,7 +33,7 @@
 # eBPF 高级特性与进阶主题
 
 - [在 Android 上使用 eBPF 程序](22-android/README.md)
-- [使用 eBPF 追踪 HTTP 请求或其他七层协议](23-http/README.md)
+- [使用 eBPF socket filter 或 syscall tracepoint 追踪 HTTP 请求等七层协议](23-http/README.md)
 - [使用 uprobe 捕获多种库的 SSL/TLS 明文数据](30-sslsniff/README.md)
 - [使用 sockops 加速网络请求转发](29-sockops/README.md)
 - [使用 eBPF 隐藏进程或文件信息](24-hide/README.md)

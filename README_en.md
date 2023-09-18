@@ -49,7 +49,7 @@ Android:
 
 Networking and tracing:
 
-- [Tracing HTTP requests or other layer-7 protocols using eBPF](src/23-http/README_en.md)
+- [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](src/23-http/README_en.md)
 - [Accelerating network request forwarding using sockops](src/29-sockops/README_en.md)
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](src/30-sslsniff/README_en.md)
 
