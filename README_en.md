@@ -34,7 +34,7 @@ Includes simple eBPF program samples and introductions.
 - [lesson 14-tcpstates](src/14-tcpstates/README_en.md) Records TCP connection state and TCP RTT.- [lesson 15-javagc](src/15-javagc/README_en.md) Capture user-level Java GC event duration using usdt
 - [lesson 16-memleak](src/16-memleak/README_en.md) Detect memory leaks
 - [lesson 17-biopattern](src/17-biopattern/README_en.md) Capture disk IO patterns
-- [lesson 18-further-reading](src/18-further-reading/README_en.md) Further reading?
+- [lesson 18-further-reading](src/18-further-reading/README_en.md) Further reading: papers list, projects, blogs, etc.
 - [lesson 19-lsm-connect](src/19-lsm-connect/README_en.md) Use LSM for security detection and defense
 - [lesson 20-tc](src/20-tc/README_en.md) Use eBPF for tc traffic control
 - [lesson 21-xdp](src/21-xdp/README_en.md) Use eBPF for XDP packet processing

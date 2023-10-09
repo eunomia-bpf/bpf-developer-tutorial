@@ -46,7 +46,7 @@ Dive straight into eBPF development with this concise tutorial, built around the
 - [lesson 15-javagc](src/15-javagc/README.md) 使用 usdt 捕获用户态 Java GC 事件耗时
 - [lesson 16-memleak](src/16-memleak/README.md) 检测内存泄漏
 - [lesson 17-biopattern](src/17-biopattern/README.md) 捕获磁盘 IO 模式
-- [lesson 18-further-reading](src/18-further-reading/README.md) 更进一步的相关资料？
+- [lesson 18-further-reading](src/18-further-reading/README.md) 更进一步的相关资料：论文列表、项目、博客等等
 - [lesson 19-lsm-connect](src/19-lsm-connect/README.md) 使用 LSM 进行安全检测防御
 - [lesson 20-tc](src/20-tc/README.md) 使用 eBPF 进行 tc 流量控制
 - [lesson 21-xdp](src/21-xdp/README.md) 使用 eBPF 进行 XDP 报文处理

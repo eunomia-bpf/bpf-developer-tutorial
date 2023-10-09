@@ -6,7 +6,7 @@ This is a development tutorial for eBPF based on CO-RE (Compile Once, Run Everyw
 
 This tutorial does not cover complex concepts and scenario introductions. Its main purpose is to provide examples of eBPF tools (**very short, starting with twenty lines of code!**) to help eBPF application developers quickly grasp eBPF development methods and techniques. The tutorial content can be found in the directory, with each directory being an independent eBPF tool example.
 
-For the complete source code of the tutorial, please refer to the repo [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) on GitHub.
+For the complete source code of the tutorial, please refer to the repo [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) on GitHub. **If you find this tutorial helpful, please give us a star!**
 
 # Table of Contents
 
@@ -27,7 +27,7 @@ For the complete source code of the tutorial, please refer to the repo [https://
 - [Capturing user space Java GC event duration using USDT](15-javagc/README.md)
 - [Writing eBPF program Memleak to monitor memory leaks](16-memleak/README.md)
 - [Writing eBPF program Biopattern to measure random/sequential disk I/O](17-biopattern/README.md)
-- [More reference materials](18-further-reading/README.md)
+- [More reference materials: papers list, projects, blogs, etc.](18-further-reading/README.md)
 - [Performing security detection and defense using LSM](19-lsm-connect/README.md)
 - [Performing traffic control using eBPF and tc](20-tc/README.md)
 

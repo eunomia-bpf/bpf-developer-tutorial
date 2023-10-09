@@ -4,8 +4,7 @@
 
 本教程不会进行复杂的概念讲解和场景介绍，主要希望提供一些 eBPF 小工具的案例（**非常短小，从二十行代码开始入门！**），来帮助 eBPF 应用的开发者快速上手 eBPF 的开发方法和技巧。教程内容可以在目录中找到，每个目录都是一个独立的 eBPF 工具案例。
 
-教程关注于可观测性、网络、安全等等方面的 eBPF 示例。完整的代码和教程可以在 [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) GitHub 开源仓库中找到。
-
+教程关注于可观测性、网络、安全等等方面的 eBPF 示例。完整的代码和教程可以在 [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) GitHub 开源仓库中找到。**如果您认为本教程对您有所帮助，也请给我们一个 star 鼓励一下！**
 
 # 目录
 
@@ -26,7 +25,7 @@
 - [使用 USDT 捕获用户态 Java GC 事件耗时](15-javagc/README.md)
 - [编写 eBPF 程序 Memleak 监控内存泄漏](16-memleak/README.md)
 - [编写 eBPF 程序 Biopattern 统计随机/顺序磁盘 I/O](17-biopattern/README.md)
-- [更多的参考资料](18-further-reading/README.md)
+- [更多的参考资料：论文列表、项目、博客等等](18-further-reading/README.md)
 - [使用 LSM 进行安全检测防御](19-lsm-connect/README.md)
 - [使用 eBPF 进行 tc 流量控制](20-tc/README.md)
 
