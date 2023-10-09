@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -10,7 +10,7 @@
         
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
         <link rel="icon" href="../favicon.svg">
         <link rel="shortcut icon" href="../favicon.png">
@@ -31,7 +31,7 @@
         <!-- Custom theme stylesheets -->
 
     </head>
-    <body>
+    <body class="sidebar-visible no-js">
     <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
@@ -61,29 +61,34 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             var html = document.querySelector('html');
-            html.classList.remove('no-js')
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
         </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var html = document.querySelector('html');
+            var body = document.querySelector('body');
             var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../https://github.com/eunomia-bpf/bpf-developer-tutorial.html">https://github.com/eunomia-bpf/bpf-developer-tutorial</a></li><li class="chapter-item expanded affix "><li class="part-title">目录</li><li class="chapter-item expanded "><a href="../0-introduce/index.html" class="active"><strong aria-hidden="true">1.</strong> 介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> 使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> 使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> 捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> 使用 uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> 捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> 使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> 一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> 使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> 使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> 使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">14.</strong> 使用 libbpf-bootstrap 记录 TCP 连接状态与 TCP RTT</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">15.</strong> 使用 USDT 捕获用户态 Java GC 事件耗时</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">16.</strong> 编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">17.</strong> 编写 eBPF 程序 Biopattern 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">18.</strong> 更多的参考资料</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">19.</strong> 使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">20.</strong> 使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF 高级特性与进阶主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">21.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">22.</strong> 使用 eBPF socket filter 或 syscall tracepoint 追踪 HTTP 请求等七层协议</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">23.</strong> 使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">24.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">25.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">26.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">28.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">29.</strong> BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">30.</strong> 使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc 教程与文档</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">31.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">32.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">33.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">34.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">35.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">36.</strong> bcc Python Developer Tutorial</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../https://github.com/eunomia-bpf/bpf-developer-tutorial.html">https://github.com/eunomia-bpf/bpf-developer-tutorial</a></li><li class="chapter-item expanded affix "><li class="part-title">目录</li><li class="chapter-item expanded "><a href="../0-introduce/index.html" class="active"><strong aria-hidden="true">1.</strong> 介绍 eBPF 的基本概念、常见的开发工具</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> eBPF Hello World，基本框架和开发流程</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> 使用 kprobe 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> 使用 fentry 监测捕获 unlink 系统调用</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> 捕获进程打开文件的系统调用集合，使用全局变量过滤进程 pid</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> 使用 uprobe 捕获 bash 的 readline 函数调用</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> 捕获进程发送信号的系统调用集合，使用 hash map 保存状态</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> 捕获进程执行/退出时间，通过 perf event array 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> 使用 exitsnoop 监控进程退出事件，使用 ring buffer 向用户态打印输出</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> 一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> 使用 hardirqs 或 softirqs 捕获中断事件</a></li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> 使用 bootstrap 开发用户态程序并跟踪 exec() 和 exit() 系统调用</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">13.</strong> 使用 libbpf-bootstrap 开发程序统计 TCP 连接延时</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">14.</strong> 使用 libbpf-bootstrap 记录 TCP 连接状态与 TCP RTT</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">15.</strong> 使用 USDT 捕获用户态 Java GC 事件耗时</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">16.</strong> 编写 eBPF 程序 Memleak 监控内存泄漏</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">17.</strong> 编写 eBPF 程序 Biopattern 统计随机/顺序磁盘 I/O</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">18.</strong> 更多的参考资料：论文列表、项目、博客等等</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">19.</strong> 使用 LSM 进行安全检测防御</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">20.</strong> 使用 eBPF 进行 tc 流量控制</a></li><li class="chapter-item expanded affix "><li class="part-title">eBPF 高级特性与进阶主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">21.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">22.</strong> 使用 eBPF socket filter 或 syscall tracepoint 追踪 HTTP 请求等七层协议</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">23.</strong> 使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">24.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">25.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">26.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">28.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">29.</strong> BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">30.</strong> 使用 eBPF 用户态捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc 教程与文档</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">31.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">32.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">33.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">34.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">35.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">36.</strong> bcc Python Developer Tutorial</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -116,9 +121,9 @@
                                 <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
-                        </button>
+                        </label>
                         <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
                             <i class="fa fa-paint-brush"></i>
                         </button>
@@ -305,7 +310,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next" href="../1-helloworld/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../1-helloworld/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -319,7 +324,7 @@ eBPF程序每次执行时候都需要进行编译，编译则需要用户配置�
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next" href="../1-helloworld/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../1-helloworld/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
