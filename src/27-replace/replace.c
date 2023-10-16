@@ -3,8 +3,6 @@
 #include <unistd.h>
 #include "replace.skel.h"
 #include "replace.h"
-
-
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <unistd.h>

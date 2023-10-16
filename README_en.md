@@ -55,6 +55,7 @@ Networking and tracing:
 
 Security:
 
+- [Use eBPF to modify syscall parameters](src/34-syscall/README.md)
 - [Hiding process or file information using eBPF](src/24-hide/README_en.md)
 - [Terminating processes by sending signals using bpf_send_signal](src/25-signal/README_en.md)
 - [Adding sudo users using eBPF](src/26-sudo/README_en.md)

@@ -67,6 +67,7 @@ Android:
 
 安全：
 
+- [使用 eBPF 修改系统调用参数](src/34-syscall/README.md)
 - [使用 eBPF 隐藏进程或文件信息](src/24-hide/README.md)
 - [使用 bpf_send_signal 发送信号终止进程](src/25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](src/26-sudo/README.md)
