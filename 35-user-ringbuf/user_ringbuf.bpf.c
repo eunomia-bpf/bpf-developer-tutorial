@@ -9,12 +9,14 @@
 
 char _license[] SEC("license") = "GPL";
 
-struct {
+struct
+{
 	__uint(type, BPF_MAP_TYPE_USER_RINGBUF);
 	__uint(max_entries, 256 * 1024);
 } user_ringbuf SEC(".maps");
 
-struct {
+struct
+{
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 256 * 1024);
 } kernel_ringbuf SEC(".maps");
@@ -48,7 +50,8 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 {
 	long num_samples;
 	int err = 0;
-
+	
+	// receive data from userspace
 	num_samples = bpf_user_ringbuf_drain(&user_ringbuf, do_nothing_cb, NULL, 0);
 
 	return 0;
