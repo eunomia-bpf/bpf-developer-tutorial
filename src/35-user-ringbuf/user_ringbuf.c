@@ -20,25 +20,27 @@ static int write_samples(struct user_ring_buffer *ringbuf)
 	struct user_sample *entry;
 
 	entry = user_ring_buffer__reserve(ringbuf, sizeof(*entry));
-	if (!entry) {
+	if (!entry)
+	{
 		err = -errno;
 		goto done;
 	}
 
-		entry->i = getpid();
-		strcpy(entry->comm, "hello");
+	entry->i = getpid();
+	strcpy(entry->comm, "hello");
 
-		int read = snprintf(entry->comm, sizeof(entry->comm), "%u", i);
-		if (read <= 0) {
-			/* Assert on the error path to avoid spamming logs with
-			 * mostly success messages.
-			 */
-			err = read;
-			user_ring_buffer__discard(ringbuf, entry);
-			goto done;
-		}
+	int read = snprintf(entry->comm, sizeof(entry->comm), "%u", i);
+	if (read <= 0)
+	{
+		/* Assert on the error path to avoid spamming logs with
+		 * mostly success messages.
+		 */
+		err = read;
+		user_ring_buffer__discard(ringbuf, entry);
+		goto done;
+	}
 
-		user_ring_buffer__submit(ringbuf, entry);
+	user_ring_buffer__submit(ringbuf, entry);
 
 done:
 	drain_current_samples();
@@ -58,7 +60,7 @@ static void sig_handler(int sig)
 	exiting = true;
 }
 
-	struct user_ring_buffer *user_ringbuf = NULL;
+struct user_ring_buffer *user_ringbuf = NULL;
 
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
@@ -71,8 +73,8 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 	tm = localtime(&t);
 	strftime(ts, sizeof(ts), "%H:%M:%S", tm);
 
-		printf("%-8s %-5s %-16s %-7d\n",
-		       ts, "SIGN", e->comm, e->pid);
+	printf("%-8s %-5s %-16s %-7d\n",
+		   ts, "SIGN", e->comm, e->pid);
 	write_samples(user_ringbuf);
 	return 0;
 }
@@ -92,7 +94,8 @@ int main(int argc, char **argv)
 
 	/* Load and verify BPF application */
 	skel = user_ringbuf_bpf__open();
-	if (!skel) {
+	if (!skel)
+	{
 		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
 	}
@@ -102,21 +105,24 @@ int main(int argc, char **argv)
 
 	/* Load & verify BPF programs */
 	err = user_ringbuf_bpf__load(skel);
-	if (err) {
+	if (err)
+	{
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
 
 	/* Attach tracepoints */
 	err = user_ringbuf_bpf__attach(skel);
-	if (err) {
+	if (err)
+	{
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		goto cleanup;
 	}
 
 	/* Set up ring buffer polling */
 	rb = ring_buffer__new(bpf_map__fd(skel->maps.kernel_ringbuf), handle_event, NULL, NULL);
-	if (!rb) {
+	if (!rb)
+	{
 		err = -1;
 		fprintf(stderr, "Failed to create ring buffer\n");
 		goto cleanup;
@@ -127,15 +133,18 @@ int main(int argc, char **argv)
 
 	/* Process events */
 	printf("%-8s %-5s %-16s %-7s %-7s %s\n",
-	       "TIME", "EVENT", "COMM", "PID", "PPID", "FILENAME/EXIT CODE");
-	while (!exiting) {
+		   "TIME", "EVENT", "COMM", "PID", "PPID", "FILENAME/EXIT CODE");
+	while (!exiting)
+	{
 		err = ring_buffer__poll(rb, 100 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */
-		if (err == -EINTR) {
+		if (err == -EINTR)
+		{
 			err = 0;
 			break;
 		}
-		if (err < 0) {
+		if (err < 0)
+		{
 			printf("Error polling perf buffer: %d\n", err);
 			break;
 		}
