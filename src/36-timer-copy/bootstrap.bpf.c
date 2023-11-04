@@ -18,7 +18,7 @@ struct map_elem {
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1000);
-    __type(key, int);`
+    __type(key, int);
     __type(value, struct map_elem);
 } hmap SEC(".maps");
 
