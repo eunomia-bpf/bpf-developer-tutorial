@@ -33,8 +33,8 @@ const volatile unsigned long long min_duration_ns = 0;
 struct map_elem
 {
 	int counter;
-	struct event e;
 	struct bpf_timer timer;
+	struct event e;
 };
 
 struct
