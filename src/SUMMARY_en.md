@@ -36,6 +36,7 @@ For the complete source code of the tutorial, please refer to the repo [https://
 - [Using eBPF programs on Android](22-android/README.md)
 - [Tracing HTTP requests or other layer 7 protocols using eBPF](23-http/README.md)
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README.md)
+- [The Secure Path Forward for eBPF: Challenges and Innovations](18-further-reading/ebpf-security.md)
 - [Accelerating network request forwarding using sockops](29-sockops/README.md)
 - [Hiding process or file information using eBPF](24-hide/README.md)
 - [Terminating processes by sending signals using bpf_send_signal](25-signal/README.md)

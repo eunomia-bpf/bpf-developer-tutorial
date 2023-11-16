@@ -35,6 +35,7 @@
 - [使用 eBPF socket filter 或 syscall tracepoint 追踪 HTTP 请求等七层协议](23-http/README.md)
 - [使用 uprobe 捕获多种库的 SSL/TLS 明文数据](30-sslsniff/README.md)
 - [使用 sockops 加速网络请求转发](29-sockops/README.md)
+- [eBPF 运行时的安全性与面临的挑战](18-further-reading/ebpf-security.zh.md)
 - [使用 eBPF 隐藏进程或文件信息](24-hide/README.md)
 - [使用 bpf_send_signal 发送信号终止进程](25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](26-sudo/README.md)
