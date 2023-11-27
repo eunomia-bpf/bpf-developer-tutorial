@@ -1,4 +1,4 @@
-# Exploring Seven-Layer Protocol Tracing with eBPF: HTTP and Beyond via Socket Filters and Syscall Tracing
+# L7 Tracing with eBPF: HTTP and Beyond via Socket Filters and Syscall Tracepoints
 
 In today's technology landscape, with the rise of microservices, cloud-native applications, and complex distributed systems, observability of systems has become a crucial factor in ensuring their health, performance, and security. Especially in a microservices architecture, application components may be distributed across multiple containers and servers, making traditional monitoring methods often insufficient to provide the depth and breadth needed to fully understand the behavior of the system. This is where observing seven-layer protocols such as HTTP, gRPC, MQTT, and more becomes particularly important.
 

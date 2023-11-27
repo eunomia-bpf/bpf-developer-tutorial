@@ -1,4 +1,4 @@
-# The Secure Path Forward for eBPF: Challenges and Innovations
+# The Secure Path Forward for eBPF runtime: Challenges and Innovations
 
 Yusheng Zheng
 
@@ -9,7 +9,7 @@ However, as with any system that interfaces closely with the kernel, the securit
 ## Table of Contents
 <!-- TOC -->
 
-- [The Secure Path Forward for eBPF: Challenges and Innovations](#the-secure-path-forward-for-ebpf-challenges-and-innovations)
+- [The Secure Path Forward for eBPF runtime: Challenges and Innovations](#the-secure-path-forward-for-ebpf-runtime-challenges-and-innovations)
   - [Table of Contents](#table-of-contents)
   - [How eBPF Ensures Security with Verifier](#how-ebpf-ensures-security-with-verifier)
     - [What the eBPF Verifier Is and What It Does](#what-the-ebpf-verifier-is-and-what-it-does)
