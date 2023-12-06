@@ -1,8 +1,2 @@
+.output
 .vscode
-package.json
-*.o
-*.skel.json
-*.skel.yaml
-package.yaml
-ecli
-ecc
