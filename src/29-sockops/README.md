@@ -17,9 +17,8 @@ Merbridge 项目就是这样实现了用 eBPF 代替 iptables 为 Istio 进行�
 ### 编译 eBPF 程序
 
 ```shell
-# Compile the bpf_sockops program
-clang -O2 -g  -Wall -target bpf  -c bpf_sockops.c -o bpf_sockops.o
-clang -O2 -g  -Wall -target bpf  -c bpf_redir.c -o bpf_redir.o
+# Compile the bpf program with libbpf
+make
 ```
 
 ### 加载 eBPF 程序
@@ -43,26 +42,45 @@ $ sudo bpftool prog show
 ### 运行 [iperf3](https://iperf.fr/) 服务器
 
 ```shell
-iperf3 -s -p 10000
+iperf3 -s -p 5001
 ```
 
 ### 运行 [iperf3](https://iperf.fr/) 客户端
 
 ```shell
-iperf3 -c 127.0.0.1 -t 10 -l 64k -p 10000
+iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
 ```
 
 ### 收集追踪
 
+查看``sock_ops``追踪本地连接建立
 ```console
-$ ./trace.sh
+$ ./trace_bpf_output.sh
 iperf3-9516  [001] .... 22500.634108: 0: <<< ipv4 op = 4, port 18583 --> 4135
 iperf3-9516  [001] ..s1 22500.634137: 0: <<< ipv4 op = 5, port 4135 --> 18583
 iperf3-9516  [001] .... 22500.634523: 0: <<< ipv4 op = 4, port 19095 --> 4135
 iperf3-9516  [001] ..s1 22500.634536: 0: <<< ipv4 op = 5, port 4135 --> 19095
 ```
 
-你应该可以看到 4 个用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。
+当iperf3 -c建立连接后，你应该可以看到上述用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。
+
+此外，当``sk_msg``生效后，可以发现当使用tcpdump捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。
+
+
+```console
+$ ./trace_lo_traffic.sh
+# 三次握手
+13:24:07.181804 IP localhost.46506 > localhost.5001: Flags [S], seq 620239881, win 65495, options [mss 65495,sackOK,TS val 1982813394 ecr 0,nop,wscale 7], length 0
+13:24:07.181815 IP localhost.5001 > localhost.46506: Flags [S.], seq 1084484879, ack 620239882, win 65483, options [mss 65495,sackOK,TS val 1982813394 ecr 1982813394,nop,wscale 7], length 0
+13:24:07.181832 IP localhost.46506 > localhost.5001: Flags [.], ack 1, win 512, options [nop,nop,TS val 1982813394 ecr 1982813394], length 0
+
+# 四次挥手
+13:24:12.475649 IP localhost.46506 > localhost.5001: Flags [F.], seq 1, ack 1, win 512, options [nop,nop,TS val 1982818688 ecr 1982813394], length 0
+13:24:12.479621 IP localhost.5001 > localhost.46506: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818692 ecr 1982818688], length 0
+13:24:12.481265 IP localhost.5001 > localhost.46506: Flags [F.], seq 1, ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818688], length 0
+13:24:12.481270 IP localhost.46506 > localhost.5001: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818694], length 0
+
+```
 
 ### 卸载 eBPF 程序
 
