@@ -45,7 +45,7 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 - 阅读 ebpf 简介：<https://ebpf.io/> （30min）
 - 简要了解一下 ebpf 内核相关文档：<https://prototype-kernel.readthedocs.io/en/latest/bpf/> （知道有问题去哪里查询，30min）
-- 阅读 ebpf 中文入门指南：<https://www.modb.pro/db/391570> （1h）
+- 阅读 ebpf 中文入门指南：<https://www.ebpf.top/post/ebpf_intro> （1h）
 - 有大量的参考资料：<https://github.com/zoidbergwill/awesome-ebpf> （2-3h）
 - 可以选自己感兴趣的 PPT 翻一翻：<https://github.com/gojue/ebpf-slide> （1-2h）
 
