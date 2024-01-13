@@ -74,6 +74,7 @@ Android:
 - [使用 eBPF 替换任意程序读取或写入的文本](src/27-replace/README.md)
 - [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
 - [eBPF 运行时的安全性与面临的挑战](src/18-further-reading/ebpf-security.zh.md)
+- [用户空间 eBPF 运行时：深度解析与应用实践](src\36-userspace-ebpf\README.md)
   
 持续更新中...
 
@@ -171,7 +172,7 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 
 ## 让 ChatGPT 来帮助我们
 
-本教程借助 ChatGPT 来学习编写 eBPF 程序，同时我们尝试教会 ChatGPT 编写 eBPF 程序，大概步骤如下：
+本教程也尝试借助 ChatGPT 来学习编写 eBPF 程序，同时我们尝试教会 ChatGPT 编写 eBPF 程序，大概步骤如下：
 
 1. 告诉它基本的 eBPF 编程相关的常识
 2. 告诉它一些案例：hello world，eBPF 程序的基本结构，如何使用 eBPF 程序进行追踪，并且让它开始编写教程
@@ -181,7 +182,7 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
 
-完整的对话记录可以在这里找到: [ChatGPT.md](ChatGPT.md)
+完整的对话记录可以在这里找到: [ChatGPT.md](src/ChatGPT.md)
 
 我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：<https://github.com/eunomia-bpf/GPTtrace>
 

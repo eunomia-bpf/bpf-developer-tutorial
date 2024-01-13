@@ -10,7 +10,9 @@ uprobe is a user-space probe that allows dynamic instrumentation in user-space p
 
 uprobe is file-based. When a function in a binary file is traced, all processes that use the file are instrumented, including those that have not yet been started, allowing system calls to be tracked system-wide.
 
-uprobe is suitable for parsing some traffic in user mode that cannot be resolved by kernel mode probes, such as HTTP/2 traffic (where the header is encoded and cannot be decoded by the kernel) and HTTPS traffic (which is encrypted and cannot be decrypted by the kernel).
+uprobe is suitable for parsing some traffic in user mode that cannot be resolved by kernel mode probes, such as HTTP/2 traffic (where the header is encoded and cannot be decoded by the kernel) and HTTPS traffic (which is encrypted and cannot be decrypted by the kernel). For more information, see the example in [eBPF Tutorial by Example: Capturing SSL/TLS Plaintext Data from Multiple Libraries with Uprobe](../30-sslsniff).
+
+Uprobe in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime). bpftime is a user mode eBPF runtime based on LLVM JIT/AOT. It can run eBPF programs in user mode and is compatible with kernel mode eBPF, avoiding context switching between kernel mode and user mode, thereby improving the execution efficiency of eBPF programs.
 
 ## Capturing readline Function Calls in bash using uprobe
 

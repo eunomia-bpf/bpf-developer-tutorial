@@ -42,7 +42,7 @@ TLS 和 SSL 不完全适合 OSI 模型或 TCP/IP 模型的任何单一层次。T
 
 eBPF (Extended Berkeley Packet Filter): 是一种内核技术，允许用户在内核空间中运行预定义的程序，不需要修改内核源代码或重新加载模块。它创建了一个桥梁，使得用户空间和内核空间可以交互，从而为系统监控、性能分析和网络流量分析等任务提供了无前例的能力。
 
-uprobes 是eBPF的一个重要特性，允许我们在用户空间应用程序中动态地插入探测点，特别适用于跟踪SSL/TLS库中的函数调用。
+uprobes 是eBPF的一个重要特性，允许我们在用户空间应用程序中动态地插入探测点，特别适用于跟踪SSL/TLS库中的函数调用。Uprobe 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
 
 ### 用户态库
 
