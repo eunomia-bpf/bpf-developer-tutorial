@@ -54,6 +54,7 @@ jobs:
       - name: Install dependents
         run: |
           pip install mkdocs-material=="9.*" mkdocs-static-i18n=="0.53"
+          pip install "mkdocs-material[imaging]"
 
       - name: Test page build
         run: |
