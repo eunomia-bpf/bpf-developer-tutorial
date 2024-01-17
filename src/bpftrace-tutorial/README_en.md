@@ -324,3 +324,5 @@ This uses kernel dynamic tracing of the vfs_open() function, which has a (struct
 The kernel struct support is the same as bcc, making use of kernel headers. This means that many structs are available, but not everything, and sometimes it might be necessary to manually include a struct. For an example of this, see the [dcsnoop tool](https://github.com/iovisor/bpftrace/blob/master/docs/../tools/dcsnoop.bt), which includes a portion of struct nameidata manually as it wasn't in the available headers. If the kernel has BTF data, all kernel structs are always available.
 
 At this point you understand much of bpftrace, and can begin to use and write powerful one-liners. See the [Reference Guide](https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md) for more capabilities.
+
+> The original tutorial link: https://github.com/iovisor/bpftrace/blob/master/docs/
