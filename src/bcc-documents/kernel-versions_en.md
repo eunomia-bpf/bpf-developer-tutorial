@@ -197,7 +197,9 @@ mmap() support for array maps | 5.5 | [`fc9702273e2e`](https://github.com/torval
 
 An approximate list of drivers or components supporting XDP programs for your
 kernel can be retrieved with:
-```sh".git grep -l XDP_SETUP_PROG drivers/
+
+```sh
+git grep -l XDP_SETUP_PROG drivers/
 ```
 
 Feature / Driver | Kernel version | Commit
@@ -218,6 +220,7 @@ Cavium `thunderx` driver | 4.12 | [`05c773f52b96`](https://github.com/torvalds/l
 Generic XDP | 4.12 | [`b5cdae3291f7`](https://github.com/torvalds/linux/commit/b5cdae3291f7be7a34e75affe4c0ec1f7f328b64)".# Helpers
 
 The list of helpers supported in your kernel can be found in file."[`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
+
 ```sh
 git grep '	FN(' include/uapi/linux/bpf.h
 ```
@@ -279,8 +282,7 @@ Helper | Kernel version | License | Commit |
 `BPF_FUNC_get_listener_sock()` | 5.1 |  | [`dbafd7ddd623`](https://github.com/torvalds/linux/commit/dbafd7ddd62369b2f3926ab847cbf8fc40e800b7)
 `BPF_FUNC_get_local_storage()` | 4.19 |  | [`cd3394317653`](https://github.com/torvalds/linux/commit/cd3394317653837e2eb5c5d0904a8996102af9fc)
 `BPF_FUNC_get_netns_cookie()` | 5.7 |  | [`f318903c0bf4`](https://github.com/torvalds/linux/commit/f318903c0bf42448b4c884732df2bbb0ef7a2284)".
-
-Return only the translated content, not including the original text.`BPF_FUNC_get_ns_current_pid_tgid()` | 5.7 |  | [`b4490c5c4e02`](https://github.com/torvalds/linux/commit/b4490c5c4e023f09b7d27c9a9d3e7ad7d09ea6bf)
+`BPF_FUNC_get_ns_current_pid_tgid()` | 5.7 |  | [`b4490c5c4e02`](https://github.com/torvalds/linux/commit/b4490c5c4e023f09b7d27c9a9d3e7ad7d09ea6bf)
 `BPF_FUNC_get_numa_node_id()` | 4.10 |  | [`2d0e30c30f84`](https://github.com/torvalds/linux/commit/2d0e30c30f84d08dc16f0f2af41f1b8a85f0755e)
 `BPF_FUNC_get_prandom_u32()` | 4.1 |  | [`03e69b508b6f`](https://github.com/torvalds/linux/commit/03e69b508b6f7c51743055c9f61d1dfeadf4b635)
 `BPF_FUNC_get_route_realm()` | 4.4 |  | [`c46646d0484f`](https://github.com/torvalds/linux/commit/c46646d0484f5d08e2bede9b45034ba5b8b489cc)
@@ -361,8 +363,7 @@ Return only the translated content, not including the original text.`BPF_FUNC_ge
 `BPF_FUNC_setsockopt()` | 4.13 |  | [`8c4b4c7e9ff0`](https://github.com/torvalds/linux/commit/8c4b4c7e9ff0447995750d9329949fa082520269)
 `BPF_FUNC_sk_ancestor_cgroup_id()` | 5.7 |  | [`f307fa2cb4c9`](https://github.com/torvalds/linux/commit/f307fa2cb4c935f7f1ff0aeb880c7b44fb9a642b)
 `BPF_FUNC_sk_assign()` | 5.6 |  | [`cf7fbe660f2d`](https://github.com/torvalds/linux/commit/cf7fbe660f2dbd738ab58aea8e9b0ca6ad232449)".
-
-format: Return only the translated content, not including the original text.`BPF_FUNC_sk_cgroup_id()` | 5.7 |  | [`f307fa2cb4c9`](https://github.com/torvalds/linux/commit/f307fa2cb4c935f7f1ff0aeb880c7b44fb9a642b)
+`BPF_FUNC_sk_cgroup_id()` | 5.7 |  | [`f307fa2cb4c9`](https://github.com/torvalds/linux/commit/f307fa2cb4c935f7f1ff0aeb880c7b44fb9a642b)
 `BPF_FUNC_sk_fullsock()` | 5.1 |  | [`46f8bc92758c`](https://github.com/torvalds/linux/commit/46f8bc92758c6259bcf945e9216098661c1587cd)
 `BPF_FUNC_sk_lookup_tcp()` | 4.20 |  | [`6acc9b432e67`](https://github.com/torvalds/linux/commit/6acc9b432e6714d72d7d77ec7c27f6f8358d0c71)
 `BPF_FUNC_sk_lookup_udp()` | 4.20 |  | [`6acc9b432e67`](https://github.com/torvalds/linux/commit/6acc9b432e6714d72d7d77ec7c27f6f8358d0c71)
@@ -375,7 +376,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_skb_adjust_room()` | 4.13 |  | [`2be7e212d541`](https://github.com/torvalds/linux/commit/2be7e212d5419a400d051c84ca9fdd083e5aacac)
 `BPF_FUNC_skb_ancestor_cgroup_id()` | 4.19 |  | [`7723628101aa`](https://github.com/torvalds/linux/commit/7723628101aaeb1d723786747529b4ea65c5b5c5)
 `BPF_FUNC_skb_change_head()` | 4.10 |  | [`3a0af8fd61f9`](https://github.com/torvalds/linux/commit/3a0af8fd61f90920f6fa04e4f1e9a6a73c1b4fd2)
-`BPF_FUNC_skb_change_proto()` | 4.8 |  | [`6578171a7ff0`](https://github.com/torvalds/linux/commit/6578171a7ff0c31dc73258f93da7407510abf085)`BPF_FUNC_skb_change_tail()` | 4.9 |  | [`5293efe62df8`](https://github.com/torvalds/linux/commit/5293efe62df81908f2e90c9820c7edcc8e61f5e9)
+`BPF_FUNC_skb_change_proto()` | 4.8 |  | [`6578171a7ff0`](https://github.com/torvalds/linux/commit/6578171a7ff0c31dc73258f93da7407510abf085)
+`BPF_FUNC_skb_change_tail()` | 4.9 |  | [`5293efe62df8`](https://github.com/torvalds/linux/commit/5293efe62df81908f2e90c9820c7edcc8e61f5e9)
 `BPF_FUNC_skb_change_type()` | 4.8 |  | [`d2485c4242a8`](https://github.com/torvalds/linux/commit/d2485c4242a826fdf493fd3a27b8b792965b9b9e)
 `BPF_FUNC_skb_cgroup_classid()` | 5.10 |  | [`b426ce83baa7`](https://github.com/torvalds/linux/commit/b426ce83baa7dff947fb354118d3133f2953aac8)
 `BPF_FUNC_skb_cgroup_id()` | 4.18 |  | [`cb20b08ead40`](https://github.com/torvalds/linux/commit/cb20b08ead401fd17627a36f035c0bf5bfee5567)
@@ -388,7 +390,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_skb_output()` | 5.5 |  | [`a7658e1a4164`](https://github.com/torvalds/linux/commit/a7658e1a4164ce2b9eb4a11aadbba38586e93bd6)
 `BPF_FUNC_skb_pull_data()` | 4.9 |  | [`36bbef52c7eb`](https://github.com/torvalds/linux/commit/36bbef52c7eb646ed6247055a2acd3851e317857)
 `BPF_FUNC_skb_set_tstamp()` | 5.18 |  | [`9bb984f28d5b`](https://github.com/torvalds/linux/commit/9bb984f28d5bcb917d35d930fcfb89f90f9449fd)
-`BPF_FUNC_skb_set_tunnel_key()` | 4.3 |  | [`d3aa45ce6b94`](https://github.com/torvalds/linux/commit/d3aa45ce6b94c65b83971257317867db13e5f492)`BPF_FUNC_skb_set_tunnel_opt()` | 4.6 |  | [`14ca0751c96f`](https://github.com/torvalds/linux/commit/14ca0751c96f8d3d0f52e8ed3b3236f8b34d3460)
+`BPF_FUNC_skb_set_tunnel_key()` | 4.3 |  | [`d3aa45ce6b94`](https://github.com/torvalds/linux/commit/d3aa45ce6b94c65b83971257317867db13e5f492)
+`BPF_FUNC_skb_set_tunnel_opt()` | 4.6 |  | [`14ca0751c96f`](https://github.com/torvalds/linux/commit/14ca0751c96f8d3d0f52e8ed3b3236f8b34d3460)
 `BPF_FUNC_skb_store_bytes()` | 4.1 |  | [`91bc4822c3d6`](https://github.com/torvalds/linux/commit/91bc4822c3d61b9bb7ef66d3b77948a4f9177954)
 `BPF_FUNC_skb_under_cgroup()` | 4.8 |  | [`4a482f34afcc`](https://github.com/torvalds/linux/commit/4a482f34afcc162d8456f449b137ec2a95be60d8)
 `BPF_FUNC_skb_vlan_pop()` | 4.3 |  | [`4e10df9a60d9`](https://github.com/torvalds/linux/commit/4e10df9a60d96ced321dd2af71da558c6b750078)
@@ -401,7 +404,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_skc_to_tcp6_sock()` | 5.9 |  | [`af7ec1383361`](https://github.com/torvalds/linux/commit/af7ec13833619e17f03aa73a785a2f871da6d66b)
 `BPF_FUNC_skc_to_udp6_sock()` | 5.9 |  | [`0d4fad3e57df`](https://github.com/torvalds/linux/commit/0d4fad3e57df2bf61e8ffc8d12a34b1caf9b8835)
 `BPF_FUNC_skc_to_unix_sock()` | 5.16 |  | [`9eeb3aa33ae0`](https://github.com/torvalds/linux/commit/9eeb3aa33ae005526f672b394c1791578463513f)
-`BPF_FUNC_snprintf()` | 5.13 | | [`7b15523a989b`](https://github.com/torvalds/linux/commit/7b15523a989b63927c2bb08e9b5b0bbc10b58bef)`BPF_FUNC_snprintf_btf()` | 5.10 | | [`c4d0bfb45068`](https://github.com/torvalds/linux/commit/c4d0bfb45068d853a478b9067a95969b1886a30f)
+`BPF_FUNC_snprintf()` | 5.13 | | [`7b15523a989b`](https://github.com/torvalds/linux/commit/7b15523a989b63927c2bb08e9b5b0bbc10b58bef)
+`BPF_FUNC_snprintf_btf()` | 5.10 | | [`c4d0bfb45068`](https://github.com/torvalds/linux/commit/c4d0bfb45068d853a478b9067a95969b1886a30f)
 `BPF_FUNC_sock_from_file()` | 5.11 |  | [`4f19cab76136`](https://github.com/torvalds/linux/commit/4f19cab76136e800a3f04d8c9aa4d8e770e3d3d8)
 `BPF_FUNC_sock_hash_update()` | 4.18 |  | [`81110384441a`](https://github.com/torvalds/linux/commit/81110384441a59cff47430f20f049e69b98c17f4)
 `BPF_FUNC_sock_map_update()` | 4.14 |  | [`174a79ff9515`](https://github.com/torvalds/linux/commit/174a79ff9515f400b9a6115643dafd62a635b7e6)
@@ -414,7 +418,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_sys_bpf()` | 5.14 |  | [`79a7f8bdb159`](https://github.com/torvalds/linux/commit/79a7f8bdb159d9914b58740f3d31d602a6e4aca8)
 `BPF_FUNC_sys_close()` | 5.14 |  | [`3abea089246f`](https://github.com/torvalds/linux/commit/3abea089246f76c1517b054ddb5946f3f1dbd2c0)
 `BPF_FUNC_sysctl_get_current_value()` | 5.2 |  | [`1d11b3016cec`](https://github.com/torvalds/linux/commit/1d11b3016cec4ed9770b98e82a61708c8f4926e7)
-`BPF_FUNC_sysctl_get_name()` | 5.2 |  | [`808649fb787d`](https://github.com/torvalds/linux/commit/808649fb787d918a48a360a668ee4ee9023f0c11)`BPF_FUNC_sysctl_get_new_value()` | 5.2 |  | [`4e63acdff864`](https://github.com/torvalds/linux/commit/4e63acdff864654cee0ac5aaeda3913798ee78f6)
+`BPF_FUNC_sysctl_get_name()` | 5.2 |  | [`808649fb787d`](https://github.com/torvalds/linux/commit/808649fb787d918a48a360a668ee4ee9023f0c11)
+`BPF_FUNC_sysctl_get_new_value()` | 5.2 |  | [`4e63acdff864`](https://github.com/torvalds/linux/commit/4e63acdff864654cee0ac5aaeda3913798ee78f6)
 `BPF_FUNC_sysctl_set_new_value()` | 5.2 |  | [`4e63acdff864`](https://github.com/torvalds/linux/commit/4e63acdff864654cee0ac5aaeda3913798ee78f6)
 `BPF_FUNC_tail_call()` | 4.2 |  | [`04fd61ab36ec`](https://github.com/torvalds/linux/commit/04fd61ab36ec065e194ab5e74ae34a5240d992bb)
 `BPF_FUNC_task_pt_regs()` | 5.15 | GPL | [`dd6e10fbd9f`](https://github.com/torvalds/linux/commit/dd6e10fbd9fb86a571d925602c8a24bb4d09a2a7)
@@ -426,7 +431,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_tcp_raw_check_syncookie_ipv6()` | 6.0 |  | [`33bf9885040c`](https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14)
 `BPF_FUNC_tcp_raw_gen_syncookie_ipv4()` | 6.0 |  | [`33bf9885040c`](https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14)
 `BPF_FUNC_tcp_raw_gen_syncookie_ipv6()` | 6.0 |  | [`33bf9885040c`](https://github.com/torvalds/linux/commit/33bf9885040c399cf6a95bd33216644126728e14)
-`BPF_FUNC_tcp_send_ack()` | 5.5 | | [`206057fe020a`](https://github.com/torvalds/linux/commit/206057fe020ac5c037d5e2dd6562a9bd216ec765)".`BPF_FUNC_tcp_sock()` | 5.1 |  | [`655a51e536c0`](https://github.com/torvalds/linux/commit/655a51e536c09d15ffa3603b1b6fce2b45b85a1f)
+`BPF_FUNC_tcp_send_ack()` | 5.5 | | [`206057fe020a`](https://github.com/torvalds/linux/commit/206057fe020ac5c037d5e2dd6562a9bd216ec765)".
+`BPF_FUNC_tcp_sock()` | 5.1 |  | [`655a51e536c0`](https://github.com/torvalds/linux/commit/655a51e536c09d15ffa3603b1b6fce2b45b85a1f)
 `BPF_FUNC_this_cpu_ptr()` | 5.10 |  | [`63d9b80dcf2c`](https://github.com/torvalds/linux/commit/63d9b80dcf2c67bc5ade61cbbaa09d7af21f43f1) |
 `BPF_FUNC_timer_init()` | 5.15 |  | [`b00628b1c7d5`](https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4)
 `BPF_FUNC_timer_set_callback()` | 5.15 |  | [`b00628b1c7d5`](https://github.com/torvalds/linux/commit/b00628b1c7d595ae5b544e059c27b1f5828314b4)
@@ -439,8 +445,8 @@ format: Return only the translated content, not including the original text.`BPF
 `BPF_FUNC_xdp_adjust_meta()` | 4.15 |  | [`de8f3a83b0a0`](https://github.com/torvalds/linux/commit/de8f3a83b0a0fddb2cf56e7a718127e9619ea3da)
 `BPF_FUNC_xdp_adjust_tail()` | 4.18 |  | [`b32cc5b9a346`](https://github.com/torvalds/linux/commit/b32cc5b9a346319c171e3ad905e0cddda032b5eb)
 `BPF_FUNC_xdp_get_buff_len()` | 5.18 |  | [`0165cc817075`](https://github.com/torvalds/linux/commit/0165cc817075cf701e4289838f1d925ff1911b3e)
-`BPF_FUNC_xdp_load_bytes()` | 5.18 |  | [`3f364222d032`](https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd)".
-format: 返回仅翻译的内容, 不包括原文."`BPF_FUNC_xdp_store_bytes()` | 5.18 |  | [`3f364222d032`](https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd)
+`BPF_FUNC_xdp_load_bytes()` | 5.18 |  | [`3f364222d032`](https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd)
+`BPF_FUNC_xdp_store_bytes()` | 5.18 |  | [`3f364222d032`](https://github.com/torvalds/linux/commit/3f364222d032eea6b245780e845ad213dab28cdd)
 `BPF_FUNC_xdp_output()` | 5.6 | GPL | [`d831ee84bfc9`](https://github.com/torvalds/linux/commit/d831ee84bfc9173eecf30dbbc2553ae81b996c60)
 `BPF_FUNC_override_return()` | 4.16 | GPL | [`9802d86585db`](https://github.com/torvalds/linux/commit/9802d86585db91655c7d1929a4f6bbe0952ea88e)
 `BPF_FUNC_sock_ops_cb_flags_set()` | 4.16 |  | [`b13d88072172`](https://github.com/torvalds/linux/commit/b13d880721729384757f235166068c315326f4a1)
