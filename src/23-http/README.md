@@ -374,6 +374,8 @@ if (bpf_strncmp(line_buffer, 3, "GET") != 0 &&
 }
 ```
 
+> 注意：bpf_strncmp 这个内核 helper 在 5.17 版本中才被引入，如果你的内核版本低于 5.17，可以手动匹配字符串来实现相同的功能。
+
 这段代码使用`bpf_strncmp`函数比较`line_buffer`中的数据与HTTP请求方法（GET、POST、PUT、DELETE、HTTP）是否匹配。如果不匹配，说明不是HTTP请求，直接返回0，放弃处理。
 
 ```c

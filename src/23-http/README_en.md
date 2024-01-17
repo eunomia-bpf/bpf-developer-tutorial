@@ -363,6 +363,8 @@ if (bpf_strncmp(line_buffer, 3, "GET") != 0 &&
 }
 ```
 
+> Note: The `bpf_strncmp` function is a helper function available from kernel version 5.17. For earlier versions, you can manually write a function to compare strings.
+
 This piece of code uses the `bpf_strncmp` function to compare the data in `line_buffer` with HTTP request methods (GET, POST, PUT, DELETE, HTTP). If there is no match, indicating that it is not an HTTP request, it returns 0, indicating that it should not be processed.
 
 ```c

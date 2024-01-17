@@ -26,7 +26,7 @@ Dive straight into eBPF development with this concise tutorial, built around the
 
 ### 入门文档
 
-包含简单的 eBPF 程序样例与介绍。
+包含简单的 eBPF 程序样例与介绍，这部分主要使用 `eunomia-bpf` 框架简化开发，并介绍了 eBPF 的基本使用方式和开发流程。
 
 - [lesson 0-introduce](src/0-introduce/README.md) 介绍 eBPF 的基本概念和常见的开发工具
 - [lesson 1-helloworld](src/1-helloworld/README.md) 使用 eBPF 开发最简单的「Hello World」程序，介绍 eBPF 的基本框架和开发流程
@@ -39,6 +39,11 @@ Dive straight into eBPF development with this concise tutorial, built around the
 - [lesson 8-execsnoop](src/8-exitsnoop/README.md) 捕获进程退出事件，使用 ring buffer 向用户态打印输出
 - [lesson 9-runqlat](src/9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
 - [lesson 10-hardirqs](src/10-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
+
+### 进阶文档和示例
+
+我们开始主要基于 `libbpf` 构建完整的 eBPF 工程，并且把它和各种应用场景结合起来进行实践。
+
 - [lesson 11-bootstrap](src/11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
 - [lesson 12-profile](src/12-profile/README.md) 使用 eBPF 进行性能分析
 - [lesson 13-tcpconnlat](src/13-tcpconnlat/README.md) 记录 TCP 连接延迟，并使用 libbpf 在用户态处理数据
@@ -51,9 +56,9 @@ Dive straight into eBPF development with this concise tutorial, built around the
 - [lesson 20-tc](src/20-tc/README.md) 使用 eBPF 进行 tc 流量控制
 - [lesson 21-xdp](src/21-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
 
-### 进阶文档与示例程序
+### 高级主题
 
-这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。将 eBPF 用户态与内核态的部分结合起来，可能能带来巨大的威力（同时也是安全隐患）。
+这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。将 eBPF 用户态与内核态的部分结合起来，可能能带来巨大的威力（同时也是安全隐患）。这部分主要基于 libbpf、Cilium 等框架进行开发。
 
 Android:
 
@@ -72,7 +77,7 @@ Android:
 - [使用 bpf_send_signal 发送信号终止进程](src/25-signal/README.md)
 - [使用 eBPF 添加 sudo 用户](src/26-sudo/README.md)
 - [使用 eBPF 替换任意程序读取或写入的文本](src/27-replace/README.md)
-- [BPF的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
+- [BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
 - [eBPF 运行时的安全性与面临的挑战](src/18-further-reading/ebpf-security.zh.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](src\36-userspace-ebpf\README.md)
   
@@ -165,7 +170,7 @@ TIME     COMM             TID     LAT(us)
 - 使用 Wasm 进行 eBPF 用户态程序的开发，在 WASM 虚拟机内部控制整个 eBPF 程序的加载和执行，以及处理相关数据；
 - eunomia-bpf 可以将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块，跨架构和内核版本进行分发，无需重新编译即可动态加载运行。
 
-eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的 BCC、原生 libbpf 等框架，大幅简化了 eBPF 程序的开发流程，在大多数时候只需编写内核态代码，即可轻松构建、打包、发布完整的 eBPF 应用，同时内核态 eBPF 代码保证和主流的 libbpf, libbpfgo, libbpf-rs 等开发框架的 100% 兼容性。需要编写用户态代码的时候，也可以借助 Webassembly 实现通过多种语言进行用户态开发。和 bpftrace 等脚本工具相比, eunomia-bpf 保留了类似的便捷性, 同时不仅局限于 trace 方面, 可以用于更多的场景, 如网络、安全等等。
+eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的 BCC、原生 libbpf 等框架，简化了 eBPF 程序的开发流程，在大多数时候只需编写内核态代码，即可轻松构建、打包、发布完整的 eBPF 应用，同时保证内核态 eBPF 代码和主流的 libbpf, libbpfgo, libbpf-rs 等开发框架的兼容性。需要编写用户态代码的时候，也可以借助 Webassembly 实现通过多种语言进行用户态开发。和 bpftrace 等脚本工具相比, eunomia-bpf 保留了类似的便捷性, 同时不仅局限于 trace 方面, 可以用于更多的场景, 如网络、安全等等。
 
 > - eunomia-bpf 项目 Github 地址: <https://github.com/eunomia-bpf/eunomia-bpf>
 > - gitee 镜像: <https://gitee.com/anolis/eunomia>

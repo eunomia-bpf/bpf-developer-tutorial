@@ -13,9 +13,9 @@ The tutorial focuses on eBPF examples in observability, networking, security, an
 
 ## Table of Contents
 
-### Getting Started Documentation
+### Getting Started Examples
 
-Includes simple eBPF program samples and introductions.
+This section contains simple eBPF program examples and introductions. It primarily utilizes the `eunomia-bpf` framework to simplify development and introduces the basic usage and development process of eBPF.
 
 - [lesson 0-introduce](src/0-introduce/README_en.md) Introduces basic concepts of eBPF and common development tools
 - [lesson 1-helloworld](src/1-helloworld/README_en.md) Develops the simplest "Hello World" program using eBPF and introduces the basic framework and development process of eBPF
@@ -28,6 +28,11 @@ Includes simple eBPF program samples and introductions.
 - [lesson 8-exitsnoop](src/8-exitsnoop/README_en.md) Captures process exit events and prints output to user space using a ring buffer
 - [lesson 9-runqlat](src/9-runqlat/README_en.md) Captures process scheduling delays and records them in histogram format
 - [lesson 10-hardirqs](src/10-hardirqs/README_en.md) Captures interrupt events using hardirqs or softirqs
+
+### Advanced Documents and Examples
+
+We start to build complete eBPF projects mainly based on `libbpf` and combine them with various application scenarios for practical use.
+
 - [lesson 11-bootstrap](src/11-bootstrap/README_en.md) Writes native libbpf user space code for eBPF using libbpf-bootstrap and establishes a complete libbpf project.
 - [lesson 12-profile](src/12-profile/README_en.md) Performs performance analysis using eBPF
 - [lesson 13-tcpconnlat](src/13-tcpconnlat/README_en.md) Records TCP connection latency and processes data in user space using libbpf
@@ -39,7 +44,7 @@ Includes simple eBPF program samples and introductions.
 - [lesson 20-tc](src/20-tc/README_en.md) Use eBPF for tc traffic control
 - [lesson 21-xdp](src/21-xdp/README_en.md) Use eBPF for XDP packet processing
 
-### Advanced Documentation and Sample Programs
+### In-Depth Topics
 
 This section covers advanced topics related to eBPF, including using eBPF programs on Android, possible attacks and defenses using eBPF programs, and complex tracing. Combining the user-mode and kernel-mode aspects of eBPF can bring great power (as well as security risks).
 
@@ -152,7 +157,7 @@ With eunomia-bpf, you can:
 - Use Wasm to develop eBPF user mode programs, controlling the entire eBPF program loading and execution, as well as handling related data within the WASM virtual machine.
 - eunomia-bpf can package pre-compiled eBPF programs into universal JSON or WASM modules for distribution across architectures and kernel versions, allowing dynamic loading and execution without the need for recompilation.
 
-eunomia-bpf consists of a compilation toolchain and a runtime library. Compared to traditional frameworks like BCC and native libbpf, it greatly simplifies the development process of eBPF programs, where in most cases, only the kernel mode code needs to be written to easily build, package, and publish complete eBPF applications. At the same time, the kernel mode eBPF code guarantees 100% compatibility with mainstream development frameworks such as libbpf, libbpfgo, libbpf-rs, and more. When user mode code needs to be written, multiple languages can be used with the help of Webassembly. Compared to script tools like bpftrace, eunomia-bpf maintains similar convenience, while not being limited to trace scenarios and can be used in various other fields such as networking and security.
+eunomia-bpf consists of a compilation toolchain and a runtime library. Compared to traditional frameworks like BCC and native libbpf, it greatly simplifies the development process of eBPF programs, where in most cases, only the kernel mode code needs to be written to easily build, package, and publish complete eBPF applications. At the same time, the kernel mode eBPF code guarantees compatibility with mainstream development frameworks such as libbpf, libbpfgo, libbpf-rs, and more. When user mode code needs to be written, multiple languages can be used with the help of Webassembly. Compared to script tools like bpftrace, eunomia-bpf maintains similar convenience, while not being limited to trace scenarios and can be used in various other fields such as networking and security.
 
 - eunomia-bpf project GitHub address: <https://github.com/eunomia-bpf/eunomia-bpf>
 - gitee mirror: <https://gitee.com/anolis/eunomia>
