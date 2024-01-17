@@ -69,7 +69,7 @@ Security:
 - [BPF lifecycle: Running eBPF programs continuously in Detached mode after user-mode applications exit](src/28-detach/README_en.md)
 - [Userspace eBPF Runtimes: Overview and Applications](src\36-userspace-ebpf\README_en.md)
 
-Continuously updated...
+Continuously updating...
 
 ## Why write this tutorial?
 
