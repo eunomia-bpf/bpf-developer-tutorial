@@ -1,0 +1,297 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>lesson 21-xdp - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../https://github.com/eunomia-bpf/bpf-developer-tutorial.html">https://github.com/eunomia-bpf/bpf-developer-tutorial</a></li><li class="chapter-item expanded affix "><li class="part-title">入门文档</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> lesson 0-introduce</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> lesson 1-helloworld</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> lesson 2-kprobe-unlink</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> lesson 3-fentry-unlink</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> lesson 4-opensnoop</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> lesson 5-uprobe-bashreadline</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> lesson 6-sigsnoop</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> lesson 7-execsnoop</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> lesson 8-execsnoop</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> lesson 9-runqlat</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> lesson 10-hardirqs</a></li><li class="chapter-item expanded affix "><li class="part-title">进阶文档和示例</li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> lesson 11-bootstrap</a></li><li class="chapter-item expanded "><a href="../12-profile/index.html"><strong aria-hidden="true">13.</strong> lesson 12-profile</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">14.</strong> lesson 13-tcpconnlat</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> lesson 14-tcpstates</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">16.</strong> lesson 15-javagc</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> lesson 16-memleak</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> lesson 17-biopattern</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> lesson 18-further-reading</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> lesson 19-lsm-connect</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> lesson 20-tc</a></li><li class="chapter-item expanded "><a href="../21-xdp/index.html" class="active"><strong aria-hidden="true">22.</strong> lesson 21-xdp</a></li><li class="chapter-item expanded affix "><li class="part-title">高级主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">23.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">24.</strong> 使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">25.</strong> 使用 eBPF socket filter 或 syscall trace 追踪 HTTP 请求和其他七层协议</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">26.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../34-syscall/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 修改系统调用参数</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">28.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">29.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">30.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">31.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">32.</strong> BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../18-further-reading/ebpf-security.zh.html"><strong aria-hidden="true">33.</strong> eBPF 运行时的安全性与面临的挑战</a></li><li class="chapter-item expanded "><a href="../src/36-userspace-ebpf/README.html"><strong aria-hidden="true">34.</strong> 用户空间 eBPF 运行时：深度解析与应用实践</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc 教程与文档</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">35.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">36.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">37.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">38.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">39.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">40.</strong> bcc Python Developer Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf-入门实践教程二十一使用-xdp-实现可编程包处理"><a class="header" href="#ebpf-入门实践教程二十一使用-xdp-实现可编程包处理">eBPF 入门实践教程二十一：使用 xdp 实现可编程包处理</a></h1>
+<h2 id="背景"><a class="header" href="#背景">背景</a></h2>
+<p>xdp（eXpress Data Path）是 Linux 内核中新兴的一种绕过内核的、可编程的包处理方案。相较于 cBPF，xdp 的挂载点非常底层，位于网络设备驱动的软中断处理过程，甚至早于 skb_buff 结构的分配。因此，在 xdp 上挂载 eBPF 程序适用于很多简单但次数极多的包处理操作（如防御 Dos 攻击），可以达到很高的性能（24Mpps/core）。</p>
+<h2 id="xdp-概述"><a class="header" href="#xdp-概述">XDP 概述</a></h2>
+<p>xdp 不是第一个支持可编程包处理的系统，在此之前，以 DPDK（Data Plane Development Kit）为代表的内核旁路方案甚至能够取得更高的性能，其思路为完全绕过内核，由用户态的网络应用接管网络设备，从而避免了用户态和内核态的切换开销。然而，这样的方式具有很多天然的缺陷：</p>
+<ul>
+<li>无法与内核中成熟的网络模块集成，而不得不在用户态将其重新实现；</li>
+<li>破坏了内核的安全边界，使得内核提供的很多网络工具变得不可用；</li>
+<li>在与常规的 socket 交互时，需要从用户态重新将包注入到内核；</li>
+<li>需要占用一个或多个单独的 CPU 来进行包处理；</li>
+</ul>
+<p>除此之外，利用内核模块和内核网络协议栈中的 hook 点也是一种思路，然而前者对内核的改动大，出错的代价高昂；后者在整套包处理流程中位置偏后，其效率不够理想。</p>
+<p>总而言之，xdp + eBPF 为可编程包处理系统提出了一种更为稳健的思路，在某种程度上权衡了上述方案的种种优点和不足，获取较高性能的同时又不会对内核的包处理流程进行过多的改变，同时借助 eBPF 虚拟机的优势将用户定义的包处理过程进行隔离和限制，提高了安全性。</p>
+<h2 id="编写-ebpf-程序"><a class="header" href="#编写-ebpf-程序">编写 eBPF 程序</a></h2>
+<pre><code class="language-C">#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_helpers.h&gt;
+
+/// @ifindex 1
+/// @flags 0
+/// @xdpopts {&quot;old_prog_fd&quot;:0}
+SEC(&quot;xdp&quot;)
+int xdp_pass(struct xdp_md* ctx) {
+    void* data = (void*)(long)ctx-&gt;data;
+    void* data_end = (void*)(long)ctx-&gt;data_end;
+    int pkt_sz = data_end - data;
+
+    bpf_printk(&quot;packet size is %d&quot;, pkt_sz);
+    return XDP_PASS;
+}
+
+char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+</code></pre>
+<p>这是一段 C 语言实现的 eBPF 内核侧代码，它能够通过 xdp 捕获所有经过目标网络设备的数据包，计算其大小并输出到 <code>trace_pipe</code> 中。</p>
+<p>值得注意的是，在代码中我们使用了以下注释：</p>
+<pre><code class="language-C">/// @ifindex 1
+/// @flags 0
+/// @xdpopts {&quot;old_prog_fd&quot;:0}
+</code></pre>
+<p>这是由 eunomia-bpf 提供的功能，我们可以通过这样的注释告知 eunomia-bpf 加载器此 xdp 程序想要挂载的目标网络设备编号，挂载的标志和选项。</p>
+<p>这些变量的设计基于 libbpf 提供的 API，可以通过 <a href="https://patchwork.kernel.org/project/netdevbpf/patch/20220120061422.2710637-2-andrii@kernel.org/#24705508">patchwork</a> 查看接口的详细介绍。</p>
+<p><code>SEC(&quot;xdp&quot;)</code> 宏指出 BPF 程序的类型，<code>ctx</code> 是此 BPF 程序执行的上下文，用于包处理流程。</p>
+<p>在程序的最后，我们返回了 <code>XDP_PASS</code>，这表示我们的 xdp 程序会将经过目标网络设备的包正常交付给内核的网络协议栈。可以通过 <a href="https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html">XDP actions</a> 了解更多 xdp 的处理动作。</p>
+<h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
+<p>通过容器编译：</p>
+<pre><code class="language-console">docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
+</code></pre>
+<p>或是通过 <code>ecc</code> 编译：</p>
+<pre><code class="language-console">$ ecc xdp.bpf.c
+Compiling bpf object...
+Packing ebpf object and config into package.json...
+</code></pre>
+<p>并通过 <code>ecli</code> 运行：</p>
+<pre><code class="language-console">sudo ecli run package.json
+</code></pre>
+<p>可以通过如下方式查看程序的输出：</p>
+<pre><code class="language-console">$ sudo cat /sys/kernel/tracing/trace_pipe
+            node-1939    [000] d.s11  1601.190413: bpf_trace_printk: packet size is 177
+            node-1939    [000] d.s11  1601.190479: bpf_trace_printk: packet size is 66
+     ksoftirqd/1-19      [001] d.s.1  1601.237507: bpf_trace_printk: packet size is 66
+            node-1939    [000] d.s11  1601.275860: bpf_trace_printk: packet size is 344
+</code></pre>
+<h2 id="总结"><a class="header" href="#总结">总结</a></h2>
+<p>本文介绍了如何使用 xdp 来处理经过特定网络设备的包，基于 eunomia-bpf 提供的通过注释向 libbpf 传递参数的方案，我们可以将自己编写的 xdp BPF 程序以指定选项挂载到目标设备，并在网络包进入内核网络协议栈之前就对其进行处理，从而获取高性能的可编程包处理能力。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
+<h2 id="参考资料"><a class="header" href="#参考资料">参考资料</a></h2>
+<ul>
+<li><a href="http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/">http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/</a></li>
+<li><a href="http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/">http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/</a></li>
+<li><a href="https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass">https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../20-tc/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../22-android/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../20-tc/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../22-android/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
