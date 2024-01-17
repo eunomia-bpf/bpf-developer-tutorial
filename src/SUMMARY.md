@@ -6,9 +6,7 @@
 
 教程关注于可观测性、网络、安全等等方面的 eBPF 示例。完整的代码和教程可以在 [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) GitHub 开源仓库中找到。**如果您认为本教程对您有所帮助，也请给我们一个 star 鼓励一下！**
 
-## 目录
-
-### 入门文档
+# 入门文档
 
 包含简单的 eBPF 程序样例与介绍，这部分主要使用 `eunomia-bpf` 框架简化开发，并介绍了 eBPF 的基本使用方式和开发流程。
 
@@ -24,7 +22,7 @@
 - [lesson 9-runqlat](9-runqlat/README.md) 捕获进程调度延迟，以直方图方式记录
 - [lesson 10-hardirqs](10-hardirqs/README.md) 使用 hardirqs 或 softirqs 捕获中断事件
 
-### 进阶文档和示例
+# 进阶文档和示例
 
 我们开始主要基于 `libbpf` 构建完整的 eBPF 工程，并且把它和各种应用场景结合起来进行实践。
 
@@ -40,7 +38,7 @@
 - [lesson 20-tc](20-tc/README.md) 使用 eBPF 进行 tc 流量控制
 - [lesson 21-xdp](21-xdp/README.md) 使用 eBPF 进行 XDP 报文处理
 
-### 高级主题
+# 高级主题
 
 这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。这部分主要基于 libbpf、Cilium 等框架进行开发。
 

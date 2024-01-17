@@ -8,9 +8,7 @@ This tutorial does not cover complex concepts and scenario introductions. Its ma
 
 For the complete source code of the tutorial, please refer to the repo [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) on GitHub. **If you find this tutorial helpful, please give us a star!**
 
-## Table of Contents
-
-### Getting Started Examples
+# Getting Started Examples
 
 This section contains simple eBPF program examples and introductions. It primarily utilizes the `eunomia-bpf` framework to simplify development and introduces the basic usage and development process of eBPF.
 
@@ -26,7 +24,7 @@ This section contains simple eBPF program examples and introductions. It primari
 - [lesson 9-runqlat](9-runqlat/README_en.md) Captures process scheduling delays and records them in histogram format
 - [lesson 10-hardirqs](10-hardirqs/README_en.md) Captures interrupt events using hardirqs or softirqs
 
-### Advanced Documents and Examples
+# Advanced Documents and Examples
 
 We start to build complete eBPF projects mainly based on `libbpf` and combine them with various application scenarios for practical use.
 
@@ -41,7 +39,7 @@ We start to build complete eBPF projects mainly based on `libbpf` and combine th
 - [lesson 20-tc](20-tc/README_en.md) Use eBPF for tc traffic control
 - [lesson 21-xdp](21-xdp/README_en.md) Use eBPF for XDP packet processing
 
-### In-Depth Topics
+# In-Depth Topics
 
 This section covers advanced topics related to eBPF, including using eBPF programs on Android, possible attacks and defenses using eBPF programs, and complex tracing. Combining the user-mode and kernel-mode aspects of eBPF can bring great power (as well as security risks).
 
