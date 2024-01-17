@@ -43,18 +43,10 @@ We start to build complete eBPF projects mainly based on `libbpf` and combine th
 
 This section covers advanced topics related to eBPF, including using eBPF programs on Android, possible attacks and defenses using eBPF programs, and complex tracing. Combining the user-mode and kernel-mode aspects of eBPF can bring great power (as well as security risks).
 
-Android:
-
 - [Using eBPF programs on Android](22-android/README_en.md)
-
-Networking and tracing:
-
 - [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](23-http/README_en.md)
 - [Accelerating network request forwarding using sockops](29-sockops/README_en.md)
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README_en.md)
-
-Security:
-
 - [Use eBPF to modify syscall parameters](34-syscall/README.md)
 - [The Secure Path Forward for eBPF: Challenges and Innovations](18-further-reading/ebpf-security.md)
 - [Hiding process or file information using eBPF](24-hide/README_en.md)
@@ -63,8 +55,6 @@ Security:
 - [Replacing text read or written by any program using eBPF](27-replace/README_en.md)
 - [BPF lifecycle: Running eBPF programs continuously in Detached mode after user-mode applications exit](28-detach/README_en.md)
 - [Userspace eBPF Runtimes: Overview and Applications](src\36-userspace-ebpf\README_en.md)
-
-Continuously updating...
 
 # bcc tutorial
 

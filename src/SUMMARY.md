@@ -42,18 +42,10 @@
 
 这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。这部分主要基于 libbpf、Cilium 等框架进行开发。
 
-Android:
-
 - [在 Android 上使用 eBPF 程序](22-android/README.md)
-
-网络和追踪：
-
 - [使用 uprobe 捕获多种库的 SSL/TLS 明文数据](30-sslsniff/README.md)
 - [使用 eBPF socket filter 或 syscall trace 追踪 HTTP 请求和其他七层协议](23-http/README.md)
 - [使用 sockops 加速网络请求转发](29-sockops/README.md)
-
-安全：
-
 - [使用 eBPF 修改系统调用参数](34-syscall/README.md)
 - [使用 eBPF 隐藏进程或文件信息](24-hide/README.md)
 - [使用 bpf_send_signal 发送信号终止进程](25-signal/README.md)
@@ -62,8 +54,6 @@ Android:
 - [BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](28-detach/README.md)
 - [eBPF 运行时的安全性与面临的挑战](18-further-reading/ebpf-security.zh.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](src\36-userspace-ebpf\README.md)
-  
-持续更新中...
 
 # bcc 教程与文档
 
