@@ -1,5 +1,7 @@
 # 使用 eBPF 添加 sudo 用户
 
+本文完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/26-sudo>
+
 编译：
 
 ```bash

@@ -4,6 +4,8 @@ eBPF (extended Berkeley Packet Filter) is a powerful feature in the Linux kernel
 
 This tutorial discusses how to use eBPF to modify ongoing system call parameters. This technique can be used for purposes such as security auditing, system monitoring, or even malicious behavior. However, it is important to note that tampering with system call parameters can have negative impacts on system stability and security, so it must be used with caution. To achieve this functionality, we will use the `bpf_probe_write_user` feature of eBPF, which allows us to modify memory in the user space, thus enabling us to modify system call parameters to the values we desire before the kernel reads the user space memory.
 
+The complete code for this tutorial can be found in <https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/25-signal/>.
+
 ## Modifying the File Name for the open System Call
 
 This functionality is used to modify the arguments of the `openat` system call to open a different file. This feature can be used for:
