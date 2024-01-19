@@ -36,6 +36,7 @@ jobs:
       run: |
         ./ecc src/4-opensnoop/opensnoop.bpf.c
         sudo timeout -s 2 3 ./ecli run src/4-opensnoop/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 ./ecli run src/4-opensnoop/package.json --pid_target 1 || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 5 bashreadline
       run: |
         ./ecc src/5-uprobe-bashreadline/bashreadline.bpf.c
@@ -68,7 +69,12 @@ jobs:
       run: |
         ./ecc src/23-http/accept.bpf.c src/23-http/accept.h
         sudo timeout -s 2 3 ./ecli run src/23-http/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
-
+    - name: test 34 syscall
+      run: |
+        ./ecc src/34-syscall/open_modify.bpf.c src/34-syscall/open_modify.h
+        sudo timeout -s 2 3 ./ecli run src/34-syscall/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        ./ecc src/34-syscall/exechijack.bpf.c src/34-syscall/exechijack.h
+        sudo timeout -s 2 3 ./ecli run src/34-syscall/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 25 signal
       run: |
         ./ecc src/25-signal/signal.bpf.c src/25-signal/signal.h

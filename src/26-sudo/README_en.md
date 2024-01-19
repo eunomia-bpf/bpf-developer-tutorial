@@ -1,5 +1,7 @@
 # Using eBPF to add sudo user
 
+The full source code for this article can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/26-sudo>
+
 Compilation:
 
 ```bash

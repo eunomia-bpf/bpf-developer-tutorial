@@ -2,7 +2,7 @@
 
 eBPF (Extended Berkeley Packet Filter) is a revolutionary technology in the Linux kernel that allows users to execute custom programs in kernel space without modifying the kernel source code or loading any kernel modules. This provides developers with great flexibility to observe, modify, and control the Linux system.
 
-This article introduces how to use the `bpf_send_signal` feature of eBPF to intervene by sending signals to specified processes. For more tutorial documentation, please refer to <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
+This article introduces how to use the `bpf_send_signal` feature of eBPF to intervene by sending signals to specified processes. For more tutorial documentation and complete source code, please refer to <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
 
 ## Use Cases
 

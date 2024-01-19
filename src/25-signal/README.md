@@ -2,7 +2,7 @@
 
 eBPF (扩展的伯克利数据包过滤器) 是 Linux 内核的一种革命性技术，允许用户在内核空间执行自定义程序，而不需要修改内核源代码或加载任何内核模块。这使得开发人员可以非常灵活地对 Linux 系统进行观测、修改和控制。
 
-本文介绍了如何使用 eBPF 的 bpf_send_signal 功能，向指定的进程发送信号进行干预。更多的教程文档，请参考 <https://github.com/eunomia-bpf/bpf-developer-tutorial>
+本文介绍了如何使用 eBPF 的 bpf_send_signal 功能，向指定的进程发送信号进行干预。本文完整的源代码和更多的教程文档，请参考 <https://github.com/eunomia-bpf/bpf-developer-tutorial>
 
 ## 使用场景
 

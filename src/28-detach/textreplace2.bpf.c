@@ -245,6 +245,8 @@ int BPF_PROG(find_possible_addrs, struct pt_regs *regs, long ret)
     return 0;
 }
 
+char name_cmp[TEXT_LEN_MAX+1];
+
 SEC("fexit/__x64_sys_read")
 int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
 {
@@ -260,7 +262,6 @@ int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
     unsigned int newline_counter = 0;
     unsigned int match_counter = 0;
 
-    char name[TEXT_LEN_MAX+1];
     unsigned int j = 0;
     char old = 0;
 
@@ -289,14 +290,15 @@ int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
         if (name_addr == 0) {
             break;
         }
-        bpf_probe_read_user(&name, TEXT_LEN_MAX, (char*)name_addr);
+        bpf_probe_read_user(&name_cmp, TEXT_LEN_MAX, (char*)name_addr);
         for (j = 0; j < TEXT_LEN_MAX; j++) {
-            if (name[j] != pFind->text[j]) {
+            if (name_cmp[j] != pFind->text[j]) {
                 break;
             }
         }
         // for newer kernels, maybe use bpf_strncmp
-        // if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, name) == 0) {
+        // const char *p = name_cmp;
+        // if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, p) == 0) {
         if (j >= name_len) {
             // ***********
             // We've found out text!
