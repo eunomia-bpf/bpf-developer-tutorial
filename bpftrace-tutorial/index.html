@@ -1,0 +1,504 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>bpftrace Tutorial - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../https://github.com/eunomia-bpf/bpf-developer-tutorial.html">https://github.com/eunomia-bpf/bpf-developer-tutorial</a></li><li class="chapter-item expanded affix "><li class="part-title">入门文档</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> lesson 0-introduce</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> lesson 1-helloworld</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> lesson 2-kprobe-unlink</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> lesson 3-fentry-unlink</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> lesson 4-opensnoop</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> lesson 5-uprobe-bashreadline</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> lesson 6-sigsnoop</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> lesson 7-execsnoop</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> lesson 8-execsnoop</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> lesson 9-runqlat</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> lesson 10-hardirqs</a></li><li class="chapter-item expanded affix "><li class="part-title">进阶文档和示例</li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> lesson 11-bootstrap</a></li><li class="chapter-item expanded "><a href="../12-profile/index.html"><strong aria-hidden="true">13.</strong> lesson 12-profile</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">14.</strong> lesson 13-tcpconnlat</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> lesson 14-tcpstates</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">16.</strong> lesson 15-javagc</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> lesson 16-memleak</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> lesson 17-biopattern</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> lesson 18-further-reading</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> lesson 19-lsm-connect</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> lesson 20-tc</a></li><li class="chapter-item expanded "><a href="../21-xdp/index.html"><strong aria-hidden="true">22.</strong> lesson 21-xdp</a></li><li class="chapter-item expanded affix "><li class="part-title">高级主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">23.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">24.</strong> 使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">25.</strong> 使用 eBPF socket filter 或 syscall trace 追踪 HTTP 请求和其他七层协议</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">26.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../34-syscall/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 修改系统调用参数</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">28.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">29.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">30.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">31.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">32.</strong> BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../18-further-reading/ebpf-security.zh.html"><strong aria-hidden="true">33.</strong> eBPF 运行时的安全性与面临的挑战</a></li><li class="chapter-item expanded "><a href="../src/36-userspace-ebpf/README.html"><strong aria-hidden="true">34.</strong> 用户空间 eBPF 运行时：深度解析与应用实践</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc 和 bpftrace 教程与文档</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">35.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">36.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">37.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">38.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">39.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">40.</strong> bcc Python Developer Tutorial</a></li><li class="chapter-item expanded "><a href="../bpftrace-tutorial/index.html" class="active"><strong aria-hidden="true">41.</strong> bpftrace Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="bpftrace一行教程"><a class="header" href="#bpftrace一行教程">bpftrace一行教程</a></h1>
+<p>该教程通过12个简单小节帮助你了解bpftrace的使用。每一小节都是一行的命令，你可以尝试运行并立刻看到运行效果。该教程系列用来介绍bpftrace的概念。关于bpftrace的完整参考，见<a href="https://github.com/iovisor/bpftrace/blob/master/man/adoc/bpftrace.adoc">bpftrace手册</a>。</p>
+<p>该教程贡献者是Brendan Gregg, Netflix (2018), 基于他的FreeBSD DTrace教程系列<a href="https://wiki.freebsd.org/DTrace/Tutorial">DTrace Tutorial</a>。</p>
+<h1 id="1-列出所有探针"><a class="header" href="#1-列出所有探针">1. 列出所有探针</a></h1>
+<pre><code>bpftrace -l 'tracepoint:syscalls:sys_enter_*'
+</code></pre>
+<p>&quot;bpftrace -l&quot; 列出所有探针，并且可以添加搜索项。</p>
+<ul>
+<li>探针是用于捕获事件数据的检测点。</li>
+<li>搜索词支持通配符，如<code>*</code>和<code>?</code>。</li>
+<li>&quot;bpftrace -l&quot; 也可以通过管道传递给grep，进行完整的正则表达式搜索。</li>
+</ul>
+<h1 id="2-hello-world"><a class="header" href="#2-hello-world">2. Hello World</a></h1>
+<pre><code># bpftrace -e 'BEGIN { printf(&quot;hello world\n&quot;); }'
+Attaching 1 probe...
+hello world
+^C
+</code></pre>
+<p>打印欢迎消息。运行后, 按Ctrl-C结束。</p>
+<ul>
+<li><code>BEGIN</code>是一个特殊的探针，在程序开始时触发探针执行(类似awk的BEGIN)。你可以使用它设置变量和打印消息头。</li>
+<li>探针可以关联动作，把动作放到{}中。这个例子中，探针被触发时会调用printf()。</li>
+</ul>
+<h1 id="3-文件打开"><a class="header" href="#3-文件打开">3. 文件打开</a></h1>
+<pre><code># bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf(&quot;%s %s\n&quot;, comm, str(args.filename)); }'
+Attaching 1 probe...
+snmp-pass /proc/cpuinfo
+snmp-pass /proc/stat
+snmpd /proc/net/dev
+snmpd /proc/net/if_inet6
+^C
+</code></pre>
+<p>这里我们在文件打开的时候打印进程名和文件名。</p>
+<ul>
+<li>该命令以<code>tracepoint:syscalls:sys_enter_openat</code>开始: 这是tracepoint探针类型(内核静态跟踪)，当进入<code>openat()</code>系统调用时执行该探针。相比kprobes探针(内核动态跟踪，在第6节介绍)，我们更加喜欢用tracepoints探针，因为tracepoints有稳定的应用程序编程接口。注意：现代linux系统(glibc &gt;= 2.26)，<code>open</code>总是调用<code>openat</code>系统调用。</li>
+<li><code>comm</code>是内建变量，代表当前进程的名字。其它类似的变量还有pid和tid，分别表示进程标识和线程标识。</li>
+<li><code>args</code>是一个包含所有tracepoint参数的结构。这个结构是由bpftrace根据tracepoint信息自动生成的。这个结构的成员可以通过命令<code>bpftrace -vl tracepoint:syscalls:sys_enter_openat</code>找到。</li>
+<li><code>args.filename</code>用来获取args的成员变量<code>filename</code>的值。</li>
+<li><code>str()</code>用来把字符串指针转换成字符串。</li>
+</ul>
+<h1 id="4-进程级系统调用计数"><a class="header" href="#4-进程级系统调用计数">4. 进程级系统调用计数</a></h1>
+<pre><code>bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
+Attaching 1 probe...
+^C
+
+@[bpftrace]: 6
+@[systemd]: 24
+@[snmp-pass]: 96
+@[sshd]: 125
+</code></pre>
+<p>按Ctrl-C后打印进程的系统调用计数。</p>
+<ul>
+<li>@: 表示一种特殊的变量类型，称为map，可以以不同的方式来存储和描述数据。你可以在@后添加可选的变量名(如@num)，用来增加可读性或者区分不同的map。</li>
+<li>[]: 可选的中括号允许设置map的关键字，比较像关联数组。</li>
+<li>count(): 这是一个map函数 - 记录被调用次数。因为调用次数根据comm保存在map里，输出结果是进程执行系统调用的次数统计。</li>
+</ul>
+<p>Maps会在bpftrace结束(如按Ctrl-C)时自动打印出来。</p>
+<h1 id="5-read返回值分布统计"><a class="header" href="#5-read返回值分布统计">5. read()返回值分布统计</a></h1>
+<pre><code># bpftrace -e 'tracepoint:syscalls:sys_exit_read /pid == 18644/ { @bytes = hist(args.ret); }'
+Attaching 1 probe...
+^C
+
+@bytes:
+[0, 1]                12 |@@@@@@@@@@@@@@@@@@@@                                |
+[2, 4)                18 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                     |
+[4, 8)                 0 |                                                    |
+[8, 16)                0 |                                                    |
+[16, 32)               0 |                                                    |
+[32, 64)              30 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[64, 128)             19 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                    |
+[128, 256)             1 |@
+</code></pre>
+<p>这里统计进程号为18644的进程执行内核函数sys_read()的返回值，并打印出直方图。</p>
+<ul>
+<li>/.../: 这里设置一个过滤条件(条件判断)，满足该过滤条件时才执行{}里面的动作。在这个例子中意思是只追踪进程号为18644的进程。过滤条件表达式也支持布尔运算，如(&quot;&amp;&amp;&quot;, &quot;||&quot;)。</li>
+<li>ret: 表示函数的返回值。对于sys_read()，它可能是-1(错误)或者成功读取的字节数。</li>
+<li>@: 类似于上节的map，但是这里没有key，即[]。该map的名称&quot;bytes&quot;会出现在输出中。</li>
+<li>hist(): 一个map函数，用来描述直方图的参数。输出行以2次方的间隔开始，如<code>[128, 256)</code>表示值大于等于128且小于256。后面跟着位于该区间的参数个数统计，最后是ascii码表示的直方图。该图可以用来研究它的模式分布。</li>
+<li>其它的map函数还有lhist(线性直方图)，count()，sum()，avg()，min()和max()。</li>
+</ul>
+<h1 id="6-内核动态跟踪read返回的字节数"><a class="header" href="#6-内核动态跟踪read返回的字节数">6. 内核动态跟踪read()返回的字节数</a></h1>
+<pre><code># bpftrace -e 'kretprobe:vfs_read { @bytes = lhist(retval, 0, 2000, 200); }'
+Attaching 1 probe...
+^C
+
+@bytes:
+(...,0]                0 |                                                    |
+[0, 200)              66 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[200, 400)             2 |@                                                   |
+[400, 600)             3 |@@                                                  |
+[600, 800)             0 |                                                    |
+[800, 1000)            5 |@@@                                                 |
+[1000, 1200)           0 |                                                    |
+[1200, 1400)           0 |                                                    |
+[1400, 1600)           0 |                                                    |
+[1600, 1800)           0 |                                                    |
+[1800, 2000)           0 |                                                    |
+[2000,...)            39 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                      |
+</code></pre>
+<p>使用内核动态跟踪技术显示read()返回字节数的直方图。</p>
+<ul>
+<li><code>kretprobe:vfs_read</code>: 这是kretprobe类型(动态跟踪内核函数返回值)的探针，跟踪<code>vfs_read</code>内核函数。此外还有kprobe类型的探针(在下一节介绍)用于跟踪内核函数的调用。它们是功能强大的探针类型，让我们可以跟踪成千上万的内核函数。然而它们是&quot;不稳定&quot;的探针类型:由于它们可以跟踪任意内核函数，对于不同的内核版本，kprobe和kretprobe不一定能够正常工作。因为内核函数名，参数，返回值和作用等可能会变化。此外，由于它们用来跟踪底层内核的，你需要浏览内核源代码，理解这些探针的参数和返回值的意义。</li>
+<li>lhist(): 线性直方图函数:参数分别是value，最小值，最大值，步进值。第一个参数(<code>retval</code>)表示系统调用sys_read()返回值:即成功读取的字节数。</li>
+</ul>
+<h1 id="7-read调用的时间"><a class="header" href="#7-read调用的时间">7. read()调用的时间</a></h1>
+<pre><code># bpftrace -e 'kprobe:vfs_read { @start[tid] = nsecs; } kretprobe:vfs_read /@start[tid]/ { @ns[comm] = hist(nsecs - @start[tid]); delete(@start[tid]); }'
+Attaching 2 probes...
+
+[...]
+@ns[snmp-pass]:
+[0, 1]                 0 |                                                    |
+[2, 4)                 0 |                                                    |
+[4, 8)                 0 |                                                    |
+[8, 16)                0 |                                                    |
+[16, 32)               0 |                                                    |
+[32, 64)               0 |                                                    |
+[64, 128)              0 |                                                    |
+[128, 256)             0 |                                                    |
+[256, 512)            27 |@@@@@@@@@                                           |
+[512, 1k)            125 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@       |
+[1k, 2k)              22 |@@@@@@@                                             |
+[2k, 4k)               1 |                                                    |
+[4k, 8k)              10 |@@@                                                 |
+[8k, 16k)              1 |                                                    |
+[16k, 32k)             3 |@                                                   |
+[32k, 64k)           144 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[64k, 128k)            7 |@@                                                  |
+[128k, 256k)          28 |@@@@@@@@@@                                          |
+[256k, 512k)           2 |                                                    |
+[512k, 1M)             3 |@                                                   |
+[1M, 2M)               1 |                                                    |
+</code></pre>
+<p>根据进程名，以直方图的形式显示read()调用花费的时间，时间单位为纳秒。</p>
+<ul>
+<li>@start[tid]: 使用线程ID作为key。某一时刻，可能有许许多多的read调用正在进行，我们希望为每个调用记录一个起始时间戳。这要如何做到呢？我们可以为每个read调用建立一个唯一的标识符，并用它作为key进行统计。由于内核线程一次只能执行一个系统调用，我们可以使用线程ID作为上述标识符。</li>
+<li>nsecs: 自系统启动到现在的纳秒数。这是一个高精度时间戳，可以用来对事件计时。</li>
+<li>/@start[tid]/: 该过滤条件检查起始时间戳是否被记录。程序可能在某次read调用中途被启动，如果没有这个过滤条件，这个调用的时间会被统计为now-zero，而不是now-start。</li>
+<li>delete(@start[tid]): 释放变量。</li>
+</ul>
+<h1 id="8-统计进程级别的事件"><a class="header" href="#8-统计进程级别的事件">8. 统计进程级别的事件</a></h1>
+<pre><code># bpftrace -e 'tracepoint:sched:sched* { @[probe] = count(); } interval:s:5 { exit(); }'
+Attaching 25 probes...
+@[tracepoint:sched:sched_wakeup_new]: 1
+@[tracepoint:sched:sched_process_fork]: 1
+@[tracepoint:sched:sched_process_exec]: 1
+@[tracepoint:sched:sched_process_exit]: 1
+@[tracepoint:sched:sched_process_free]: 2
+@[tracepoint:sched:sched_process_wait]: 7
+@[tracepoint:sched:sched_wake_idle_without_ipi]: 53
+@[tracepoint:sched:sched_stat_runtime]: 212
+@[tracepoint:sched:sched_wakeup]: 253
+@[tracepoint:sched:sched_waking]: 253
+@[tracepoint:sched:sched_switch]: 510
+</code></pre>
+<p>这里统计5秒内进程级的事件并打印。</p>
+<ul>
+<li>sched: <code>sched</code>探针可以探测调度器的高级事件和进程事件如fork, exec和上下文切换。</li>
+<li>probe: 探针的完整名称。</li>
+<li>interval:s:5: 这是一个每5秒在每个CPU上触发一次的探针，它用来创建脚本级别的间隔或超时时间。</li>
+<li>exit(): 退出bpftrace。</li>
+</ul>
+<h1 id="9-分析内核实时函数栈"><a class="header" href="#9-分析内核实时函数栈">9. 分析内核实时函数栈</a></h1>
+<pre><code># bpftrace -e 'profile:hz:99 { @[kstack] = count(); }'
+Attaching 1 probe...
+^C
+
+[...]
+@[
+filemap_map_pages+181
+__handle_mm_fault+2905
+handle_mm_fault+250
+__do_page_fault+599
+async_page_fault+69
+]: 12
+[...]
+@[
+cpuidle_enter_state+164
+do_idle+390
+cpu_startup_entry+111
+start_secondary+423
+secondary_startup_64+165
+]: 22122
+</code></pre>
+<p>以99赫兹的频率分析内核调用栈并打印次数统计。</p>
+<ul>
+<li>profile:hz:99: 这里所有cpu都以99赫兹的频率采样分析内核栈。为什么是99而不是100或者1000？我们想要抓取足够详细的内核执行时内核栈信息，但是频率太大影响性能。100赫兹足够了，但是我们不想用正好100赫兹，这样采样频率可能与其他定时事件步调一致，所以99赫兹是一个理想的选择。</li>
+<li>kstack: 返回内核调用栈。这里作为map的关键字，可以跟踪次数。这些输出信息可以使用火焰图可视化。此外<code>ustack</code>用来分析用户级堆栈。</li>
+</ul>
+<h1 id="10-调度器跟踪"><a class="header" href="#10-调度器跟踪">10. 调度器跟踪</a></h1>
+<pre><code># bpftrace -e 'tracepoint:sched:sched_switch { @[kstack] = count(); }'
+^C
+[...]
+
+@[
+__schedule+697
+__schedule+697
+schedule+50
+schedule_timeout+365
+xfsaild+274
+kthread+248
+ret_from_fork+53
+]: 73
+@[
+__schedule+697
+__schedule+697
+schedule_idle+40
+do_idle+356
+cpu_startup_entry+111
+start_secondary+423
+secondary_startup_64+165
+]: 305
+</code></pre>
+<p>这里统计进程上下文切换次数。以上输出被截断，只输出了最后两个结果。</p>
+<ul>
+<li>sched: 跟踪调度类别的调度器事件:sched_switch, sched_wakeup, sched_migrate_task等。</li>
+<li>sched_switch: 当线程释放cpu资源，当前不运行时触发。这里可能的阻塞事件:如等待I/O，定时器，分页/交换，锁等。</li>
+<li>kstack: 内核堆栈跟踪，打印调用栈。</li>
+<li>sched_switch在线程切换的时候触发，打印的调用栈是被切换出cpu的那个线程。像你使用其他探针一样，注意这里的上下文，例如comm, pid, kstack等等，并不一定反映了探针的目标的状态。</li>
+</ul>
+<h1 id="11-块级io跟踪"><a class="header" href="#11-块级io跟踪">11. 块级I/O跟踪</a></h1>
+<pre><code># bpftrace -e 'tracepoint:block:block_rq_issue { @ = hist(args.bytes); }'
+Attaching 1 probe...
+^C
+
+@:
+[0, 1]                 1 |@@                                                  |
+[2, 4)                 0 |                                                    |
+[4, 8)                 0 |                                                    |
+[8, 16)                0 |                                                    |
+[16, 32)               0 |                                                    |
+[32, 64)               0 |                                                    |
+[64, 128)              0 |                                                    |
+[128, 256)             0 |                                                    |
+[256, 512)             0 |                                                    |
+[512, 1K)              0 |                                                    |
+[1K, 2K)               0 |                                                    |
+[2K, 4K)               0 |                                                    |
+[4K, 8K)              24 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[8K, 16K)              2 |@@@@                                                |
+[16K, 32K)             6 |@@@@@@@@@@@@@                                       |
+[32K, 64K)             5 |@@@@@@@@@@                                          |
+[64K, 128K)            0 |                                                    |
+[128K, 256K)           1 |@@                                                  |
+
+</code></pre>
+<p>以上是块I/O请求字节数的直方图。</p>
+<ul>
+<li>tracepoint:block: 块类别的跟踪点跟踪块级I/O事件。</li>
+<li>block_rq_issue: 当I/O提交到块设备时触发。</li>
+<li>args.bytes: 跟踪点block_rq_issue的参数成员bytes，表示提交I/O请求的字节数。</li>
+</ul>
+<p>该探针的上下文是非常重要的: 它在I/O请求被提交给块设备时触发。这通常发生在进程上下文，此时通过内核的comm可以得到进程名；也可能发生在内核上下文，(如readahead)，此时不能显示预期的进程号和进程名信息。</p>
+<h1 id="12-内核结构跟踪"><a class="header" href="#12-内核结构跟踪">12. 内核结构跟踪</a></h1>
+<pre><code># cat path.bt
+#ifndef BPFTRACE_HAVE_BTF
+#include &lt;linux/path.h&gt;
+#include &lt;linux/dcache.h&gt;
+#endif
+
+kprobe:vfs_open
+{
+	printf(&quot;open path: %s\n&quot;, str(((struct path *)arg0)-&gt;dentry-&gt;d_name.name));
+}
+
+# bpftrace path.bt
+Attaching 1 probe...
+open path: dev
+open path: if_inet6
+open path: retrans_time_ms
+[...]
+</code></pre>
+<p>这里使用内核动态跟踪技术跟踪vfs_read()函数，该函数的(struct path *)作为第一个参数。</p>
+<ul>
+<li>kprobe: 如前面所述，这是内核动态跟踪kprobe探针类型，跟踪内核函数的调用(kretprobe探针类型跟踪内核函数返回值)。</li>
+<li><code>arg0</code> 是一个内建变量，表示探针的第一个参数，其含义由探针类型决定。对于<code>kprobe</code>类型探针，它表示函数的第一个参数。其它参数使用arg1,...,argN访问。</li>
+<li><code>((struct path *)arg0)-&gt;dentry-&gt;d_name.name</code>: 这里<code>arg0</code>作为<code>struct path *</code>并引用dentry。</li>
+<li>#include: 在没有BTF (BPF Type Format) 的情况下,包含必要的path和dentry类型声明的头文件。</li>
+</ul>
+<p>bpftrace对内核结构跟踪的支持和bcc是一样的，允许使用内核头文件。这意味着大多数结构是可用的，但是并不是所有的，有时需要手动增加某些结构的声明。例如这个例子，见<a href="https://github.com/iovisor/bpftrace/blob/master/docs/../tools/dcsnoop.bt">dcsnoop tool</a>，包含struct nameidata的声明。倘若内核有提供BTF数据，则所有结构都可用。</p>
+<p>现在，你已经理解了bpftrace的大部分功能，你可以开始使用和编写强大的一行命令。查阅<a href="https://github.com/iovisor/bpftrace/blob/master/docs/reference_guide.md">参考手册</a>更多的功能。</p>
+<blockquote>
+<p>原文地址：https://github.com/iovisor/bpftrace/blob/master/docs</p>
+</blockquote>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../bcc-documents/tutorial_bcc_python_developer.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../bcc-documents/tutorial_bcc_python_developer.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
