@@ -52,7 +52,7 @@ jobs:
         make -C src/28-detach
         sudo mount bpffs -t bpf /sys/fs/bpf
         sudo mkdir /sys/fs/bpf/textreplace
-        sudo ./textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd' -d || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo src/28-detach/textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd' -d || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 30 sslsniff
       run: |
         make -C src/30-sslsniff
