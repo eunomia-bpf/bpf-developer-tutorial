@@ -58,7 +58,7 @@ Dive straight into eBPF development with this concise tutorial, built around the
 
 ### 高级主题
 
-这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。将 eBPF 用户态与内核态的部分结合起来，可能能带来巨大的威力（同时也是安全隐患）。这部分主要基于 libbpf、Cilium 等框架进行开发。
+这里涵盖了一系列和 eBPF 相关的高级内容，包含在 Android 上使用 eBPF 程序、使用 eBPF 程序进行可能的攻击与防御、复杂的追踪等等。将 eBPF 用户态与内核态的部分结合起来，可能能带来巨大的威力（同时也是安全隐患）。这部分较为复杂的示例会基于 libbpf、Cilium 等框架进行开发，简单示例使用 eunomia-bpf 完成。
 
 Android:
 
