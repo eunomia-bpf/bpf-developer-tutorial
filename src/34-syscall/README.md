@@ -4,7 +4,7 @@ eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一个强大
 
 本教程介绍了如何使用 eBPF 修改正在进行的系统调用参数。这种技术可以用作安全审计、系统监视、或甚至恶意行为。然而需要特别注意，篡改系统调用参数可能对系统的稳定性和安全性带来负面影响，因此必须谨慎使用。实现这个功能需要使用到 eBPF 的 `bpf_probe_write_user` 功能，它可以修改用户空间的内存，因此能用来修改系统调用参数，在内核读取用户空间内存之前，将其修改为我们想要的值。
 
-本文的完整代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/25-signal/> 找到。
+本文的完整代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/34-syscall/> 找到。
 
 ## 修改 open 系统调用的文件名
 
@@ -16,7 +16,7 @@ eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一个强大
 
 如果该技术被恶意软件利用，攻击者可以重定向文件操作，导致数据泄漏或者破坏数据完整性。例如，程序写入日志文件时，攻击者可能将数据重定向到控制的文件中，干扰审计跟踪。
 
-内核态代码：
+内核态代码（部分，完整内容请参考 Github bpf-developer-tutorial）：
 
 ```c
 SEC("tracepoint/syscalls/sys_enter_openat")
@@ -49,20 +49,85 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter *ctx
 - 我们创建一个 `args_t` 结构来存储文件名和标志。
 - 使用 `bpf_probe_write_user` 修改用户空间内存中的文件名为 "hijacked"。
 
-代码编译并运行后，可以使用以下命令指定应修改其 `openat` 系统调用参数的目标进程ID：
+eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 或 <https://eunomia.dev/tutorials/1-helloworld/> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+
+编译：
 
 ```bash
-sudo ./ecli run package.json -- --rewrite --target_pid=$(pidof victim)
+./ecc open_modify.bpf.c open_modify.h
 ```
 
-完整代码可以在
+使用 make 构建一个简单的 victim 程序，用来测试：
+
+```c
+int main()
+{
+    char filename[100] = "my_test.txt";
+    // print pid
+    int pid = getpid();
+    std::cout << "current pid: " << pid << std::endl;
+    system("echo \"hello\" > my_test.txt");
+    system("echo \"world\" >> hijacked");
+    while (true) {
+        std::cout << "Opening my_test.txt" << std::endl;
+
+        int fd = open(filename, O_RDONLY);
+        assert(fd != -1);
+
+        std::cout << "test.txt opened, fd=" << fd << std::endl;
+        usleep(1000 * 300);
+        // print the file content
+        char buf[100] = {0};
+        int ret = read(fd, buf, 5);
+        std::cout << "read " << ret << " bytes: " << buf << std::endl;
+        std::cout << "Closing test.txt..." << std::endl;
+        close(fd);
+        std::cout << "test.txt closed" << std::endl;
+    }
+    return 0;
+}
+```
+
+测试代码编译并运行:
+
+```sh
+$ ./victim
+test.txt opened, fd=3
+read 5 bytes: hello
+Closing test.txt...
+test.txt closed
+```
+
+可以使用以下命令指定应修改其 `openat` 系统调用参数的目标进程ID：
+
+```bash
+sudo ./ecli run package.json --rewrite --target_pid=$(pidof victim)
+```
+
+然后就会发现输出变成了 world，可以看到我们原先想要打开 "my_test.txt" 文件，但是实际上被劫持打开了 hijacked 文件：
+
+```console
+test.txt opened, fd=3
+read 5 bytes: hello
+Closing test.txt...
+test.txt closed
+Opening my_test.txt
+test.txt opened, fd=3
+read 5 bytes: world
+Closing test.txt...
+test.txt closed
+Opening my_test.txt
+test.txt opened, fd=3
+read 5 bytes: world
+```
+
+包含测试用例的完整代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 找到。
 
 ## 修改 bash execve 的进程名称
 
 这段功能用于当 `execve` 系统调用进行时修改执行程序名称。在一些审计或监控场景，这可能用于记录特定进程的行为或修改其行为。然而，此类篡改可能会造成混淆，使得用户或管理员难以确定系统实际执行的程序是什么。最严重的风险是，如果恶意用户能够控制 eBPF 程序，他们可以将合法的系统命令重定向到恶意软件，造成严重的安全威胁。
 
 ```c
-
 SEC("tp/syscalls/sys_enter_execve")
 int handle_execve_enter(struct trace_event_raw_sys_enter *ctx)
 {
@@ -122,7 +187,12 @@ int handle_execve_enter(struct trace_event_raw_sys_enter *ctx)
 - 读取第一个 `execve` 参数到 `prog_name`，这通常是将要执行的程序的路径。
 - 通过 `bpf_probe_write_user` 重写这个参数，使得系统实际执行的是一个不同的程序。
 
-这种做法的风险在于它可以被用于劫持软件的行为，导致系统运行恶意代码。
+这种做法的风险在于它可以被用于劫持软件的行为，导致系统运行恶意代码。同样也可以使用 ecc 和 ecli 编译运行：
+
+```bash
+./ecc exechijack.bpf.c exechijack.h
+sudo ./ecli run package.json
+```
 
 ## 总结
 
