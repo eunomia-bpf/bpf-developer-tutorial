@@ -1,22 +1,22 @@
-# eBPF Development Practice: Modifying System Call Parameters with eBPF
+# eBPF Development Practice: Modifying System Call Arguments with eBPF
 
-eBPF (extended Berkeley Packet Filter) is a powerful feature in the Linux kernel that allows running, loading, and updating user-defined code without the need to modify kernel source code or restart the kernel. This capability has enabled eBPF to be widely used in areas such as network and system performance analysis, packet filtering, and security policies.
+eBPF (Extended Berkeley Packet Filter) is a powerful feature in the Linux kernel that allows user-defined code to be run, loaded, and updated without the need to modify kernel source code or reboot the kernel. This functionality has enabled a wide range of applications for eBPF, such as network and system performance analysis, packet filtering, and security policies.
 
-This tutorial discusses how to use eBPF to modify ongoing system call parameters. This technique can be used for purposes such as security auditing, system monitoring, or even malicious behavior. However, it is important to note that tampering with system call parameters can have negative impacts on system stability and security, so it must be used with caution. To achieve this functionality, we will use the `bpf_probe_write_user` feature of eBPF, which allows us to modify memory in the user space, thus enabling us to modify system call parameters to the values we desire before the kernel reads the user space memory.
+In this tutorial, we will explore how to use eBPF to modify the arguments of a running system call. This technique can be used for security auditing, system monitoring, or even malicious behavior. However, it is important to note that modifying system call arguments can have negative implications for system stability and security, so caution must be exercised. To implement this functionality, we will use the `bpf_probe_write_user` feature of eBPF, which allows us to modify memory in the user space and therefore modify system call arguments before the kernel reads them from user space.
 
-The complete code for this tutorial can be found in <https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/25-signal/>.
+The complete code for this tutorial can be found in the <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/34-syscall/> repository on GitHub.
 
-## Modifying the File Name for the open System Call
+## Modifying the File Name of the `open` System Call
 
-This functionality is used to modify the arguments of the `openat` system call to open a different file. This feature can be used for:
+This functionality is used to modify the arguments of the `openat` system call to open a different file. This technique can be useful for:
 
-1. **File access auditing**: In environments with strict requirements for legal compliance and data security, auditors may need to record all access attempts to sensitive files. By modifying the `openat` system call parameters, all attempts to access a specific sensitive file can be redirected to a backup file or a log file.
-2. **Security sandboxing**: During early stages of development, it may be desirable to monitor the files that an application attempts to open. By changing the `openat` call, the application can run in a secure sandbox environment where all file operations are redirected to an isolated file system path.
-3. **Protection of sensitive data**: For files containing sensitive information, such as a configuration file that includes a database password, a eBPF-based system can redirect these calls to an encrypted or temporary location to enhance data security.
+1. **File Access Auditing**: In environments with strict legal and data security requirements, auditors may need to record access to sensitive files. By modifying the `openat` system call arguments, all attempts to access a specific sensitive file can be redirected to a backup file or a log file.
+2. **Secure Sandbox**: In the early stages of development, it may be desirable to monitor the files accessed by an application. By changing the `openat` calls, the application can be run in a secure sandbox environment where all file operations are redirected to an isolated file system path.
+3. **Sensitive Data Protection**: For files containing sensitive information, such as a configuration file that contains database passwords, a eBPF-based system can redirect those calls to an encrypted or temporary location to enhance data security.
 
-If this technique is leveraged by malicious software, attackers can redirect file operations, leading to data leakage or compromise of data integrity. For example, when a program writes to a log file, an attacker could redirect the data to a file under their control, disrupting the audit trail.
+If leveraged by malicious software, this technique can be used to redirect file operations resulting in data leaks or compromise data integrity. For example, when a program is writing to a log file, an attacker could redirect the data to a controlled file, disrupting the audit trail.
 
-Kernel code:
+Kernel code (partial code, see complete code on Github bpf-developer-tutorial):
 
 ```c
 SEC("tracepoint/syscalls/sys_enter_openat")
@@ -42,24 +42,90 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter *ctx
 }
 ```
 
-Analysis of kernel code:
+Analysis of the kernel code:
 
-- `bpf_get_current_pid_tgid()` is used to get the current process ID (PID).
-- If `target_pid` is specified and doesn't match the current PID, the function returns.
+- `bpf_get_current_pid_tgid()` retrieves the current process ID.
+- If `target_pid` is specified and does not match the current process ID, the function returns 0 and does not execute further.
 - We create an `args_t` structure to store the file name and flags.
 - We use `bpf_probe_write_user` to modify the file name in the user space memory to "hijacked".
 
-After compiling and running the code, you can use the following command to specify the target process ID whose `openat` system call parameters should be modified:
+The `eunomia-bpf` is an open-source eBPF dynamic loading runtime and development toolchain aimed at making eBPF program development, building, distribution, and execution easier. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> or <https://eunomia.dev/tutorials/1-helloworld/> for installing ecc compiler toolchain and ecli runtime. We will use `eunomia-bpf` to compile and run this example.
+
+Compile the code:
 
 ```bash
-sudo ./ecli run package.json -- --rewrite --target_pid=$(pidof victim)
+./ecc open_modify.bpf.c open_modify.h
 ```
 
-The complete code can be found in the tutorial code repository.
+Build a simple victim program using make for testing:
 
-## Modifying the Process Name for bash execve
+```c
+int main()
+{
+    char filename[100] = "my_test.txt";
+    // print pid
+    int pid = getpid();
+    std::cout << "current pid: " << pid << std::endl;
+    system("echo \"hello\" > my_test.txt");
+    system("echo \"world\" >> hijacked");
+    while (true) {
+        std::cout << "Opening my_test.txt" << std::endl;
 
-This functionality is used to modify the program name when the `execve` system call is being executed. In certain auditing or monitoring scenarios, this could be used to track the behavior of specific processes or modify their behavior. However, such tampering can lead to confusion, making it difficult for users or administrators to determine the actual program being executed by the system. The most serious risk is that if malicious users can control the eBPF program, they can redirect legitimate system commands to malicious software, posing a significant security threat.
+        int fd = open(filename, O_RDONLY);
+        assert(fd != -1);
+
+        std::cout << "test.txt opened, fd=" << fd << std::endl;
+        usleep(1000 * 300);
+        // print the file content
+        char buf[100] = {0};
+        int ret = read(fd, buf, 5);
+        std::cout << "read " << ret << " bytes: " << buf << std::endl;
+        std::cout << "Closing test.txt..." << std::endl;
+        close(fd);
+        std::cout << "test.txt closed" << std::endl;
+    }
+    return 0;
+}
+```
+
+Compile and run the test code:
+
+```sh
+$ ./victim
+test.txt opened, fd=3
+read 5 bytes: hello
+Closing test.txt...
+test.txt closed
+```
+
+Use the following command to specify the target process ID to modify the `openat` system call arguments:
+
+```bash
+sudo ./ecli run package.json --rewrite --target_pid=$(pidof victim)
+```
+
+You will see that the output changes to "world". Instead of opening the "my_test.txt" file, it opens the "hijacked" file:
+
+```console
+test.txt opened, fd=3
+read 5 bytes: hello
+Closing test.txt...
+test.txt closed
+Opening my_test.txt
+test.txt opened, fd=3
+read 5 bytes: world
+Closing test.txt...
+test.txt closed
+Opening my_test.txt
+test.txt opened, fd=3
+read 5 bytes: world
+```
+
+The complete code with test cases can be found in the <https://github.com/eunomia-bpf/bpf-developer-tutorial> repository.
+
+## Modifying the Process Name of bash `execve`
+
+This functionality is used to modify the program name when the `execve` system call is made. In certain auditing or monitoring scenarios, this may be used to track the behavior of specific processes or modify their behavior. However, such modifications can lead to confusion and make it difficult for users or administrators to determine the actual program being executed by the system. The most serious risk is that if malicious users are able to control the eBPF program, they could redirect legitimate system commands to malicious software, resulting in a significant security threat.
 
 ```c
 SEC("tp/syscalls/sys_enter_execve")
@@ -114,17 +180,20 @@ int handle_execve_enter(struct trace_event_raw_sys_enter *ctx)
 }
 ```
 
-Analysis of kernel code:
+Analysis of the kernel code:
 
-- Use `bpf_get_current_pid_tgid` to get the current process ID and thread group ID.
+- Execute `bpf_get_current_pid_tgid` to get the current process ID and thread group ID.
 - If `target_ppid` is set, the code checks if the current process's parent process ID matches.
-- Read the program name from the first argument of `execve`, which is typically the path to the program being executed.
-- Overwrite this argument with a hijacked binary path using `bpf_probe_write_user`, so that the system actually executes a different program.
+- Read the program name from the first argument of `execve`.
+- Use `bpf_probe_write_user` to overwrite the argument with a hijacked binary path.
 
-The risk of this approach is that it can be used to hijack the behavior of legitimate software, leading to the execution of malicious code by the system.
+This approach poses a risk as it can be leveraged to hijack the behavior of software, resulting in the execution of malicious code on the system. Using ecc and ecli to compile and run:
+
+```bash
+./ecc exechijack.bpf.c exechijack.h
+sudo ./ecli run package.json
+```
 
 ## Conclusion
 
-eBPF provides powerful capabilities for real-time monitoring and intervention of running systems. With proper governance and security policies in place, this can bring many benefits such as enhanced security, performance optimization, and operational convenience. However, the use of this technology must be treated with utmost care, as misoperation or misuse can cause disruption to the normal operation of the system or trigger serious security incidents. In practice, it is essential to ensure that only authorized users and programs can deploy and manage eBPF programs, and to validate the behavior of these eBPF programs in isolated test environments before applying them to production environments.
-
-You can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
+eBPF provides powerful capabilities for real-time monitoring and intervention in running systems. When used in conjunction with appropriate governance and security policies, this can bring many benefits such as enhanced security, performance optimization, and operational convenience. However, this technology must be used with great care as incorrect operations or misuse can result in system disruption or serious security incidents. In practice, it should be ensured that only authorized users and programs can deploy and manage eBPF programs, and their behavior should be validated in isolated test environments before they are applied in production.
