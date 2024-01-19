@@ -55,7 +55,7 @@
 - [eBPF 运行时的安全性与面临的挑战](18-further-reading/ebpf-security.zh.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](src\36-userspace-ebpf\README.md)
 
-# bcc 教程与文档
+# bcc 和 bpftrace 教程与文档
 
 - [BPF Features by Linux Kernel Version](bcc-documents/kernel-versions.md)
 - [Kernel Configuration for BPF Features](bcc-documents/kernel_config.md)
@@ -63,3 +63,4 @@
 - [Special Filtering](bcc-documents/special_filtering.md)
 - [bcc Tutorial](bcc-documents/tutorial.md)
 - [bcc Python Developer Tutorial](bcc-documents/tutorial_bcc_python_developer.md)
+- [bpftrace Tutorial](bpftrace-tutorial/README.md)
