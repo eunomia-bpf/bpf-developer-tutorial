@@ -49,7 +49,7 @@ char LICENSE[] SEC("license") = "GPL";
 
 这个 eBPF 程序可以通过 libbpf 或 eunomia-bpf 等工具加载到内核并执行。它将捕获指定进程（或所有进程）的 sys_openat 系统调用，并在用户空间输出相关信息。
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。完整代码请查看 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/4-opensnoop> 。
 
 编译运行上述代码：
 
@@ -100,7 +100,7 @@ See https://github.com/eunomia-bpf/eunomia-bpf for more information.
 可以通过 `--pid_target` 选项来指定要捕获的进程的 pid，例如：
 
 ```console
-$ sudo ./ecli run package.json  --pid_target 618
+$ sudo ./ecli run package.json --pid_target 618
 Runing eBPF program...
 ```
 

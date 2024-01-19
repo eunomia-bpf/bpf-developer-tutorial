@@ -132,6 +132,70 @@ eBPF，原本因其在内核空间的强大性能而被广泛认知，但近年�
 
 从更宏观的角度看，eBPF运行时和Wasm实际上可以被视为是相互补充的。尽管 eBPF 拥有出色的验证器机制来确保运行时安全性，但由于其编程语言的局限性和相对较高的开发难度，它并不总是适合作为业务逻辑的首选运行时。反之，eBPF 更适用于像网络流量转发、可观测性和 livepatch 这样的高专业性任务。相对而言，Wasm 运行时可以作为 Serverless 的运行时平台、插件系统和轻量级虚拟化等场景的首选。这两者都有自己的优势，但它们的选择取决于特定的用例和优先级。
 
+## bpftime 快速入门
+
+使用`bpftime`，您可以使用熟悉的工具（如clang和libbpf）构建eBPF应用程序，并在用户空间中执行它们。例如，`malloc` eBPF程序使用uprobe跟踪malloc调用，并使用哈希映射对其进行统计。
+
+您可以参考[documents/build-and-test.md](https://eunomia.dev/bpftime/documents/build-and-test)上的构建项目的方法，或者使用来自[GitHub packages](https://github.com/eunomia-bpf/bpftime/pkgs/container/bpftime)的容器映像。
+
+要开始，请构建并运行一个基于libbpf的eBPF程序，使用以下命令行：
+
+```console
+make -C example/malloc # 构建示例的eBPF程序
+bpftime load ./example/malloc/malloc
+```
+
+在另一个shell中，运行带有eBPF的目标程序：
+
+```console
+$ bpftime start ./example/malloc/victim
+Hello malloc!
+malloc called from pid 250215
+continue malloc...
+malloc called from pid 250215
+```
+
+您还可以动态地将eBPF程序附加到正在运行的进程上：
+
+```console
+$ ./example/malloc/victim & echo $! # 进程ID为101771
+[1] 101771
+101771
+continue malloc...
+continue malloc...
+```
+
+然后附加到该进程：
+
+```console
+$ sudo bpftime attach 101771 # 您可能需要以root身份运行make install
+Inject: "/root/.bpftime/libbpftime-agent.so"
+成功注入。ID: 1
+```
+
+您可以看到原始程序的输出：
+
+```console
+$ bpftime load ./example/malloc/malloc
+...
+12:44:35 
+        pid=247299      malloc calls: 10
+        pid=247322      malloc calls: 10
+```
+
+或者，您也可以直接在内核eBPF中运行我们的示例eBPF程序，以查看类似的输出：
+
+```console
+$ sudo example/malloc/malloc
+15:38:05
+        pid=30415       malloc calls: 1079
+        pid=30393       malloc calls: 203
+        pid=29882       malloc calls: 1076
+        pid=34809       malloc calls: 8
+```
+
+有关更多详细信息，请参阅[documents/usage.md](https://eunomia.dev/bpftime/documents/usage)。
+
 ## 总结与前景
 
 用户空间的eBPF运行时正在打破边界，将eBPF的能力从内核扩展到了更广阔的领域。这种扩展带来了显著的性能、灵活性和安全性提升。例如，`bpftime`运行时显示了其在某些低级性能场景下，甚至超越了像 Wasm 这样的其他技术。也有越来越多的应用将用户空间的 eBPF 用于快速补丁、轻量级虚拟化、网络过滤等场景。

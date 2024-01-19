@@ -129,6 +129,70 @@ For both technologies, reliance on underlying libraries for complex operations i
 
 On the language support front, while eBPF's niche and specialized nature mean limited language support, Wasm boasts a broader language portfolio due to its origin and design for the web.
 
+## bpftime Quick Start
+
+With `bpftime`, you can build eBPF applications using familiar tools like clang and libbpf, and execute them in userspace. For instance, the `malloc` eBPF program traces malloc calls using uprobe and aggregates the counts using a hash map.
+
+You can refer to [documents/build-and-test.md](https://eunomia.dev/bpftime/documents/build-and-test) for how to build the project, or using the container images from [GitHub packages](https://github.com/eunomia-bpf/bpftime/pkgs/container/bpftime).
+
+To get started, you can build and run a libbpf based eBPF program starts with `bpftime` cli:
+
+```console
+make -C example/malloc # Build the eBPF program example
+bpftime load ./example/malloc/malloc
+```
+
+In another shell, Run the target program with eBPF inside:
+
+```console
+$ bpftime start ./example/malloc/victim
+Hello malloc!
+malloc called from pid 250215
+continue malloc...
+malloc called from pid 250215
+```
+
+You can also dynamically attach the eBPF program with a running process:
+
+```console
+$ ./example/malloc/victim & echo $! # The pid is 101771
+[1] 101771
+101771
+continue malloc...
+continue malloc...
+```
+
+And attach to it:
+
+```console
+$ sudo bpftime attach 101771 # You may need to run make install in root
+Inject: "/root/.bpftime/libbpftime-agent.so"
+Successfully injected. ID: 1
+```
+
+You can see the output from original program:
+
+```console
+$ bpftime load ./example/malloc/malloc
+...
+12:44:35 
+        pid=247299      malloc calls: 10
+        pid=247322      malloc calls: 10
+```
+
+Alternatively, you can also run our sample eBPF program directly in the kernel eBPF, to see the similar output:
+
+```console
+$ sudo example/malloc/malloc
+15:38:05
+        pid=30415       malloc calls: 1079
+        pid=30393       malloc calls: 203
+        pid=29882       malloc calls: 1076
+        pid=34809       malloc calls: 8
+```
+
+See [documents/usage.md](https://eunomia.dev/bpftime/documents/usage) for more details.
+
 ## Conclusion
 
 Userspace eBPF runtimes are an exciting development that expands the capabilities of eBPF beyond the kernel. As highlighted in this post, they offer compelling benefits like enhanced performance, flexibility, and security compared to kernel-based eBPF. Runtimes like bpftime demonstrate the potential for substantial speedups, even outperforming alternatives like Wasm runtimes in certain dimensions like low-level performance.

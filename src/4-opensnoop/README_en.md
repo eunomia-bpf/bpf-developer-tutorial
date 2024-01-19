@@ -51,7 +51,7 @@ Translate the following Chinese text to English while maintaining the original f
 
 "This eBPF program can be loaded into the kernel and executed using tools like libbpf or eunomia-bpf. It captures the sys_openat system call of the specified process (or all processes) and outputs relevant information in user-space.
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We will use eunomia-bpf to compile and run this example.
+eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We will use eunomia-bpf to compile and run this example. The complete code of this example can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/4-opensnoop> .
 
 Compile and run the above code:
 
