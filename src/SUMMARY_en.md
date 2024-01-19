@@ -62,6 +62,7 @@ Security:
 - [Adding sudo users using eBPF](26-sudo/README.md)
 - [Replacing text read or written by any program using eBPF](27-replace/README.md)
 - [BPF lifecycle: Running eBPF programs continuously in Detached mode after user-mode applications exit](28-detach/README.md)
+- [Modifying System Call Parameters with eBPF](34-syscall/README.md)
 - [Userspace eBPF Runtimes: Overview and Applications](36-userspace-ebpf/README.md)
 
 # bcc and bpftrace tutorial
