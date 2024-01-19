@@ -297,7 +297,8 @@ int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
         //     }
         // }
         // for newer kernels, maybe use bpf_strncmp
-        if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, name_cmp) == 0) {
+        const char *p = name_cmp;
+        if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, p) == 0) {
         // if (j >= name_len) {
             // ***********
             // We've found out text!
