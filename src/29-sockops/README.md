@@ -1,4 +1,4 @@
-# eBPF sockops 示例
+# eBPF 开发实践：使用 sockops 加速网络请求转发
 
 ## 利用 eBPF 的 sockops 进行性能优化
 
@@ -54,6 +54,7 @@ iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
 ### 收集追踪
 
 查看``sock_ops``追踪本地连接建立
+
 ```console
 $ ./trace_bpf_output.sh
 iperf3-9516  [001] .... 22500.634108: 0: <<< ipv4 op = 4, port 18583 --> 4135
@@ -65,7 +66,6 @@ iperf3-9516  [001] ..s1 22500.634536: 0: <<< ipv4 op = 5, port 4135 --> 19095
 当iperf3 -c建立连接后，你应该可以看到上述用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。
 
 此外，当``sk_msg``生效后，可以发现当使用tcpdump捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。
-
 
 ```console
 $ ./trace_lo_traffic.sh
@@ -79,7 +79,6 @@ $ ./trace_lo_traffic.sh
 13:24:12.479621 IP localhost.5001 > localhost.46506: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818692 ecr 1982818688], length 0
 13:24:12.481265 IP localhost.5001 > localhost.46506: Flags [F.], seq 1, ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818688], length 0
 13:24:12.481270 IP localhost.46506 > localhost.5001: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818694], length 0
-
 ```
 
 ### 卸载 eBPF 程序
