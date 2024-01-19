@@ -26,28 +26,34 @@ jobs:
     - name: test 12 profile
       run: |
         make -C src/12-profile
-        # sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/12-profile/profile || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 13 tcpconnlat
       run: |
         make -C src/13-tcpconnlat
-        # sudo timeout -s 2 3 src/13-tcpconnlat/tcpconnlat || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/13-tcpconnlat/tcpconnlat || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 14 tcpstates
       run: |
         make -C src/14-tcpstates
-        # sudo timeout -s 2 3 src/14-tcpstates/tcpstates || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/14-tcpstates/tcpstates || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 16 memleak
       run: |
         make -C src/16-memleak
-        # sudo timeout -s 2 3 src/16-memleak/memleak || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/16-memleak/memleak || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 17 biopattern
       run: |
         make -C src/17-biopattern
-        # sudo timeout -s 2 3 src/17-biopattern/biopattern || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/17-biopattern/biopattern || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 23 http
       run: |
         make -C src/23-http
-        # sudo timeout -s 2 3 src/23-http/sockfilter || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/23-http/sockfilter || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 28 detach
+      run: |
+        make -C src/28-detach
+        sudo mount bpffs -t bpf /sys/fs/bpf
+        sudo mkdir /sys/fs/bpf/textreplace
+        sudo ./textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd' -d || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 30 sslsniff
       run: |
         make -C src/30-sslsniff
-        # sudo timeout -s 2 3 src/30-sslsniff/sslsniff || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        sudo timeout -s 2 3 src/30-sslsniff/sslsniff || if [ $? = 124 ]; then exit 0; else exit $?; fi

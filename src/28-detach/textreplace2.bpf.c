@@ -290,14 +290,14 @@ int BPF_PROG(check_possible_addresses, struct pt_regs *regs, long ret)
             break;
         }
         bpf_probe_read_user(&name, TEXT_LEN_MAX, (char*)name_addr);
-        for (j = 0; j < TEXT_LEN_MAX; j++) {
-            if (name[j] != pFind->text[j]) {
-                break;
-            }
-        }
+        // for (j = 0; j < TEXT_LEN_MAX; j++) {
+        //     if (name[j] != pFind->text[j]) {
+        //         break;
+        //     }
+        // }
         // for newer kernels, maybe use bpf_strncmp
-        // if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, name) == 0) {
-        if (j >= name_len) {
+        if (bpf_strncmp(pFind->text, TEXT_LEN_MAX, name) == 0) {
+        // if (j >= name_len) {
             // ***********
             // We've found out text!
             // Add location to map to be overwritten
