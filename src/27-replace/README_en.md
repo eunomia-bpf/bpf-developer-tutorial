@@ -1,4 +1,6 @@
-# Replace Text Read or Written by Any Program with eBPF 
+# Replace Text Read or Written by Any Program with eBPF
+
+See <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/27-replace> for the full source code.
 
 Compile:
 

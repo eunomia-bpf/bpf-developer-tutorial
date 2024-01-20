@@ -113,3 +113,5 @@ sudo rm -r /sys/fs/bpf/textreplace
 - [bad-bpf](https://github.com/pathtofile/bad-bpf)
 - [Object Lifetime in the Linux kernel](https://facebookmicrosites.github.io/bpf/blog/2018/08/31/object-lifetime.html)
 - [BPFMan: A Novel Way to Manage eBPF—Beyond Capsule Mode](https://bpfman.io/main/blog/2023/09/07/bpfman-a-novel-way-to-manage-ebpf)
+
+> 原文地址：<https://eunomia.dev/zh/tutorials/28-detach/>

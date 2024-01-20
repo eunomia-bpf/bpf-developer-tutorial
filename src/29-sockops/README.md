@@ -244,3 +244,5 @@ sudo ./unload.sh
 
 - <https://github.com/zachidan/ebpf-sockops>
 - <https://github.com/merbridge/merbridge>
+
+> 原文地址：<https://eunomia.dev/zh/tutorials/29-sockops/> 转载请注明出处。

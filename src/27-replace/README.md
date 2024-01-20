@@ -1,5 +1,7 @@
 # 使用 eBPF 替换任意程序读取或写入的文本
 
+完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/27-replace>
+
 编译：
 
 ```bash
