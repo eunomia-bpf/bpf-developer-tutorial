@@ -6058,30 +6058,35 @@ sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs
 <p>综上，此脚本的主要作用就是将两个用于处理本地套接字流量的 BPF 程序分别加载到系统并附加到正确的位置，以便它们能被正确地调用，并且确保它们可以访问和操作相关的 BPF map。</p>
 <p>您可以使用 <a href="https://github.com/torvalds/linux/blob/master/tools/bpf/bpftool/Documentation/bpftool-prog.rst">bpftool utility</a> 检查这两个 eBPF 程序是否已经加载。</p>
 <pre><code class="language-console">$ sudo bpftool prog show
-63: sock_ops  name bpf_sockmap  tag 275467be1d69253d  gpl
+63: sock_ops  name bpf_sockops_handler  tag 275467be1d69253d  gpl
  loaded_at 2019-01-24T13:07:17+0200  uid 0
  xlated 1232B  jited 750B  memlock 4096B  map_ids 58
 64: sk_msg  name bpf_redir  tag bc78074aa9dd96f4  gpl
  loaded_at 2019-01-24T13:07:17+0200  uid 0
  xlated 304B  jited 233B  memlock 4096B  map_ids 58
 </code></pre>
-<h3 id="运行-iperf3-服务器"><a class="header" href="#运行-iperf3-服务器">运行 <a href="https://iperf.fr/">iperf3</a> 服务器</a></h3>
+<h3 id="使用-iperf3-或-curl-进行测试"><a class="header" href="#使用-iperf3-或-curl-进行测试">使用 iperf3 或 curl 进行测试</a></h3>
+<p>运行 <a href="https://iperf.fr/">iperf3</a> 服务器</p>
 <pre><code class="language-shell">iperf3 -s -p 5001
 </code></pre>
-<h3 id="运行-iperf3-客户端"><a class="header" href="#运行-iperf3-客户端">运行 <a href="https://iperf.fr/">iperf3</a> 客户端</a></h3>
+<p>运行 <a href="https://iperf.fr/">iperf3</a> 客户端</p>
 <pre><code class="language-shell">iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
+</code></pre>
+<p>或者也可以用 Python 和 curl 进行测试：</p>
+<pre><code class="language-sh">python3 -m http.server
+curl http://0.0.0.0:8000/
 </code></pre>
 <h3 id="收集追踪"><a class="header" href="#收集追踪">收集追踪</a></h3>
 <p>查看<code>sock_ops</code>追踪本地连接建立</p>
-<pre><code class="language-console">$ ./trace_bpf_output.sh
+<pre><code class="language-console">$ ./trace_bpf_output.sh # 实际上就是 sudo cat /sys/kernel/debug/tracing/trace_pipe
 iperf3-9516  [001] .... 22500.634108: 0: &lt;&lt;&lt; ipv4 op = 4, port 18583 --&gt; 4135
 iperf3-9516  [001] ..s1 22500.634137: 0: &lt;&lt;&lt; ipv4 op = 5, port 4135 --&gt; 18583
 iperf3-9516  [001] .... 22500.634523: 0: &lt;&lt;&lt; ipv4 op = 4, port 19095 --&gt; 4135
 iperf3-9516  [001] ..s1 22500.634536: 0: &lt;&lt;&lt; ipv4 op = 5, port 4135 --&gt; 19095
 </code></pre>
 <p>当iperf3 -c建立连接后，你应该可以看到上述用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。</p>
-<p>此外，当<code>sk_msg</code>生效后，可以发现当使用tcpdump捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。</p>
-<pre><code class="language-console">$ ./trace_lo_traffic.sh # 实际上就是 sudo cat /sys/kernel/debug/tracing/trace_pipe
+<p>此外，当<code>sk_msg</code>生效后，可以发现当使用 tcpdump 捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。</p>
+<pre><code class="language-console">$ ./trace_lo_traffic.sh # tcpdump -i lo port 5001
 
 # 三次握手
 13:24:07.181804 IP localhost.46506 &gt; localhost.5001: Flags [S], seq 620239881, win 65495, options [mss 65495,sackOK,TS val 1982813394 ecr 0,nop,wscale 7], length 0
