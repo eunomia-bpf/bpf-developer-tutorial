@@ -189,16 +189,27 @@ $ sudo bpftool prog show
  xlated 304B  jited 233B  memlock 4096B  map_ids 58
 ```
 
-### Running the iperf3 Server
+### Test with iperf3 or curl
+
+See <https://iperf.fr/> to install iperf3.
+
+Running the iperf3 Server:
 
 ```shell
 iperf3 -s -p 5001
 ```
 
-### Running the iperf3 Client
+Running the iperf3 Client:
 
 ```shell
 iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
+```
+
+Or you can use curl and python:
+
+```sh
+python3 -m http.server
+curl http://0.0.0.0:8000/
 ```
 
 ### Collecting Traces
@@ -206,7 +217,7 @@ iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
 Check the `sock_ops` trace for local connection establishments.
 
 ```console
-$ ./trace_bpf_output.sh
+$ ./trace_bpf_output.sh # which is basically sudo cat /sys/kernel/debug/tracing/trace_pipe
 iperf3-9516  [001] .... 22500.634108: 0: <<< ipv4 op = 4, port 18583 --> 4135
 iperf3-9516  [001] ..s1 22500.634137: 0: <<< ipv4 op = 5, port 4135 --> 18583
 iperf3-9516  [001] .... 22500.634523: 0: <<< ipv4 op = 4, port 19095 --> 4135
@@ -218,7 +229,7 @@ When the connection is established between `iperf3 -c` and the server, you shoul
 Furthermore, when `sk_msg` takes effect, you should observe that when capturing local traffic on the loopback interface using tcpdump, only the three-way handshake and four-way termination traffic are captured, and the actual data flow of iperf is not captured. If the iperf data flow is captured, then the eBPF programs may not have been attached correctly.
 
 ```console
-$ ./trace_lo_traffic.sh # which is basically sudo cat /sys/kernel/debug/tracing/trace_pipe
+$ ./trace_lo_traffic.sh # tcpdump -i lo port 5001
 
 # Three-way handshake
 13:24:07.181804 IP localhost.46506 > localhost.5001: Flags [S], seq 620239881, win 65495, options [mss 65495,sackOK,TS val 1982813394 ecr 0,nop,wscale 7], length 0

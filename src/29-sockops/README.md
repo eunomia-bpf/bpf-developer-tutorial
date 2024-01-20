@@ -181,7 +181,7 @@ sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs
 
 ```console
 $ sudo bpftool prog show
-63: sock_ops  name bpf_sockmap  tag 275467be1d69253d  gpl
+63: sock_ops  name bpf_sockops_handler  tag 275467be1d69253d  gpl
  loaded_at 2019-01-24T13:07:17+0200  uid 0
  xlated 1232B  jited 750B  memlock 4096B  map_ids 58
 64: sk_msg  name bpf_redir  tag bc78074aa9dd96f4  gpl
@@ -189,16 +189,25 @@ $ sudo bpftool prog show
  xlated 304B  jited 233B  memlock 4096B  map_ids 58
 ```
 
-### 运行 [iperf3](https://iperf.fr/) 服务器
+### 使用 iperf3 或 curl 进行测试
+
+运行 [iperf3](https://iperf.fr/) 服务器
 
 ```shell
 iperf3 -s -p 5001
 ```
 
-### 运行 [iperf3](https://iperf.fr/) 客户端
+运行 [iperf3](https://iperf.fr/) 客户端
 
 ```shell
 iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
+```
+
+或者也可以用 Python 和 curl 进行测试：
+
+```sh
+python3 -m http.server
+curl http://0.0.0.0:8000/
 ```
 
 ### 收集追踪
@@ -206,7 +215,7 @@ iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
 查看``sock_ops``追踪本地连接建立
 
 ```console
-$ ./trace_bpf_output.sh
+$ ./trace_bpf_output.sh # 实际上就是 sudo cat /sys/kernel/debug/tracing/trace_pipe
 iperf3-9516  [001] .... 22500.634108: 0: <<< ipv4 op = 4, port 18583 --> 4135
 iperf3-9516  [001] ..s1 22500.634137: 0: <<< ipv4 op = 5, port 4135 --> 18583
 iperf3-9516  [001] .... 22500.634523: 0: <<< ipv4 op = 4, port 19095 --> 4135
@@ -215,10 +224,10 @@ iperf3-9516  [001] ..s1 22500.634536: 0: <<< ipv4 op = 5, port 4135 --> 19095
 
 当iperf3 -c建立连接后，你应该可以看到上述用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。
 
-此外，当``sk_msg``生效后，可以发现当使用tcpdump捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。
+此外，当``sk_msg``生效后，可以发现当使用 tcpdump 捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。
 
 ```console
-$ ./trace_lo_traffic.sh # 实际上就是 sudo cat /sys/kernel/debug/tracing/trace_pipe
+$ ./trace_lo_traffic.sh # tcpdump -i lo port 5001
 
 # 三次握手
 13:24:07.181804 IP localhost.46506 > localhost.5001: Flags [S], seq 620239881, win 65495, options [mss 65495,sackOK,TS val 1982813394 ecr 0,nop,wscale 7], length 0
