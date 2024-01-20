@@ -455,9 +455,7 @@ int attach_uprobes(struct memleak_bpf *skel)
 
 注意，一些内存分配函数可能并不存在或已弃用，比如valloc、pvalloc等，因此它们的附加可能会失败。在这种情况下，我们允许附加失败，并不会阻止程序的执行。这是因为我们更关注的是主流和常用的内存分配函数，而这些已经被弃用的函数往往在实际应用中较少使用。
 
-完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak>
-
-参考：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>
+完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak> 关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 ## 编译运行
 
@@ -487,3 +485,5 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
 您可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。希望这些知识和技巧能帮助您更好地了解和使用 eBPF，以解决实际工作中遇到的问题。
+
+参考资料：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>

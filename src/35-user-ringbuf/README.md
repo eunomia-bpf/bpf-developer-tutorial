@@ -20,9 +20,15 @@ bpftime 是一个用户空间 eBPF 运行时，允许现有 eBPF 应用程序在
 
 在 bpftime 中，我们使用 user ring buffer 来实现用户态 eBPF 往内核态 eBPF 发送数据，并更新内核态 eBPF 对应的 maps，让内核态和用户态的 eBPF 一起协同工作。user ring buffer 的异步特性，可以避免系统调用不必要的同步操作，从而提高了内核态和用户态之间的数据传输效率。
 
+eBPF 的双向环形队列也和 io_uring 在某些方面有相似之处，但它们的设计初衷和应用场景有所不同：
+
+- **设计焦点**：io_uring主要专注于提高异步I/O操作的性能和效率，而eBPF的环形队列更多关注于内核和用户空间之间的数据通信和事件传输。
+- **应用范围**：io_uring主要用于文件I/O和网络I/O的场景，而eBPF的环形队列则更广泛，不限于I/O操作，还包括系统调用跟踪、网络数据包处理等。
+- **灵活性和扩展性**：eBPF提供了更高的灵活性和扩展性，允许用户定义复杂的数据处理逻辑，并在内核态执行。
+
 下面，我们将通过一段代码示例，详细展示如何利用 user ring buffer，实现从用户态向内核传送数据，并以 kernel ring buffer 相应地从内核态向用户态传送数据。
 
-## 一、实现：在用户态和内核态间使用ring buffer传送数据
+## 一、实现：在用户态和内核态间使用 ring buffer 传送数据
 
 借助新的 BPF MAP，我们可以实现在用户态和内核态间通过环形缓冲区传送数据。在这个示例中，我们将详细说明如何在用户空间创建一个 "用户环形缓冲区" (user ring buffer) 并向其写入数据，然后在内核空间中通过 `bpf_user_ringbuf_drain` 函数来消费这些数据。同时，我们也会使用 "内核环形缓冲区" (kernel ring buffer) 来从内核空间反馈数据到用户空间。为此，我们需要在用户空间和内核空间分别创建并操作这两个环形缓冲区。
 
@@ -186,7 +192,23 @@ done:
 make
 ```
 
-运行结果将展示如何使用 user ring buffer 和 kernel ringbuffer 在用户态和内核态间进行高效的数据传输。
+关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+
+运行结果将展示如何使用 user ring buffer 和 kernel ringbuffer 在用户态和内核态间进行高效的数据传输:
+
+```console
+$ sudo ./user_ringbuf
+Draining current samples...
+TIME     EVENT COMM             PID   
+16:31:37 SIGN  node             1707   
+Draining current samples...
+16:31:38 SIGN  node             1981   
+Draining current samples...
+16:31:38 SIGN  node             1707   
+Draining current samples...
+16:31:38 SIGN  node             1707   
+Draining current samples...
+```
 
 ## 总结
 

@@ -79,7 +79,11 @@ Android:
 - [使用 eBPF 替换任意程序读取或写入的文本](src/27-replace/README.md)
 - [BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](src/28-detach/README.md)
 - [eBPF 运行时的安全性与面临的挑战](src/18-further-reading/ebpf-security.zh.md)
-- [用户空间 eBPF 运行时：深度解析与应用实践](src\36-userspace-ebpf\README.md)
+
+其他高级特性：
+
+- [eBPF开发实践：使用 user ring buffer 向内核异步发送信息](src/35-user-ringbuf/README.md)
+- [用户空间 eBPF 运行时：深度解析与应用实践](src/36-userspace-ebpf/README.md)
   
 持续更新中...
 
