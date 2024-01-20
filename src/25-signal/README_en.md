@@ -196,3 +196,5 @@ Lastly, if you are interested in eBPF technology and wish to further understand 
 
 - <https://github.com/pathtofile/bad-bpf>
 - <https://www.mail-archive.com/netdev@vger.kernel.org/msg296358.html>
+
+> The original link of this article: <https://eunomia.dev/tutorials/25-signal>

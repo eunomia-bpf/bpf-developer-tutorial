@@ -425,3 +425,5 @@ yunwei     31583  0.0  0.0  17712  2612 pts/1    S+   05:42   0:00 grep --color=
 ## Summary
 
 You can also visit our tutorial code repository [at https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [at https://eunomia.dev/zh/tutorials/](https://eunomia.dev/zh/tutorials/) for more examples and the full tutorial.
+
+> The original link of this article: <https://eunomia.dev/tutorials/24-hide>

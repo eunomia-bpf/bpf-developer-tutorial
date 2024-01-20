@@ -540,3 +540,5 @@ References:
 - <https://www.openssl.org/docs/man1.1.1/man3/SSL_read.html>
 - <https://github.com/iovisor/bcc/blob/master/tools/sslsniff_example.txt>
 - <https://en.wikipedia.org/wiki/Transport_Layer_Security>
+
+> The original link of this article: <https://eunomia.dev/tutorials/30-sslsniff>

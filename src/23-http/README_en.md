@@ -635,3 +635,5 @@ In today's complex technological landscape, system observability has become cruc
    - The tutorial covers the development of eBPF programs, the use of the eBPF toolchain, and the implementation of HTTP request tracing.
 
 Through this article, readers can gain a deep understanding of how to use eBPF technology for tracing seven-layer protocols, particularly HTTP traffic. This knowledge will help enhance the monitoring and analysis of network traffic, thereby improving application performance and security. If you're interested in learning more about eBPF and its practical applications, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
+
+> The original link of this article: <https://eunomia.dev/tutorials/23-http>

@@ -166,3 +166,5 @@ If you want to learn more about eBPF knowledge and practices, you can visit our 
 
 + <https://github.com/leodido/demo-cloud-native-ebpf-day>
 + <https://aya-rs.dev/book/programs/lsm/#writing-lsm-bpf-program>
+
+> The original link of this article: <https://eunomia.dev/tutorials/19-lsm-connect>

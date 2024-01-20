@@ -126,3 +126,5 @@ You can visit our tutorial code repository [at https://github.com/eunomia-bpf/bp
 - <https://github.com/pathtofile/bad-bpf>
 - <https://facebookmicrosites.github.io/bpf/blog/2018/08/31/object-lifetime.html>
 - <https://bpfman.io/main/blog/2023/09/07/bpfman-a-novel-way-to-manage-ebpf>
+
+> The original link of this article: <https://eunomia.dev/tutorials/28-detach>

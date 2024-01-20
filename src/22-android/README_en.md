@@ -146,3 +146,5 @@ If you want to learn more about eBPF knowledge and practice, you can visit our t
 + [Google android docs](https://source.android.google.cn/docs/core/architecture/kernel/bpf)
 + [weixin WeiShu](https://mp.weixin.qq.com/s/mul4n5D3nXThjxuHV7GpMA)
 + [SeeFlowerX](https://blog.seeflower.dev/archives/138/>)
+
+> The original link of this article: <https://eunomia.dev/tutorials/22-android>
