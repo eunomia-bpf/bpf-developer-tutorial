@@ -1,0 +1,409 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>eBPF开发实践：使用 user ring buffer 向内核异步发送信息 - bpf-developer-tutorial</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../https://github.com/eunomia-bpf/bpf-developer-tutorial.html">https://github.com/eunomia-bpf/bpf-developer-tutorial</a></li><li class="chapter-item expanded affix "><li class="part-title">入门文档</li><li class="chapter-item expanded "><a href="../0-introduce/index.html"><strong aria-hidden="true">1.</strong> lesson 0-introduce</a></li><li class="chapter-item expanded "><a href="../1-helloworld/index.html"><strong aria-hidden="true">2.</strong> lesson 1-helloworld</a></li><li class="chapter-item expanded "><a href="../2-kprobe-unlink/index.html"><strong aria-hidden="true">3.</strong> lesson 2-kprobe-unlink</a></li><li class="chapter-item expanded "><a href="../3-fentry-unlink/index.html"><strong aria-hidden="true">4.</strong> lesson 3-fentry-unlink</a></li><li class="chapter-item expanded "><a href="../4-opensnoop/index.html"><strong aria-hidden="true">5.</strong> lesson 4-opensnoop</a></li><li class="chapter-item expanded "><a href="../5-uprobe-bashreadline/index.html"><strong aria-hidden="true">6.</strong> lesson 5-uprobe-bashreadline</a></li><li class="chapter-item expanded "><a href="../6-sigsnoop/index.html"><strong aria-hidden="true">7.</strong> lesson 6-sigsnoop</a></li><li class="chapter-item expanded "><a href="../7-execsnoop/index.html"><strong aria-hidden="true">8.</strong> lesson 7-execsnoop</a></li><li class="chapter-item expanded "><a href="../8-exitsnoop/index.html"><strong aria-hidden="true">9.</strong> lesson 8-execsnoop</a></li><li class="chapter-item expanded "><a href="../9-runqlat/index.html"><strong aria-hidden="true">10.</strong> lesson 9-runqlat</a></li><li class="chapter-item expanded "><a href="../10-hardirqs/index.html"><strong aria-hidden="true">11.</strong> lesson 10-hardirqs</a></li><li class="chapter-item expanded affix "><li class="part-title">进阶文档和示例</li><li class="chapter-item expanded "><a href="../11-bootstrap/index.html"><strong aria-hidden="true">12.</strong> lesson 11-bootstrap</a></li><li class="chapter-item expanded "><a href="../12-profile/index.html"><strong aria-hidden="true">13.</strong> lesson 12-profile</a></li><li class="chapter-item expanded "><a href="../13-tcpconnlat/index.html"><strong aria-hidden="true">14.</strong> lesson 13-tcpconnlat</a></li><li class="chapter-item expanded "><a href="../14-tcpstates/index.html"><strong aria-hidden="true">15.</strong> lesson 14-tcpstates</a></li><li class="chapter-item expanded "><a href="../15-javagc/index.html"><strong aria-hidden="true">16.</strong> lesson 15-javagc</a></li><li class="chapter-item expanded "><a href="../16-memleak/index.html"><strong aria-hidden="true">17.</strong> lesson 16-memleak</a></li><li class="chapter-item expanded "><a href="../17-biopattern/index.html"><strong aria-hidden="true">18.</strong> lesson 17-biopattern</a></li><li class="chapter-item expanded "><a href="../18-further-reading/index.html"><strong aria-hidden="true">19.</strong> lesson 18-further-reading</a></li><li class="chapter-item expanded "><a href="../19-lsm-connect/index.html"><strong aria-hidden="true">20.</strong> lesson 19-lsm-connect</a></li><li class="chapter-item expanded "><a href="../20-tc/index.html"><strong aria-hidden="true">21.</strong> lesson 20-tc</a></li><li class="chapter-item expanded "><a href="../21-xdp/index.html"><strong aria-hidden="true">22.</strong> lesson 21-xdp</a></li><li class="chapter-item expanded affix "><li class="part-title">高级主题</li><li class="chapter-item expanded "><a href="../22-android/index.html"><strong aria-hidden="true">23.</strong> 在 Android 上使用 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../30-sslsniff/index.html"><strong aria-hidden="true">24.</strong> 使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li><li class="chapter-item expanded "><a href="../23-http/index.html"><strong aria-hidden="true">25.</strong> 使用 eBPF socket filter 或 syscall trace 追踪 HTTP 请求和其他七层协议</a></li><li class="chapter-item expanded "><a href="../29-sockops/index.html"><strong aria-hidden="true">26.</strong> 使用 sockops 加速网络请求转发</a></li><li class="chapter-item expanded "><a href="../24-hide/index.html"><strong aria-hidden="true">27.</strong> 使用 eBPF 隐藏进程或文件信息</a></li><li class="chapter-item expanded "><a href="../25-signal/index.html"><strong aria-hidden="true">28.</strong> 使用 bpf_send_signal 发送信号终止进程</a></li><li class="chapter-item expanded "><a href="../26-sudo/index.html"><strong aria-hidden="true">29.</strong> 使用 eBPF 添加 sudo 用户</a></li><li class="chapter-item expanded "><a href="../27-replace/index.html"><strong aria-hidden="true">30.</strong> 使用 eBPF 替换任意程序读取或写入的文本</a></li><li class="chapter-item expanded "><a href="../28-detach/index.html"><strong aria-hidden="true">31.</strong> BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序</a></li><li class="chapter-item expanded "><a href="../18-further-reading/ebpf-security.zh.html"><strong aria-hidden="true">32.</strong> eBPF 运行时的安全性与面临的挑战</a></li><li class="chapter-item expanded "><a href="../34-syscall/index.html"><strong aria-hidden="true">33.</strong> 使用 eBPF 修改系统调用参数</a></li><li class="chapter-item expanded "><a href="../35-user-ringbuf/index.html" class="active"><strong aria-hidden="true">34.</strong> eBPF开发实践：使用 user ring buffer 向内核异步发送信息</a></li><li class="chapter-item expanded "><a href="../36-userspace-ebpf/index.html"><strong aria-hidden="true">35.</strong> 用户空间 eBPF 运行时：深度解析与应用实践</a></li><li class="chapter-item expanded affix "><li class="part-title">bcc 和 bpftrace 教程与文档</li><li class="chapter-item expanded "><a href="../bcc-documents/kernel-versions.html"><strong aria-hidden="true">36.</strong> BPF Features by Linux Kernel Version</a></li><li class="chapter-item expanded "><a href="../bcc-documents/kernel_config.html"><strong aria-hidden="true">37.</strong> Kernel Configuration for BPF Features</a></li><li class="chapter-item expanded "><a href="../bcc-documents/reference_guide.html"><strong aria-hidden="true">38.</strong> bcc Reference Guide</a></li><li class="chapter-item expanded "><a href="../bcc-documents/special_filtering.html"><strong aria-hidden="true">39.</strong> Special Filtering</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial.html"><strong aria-hidden="true">40.</strong> bcc Tutorial</a></li><li class="chapter-item expanded "><a href="../bcc-documents/tutorial_bcc_python_developer.html"><strong aria-hidden="true">41.</strong> bcc Python Developer Tutorial</a></li><li class="chapter-item expanded "><a href="../bpftrace-tutorial/index.html"><strong aria-hidden="true">42.</strong> bpftrace Tutorial</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">bpf-developer-tutorial</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ebpf开发实践使用-user-ring-buffer-向内核异步发送信息"><a class="header" href="#ebpf开发实践使用-user-ring-buffer-向内核异步发送信息">eBPF开发实践：使用 user ring buffer 向内核异步发送信息</a></h1>
+<p>eBPF，即扩展的Berkeley包过滤器（Extended Berkeley Packet Filter），是Linux内核中的一种革命性技术，它允许开发者在内核态中运行自定义的“微程序”，从而在不修改内核代码的情况下改变系统行为或收集系统细粒度的性能数据。</p>
+<p>eBPF的一个独特之处是它不仅可以在内核态运行程序，从而访问系统底层的状态和资源，同时也可以通过特殊的数据结构与用户态程序进行通信。关于这方面的一个重要概念就是内核态和用户态之间的环形队列——ring buffer。在许多实时或高性能要求的应用中，环形队列是一种常用的数据结构。由于它的FIFO（先进先出）特性，使得数据在生产者和消费者之间可以持续、线性地流动，从而避免了频繁的IO操作和不必要的内存 reallocation开销。</p>
+<p>在eBPF中，分别提供了两种环形队列: user ring buffer 和 kernel ring buffer，以实现用户态和内核态之间的高效数据通信。本文是 eBPF 开发者教程的一部分，更详细的内容可以在这里找到：<a href="https://eunomia.dev/tutorials/">https://eunomia.dev/tutorials/</a> 源代码在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">GitHub 仓库</a> 中开源。</p>
+<h2 id="用户态和内核态环形队列user-ring-buffer和kernel-ring-buffer"><a class="header" href="#用户态和内核态环形队列user-ring-buffer和kernel-ring-buffer">用户态和内核态环形队列—user ring buffer和kernel ring buffer</a></h2>
+<p>围绕内核态和用户态这两个主要运行级别，eBPF提供了两种相应的环形队列数据结构：用户态环形队列——User ring buffer和内核态环形队列——Kernel ring buffer。</p>
+<p>Kernel ring buffer 则由 eBPF实现，专为Linux内核设计，用于追踪和记录内核日志、性能统计信息等，它的能力是内核态和用户态数据传输的核心，可以从内核态向用户态传送数据。Kernel ring buffer 在 5.7 版本的内核中被引入，目前已经被广泛应用于内核日志系统、性能分析工具等。</p>
+<p>对于内核态往用户态发送应用场景，如内核监控事件的发送、异步通知、状态更新通知等，ring buffer 数据结构都能够胜任。比如，当我们需要监听网络服务程序的大量端口状态时，这些端口的开启、关闭、错误等状态更新就需由内核实时传递到用户空间进行处理。而Linux 内核的日志系统、性能分析工具等，也需要频繁地将大量数据发送到用户空间，以支持用户人性化地展示和分析这些数据。在这些场景中，ring buffer在内核态往用户态发送数据中表现出了极高的效率。</p>
+<p>User ring buffer 是基于环形缓冲器的一种新型 Map 类型，它提供了单用户空间生产者/单内核消费者的语义。这种环形队列的优点是对异步消息传递提供了优秀的支持，避免了不必要的同步操作，使得内核到用户空间的数据传输可以被优化，并且降低了系统调用的系统开销。User ring buffer 在 6.1 版本的内核中被引入，目前的使用场景相对较少。</p>
+<p>bpftime 是一个用户空间 eBPF 运行时，允许现有 eBPF 应用程序在非特权用户空间使用相同的库和工具链运行。它为 eBPF 提供了 Uprobe 和 Syscall 跟踪点，与内核 Uprobe 相比，性能有了显著提高，而且无需手动检测代码或重启进程。运行时支持用户空间共享内存中的进程间 eBPF 映射，也兼容内核 eBPF 映射，允许与内核 eBPF 基础架构无缝运行。它包括一个适用于各种架构的高性能 LLVM JIT，以及一个适用于 x86 的轻量级 JIT 和一个解释器。GitHub 地址：<a href="https://github.com/eunomia-bpf/bpftime">https://github.com/eunomia-bpf/bpftime</a></p>
+<p>在 bpftime 中，我们使用 user ring buffer 来实现用户态 eBPF 往内核态 eBPF 发送数据，并更新内核态 eBPF 对应的 maps，让内核态和用户态的 eBPF 一起协同工作。user ring buffer 的异步特性，可以避免系统调用不必要的同步操作，从而提高了内核态和用户态之间的数据传输效率。</p>
+<p>eBPF 的双向环形队列也和 io_uring 在某些方面有相似之处，但它们的设计初衷和应用场景有所不同：</p>
+<ul>
+<li><strong>设计焦点</strong>：io_uring主要专注于提高异步I/O操作的性能和效率，而eBPF的环形队列更多关注于内核和用户空间之间的数据通信和事件传输。</li>
+<li><strong>应用范围</strong>：io_uring主要用于文件I/O和网络I/O的场景，而eBPF的环形队列则更广泛，不限于I/O操作，还包括系统调用跟踪、网络数据包处理等。</li>
+<li><strong>灵活性和扩展性</strong>：eBPF提供了更高的灵活性和扩展性，允许用户定义复杂的数据处理逻辑，并在内核态执行。</li>
+</ul>
+<p>下面，我们将通过一段代码示例，详细展示如何利用 user ring buffer，实现从用户态向内核传送数据，并以 kernel ring buffer 相应地从内核态向用户态传送数据。</p>
+<h2 id="一实现在用户态和内核态间使用-ring-buffer-传送数据"><a class="header" href="#一实现在用户态和内核态间使用-ring-buffer-传送数据">一、实现：在用户态和内核态间使用 ring buffer 传送数据</a></h2>
+<p>借助新的 BPF MAP，我们可以实现在用户态和内核态间通过环形缓冲区传送数据。在这个示例中，我们将详细说明如何在用户空间创建一个 &quot;用户环形缓冲区&quot; (user ring buffer) 并向其写入数据，然后在内核空间中通过 <code>bpf_user_ringbuf_drain</code> 函数来消费这些数据。同时，我们也会使用 &quot;内核环形缓冲区&quot; (kernel ring buffer) 来从内核空间反馈数据到用户空间。为此，我们需要在用户空间和内核空间分别创建并操作这两个环形缓冲区。</p>
+<p>完整的代码可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/35-user-ringbuf">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/35-user-ringbuf</a> 中找到。</p>
+<h3 id="创建环形缓冲区"><a class="header" href="#创建环形缓冲区">创建环形缓冲区</a></h3>
+<p>在内核空间，我们创建了一个类型为 <code>BPF_MAP_TYPE_USER_RINGBUF</code> 的 <code>user_ringbuf</code>，以及一个类型为 <code>BPF_MAP_TYPE_RINGBUF</code> 的 <code>kernel_ringbuf</code>。在用户空间，我们创建了一个 <code>struct ring_buffer_user</code> 结构体的实例，并通过 <code>ring_buffer_user__new</code> 函数和对应的操作来管理这个用户环形缓冲区。</p>
+<pre><code class="language-c">    /* Set up ring buffer polling */
+    rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.kernel_ringbuf), handle_event, NULL, NULL);
+    if (!rb)
+    {
+        err = -1;
+        fprintf(stderr, &quot;Failed to create ring buffer\n&quot;);
+        goto cleanup;
+    }
+    user_ringbuf = user_ring_buffer__new(bpf_map__fd(skel-&gt;maps.user_ringbuf), NULL);
+</code></pre>
+<h3 id="编写内核态程序"><a class="header" href="#编写内核态程序">编写内核态程序</a></h3>
+<p>我们定义一个 <code>kill_exit</code> 的 tracepoint 程序，每当有进程退出时，它会通过 <code>bpf_user_ringbuf_drain</code> 函数读取 <code>user_ringbuf</code> 中的用户数据，然后通过 <code>bpf_ringbuf_reserve</code> 函数在 <code>kernel_ringbuf</code> 中创建一个新的记录，并写入相关信息。最后，通过 <code>bpf_ringbuf_submit</code> 函数将这个记录提交，使得该记录能够被用户空间读取。</p>
+<pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0
+/* Copyright (c) 2022 Meta Platforms, Inc. and affiliates. */
+
+#include &quot;vmlinux.h&quot;
+#include &lt;bpf/bpf_helpers.h&gt;
+#include &lt;bpf/bpf_tracing.h&gt;
+#include &lt;bpf/bpf_core_read.h&gt;
+#include &quot;user_ringbuf.h&quot;
+
+char _license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_USER_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} user_ringbuf SEC(&quot;.maps&quot;);
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} kernel_ringbuf SEC(&quot;.maps&quot;);
+
+int read = 0;
+
+static long
+do_nothing_cb(struct bpf_dynptr *dynptr, void *context)
+{
+    struct event *e;
+    pid_t pid;
+    /* get PID and TID of exiting thread/process */
+    pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
+
+    /* reserve sample from BPF ringbuf */
+    e = bpf_ringbuf_reserve(&amp;kernel_ringbuf, sizeof(*e), 0);
+    if (!e)
+        return 0;
+
+    e-&gt;pid = pid;
+    bpf_get_current_comm(&amp;e-&gt;comm, sizeof(e-&gt;comm));
+
+    /* send data to user-space for post-processing */
+    bpf_ringbuf_submit(e, 0);
+    __sync_fetch_and_add(&amp;read, 1);
+    return 0;
+}
+
+SEC(&quot;tracepoint/syscalls/sys_exit_kill&quot;)
+int kill_exit(struct trace_event_raw_sys_exit *ctx)
+{
+    long num_samples;
+    int err = 0;
+    
+    // receive data from userspace
+    num_samples = bpf_user_ringbuf_drain(&amp;user_ringbuf, do_nothing_cb, NULL, 0);
+
+    return 0;
+}
+</code></pre>
+<h3 id="编写用户态程序"><a class="header" href="#编写用户态程序">编写用户态程序</a></h3>
+<p>在用户空间，我们通过 <code>ring_buffer_user__reserve</code> 函数在 ring buffer 中预留出一段空间，这段空间用于写入我们希望传递给内核的信息。然后，通过 <code>ring_buffer_user__submit</code> 函数提交数据，之后这些数据就可以在内核态被读取。</p>
+<pre><code class="language-c">static int write_samples(struct user_ring_buffer *ringbuf)
+{
+    int i, err = 0;
+    struct user_sample *entry;
+
+    entry = user_ring_buffer__reserve(ringbuf, sizeof(*entry));
+    if (!entry)
+    {
+        err = -errno;
+        goto done;
+    }
+
+    entry-&gt;i = getpid();
+    strcpy(entry-&gt;comm, &quot;hello&quot;);
+
+    int read = snprintf(entry-&gt;comm, sizeof(entry-&gt;comm), &quot;%u&quot;, i);
+    if (read &lt;= 0)
+    {
+        /* Assert on the error path to avoid spamming logs with
+         * mostly success messages.
+         */
+        err = read;
+        user_ring_buffer__discard(ringbuf, entry);
+        goto done;
+    }
+
+    user_ring_buffer__submit(ringbuf, entry);
+
+done:
+    drain_current_samples();
+
+    return err;
+}
+</code></pre>
+<h3 id="初始化环形缓冲区并轮询"><a class="header" href="#初始化环形缓冲区并轮询">初始化环形缓冲区并轮询</a></h3>
+<p>最后，对 ring buffer 进行初始化并定时轮询，这样我们就可以实时得知内核态的数据消费情况，我们还可以在用户空间对 <code>user_ringbuf</code> 进行写入操作，然后在内核态对其进行读取和处理。</p>
+<pre><code class="language-c">    write_samples(user_ringbuf);
+
+    /* Process events */
+    printf(&quot;%-8s %-5s %-16s %-7s %-7s %s\n&quot;,
+           &quot;TIME&quot;, &quot;EVENT&quot;, &quot;COMM&quot;, &quot;PID&quot;, &quot;PPID&quot;, &quot;FILENAME/EXIT CODE&quot;);
+    while (!exiting)
+    {
+        err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+        /* Ctrl-C will cause -EINTR */
+        if (err == -EINTR)
+        {
+            err = 0;
+            break;
+        }
+        if (err &lt; 0)
+        {
+            printf(&quot;Error polling perf buffer: %d\n&quot;, err);
+            break;
+        }
+    }
+</code></pre>
+<p>通过以上步骤，我们实现了用户态与内核态间环形缓冲区的双向数据传输。</p>
+<h2 id="二编译和运行代码"><a class="header" href="#二编译和运行代码">二、编译和运行代码</a></h2>
+<p>为了编译和运行以上代码，我们可以通过以下命令来实现：</p>
+<pre><code class="language-sh">make
+</code></pre>
+<p>关于如何安装依赖，请参考：<a href="https://eunomia.dev/tutorials/11-bootstrap/">https://eunomia.dev/tutorials/11-bootstrap/</a></p>
+<p>运行结果将展示如何使用 user ring buffer 和 kernel ringbuffer 在用户态和内核态间进行高效的数据传输:</p>
+<pre><code class="language-console">$ sudo ./user_ringbuf
+Draining current samples...
+TIME     EVENT COMM             PID   
+16:31:37 SIGN  node             1707   
+Draining current samples...
+16:31:38 SIGN  node             1981   
+Draining current samples...
+16:31:38 SIGN  node             1707   
+Draining current samples...
+16:31:38 SIGN  node             1707   
+Draining current samples...
+</code></pre>
+<h2 id="总结"><a class="header" href="#总结">总结</a></h2>
+<p>在本篇文章中，我们介绍了如何使用eBPF的user ring buffer和kernel ring buffer在用户态和内核态之间进行数据传输。通过这种方式，我们可以有效地将用户态的数据传送给内核，或者将内核生成的数据反馈给用户，从而实现了内核态和用户态的双向通信。</p>
+<p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
+<p>参考资料：</p>
+<ol>
+<li><a href="https://lwn.net/Articles/907056/">https://lwn.net/Articles/907056/</a></li>
+</ol>
+<blockquote>
+<p>原文地址：<a href="https://eunomia.dev/zh/tutorials/35-user-ringbuf/">https://eunomia.dev/zh/tutorials/35-user-ringbuf/</a> 转载请注明出处。</p>
+</blockquote>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../34-syscall/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../36-userspace-ebpf/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../34-syscall/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../36-userspace-ebpf/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
