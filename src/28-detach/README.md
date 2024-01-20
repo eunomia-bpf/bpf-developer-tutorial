@@ -77,7 +77,7 @@ int pin_link(struct bpf_link *link, const char* path)
 
 ## 运行示例
 
-在这个示例中，我们将继续使用前一节中的字符串替换示例来演示在应用程序退出后运行 eBPF 程序的方法，并展示潜在的安全风险。通过使用 `--detach` 参数运行该程序，可以使用户空间加载程序在不停止 eBPF 程序的情况下退出。完整的示例代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/28-detach> 中找到。
+在这个示例中，我们将继续使用前一节中的字符串替换示例来演示在应用程序退出后运行 eBPF 程序的方法，并展示潜在的安全风险。通过使用 `--detach` 参数运行该程序，可以使用户空间加载程序在不停止 eBPF 程序的情况下退出。完整的示例代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/28-detach> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 在运行之前，请确保已经挂载了 BPF 文件系统：
 
@@ -113,3 +113,5 @@ sudo rm -r /sys/fs/bpf/textreplace
 - [bad-bpf](https://github.com/pathtofile/bad-bpf)
 - [Object Lifetime in the Linux kernel](https://facebookmicrosites.github.io/bpf/blog/2018/08/31/object-lifetime.html)
 - [BPFMan: A Novel Way to Manage eBPF—Beyond Capsule Mode](https://bpfman.io/main/blog/2023/09/07/bpfman-a-novel-way-to-manage-ebpf)
+
+> 原文地址：<https://eunomia.dev/zh/tutorials/28-detach/>

@@ -124,7 +124,7 @@ int bpf_sockops_handler(struct bpf_sock_ops *skops){
 
 ### 编译 eBPF 程序
 
-这里我们使用 libbpf 编译这个 eBPF 程序。完整的源代码和工程可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops> 中找到。
+这里我们使用 libbpf 编译这个 eBPF 程序。完整的源代码和工程可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 ```shell
 # Compile the bpf program with libbpf
@@ -244,3 +244,5 @@ sudo ./unload.sh
 
 - <https://github.com/zachidan/ebpf-sockops>
 - <https://github.com/merbridge/merbridge>
+
+> 原文地址：<https://eunomia.dev/zh/tutorials/29-sockops/> 转载请注明出处。

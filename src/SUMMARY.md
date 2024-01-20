@@ -53,7 +53,9 @@
 - [BPF 的生命周期：使用 Detached 模式在用户态应用退出后持续运行 eBPF 程序](28-detach/README.md)
 - [eBPF 运行时的安全性与面临的挑战](18-further-reading/ebpf-security.zh.md)
 - [使用 eBPF 修改系统调用参数](34-syscall/README.md)
+- [eBPF开发实践：使用 user ring buffer 向内核异步发送信息](35-user-ringbuf/README.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](36-userspace-ebpf/README.md)
+
 
 # bcc 和 bpftrace 教程与文档
 

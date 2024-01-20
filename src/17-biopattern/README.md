@@ -20,7 +20,7 @@ eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一种新技
 
 Biopattern 可以统计随机/顺序磁盘I/O次数的比例。
 
-首先，确保你已经正确安装了 libbpf 和相关的工具集，可以在这里找到对应的源代码：[bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial)
+首先，确保你已经正确安装了 libbpf 和相关的工具集，可以在这里找到对应的源代码：[bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 导航到 `biopattern` 的源代码目录，并使用 `make` 命令进行编译：
 

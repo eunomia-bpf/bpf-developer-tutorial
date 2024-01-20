@@ -629,3 +629,5 @@ If you would like to learn more about eBPF knowledge and practices, please refer
 
 - [Building BPF applications with libbpf-bootstrap](https://nakryiko.com/posts/libbpf-bootstrap/)
 - <https://github.com/libbpf/libbpf-bootstrap>
+
+> The original link of this article: <https://eunomia.dev/tutorials/11-bootstrap>

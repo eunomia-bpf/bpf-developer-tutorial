@@ -567,3 +567,5 @@ In user-space, we introduced the usage of libbpf library APIs, such as perf_buff
 If you are interested in learning more about eBPF and its practical applications, please refer to the official documentation of eunomia-bpf: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf). You can also visit our tutorial code repository at [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) for more examples and complete tutorials.
 
 In the upcoming tutorials, we will dive deeper into advanced features of eBPF, such as tracing the path of network packets and fine-grained system performance monitoring. We will continue to share more content on eBPF development practices to help you better understand and master eBPF technology. We hope these resources will be valuable in your learning and practical journey with eBPF.
+
+> The original link of this article: <https://eunomia.dev/tutorials/13-tcpconnect>

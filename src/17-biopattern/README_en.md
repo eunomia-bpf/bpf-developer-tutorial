@@ -328,3 +328,5 @@ You can visit our tutorial code repository [at https://github.com/eunomia-bpf/bp
 
 - Source repo：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/17-biopattern>
 - bcc tool：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/biopattern.c>
+
+> The original link of this article: <https://eunomia.dev/tutorials/17-biopattern>

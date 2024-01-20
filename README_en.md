@@ -67,7 +67,11 @@ Security:
 - [Adding sudo users using eBPF](src/26-sudo/README_en.md)
 - [Replacing text read or written by any program using eBPF](src/27-replace/README_en.md)
 - [BPF lifecycle: Running eBPF programs continuously in Detached mode after user-mode applications exit](src/28-detach/README_en.md)
-- [Userspace eBPF Runtimes: Overview and Applications](src\36-userspace-ebpf\README_en.md)
+
+Other:
+
+- [Using user ring buffer to send information to the kernel](src/35-user-ringbuf/README.md)
+- [Userspace eBPF Runtimes: Overview and Applications](src/36-userspace-ebpf/README.md)
 
 Continuously updating...
 

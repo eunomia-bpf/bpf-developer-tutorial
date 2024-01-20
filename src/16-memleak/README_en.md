@@ -42,6 +42,8 @@ Over time, it becomes evident that the `main` function of the `allocs` process i
 
 At a basic level, `memleak` operates by installing monitoring devices on the memory allocation and deallocation paths. It achieves this by inserting eBPF programs into memory allocation and deallocation functions. This means that when these functions are called, `memleak` will record important information, such as the caller's process ID (PID), the allocated memory address, and the size of the allocated memory. When the function for freeing memory is called, `memleak` will delete the corresponding memory allocation record in its internal map. This mechanism allows `memleak` to accurately trace which memory blocks have been allocated but not deallocated.For commonly used memory allocation functions in user space, such as `malloc` and `calloc`, `memleak` uses user space probing (uprobe) technology for monitoring. Uprobe is a dynamic tracing technology for user space applications, which can set breakpoints at any location at runtime without modifying the binary files, thus achieving tracing of specific function calls.
 
+Uprobe in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime). bpftime is a user mode eBPF runtime based on LLVM JIT/AOT. It can run eBPF programs in user mode and is compatible with kernel mode eBPF, avoiding context switching between kernel mode and user mode, thereby improving the execution efficiency of eBPF programs by 10 times.
+
 For kernel space memory allocation functions, such as `kmalloc`, `memleak` chooses to use tracepoints for monitoring. Tracepoint is a dynamic tracing technology provided in the Linux kernel, which can dynamically trace specific events in the kernel at runtime without recompiling the kernel or loading kernel modules.
 
 ## Kernel Space eBPF Program Implementation
@@ -442,3 +444,4 @@ Through this eBPF introductory tutorial, you have learned how to write a Memleak
 
 You can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
 
+> The original link of this article: <https://eunomia.dev/tutorials/16-memleak>

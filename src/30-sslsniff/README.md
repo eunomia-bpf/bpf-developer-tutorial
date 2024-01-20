@@ -430,6 +430,8 @@ void print_event(struct probe_SSL_data_t *event, const char *evt) {
 
 ## 编译与运行
 
+关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+
 要开始使用 `sslsniff`，首先要进行编译：
 
 ```sh

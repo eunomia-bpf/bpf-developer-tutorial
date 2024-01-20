@@ -44,7 +44,7 @@ Attaching to pid 5193, Ctrl+C to quit.
 
 在基本层面上，`memleak` 的工作方式类似于在内存分配和释放路径上安装监控设备。它通过在内存分配和释放函数中插入 eBPF 程序来达到这个目标。这意味着，当这些函数被调用时，`memleak` 就会记录一些重要信息，如调用者的进程 ID（PID）、分配的内存地址以及分配的内存大小等。当释放内存的函数被调用时，`memleak` 则会在其内部的映射表（map）中删除相应的内存分配记录。这种机制使得 `memleak` 能够准确地追踪到哪些内存块已被分配但未被释放。
 
-对于用户态的常用内存分配函数，如 `malloc` 和 `calloc` 等，`memleak` 利用了用户态探测（uprobe）技术来实现监控。uprobe 是一种用于用户空间应用程序的动态追踪技术，它可以在运行时不修改二进制文件的情况下在任意位置设置断点，从而实现对特定函数调用的追踪。
+对于用户态的常用内存分配函数，如 `malloc` 和 `calloc` 等，`memleak` 利用了用户态探测（uprobe）技术来实现监控。uprobe 是一种用于用户空间应用程序的动态追踪技术，它可以在运行时不修改二进制文件的情况下在任意位置设置断点，从而实现对特定函数调用的追踪。Uprobe 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
 
 对于内核态的内存分配函数，如 `kmalloc` 等，`memleak` 则选择使用了 tracepoint 来实现监控。Tracepoint 是一种在 Linux 内核中提供的动态追踪技术，它可以在内核运行时动态地追踪特定的事件，而无需重新编译内核或加载内核模块。
 
@@ -455,9 +455,7 @@ int attach_uprobes(struct memleak_bpf *skel)
 
 注意，一些内存分配函数可能并不存在或已弃用，比如valloc、pvalloc等，因此它们的附加可能会失败。在这种情况下，我们允许附加失败，并不会阻止程序的执行。这是因为我们更关注的是主流和常用的内存分配函数，而这些已经被弃用的函数往往在实际应用中较少使用。
 
-完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak>
-
-参考：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>
+完整的源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/16-memleak> 关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 ## 编译运行
 
@@ -487,3 +485,5 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
 您可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
 接下来的教程将进一步探讨 eBPF 的高级特性，我们会继续分享更多有关 eBPF 开发实践的内容。希望这些知识和技巧能帮助您更好地了解和使用 eBPF，以解决实际工作中遇到的问题。
+
+参考资料：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>

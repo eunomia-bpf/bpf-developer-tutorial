@@ -582,7 +582,7 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222774 ssh          4  192.168.88.15    1.15.149.151     22    25.31
 ```
 
-源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat>
+源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat> 关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
 
 参考资料：
 

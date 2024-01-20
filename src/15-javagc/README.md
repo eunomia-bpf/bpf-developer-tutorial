@@ -42,9 +42,7 @@ adjust_time_range
 
 用户级静态定义跟踪（User-level Statically Defined Tracing, USDT）则可以在某种程度上解决这些问题。USDT 探针（或者称为用户级 "marker"）是开发者在代码的关键位置插入的跟踪宏，提供稳定且已经过文档说明的 API。这使得跟踪工作变得更加简单。
 
-使用 USDT，我们可以简单地跟踪一个名为 `mysql:query__start` 的探针，而不是去跟踪那个名为 `_Z16dispatch_command19enum_server_commandP3THDPcj` 的 C++ 符号，也就是 `dispatch_command()` 函数。当然，我们仍然可以在需要的时候去跟踪 `dispatch_command()` 以及
-
-其他 21,000 个 mysqld 函数，但只有当 USDT 探针无法解决问题的时候我们才需要这么做。
+使用 USDT，我们可以简单地跟踪一个名为 `mysql:query__start` 的探针，而不是去跟踪那个名为 `_Z16dispatch_command19enum_server_commandP3THDPcj` 的 C++ 符号，也就是 `dispatch_command()` 函数。当然，我们仍然可以在需要的时候去跟踪 `dispatch_command()` 以及其他 21,000 个 mysqld 函数，但只有当 USDT 探针无法解决问题的时候我们才需要这么做。
 
 在 Linux 中的 USDT，无论是哪种形式的静态跟踪点，其实都已经存在了几十年。它最近由于 Sun 的 DTrace 工具的流行而再次受到关注，这使得许多常见的应用程序，包括 MySQL、PostgreSQL、Node.js、Java 等都加入了 USDT。SystemTap 则开发了一种可以消费这些 DTrace 探针的方式。
 
@@ -72,6 +70,8 @@ Notes at offset 0x00c43058 with length 0x00000494:
 这就是使用 --enable-dtrace 重新编译的 node，以及安装了提供 "dtrace" 功能来构建 USDT 支持的 systemtap-sdt-dev 包。这里显示了两个探针：node:gc__start（开始进行垃圾回收）和 node:http__client__request。
 
 在这一点上，你可以使用 SystemTap 或者 LTTng 来跟踪这些探针。然而，内置的 Linux 跟踪器，比如 ftrace 和 perf_events，目前还无法做到这一点（尽管 perf_events 的支持正在开发中）。
+
+USDT 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
 
 ## Java GC 介绍
 
@@ -323,3 +323,5 @@ TIME     CPU     PID     GC TIME
 此外，我们也介绍了一些关于 Java GC、USDT 和 eBPF 的基础知识和实践技巧，这些知识和技巧对于想要在网络和系统性能分析领域深入研究的开发者来说是非常有价值的。
 
 如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+
+> The original link of this article: <https://eunomia.dev/tutorials/15-javagc>

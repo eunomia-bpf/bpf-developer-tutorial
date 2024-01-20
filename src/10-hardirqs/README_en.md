@@ -258,3 +258,5 @@ In this chapter (eBPF Tutorial by Example Ten: Capturing Interrupt Events in eBP
 By studying the content of this chapter, you should have mastered the methods of capturing interrupt events with hardirqs or softirqs in eBPF, as well as how to analyze these events to identify performance issues and other problems related to interrupt handling in the kernel. These skills are crucial for analyzing and optimizing the performance of the Linux kernel.
 
 To better understand and practice eBPF programming, we recommend reading the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>. In addition, we provide a complete tutorial and source code for you to view and learn from at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
+
+> The original link of this article: <https://eunomia.dev/tutorials/10-hardirqs/>

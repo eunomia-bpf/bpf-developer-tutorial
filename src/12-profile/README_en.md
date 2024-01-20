@@ -330,3 +330,5 @@ Through this introductory tutorial on eBPF, we have learned how to use eBPF prog
 If you want to learn more about eBPF knowledge and practices, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>. You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
 
 The next tutorial will further explore advanced features of eBPF. We will continue to share more content about eBPF development practices to help you better understand and master eBPF technology. We hope these contents will be helpful for your learning and practice on the eBPF development journey.
+
+> The original link of this article: <https://eunomia.dev/tutorials/12-profile>
