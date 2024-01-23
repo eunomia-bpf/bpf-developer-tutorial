@@ -57,6 +57,8 @@ $ ./ecc -h
 eunomia-bpf compiler
 Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
 ....
+
+注：假如在aarch64平台上，请使用链接 https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc-aarch64
 ```
 
 也可以使用 docker 镜像进行编译：
