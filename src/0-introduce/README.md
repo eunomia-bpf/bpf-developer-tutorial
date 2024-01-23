@@ -61,6 +61,7 @@ Linux 内核的主要目的是抽象出硬件或虚拟硬件，并提供一个�
 
 了解并尝试一下 eBPF 开发框架：
 
+- bpftrace 教程，对于最简单的应用来说，bpftrace 可能是最方便的：https://eunomia.dev/zh/tutorials/bpftrace-tutorial/ （试试，1h）
 - BCC 开发各类小工具的例子：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> （跑一遍，3-4h）
 - libbpf 的一些例子：<https://github.com/libbpf/libbpf-bootstrap> （选感兴趣的运行一下，并阅读一下源代码，2h）
 - 基于 libbpf 和 eunomia-bpf 的教程：<https://github.com/eunomia-bpf/bpf-developer-tutorial> （阅读 1-10 的部分，3-4h）
