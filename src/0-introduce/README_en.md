@@ -54,6 +54,7 @@ Answer three questions:
 
 Understand and try eBPF development frameworks:
 
+- bpftrace tutorial：https://eunomia.dev/tutorials/bpftrace-tutorial/ （Try it，1h）
 - Examples of developing various tools with BCC: <https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> (Run through, 3-4h)
 - Some examples of libbpf: <https://github.com/libbpf/libbpf-bootstrap> (Run any interesting one and read the source code, 2h)
 - Tutorial based on libbpf and eunomia-bpf: <https://github.com/eunomia-bpf/bpf-developer-tutorial> (Read part 1-10, 3-4h)
