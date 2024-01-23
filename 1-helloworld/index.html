@@ -216,8 +216,8 @@ Usage: ecli [--help] [--version] [--json] [--no-cache] url-and-args
 $ ./ecc -h
 eunomia-bpf compiler
 Usage: ecc [OPTIONS] &lt;SOURCE_PATH&gt; [EXPORT_EVENT_HEADER]
-....
 </code></pre>
+<p>注：假如在 aarch64 平台上，请从 release 下载 <a href="https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc-aarch64">ecc-aarch64</a> 和 <a href="https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecli-aarch64">ecli-aarch64</a>.</p>
 <p>也可以使用 docker 镜像进行编译：</p>
 <pre><code class="language-console">$ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
 export PATH=PATH:~/.eunomia/bin
