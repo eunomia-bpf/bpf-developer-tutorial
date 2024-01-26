@@ -180,9 +180,9 @@
 <p>Uprobe是一种用户空间探针，uprobe探针允许在用户空间程序中动态插桩，插桩位置包括：函数入口、特定偏移处，以及函数返回处。当我们定义uprobe时，内核会在附加的指令上创建快速断点指令（x86机器上为int3指令），当程序执行到该指令时，内核将触发事件，程序陷入到内核态，并以回调函数的方式调用探针函数，执行完探针函数再返回到用户态继续执行后序的指令。</p>
 <p>uprobe 适用于在用户态去解析一些内核态探针无法解析的流量，例如 http2 流量，https 流量，同时也可以分析程序运行时、业务逻辑等。关于 Uprobe 的更多信息，可以参考：</p>
 <ul>
-<li><a href="../30-sslsniff">eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li>
-<li><a href="../31-goroutine">eBPF 实践教程：使用 uprobe 捕获 Golang 的协程切换</a></li>
-<li><a href="../32-http2">eBPF 实践教程：使用 uprobe 捕获用户态 http2 流量</a></li>
+<li><a href="../30-sslsniff/README.html">eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据</a></li>
+<li><a href="../31-goroutine/README.html">eBPF 实践教程：使用 uprobe 捕获 Golang 的协程切换</a></li>
+<li><a href="../32-http2/README.html">eBPF 实践教程：使用 uprobe 捕获用户态 http2 流量</a></li>
 </ul>
 <p>Uprobe 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  <a href="https://github.com/eunomia-bpf/bpftime">bpftime</a>。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF Uprobe 程序，和内核态的 eBPF 兼容，由于避免了内核态和用户态之间的上下文切换，bpftime 的 Uprobe 开销比内核少约 10 倍，并且也更容易扩展。</p>
 <h2 id="rust"><a class="header" href="#rust">Rust</a></h2>
