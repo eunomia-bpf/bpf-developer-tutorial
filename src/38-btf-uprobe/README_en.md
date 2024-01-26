@@ -2,11 +2,11 @@
 
 eBPF, short for extended Berkeley Packet Filter, is a powerful and versatile technology used in modern Linux systems. It allows for the running of sandboxed programs in a virtual machine-like environment within the kernel, providing a safe way to extend the capabilities of the kernel without the risk of crashing the system or compromising security.
 
-The term "co-re" in the context of eBPF stands for "Compile Once, Run Everywhere". This is a key feature of eBPF that addresses a major challenge: the compatibility of eBPF programs across different kernel versions. The CO-RE of eBPF program can help us to run the eBPF program on different kernel versions without the need for recompilation.
+The term "CO-RE" in the context of eBPF stands for "Compile Once, Run Everywhere". This is a key feature of eBPF that addresses a major challenge: the compatibility of eBPF programs across different kernel versions. It can help us run the eBPF program on different kernel versions without the need for recompilation.
 
-With eBPF Uprobe, you can also trace userspace applications and access their internal data structures. However, there is no CO-RE practice for userspace. This blog introduces a new approach to leverage CO-RE for user-space applications, ensuring eBPF programs remain compatible across different application versions without the need for multiple compilations. For example, you may not need to maintain a separate eBPF program for each version of OpenSSL when capturing SSL/TLS plaintext data from encrypted traffic.
+With eBPF Uprobe, you can also trace userspace applications and access their internal data structures. However, the  CO-RE is not designed for userspace applications. This blog introduces a new approach to leverage CO-RE for user-space applications, ensuring eBPF uprobe programs remain compatible across different application versions without the need for multiple compilations. For example, you may not need to maintain a separate eBPF program for each version of OpenSSL when capturing SSL/TLS plaintext data from encrypted traffic.
 
-To implement the "Compile Once, Run Everywhere" (Co-RE) feature of eBPF in user-space applications, we need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
+To implement the "Compile Once, Run Everywhere" (Co-RE) feature of eBPF in user-space applications, we also need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
 
 This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). The source code is available on the [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe).
 
@@ -35,7 +35,7 @@ The BTF is designed for the kernel and generated from vmlinux, it can help the e
 
 The userspace application, however, also need CO-RE. For example, the SSL/TLS uprobe is widely used to capture the plaintext data from the encrypted traffic. It is implemented with the userspace library, such as OpenSSL, GnuTLS, NSS, etc. The userspace application and libraries also has different versions, it would be complex if we need to compile and maintain the eBPF program for each version.
 
-Here is some new tools and methods to help us enable CO-RE for userspace application.
+Let's see what will happen if CO-RE is not enabled for userspace applications, and how the BTF from userspace applications can solve this.
 
 ## No BTF for userspace program
 
@@ -112,7 +112,9 @@ int main(int argc, char **argv) {
 }
 ```
 
-We can use pahole and clang to generate the btf for each version. make example and generate btf:
+We can use pahole and clang to generate the btf for each version of userspace applications. The pahole tool can simply generate BTF from the debug info: <https://linux.die.net/man/1/pahole>
+
+make examples and generate btf for them:
 
 ```sh
 make -C example # it's like: pahole --btf_encode_detached base.btf btf-base.o
@@ -158,7 +160,7 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe\
            <...>-25809   [001] ...11 27828.314224: bpf_trace_printk: add_test(&d) 1 + 2 = 3
 ```
 
-The result is different, because the struct `data` is different in the two versions. The eBPF program can't be compatible with different versions of the userspace program.
+The result is different, because the struct `data` is different in the two versions. The eBPF program can't be compatible with different versions of the userspace program, so we cannot get the correct information.
 
 ## Use BTF for userspace program
 
@@ -260,11 +262,47 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 For complete source code, you can visit [https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe) for more details.
 
+The eBPF uprobe tracing program almost doesn't need any modifications. We just need to load the BTF containing the offsets of kernel and user-space structures. This is the same usage as enabling CO-RE on older kernel versions without BTF information:
+
+```c
+    LIBBPF_OPTS(bpf_object_open_opts , opts,
+    );
+    LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
+    if (argc != 3 && argc != 2) {
+        fprintf(stderr, "Usage: %s <example-name> [<external-btf>]\n", argv[0]);
+        return 1;
+    }
+    if (argc == 3)
+        opts.btf_custom_path = argv[2];
+
+    /* Set up libbpf errors and debug info callback */
+    libbpf_set_print(libbpf_print_fn);
+
+    /* Cleaner handling of Ctrl-C */
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    /* Load and verify BPF application */
+    skel = uprobe_bpf__open_opts(&opts);
+    if (!skel) {
+        fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        return 1;
+    }
+```
+
+In fact, the BTF implementation for relocation requires two parts: the compile-time BTF information carried by the BPF program, and the BTF information of the kernel when loading the eBPF program. When actually loading the eBPF program, libbpf will modify potentially incorrect eBPF instructions based on the accurate BTF information of the current kernel, ensuring compatibility across different kernel versions.
+
+Interestingly, libbpf does not differentiate whether these BTF information come from user-space programs or the kernel. Therefore, by merging the user-space BTF information with kernel BTF and provide them to libbpf, the problem is solved.
+
+And also, since the relocation is happened in userspace loader(like libbpf), both kernel eBPF runtime and userspace eBPF runtimes(Such as bpftime) can benefit from the CO-RE. bpftime (<https://github.com/eunomia-bpf/bpftime>) is an open-source user-space eBPF runtime based on LLVM JIT/AOT. It enables the execution of eBPF programs in user space, compatible with kernel-space eBPF. While supporting uprobes, syscall trace, and general plugin extensions, it avoids the context switching between kernel and user spaces, thereby enhancing the execution efficiency of uprobe programs. With the support of libbpf and BTF, bpftime can also dynamically extend user-space applications, achieving compatibility across different versions of user-space programs.
+
+For more details about BTF relocation, you may refer to <https://nakryiko.com/posts/bpf-core-reference-guide/>
+
 ## Conclusion
 
 - **Flexibility and Compatibility**: The use of BTF in user-space eBPF programs greatly enhances their flexibility and compatibility across different versions of user-space applications and libraries.
 - **Reduced Complexity**: This approach significantly reduces the complexity involved in maintaining eBPF programs for different versions of user-space applications, as it eliminates the need for multiple program versions.
-- **Potential for Broader Application**: While your example focused on SSL/TLS monitoring, this methodology has broader applications in performance monitoring, security, and debugging of user-space applications.
+- **Potential for Broader Application**: While your example focused on SSL/TLS monitoring, this methodology may has broader applications in performance monitoring, security, and debugging of user-space applications.
 
 This example showcases a significant advancement in the practical application of eBPF, extending its powerful features to more dynamically handle user-space applications in a Linux environment. It's a compelling solution for software engineers and system administrators dealing with the complexities of modern Linux systems.
 
