@@ -139,6 +139,10 @@ Attaching 1 probe...
 Function hello-world called 6
 ```
 
+This may due to Rust does not have a stable ABI. Rust, as it has existed so far, has reserved the right to order those struct members any way it wants. So the compiled version of the callee might order the members exactly as above, while the compiled version of the programming calling into the library might think its actually laid out like this:
+
+TODO: Further analysis (to be continued)
+
 ## References
 
 - <https://doc.rust-lang.org/rustc/symbol-mangling/index.html>

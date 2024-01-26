@@ -139,6 +139,10 @@ Attaching 1 probe...
 Function hello-world called 6
 ```
 
+这可能是由于 Rust 没有稳定的 ABI。 Rust，正如它迄今为止所存在的那样，保留了以任何它想要的方式对这些结构成员进行排序的权利。 因此，被调用者的编译版本可能会完全按照上面的方式对成员进行排序，而调用库的编程的编译版本可能会认为它实际上是这样布局的：
+
+TODO: 进一步分析（未完待续）
+
 ## 参考资料
 
 - <https://doc.rust-lang.org/rustc/symbol-mangling/index.html>

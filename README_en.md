@@ -72,6 +72,7 @@ Other:
 
 - [Using user ring buffer to send information to the kernel](src/35-user-ringbuf/README.md)
 - [Userspace eBPF Runtimes: Overview and Applications](src/36-userspace-ebpf/README.md)
+- [Compile Once, Run Everywhere for userspace trace with eBPF and BTF](src/38-btf-uprobe/README.md)
 
 Continuously updating...
 

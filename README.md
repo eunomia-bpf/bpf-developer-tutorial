@@ -84,7 +84,8 @@ Android:
 
 - [eBPF开发实践：使用 user ring buffer 向内核异步发送信息](src/35-user-ringbuf/README.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](src/36-userspace-ebpf/README.md)
-  
+- [借助 eBPF 和 BTF，让用户态也能一次编译、到处运行](src/38-btf-uprobe/README.md)
+
 持续更新中...
 
 ## 为什么要写这个教程？

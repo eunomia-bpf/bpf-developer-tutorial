@@ -55,7 +55,8 @@
 - [使用 eBPF 修改系统调用参数](34-syscall/README.md)
 - [eBPF开发实践：使用 user ring buffer 向内核异步发送信息](35-user-ringbuf/README.md)
 - [用户空间 eBPF 运行时：深度解析与应用实践](36-userspace-ebpf/README.md)
-
+- [使用 uprobe 追踪 Rust 应用程序](37-uprobe-rust/README.md)
+- [借助 eBPF 和 BTF，让用户态也能一次编译、到处运行](38-btf-uprobe/README.md)
 
 # bcc 和 bpftrace 教程与文档
 
