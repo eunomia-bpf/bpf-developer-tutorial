@@ -10,7 +10,7 @@ uprobe是一种用户空间探针，uprobe探针允许在用户空间程序中�
 
 uprobe基于文件，当一个二进制文件中的一个函数被跟踪时，所有使用到这个文件的进程都会被插桩，包括那些尚未启动的进程，这样就可以在全系统范围内跟踪系统调用。
 
-uprobe适用于在用户态去解析一些内核态探针无法解析的流量，例如http2流量（报文header被编码，内核无法解码），https流量（加密流量，内核无法解密）。具体可以参考 [eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据](../30-sslsniff) 中的例子。
+uprobe适用于在用户态去解析一些内核态探针无法解析的流量，例如http2流量（报文header被编码，内核无法解码），https流量（加密流量，内核无法解密）。具体可以参考 [eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据](../30-sslsniff/README.md) 中的例子。
 
 Uprobe 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
 

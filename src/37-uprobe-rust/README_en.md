@@ -10,9 +10,9 @@ Uprobe is a user space probe. Uprobe probes allow dynamic instrumentation in use
 
 Uprobe is useful for parsing traffic in user space that cannot be parsed by kernel probes, such as http2 traffic, https traffic, and can also analyze runtime program, business logic, etc. For more information about Uprobe, you can refer to:
 
-- [eBPF practice tutorial: Use Uprobe to capture plaintext SSL/TLS data from various libraries](../30-sslsniff)
-- [eBPF practice tutorial: Use Uprobe to capture Golang coroutine switching](../31-goroutine)
-- [eBPF practice tutorial: Use Uprobe to capture user space http2 traffic](../32-http2)
+- [eBPF practice tutorial: Use Uprobe to capture plaintext SSL/TLS data from various libraries](../30-sslsniff/README.md)
+- [eBPF practice tutorial: Use Uprobe to capture Golang coroutine switching](../31-goroutine/README.md)
+- [eBPF practice tutorial: Use Uprobe to capture user space http2 traffic](../32-http2/README.md)
 
 Running Uprobe in kernel mode eBPF might also produce significant performance overhead, in which case you might consider using user space eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime). bpftime is a user-space eBPF runtime based on LLVM JIT/AOT. It can run eBPF Uprobe programs in user mode and is compatible with kernel mode eBPF. Because it avoids context switching between user and kernel modes, bpftime's Uprobe overheads are about 10 times less than the kernel's, and it also more easy to extend.
 
