@@ -52,6 +52,7 @@ Networking and tracing:
 - [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](23-http/README.md)
 - [Accelerating network request forwarding using sockops](29-sockops/README.md)
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README.md)
+- [Use uprobe to trace Rust programs](37-uprobe-rust/README.md)
 
 Security:
 
@@ -68,6 +69,7 @@ Other:
 
 - [Using user ring buffer to send information to the kernel](35-user-ringbuf/README.md)
 - [Userspace eBPF Runtimes: Overview and Applications](36-userspace-ebpf/README.md)
+- [Compile Once, Run Everywhere for userspace with eBPF and BTF](38-btf-uprobe/README.md)
 
 # bcc and bpftrace tutorial
 
