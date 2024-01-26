@@ -8,7 +8,7 @@ eBPF 中的 “co-re” 代表“一次编译、到处运行”。这是其关�
 
 为了在用户空间应用程序中实现eBPF的“一次编译、到处运行”(Co-RE)特性，我们需要利用BPF类型格式(BTF)来克服传统eBPF程序的一些限制。这种方法的关键在于为用户空间程序提供与内核类似的类型信息和兼容性支持，从而使得eBPF程序能够更灵活地应对不同版本的用户空间应用和库。
 
-本文是eBPF开发者教程的一部分，详细内容可访问[这里](https://eunomia.dev/tutorials/)。源代码在[GitHub库](https://github.com/eunomia-bpf/bpf-developer-tutorial)中可用。
+本文是eBPF开发者教程的一部分，详细内容可访问[https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/)。本文完整的代码请查看 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe> 。
 
 ## 为什么我们需要CO-RE？
 
@@ -254,6 +254,8 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 [sudo] password for yunwei37: 
            <...>-26740   [001] ...11 28180.156220: bpf_trace_printk: add_test(&d) 1 + 3 = 4
 ```
+
+本文的工具和完整的代码在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe> 开源。
 
 ## 结论
 

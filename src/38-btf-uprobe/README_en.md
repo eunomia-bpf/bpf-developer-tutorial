@@ -6,7 +6,9 @@ The term "co-re" in the context of eBPF stands for "Compile Once, Run Everywhere
 
 With eBPF Uprobe, you can also trace userspace applications and access their internal data structures. However, there is no CO-RE practice for userspace. This blog introduces a new approach to leverage CO-RE for user-space applications, ensuring eBPF programs remain compatible across different application versions without the need for multiple compilations. For example, you may not need to maintain a separate eBPF program for each version of OpenSSL when capturing SSL/TLS plaintext data from encrypted traffic.
 
-This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [here](https://eunomia.dev/tutorials/). The source code is available on the [GitHub repository](https://github.com/eunomia-bpf/bpf-developer-tutorial).
+To implement the "Compile Once, Run Everywhere" (Co-RE) feature of eBPF in user-space applications, we need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
+
+This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). The source code is available on the [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe).
 
 ## Why we need CO-RE?
 
@@ -255,6 +257,8 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 [sudo] password for yunwei37: 
            <...>-26740   [001] ...11 28180.156220: bpf_trace_printk: add_test(&d) 1 + 3 = 4
 ```
+
+For complete source code, you can visit [https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe) for more details.
 
 ## Conclusion
 
