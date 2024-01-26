@@ -1,12 +1,14 @@
-# Compile Once, Run Everywhere for userspace trace with eBPF and BTF
+# Expanding eBPF Compile Once, Run Everywhere(CO-RE) to Userspace Compatibility 
 
 eBPF, short for extended Berkeley Packet Filter, is a powerful and versatile technology used in modern Linux systems. It allows for the running of sandboxed programs in a virtual machine-like environment within the kernel, providing a safe way to extend the capabilities of the kernel without the risk of crashing the system or compromising security.
 
-The term "CO-RE" in the context of eBPF stands for "Compile Once, Run Everywhere". This is a key feature of eBPF that addresses a major challenge: the compatibility of eBPF programs across different kernel versions. It can help us run the eBPF program on different kernel versions without the need for recompilation.
+Co-RE, standing for 'Compile Once, Run Everywhere', tackles the critical issue of eBPF program compatibility across diverse kernel versions. This feature allows eBPF programs to run on various kernel versions without the need for recompilation, simplifying deployment and maintenance.
 
-With eBPF Uprobe, you can also trace userspace applications and access their internal data structures. However, the  CO-RE is not designed for userspace applications. This blog introduces a new approach to leverage CO-RE for user-space applications, ensuring eBPF uprobe programs remain compatible across different application versions without the need for multiple compilations. For example, you may not need to maintain a separate eBPF program for each version of OpenSSL when capturing SSL/TLS plaintext data from encrypted traffic.
+With eBPF Uprobe, you can also trace userspace applications and access their internal data structures. However, the  CO-RE is not designed for userspace applications. This blog will introduce how to leverage CO-RE for user-space applications, ensuring eBPF Uprobe programs remain compatible across different application versions without the need for multiple compilations. 
 
-To implement the "Compile Once, Run Everywhere" (Co-RE) feature of eBPF in user-space applications, we also need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
+This approach may be particularly beneficial for tracing applications like OpenSSL, where maintaining separate eBPF programs for each version is impractical. With userspace eBPF runtimes like bpftime, you can also expand the CO-RE to more usecases, including extensions, networking, and dynamic patching, providing versatile and efficient solutions.
+
+To implement the Co-RE feature of eBPF in user-space applications, we also need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
 
 This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). The source code is available on the [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe).
 
