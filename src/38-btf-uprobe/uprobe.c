@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "uprobe.skel.h"
+
 #define warn(...) fprintf(stderr, __VA_ARGS__)
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
@@ -29,6 +30,15 @@ int main(int argc, char **argv)
 {
 	struct uprobe_bpf *skel;
 	int err;
+	LIBBPF_OPTS(bpf_object_open_opts , opts,
+	);
+	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
+	if (argc != 3 && argc != 2) {
+		fprintf(stderr, "Usage: %s <example-name> [<external-btf>]\n", argv[0]);
+		return 1;
+	}
+	if (argc == 3)
+		opts.btf_custom_path = argv[2];
 
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
@@ -38,7 +48,7 @@ int main(int argc, char **argv)
 	signal(SIGTERM, sig_handler);
 
 	/* Load and verify BPF application */
-	skel = uprobe_bpf__open();
+	skel = uprobe_bpf__open_opts(&opts);
 	if (!skel) {
 		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
@@ -50,12 +60,16 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
-	err = uprobe_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "Failed to attach BPF skeleton\n");
+
+	uprobe_opts.func_name = "add_test";
+	skel->links.add_test = bpf_program__attach_uprobe_opts(
+		skel->progs.add_test, -1 /* self pid */, argv[1] /* binary path */,
+		0 /* offset for function */, &uprobe_opts /* opts */);
+	if (!skel->links.add_test) {
+		err = -errno;
+		fprintf(stderr, "Failed to attach uprobe: %d\n", err);
 		goto cleanup;
 	}
-
 	printf("Successfully started! Press Ctrl+C to stop.\n");
 	fflush(stdout);
 	while (!exiting) {

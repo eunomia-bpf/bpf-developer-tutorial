@@ -19,10 +19,10 @@ btf-base-new.o: btf-base-new.c
 	clang -g -c btf-base-new.c -o btf-base-new.o
 
 base.btf: btf-base.o
-	pahole  --btf_encode_detached base.btf btf-base.o
+	pahole --btf_encode_detached base.btf btf-base.o
 
 base-new.btf: btf-base-new.o
-	pahole  --btf_encode_detached base-new.btf btf-base-new.o
+	pahole --btf_encode_detached base-new.btf btf-base-new.o
 
 btf-base: btf-base.o
 	clang -g btf-base.o -o btf-base

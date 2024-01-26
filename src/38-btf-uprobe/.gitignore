@@ -1,2 +1,4 @@
 .output
 uprobe
+merge-btf
+*.btf
