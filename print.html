@@ -7622,9 +7622,8 @@ Function hello-world called 6
 </ol>
 <h2 id="用户空间应用程序co-re的问题"><a class="header" href="#用户空间应用程序co-re的问题">用户空间应用程序CO-RE的问题</a></h2>
 <p>eBPF也支持追踪用户空间应用程序。Uprobe是一个用户空间探针，允许对用户空间程序进行动态仪表装置。探针位置包括函数入口、特定偏移和函数返回。</p>
-<p>BTF是为内核设计的，生成自vmlinux，它可以帮助eBPF程序方便地兼容不同的内核版本。</p>
-<p>但是，用户空间应用程序也需要CO-RE。例如，SSL/TLS uprobe被广泛用于从加密流量中捕获明文数据。它是用用户空间库实现的，如OpenSSL、GnuTLS、NSS等。用户空间应用程序和库也有各种版本，如果我们需要为每个版本编译和维护eBPF程序，那就会很复杂。</p>
-<p>下面是一些新的工具和方法来帮助我们为用户空间应用程序启用CO-RE。</p>
+<p>BTF是为内核设计的，生成自vmlinux，它可以帮助eBPF程序方便地兼容不同的内核版本。但是，用户空间应用程序也需要CO-RE。例如，SSL/TLS uprobe被广泛用于从加密流量中捕获明文数据。它是用用户空间库实现的，如OpenSSL、GnuTLS、NSS等。用户空间应用程序和库也有各种版本，如果我们需要为每个版本编译和维护eBPF程序，那就会很复杂。</p>
+<p>下面是一些新的工具和方法，可以帮助我们为用户空间应用程序启用CO-RE。</p>
 <h2 id="用户空间程序的btf"><a class="header" href="#用户空间程序的btf">用户空间程序的BTF</a></h2>
 <p>这是一个简单的uprobe例子，它可以捕获用户空间程序的<code>add_test</code>函数的调用和参数。你可以在<code>uprobe.bpf.c</code>中添加<code>#define BPF_NO_PRESERVE_ACCESS_INDEX</code>来确保eBPF程序可以在没有<code>struct data</code>的BTF的情况下编译。</p>
 <pre><code class="language-c">#define BPF_NO_GLOBAL_DATA
@@ -7713,7 +7712,7 @@ add_test(&amp;d) = 4
 <pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe\
            &lt;...&gt;-25809   [001] ...11 27828.314224: bpf_trace_printk: add_test(&amp;d) 1 + 2 = 3
 </code></pre>
-<p>结果是不同的，因为两个版本中的struct <code>data</code>是不同的。eBPF程序无法与不同版本的用户空间程序兼容。</p>
+<p>结果是不同的，因为两个版本中的struct <code>data</code>是不同的。eBPF程序无法与不同版本的用户空间程序兼容，我们获取到了错误的结构体偏移量，也会导致我们追踪失败。</p>
 <h2 id="使用用户空间程序的btf"><a class="header" href="#使用用户空间程序的btf">使用用户空间程序的BTF</a></h2>
 <p>在<code>uprobe.bpf.c</code>中注释掉<code>#define BPF_NO_PRESERVE_ACCESS_INDEX</code> ，以确保eBPF程序可以以<code>struct data</code>的BTF编译。</p>
 <pre><code class="language-c">#define BPF_NO_GLOBAL_DATA
@@ -7790,14 +7789,41 @@ Successfully started! Press Ctrl+C to stop.
 [sudo] password for yunwei37: 
            &lt;...&gt;-26740   [001] ...11 28180.156220: bpf_trace_printk: add_test(&amp;d) 1 + 3 = 4
 </code></pre>
+<p>我们的 eBPF 追踪程序也几乎不需要进行任何修改，只需要把包含 kernel 和用户态结构体偏移量的 BTF 加载进来即可。这和旧版本内核上没有 btf 信息的使用方式是一样的:</p>
+<pre><code class="language-c">	LIBBPF_OPTS(bpf_object_open_opts , opts,
+	);
+	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
+	if (argc != 3 &amp;&amp; argc != 2) {
+		fprintf(stderr, &quot;Usage: %s &lt;example-name&gt; [&lt;external-btf&gt;]\n&quot;, argv[0]);
+		return 1;
+	}
+	if (argc == 3)
+		opts.btf_custom_path = argv[2];
+
+	/* Set up libbpf errors and debug info callback */
+	libbpf_set_print(libbpf_print_fn);
+
+	/* Cleaner handling of Ctrl-C */
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+
+	/* Load and verify BPF application */
+	skel = uprobe_bpf__open_opts(&amp;opts);
+	if (!skel) {
+		fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+		return 1;
+	}
+</code></pre>
+<p>实际上，btf 实现重定向需要两个部分，一个是 bpf 程序带的编译时的 btf 信息，一个是内核的 btf 信息。在实际加载 ebpf 程序的时候，libbpf 会根据当前内核上准确的 btf 信息，来修改可能存在错误的 ebpf 指令，确保在不同内核版本上能够兼容。</p>
+<p>有趣的是，实际上 libbpf 并不区分这些 btf 信息来自用户态程序还是内核，因此我们只要把用户态的重定向信息一起提供给 libbpf 进行重定向，问题就解决了。</p>
 <p>本文的工具和完整的代码在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe</a> 开源。</p>
 <h2 id="结论-1"><a class="header" href="#结论-1">结论</a></h2>
 <ul>
-<li><strong>灵活性和兼容性</strong>：在用户空间eBPF程序中使用BTF大大增强了它们在不同版本的用户空间应用程序和库之间的灵活性和兼容性。</li>
+<li><strong>灵活性和兼容性</strong>：在用户空间eBPF程序中使用 BTF 大大增强了它们在不同版本的用户空间应用程序和库之间的灵活性和兼容性。</li>
 <li><strong>简化了复杂性</strong>：这种方法显著减少了维护不同版本的用户空间应用程序的eBPF程序的复杂性，因为它消除了需要多个程序版本的需要。</li>
-<li><strong>更广泛的应用</strong>：虽然你的例子关注于SSL/TLS监控，但是这种方法在性能监控、安全和用户空间应用程序的调试等方面有更广泛的应用。</li>
+<li><strong>更广泛的应用</strong>：这种方法在性能监控、安全和用户空间应用程序的调试等方面也可能能有更广泛的应用。bpftime（https://github.com/eunomia-bpf/bpftime） 是一个开源的基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容。它在支持 uprobe、syscall trace 和一般的插件扩展的同时，避免了内核态和用户态之间的上下文切换，从而提高了 uprobe 程序的执行效率。借助 libbpf 和 btf 的支持，bpftime 也可以更加动态的扩展用户态应用程序，实现在不同用户态程序版本之间的兼容性。</li>
 </ul>
-<p>这个示例展示了eBPF在实践中的重要进步，将其强大的功能扩展到更动态地处理用户空间应用程序在Linux环境中。对于处理现代Linux系统复杂性的软件工程师和系统管理员来说，这是一个引人注目的解决方案。</p>
+<p>这个示例展示了 eBPF 在实践中可以将其强大的 CO-RE 功能扩展到更动态地处理用户空间应用的不同版本变化。</p>
 <p>如果你想了解更多关于eBPF知识和实践，你可以访问我们的教程代码库<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a>或者网站<a href="https://eunomia.dev/tutorials/">https://eunomia.dev/tutorials/</a>获得更多示例和完整教程。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="linux-内核版本的-bpf-功能"><a class="header" href="#linux-内核版本的-bpf-功能">Linux 内核版本的 BPF 功能</a></h1>
 <h2 id="ebpf支持"><a class="header" href="#ebpf支持">eBPF支持</a></h2>
