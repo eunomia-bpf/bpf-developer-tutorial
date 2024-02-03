@@ -42,8 +42,6 @@ jobs:
           cp -rf eunomia-bpf/documents/src docs
           mkdir docs/tutorials
           cp -rf tutorial/src/* docs/tutorials
-          mv tutorial/README.zh.md docs/tutorials/SUMMARY.zh.md
-          mv tutorial/README.md docs/tutorials/SUMMARY.md
           mv tutorial/src/SUMMARY.zh.md docs/tutorials/index.zh.md
           mv tutorial/src/SUMMARY.md docs/tutorials/index.md
 
