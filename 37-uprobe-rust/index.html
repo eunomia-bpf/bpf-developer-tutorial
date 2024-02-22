@@ -191,7 +191,7 @@
 <h2 id="最简单的例子symbol-name-mangling"><a class="header" href="#最简单的例子symbol-name-mangling">最简单的例子：Symbol name mangling</a></h2>
 <p>我们先来看一个简单的例子，使用 Uprobe 追踪 Rust 程序的 <code>main</code> 函数，代码如下：</p>
 <pre><pre class="playground"><code class="language-rust">pub fn hello() -&gt; i32 {
-    println!(&quot;Hello, world!&quot;);
+    println!("Hello, world!");
     0
 }
 
@@ -214,7 +214,7 @@ $ rustfilt -i name.txt | grep hello
 0000000000008b60 t helloworld::main
 </code></pre>
 <p>接下来我们可以尝试使用 bpftrace 跟踪对应的函数：</p>
-<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:helloworld/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf(&quot;Function hello-world called\n&quot;); }'
+<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:helloworld/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
 Attaching 1 probe...
 Function hello-world called
 </code></pre>
@@ -223,7 +223,7 @@ Function hello-world called
 <pre><pre class="playground"><code class="language-rust">use std::env;
 
 pub fn hello(i: i32, len: usize) -&gt; i32 {
-    println!(&quot;Hello, world! {} in {}&quot;, i, len);
+    println!("Hello, world! {} in {}", i, len);
     i + len as i32
 }
 
@@ -235,16 +235,16 @@ fn main() {
         match arg.parse::&lt;i32&gt;() {
             Ok(i) =&gt; {
                 let ret = hello(i, args.len());
-                println!(&quot;return value: {}&quot;, ret);
+                println!("return value: {}", ret);
             }
             Err(_) =&gt; {
-                eprintln!(&quot;Error: Argument '{}' is not a valid integer&quot;, arg);
+                eprintln!("Error: Argument '{}' is not a valid integer", arg);
             }
         }
     }
 }</code></pre></pre>
 <p>我们再次进行类似的操作，会发现一个奇怪的现象：</p>
-<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf(&quot;Function hello-world called\n&quot;); }'
+<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
 Attaching 1 probe...
 Function hello-world called
 </code></pre>
@@ -260,7 +260,7 @@ Hello, world! 4 in 5
 return value: 9
 </code></pre>
 <p>而且看起来 bpftrace 并不能正确获取参数：</p>
-<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf(&quot;Function hello-world called %d\n&quot;
+<pre><code class="language-console">$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called %d\n"
 , arg0); }'
 Attaching 1 probe...
 Function hello-world called 63642464
@@ -268,8 +268,8 @@ Function hello-world called 63642464
 <p>Uretprobe 捕捉到了第一次调用的返回值：</p>
 <pre><code class="language-console">$ sudo bpftrace -e 'uretprobe:args/tar
 get/release/helloworld:_ZN10helloworld4main17h2dce92
-cb81426b91E { printf(&quot;Function hello-world called %d
-\n&quot;, retval); }'
+cb81426b91E { printf("Function hello-world called %d
+\n", retval); }'
 Attaching 1 probe...
 Function hello-world called 6
 </code></pre>

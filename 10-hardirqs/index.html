@@ -203,9 +203,9 @@ hardirqs 和 softirqs 是 Linux 内核中两种不同类型的中断处理程序
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
-#include &quot;hardirqs.h&quot;
-#include &quot;bits.bpf.h&quot;
-#include &quot;maps.bpf.h&quot;
+#include "hardirqs.h"
+#include "bits.bpf.h"
+#include "maps.bpf.h"
 
 #define MAX_ENTRIES 256
 
@@ -219,21 +219,21 @@ struct {
  __type(key, u32);
  __type(value, u32);
  __uint(max_entries, 1);
-} cgroup_map SEC(&quot;.maps&quot;);
+} cgroup_map SEC(".maps");
 
 struct {
  __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
  __uint(max_entries, 1);
  __type(key, u32);
  __type(value, u64);
-} start SEC(&quot;.maps&quot;);
+} start SEC(".maps");
 
 struct {
  __uint(type, BPF_MAP_TYPE_HASH);
  __uint(max_entries, MAX_ENTRIES);
  __type(key, struct irq_key);
  __type(value, struct info);
-} infos SEC(&quot;.maps&quot;);
+} infos SEC(".maps");
 
 static struct info zero;
 
@@ -302,31 +302,31 @@ static int handle_exit(int irq, struct irqaction *action)
  return 0;
 }
 
-SEC(&quot;tp_btf/irq_handler_entry&quot;)
+SEC("tp_btf/irq_handler_entry")
 int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
 {
  return handle_entry(irq, action);
 }
 
-SEC(&quot;tp_btf/irq_handler_exit&quot;)
+SEC("tp_btf/irq_handler_exit")
 int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
 {
  return handle_exit(irq, action);
 }
 
-SEC(&quot;raw_tp/irq_handler_entry&quot;)
+SEC("raw_tp/irq_handler_entry")
 int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
 {
  return handle_entry(irq, action);
 }
 
-SEC(&quot;raw_tp/irq_handler_exit&quot;)
+SEC("raw_tp/irq_handler_exit")
 int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 {
  return handle_exit(irq, action);
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char LICENSE[] SEC("license") = "GPL";
 </code></pre>
 <p>这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。</p>
 <ol>
@@ -336,9 +336,9 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
-#include &quot;hardirqs.h&quot;
-#include &quot;bits.bpf.h&quot;
-#include &quot;maps.bpf.h&quot;
+#include "hardirqs.h"
+#include "bits.bpf.h"
+#include "maps.bpf.h"
 </code></pre>
 <p>该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。</p>
 </li>
@@ -363,25 +363,25 @@ const volatile bool do_count = false;
 <li>
 <p>定义 eBPF 程序的入口点：</p>
 <pre><code class="language-c">
-SEC(&quot;tp_btf/irq_handler_entry&quot;)
+SEC("tp_btf/irq_handler_entry")
 int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
 {
 return handle_entry(irq, action);
 }
 
-SEC(&quot;tp_btf/irq_handler_exit&quot;)
+SEC("tp_btf/irq_handler_exit")
 int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
 {
 return handle_exit(irq, action);
 }
 
-SEC(&quot;raw_tp/irq_handler_entry&quot;)
+SEC("raw_tp/irq_handler_entry")
 int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
 {
 return handle_entry(irq, action);
 }
 
-SEC(&quot;raw_tp/irq_handler_exit&quot;)
+SEC("raw_tp/irq_handler_exit")
 int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 {
 return handle_exit(irq, action);

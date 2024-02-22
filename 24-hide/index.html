@@ -177,25 +177,25 @@
 <p>eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一个强大功能，可以在无需更改内核源代码或重启内核的情况下，运行、加载和更新用户定义的代码。这种功能让 eBPF 在网络和系统性能分析、数据包过滤、安全策略等方面有了广泛的应用。</p>
 <p>在本篇教程中，我们将展示如何利用 eBPF 来隐藏进程或文件信息，这是网络安全和防御领域中一种常见的技术。</p>
 <h2 id="背景知识与实现机制"><a class="header" href="#背景知识与实现机制">背景知识与实现机制</a></h2>
-<p>&quot;进程隐藏&quot; 能让特定的进程对操作系统的常规检测机制变得不可见。在黑客攻击或系统防御的场景中，这种技术都可能被应用。具体来说，Linux 系统中每个进程都在 /proc/ 目录下有一个以其进程 ID 命名的子文件夹，包含了该进程的各种信息。<code>ps</code> 命令就是通过查找这些文件夹来显示进程信息的。因此，如果我们能隐藏某个进程的 /proc/ 文件夹，就能让这个进程对 <code>ps</code> 命令等检测手段“隐身”。</p>
+<p>"进程隐藏" 能让特定的进程对操作系统的常规检测机制变得不可见。在黑客攻击或系统防御的场景中，这种技术都可能被应用。具体来说，Linux 系统中每个进程都在 /proc/ 目录下有一个以其进程 ID 命名的子文件夹，包含了该进程的各种信息。<code>ps</code> 命令就是通过查找这些文件夹来显示进程信息的。因此，如果我们能隐藏某个进程的 /proc/ 文件夹，就能让这个进程对 <code>ps</code> 命令等检测手段“隐身”。</p>
 <p>要实现进程隐藏，关键在于操作 <code>/proc/</code> 目录。在 Linux 中，<code>getdents64</code> 系统调用可以读取目录下的文件信息。我们可以通过挂接这个系统调用，修改它返回的结果，从而达到隐藏文件的目的。实现这个功能需要使用到 eBPF 的 <code>bpf_probe_write_user</code> 功能，它可以修改用户空间的内存，因此能用来修改 <code>getdents64</code> 返回的结果。</p>
 <p>下面，我们会详细介绍如何在内核态和用户态编写 eBPF 程序来实现进程隐藏。</p>
 <h3 id="内核态-ebpf-程序实现"><a class="header" href="#内核态-ebpf-程序实现">内核态 eBPF 程序实现</a></h3>
 <p>接下来，我们将详细介绍如何在内核态编写 eBPF 程序来实现进程隐藏。首先是 eBPF 程序的起始部分：</p>
 <pre><code class="language-c">// SPDX-License-Identifier: BSD-3-Clause
-#include &quot;vmlinux.h&quot;
+#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;common.h&quot;
+#include "common.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 // Ringbuffer Map to pass messages from kernel to user
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} rb SEC(&quot;.maps&quot;);
+} rb SEC(".maps");
 
 // Map to fold the dents buffer addresses
 struct {
@@ -203,7 +203,7 @@ struct {
     __uint(max_entries, 8192);
     __type(key, size_t);
     __type(value, long unsigned int);
-} map_buffs SEC(&quot;.maps&quot;);
+} map_buffs SEC(".maps");
 
 // Map used to enable searching through the
 // data in a loop
@@ -212,7 +212,7 @@ struct {
     __uint(max_entries, 8192);
     __type(key, size_t);
     __type(value, int);
-} map_bytes_read SEC(&quot;.maps&quot;);
+} map_bytes_read SEC(".maps");
 
 // Map with address of actual
 struct {
@@ -220,7 +220,7 @@ struct {
     __uint(max_entries, 8192);
     __type(key, size_t);
     __type(value, long unsigned int);
-} map_to_patch SEC(&quot;.maps&quot;);
+} map_to_patch SEC(".maps");
 
 // Map to hold program tail calls
 struct {
@@ -228,23 +228,23 @@ struct {
     __uint(max_entries, 5);
     __type(key, __u32);
     __type(value, __u32);
-} map_prog_array SEC(&quot;.maps&quot;);
+} map_prog_array SEC(".maps");
 </code></pre>
-<p>我们首先需要理解这个 eBPF 程序的基本构成和使用到的几个重要组件。前几行引用了几个重要的头文件，如 &quot;vmlinux.h&quot;、&quot;bpf_helpers.h&quot;、&quot;bpf_tracing.h&quot; 和 &quot;bpf_core_read.h&quot;。这些文件提供了 eBPF 编程所需的基础设施和一些重要的函数或宏。</p>
+<p>我们首先需要理解这个 eBPF 程序的基本构成和使用到的几个重要组件。前几行引用了几个重要的头文件，如 "vmlinux.h"、"bpf_helpers.h"、"bpf_tracing.h" 和 "bpf_core_read.h"。这些文件提供了 eBPF 编程所需的基础设施和一些重要的函数或宏。</p>
 <ul>
-<li>&quot;vmlinux.h&quot; 是一个包含了完整的内核数据结构的头文件，是从 vmlinux 内核二进制中提取的。使用这个头文件，eBPF 程序可以访问内核的数据结构。</li>
-<li>&quot;bpf_helpers.h&quot; 头文件中定义了一系列的宏，这些宏是 eBPF 程序使用的 BPF 助手（helper）函数的封装。这些 BPF 助手函数是 eBPF 程序和内核交互的主要方式。</li>
-<li>&quot;bpf_tracing.h&quot; 是用于跟踪事件的头文件，它包含了许多宏和函数，这些都是为了简化 eBPF 程序对跟踪点（tracepoint）的操作。</li>
-<li>&quot;bpf_core_read.h&quot; 头文件提供了一组用于从内核读取数据的宏和函数。</li>
+<li>"vmlinux.h" 是一个包含了完整的内核数据结构的头文件，是从 vmlinux 内核二进制中提取的。使用这个头文件，eBPF 程序可以访问内核的数据结构。</li>
+<li>"bpf_helpers.h" 头文件中定义了一系列的宏，这些宏是 eBPF 程序使用的 BPF 助手（helper）函数的封装。这些 BPF 助手函数是 eBPF 程序和内核交互的主要方式。</li>
+<li>"bpf_tracing.h" 是用于跟踪事件的头文件，它包含了许多宏和函数，这些都是为了简化 eBPF 程序对跟踪点（tracepoint）的操作。</li>
+<li>"bpf_core_read.h" 头文件提供了一组用于从内核读取数据的宏和函数。</li>
 </ul>
 <p>程序中定义了一系列的 map 结构，这些 map 是 eBPF 程序中的主要数据结构，它们用于在内核态和用户态之间共享数据，或者在 eBPF 程序中存储和传递数据。</p>
-<p>其中，&quot;rb&quot; 是一个 Ringbuffer 类型的 map，它用于从内核向用户态传递消息。Ringbuffer 是一种能在内核和用户态之间高效传递大量数据的数据结构。</p>
-<p>&quot;map_buffs&quot; 是一个 Hash 类型的 map，它用于存储目录项（dentry）的缓冲区地址。</p>
-<p>&quot;map_bytes_read&quot; 是另一个 Hash 类型的 map，它用于在数据循环中启用搜索。</p>
-<p>&quot;map_to_patch&quot; 是另一个 Hash 类型的 map，存储了需要被修改的目录项（dentry）的地址。</p>
-<p>&quot;map_prog_array&quot; 是一个 Prog Array 类型的 map，它用于保存程序的尾部调用。</p>
-<p>程序中的 &quot;target_ppid&quot; 和 &quot;pid_to_hide_len&quot;、&quot;pid_to_hide&quot; 是几个重要的全局变量，它们分别存储了目标父进程的 PID、需要隐藏的 PID 的长度以及需要隐藏的 PID。</p>
-<p>接下来的代码部分，程序定义了一个名为 &quot;linux_dirent64&quot; 的结构体，这个结构体代表一个 Linux 目录项。然后程序定义了两个函数，&quot;handle_getdents_enter&quot; 和 &quot;handle_getdents_exit&quot;，这两个函数分别在 getdents64 系统调用的入口和出口被调用，用于实现对目录项的操作。</p>
+<p>其中，"rb" 是一个 Ringbuffer 类型的 map，它用于从内核向用户态传递消息。Ringbuffer 是一种能在内核和用户态之间高效传递大量数据的数据结构。</p>
+<p>"map_buffs" 是一个 Hash 类型的 map，它用于存储目录项（dentry）的缓冲区地址。</p>
+<p>"map_bytes_read" 是另一个 Hash 类型的 map，它用于在数据循环中启用搜索。</p>
+<p>"map_to_patch" 是另一个 Hash 类型的 map，存储了需要被修改的目录项（dentry）的地址。</p>
+<p>"map_prog_array" 是一个 Prog Array 类型的 map，它用于保存程序的尾部调用。</p>
+<p>程序中的 "target_ppid" 和 "pid_to_hide_len"、"pid_to_hide" 是几个重要的全局变量，它们分别存储了目标父进程的 PID、需要隐藏的 PID 的长度以及需要隐藏的 PID。</p>
+<p>接下来的代码部分，程序定义了一个名为 "linux_dirent64" 的结构体，这个结构体代表一个 Linux 目录项。然后程序定义了两个函数，"handle_getdents_enter" 和 "handle_getdents_exit"，这两个函数分别在 getdents64 系统调用的入口和出口被调用，用于实现对目录项的操作。</p>
 <pre><code class="language-c">
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
@@ -262,7 +262,7 @@ const volatile char pid_to_hide[max_pid_len];
 //     unsigned char  d_type;   /* File type */
 //     char           d_name[]; /* Filename (null-terminated) */ }; 
 // int getdents64(unsigned int fd, struct linux_dirent64 *dirp, unsigned int count);
-SEC(&quot;tp/syscalls/sys_enter_getdents64&quot;)
+SEC("tp/syscalls/sys_enter_getdents64")
 int handle_getdents_enter(struct trace_event_raw_sys_enter *ctx)
 {
     size_t pid_tgid = bpf_get_current_pid_tgid();
@@ -296,7 +296,7 @@ int handle_getdents_enter(struct trace_event_raw_sys_enter *ctx)
 <p>在接下来的代码段中，我们将要实现在 <code>getdents64</code> 系统调用返回时的处理。我们主要的目标就是找到我们想要隐藏的进程，并且对目录项进行修改以实现隐藏。</p>
 <p>我们首先定义了一个名为 <code>handle_getdents_exit</code> 的函数，它将在 <code>getdents64</code> 系统调用返回时被调用。</p>
 <pre><code class="language-c">
-SEC(&quot;tp/syscalls/sys_exit_getdents64&quot;)
+SEC("tp/syscalls/sys_exit_getdents64")
 int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
 {
     size_t pid_tgid = bpf_get_current_pid_tgid();
@@ -372,7 +372,7 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
 <p>在这个函数中，我们首先获取了当前进程的 PID 和线程组 ID，然后检查系统调用是否读取到了目录的内容。如果没有读取到内容，我们就直接返回。</p>
 <p>然后我们从 <code>map_buffs</code> 这个 map 中获取 <code>getdents64</code> 系统调用入口处保存的目录内容的地址。如果我们没有保存过这个地址，那么就没有必要进行进一步的处理。</p>
 <p>接下来的部分有点复杂，我们用了一个循环来迭代读取目录的内容，并且检查是否有我们想要隐藏的进程的 PID。如果我们找到了，我们就用 <code>bpf_tail_call</code> 函数跳转到 <code>handle_getdents_patch</code> 函数，进行实际的隐藏操作。</p>
-<pre><code class="language-c">SEC(&quot;tp/syscalls/sys_exit_getdents64&quot;)
+<pre><code class="language-c">SEC("tp/syscalls/sys_exit_getdents64")
 int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
 {
     // Only patch if we've already checked and found our pid's folder to hide
@@ -398,10 +398,10 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
     char filename[max_pid_len];
     bpf_probe_read_user_str(&amp;filename, pid_to_hide_len, dirp_previous-&gt;d_name);
     filename[pid_to_hide_len-1] = 0x00;
-    bpf_printk(&quot;[PID_HIDE] filename previous %s\n&quot;, filename);
+    bpf_printk("[PID_HIDE] filename previous %s\n", filename);
     bpf_probe_read_user_str(&amp;filename, pid_to_hide_len, dirp-&gt;d_name);
     filename[pid_to_hide_len-1] = 0x00;
-    bpf_printk(&quot;[PID_HIDE] filename next one %s\n&quot;, filename);
+    bpf_printk("[PID_HIDE] filename next one %s\n", filename);
 
     // Attempt to overwrite
     short unsigned int d_reclen_new = d_reclen_previous + d_reclen;
@@ -439,7 +439,7 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
 <pre><code class="language-c">    skel = pidhide_bpf__open();
     if (!skel)
     {
-        fprintf(stderr, &quot;Failed to open BPF program: %s\n&quot;, strerror(errno));
+        fprintf(stderr, "Failed to open BPF program: %s\n", strerror(errno));
         return 1;
     }
 </code></pre>
@@ -449,7 +449,7 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
     {
         env.pid_to_hide = getpid();
     }
-    sprintf(pid_to_hide, &quot;%d&quot;, env.pid_to_hide);
+    sprintf(pid_to_hide, "%d", env.pid_to_hide);
     strncpy(skel-&gt;rodata-&gt;pid_to_hide, pid_to_hide, sizeof(skel-&gt;rodata-&gt;pid_to_hide));
     skel-&gt;rodata-&gt;pid_to_hide_len = strlen(pid_to_hide) + 1;
     skel-&gt;rodata-&gt;target_ppid = env.target_ppid;
@@ -458,13 +458,13 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
 <pre><code class="language-c">    err = pidhide_bpf__load(skel);
     if (err)
     {
-        fprintf(stderr, &quot;Failed to load and verify BPF skeleton\n&quot;);
+        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
         goto cleanup;
     }
 </code></pre>
 <p>最后，我们等待并处理由 eBPF 程序发送的事件。这个过程是通过调用 <code>ring_buffer__poll</code> 函数实现的。在这个过程中，我们每隔一段时间就检查一次环形缓冲区中是否有新的事件。如果有，我们就调用 <code>handle_event</code> 函数来处理这个事件。</p>
-<pre><code class="language-c">printf(&quot;Successfully started!\n&quot;);
-printf(&quot;Hiding PID %d\n&quot;, env.pid_to_hide);
+<pre><code class="language-c">printf("Successfully started!\n");
+printf("Hiding PID %d\n", env.pid_to_hide);
 while (!exiting)
 {
     err = ring_buffer__poll(rb, 100 /* timeout, ms */);
@@ -476,7 +476,7 @@ while (!exiting)
     }
     if (err &lt; 0)
     {
-        printf(&quot;Error polling perf buffer: %d\n&quot;, err);
+        printf("Error polling perf buffer: %d\n", err);
         break;
     }
 }
@@ -487,9 +487,9 @@ while (!exiting)
 {
     const struct event *e = data;
     if (e-&gt;success)
-        printf(&quot;Hid PID from program %d (%s)\n&quot;, e-&gt;pid, e-&gt;comm);
+        printf("Hid PID from program %d (%s)\n", e-&gt;pid, e-&gt;comm);
     else
-        printf(&quot;Failed to hide PID from program %d (%s)\n&quot;, e-&gt;pid, e-&gt;comm);
+        printf("Failed to hide PID from program %d (%s)\n", e-&gt;pid, e-&gt;comm);
     return 0;
 }
 </code></pre>

@@ -206,7 +206,7 @@
 </code></pre>
 <p>这将以主机的字节序(hexadecimal string)打印出cgroup ID，例如<code>77 16 00 00 01 00 00 00</code>。</p>
 <pre><code class="language-sh"># FILE=/sys/fs/bpf/test01
-# CGROUPID_HEX=&quot;77 16 00 00 01 00 00 00&quot;
+# CGROUPID_HEX="77 16 00 00 01 00 00 00"
 # bpftool map update pinned $FILE key hex $CGROUPID_HEX value hex 00 00 00 00 00 00 00 00 any
 </code></pre>
 <p>现在，通过systemd-run启动的shell的cgroup ID已经存在于BPF哈希映射中，bcc工具将显示来自该shell的结果。可以添加和。从BPF哈希映射中删除而不重新启动bcc工具。</p>
@@ -230,7 +230,7 @@ else
   HOST_ENDIAN_CMD=cat
 fi
 
-NS_ID_HEX=&quot;$(printf '%016x' $(stat -Lc '%i' /proc/self/ns/mnt) | sed 's/.\{2\}/&amp;\n/g' | $HOST_ENDIAN_CMD)&quot;
+NS_ID_HEX="$(printf '%016x' $(stat -Lc '%i' /proc/self/ns/mnt) | sed 's/.\{2\}/&amp;\n/g' | $HOST_ENDIAN_CMD)"
 bpftool map update pinned $FILE key hex $NS_ID_HEX value hex 00 00 00 00 any
 </code></pre>
 <p>在这个终端中执行命令：</p>

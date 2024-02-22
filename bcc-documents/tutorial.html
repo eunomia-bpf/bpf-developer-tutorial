@@ -294,7 +294,7 @@ TIME(s)        COMM           PID    DISK    T  SECTOR    BYTES   LAT(ms)
     1074       44       13      94.9%       2.9%            1        223
     2195      170        8      92.5%       6.8%            1        143
      182       53       56      53.6%       1.3%            1        143
-   62480    40960    20480      40.6%      19.8%            1        223&quot;。
+   62480    40960    20480      40.6%      19.8%            1        223"。
 格式：仅返回翻译后的内容，不包括原始文本。```
 7        2        5      22.2%      22.2%            1        223
      348        0        0     100.0%       0.0%            1        223
@@ -328,7 +328,7 @@ PID    COMM         IP RADDR            LADDR            LPORT
 <p>寻找可能指向应用程序配置问题或入侵者的意外连接。</p>
 <p>更多 <a href="https://github.com/iovisor/bcc/tree/master/tools/tcpaccept_example.txt">示例</a>。</p>
 <h4 id="19-tcpretrans"><a class="header" href="#19-tcpretrans">1.9. tcpretrans</a></h4>
-<pre><code class="language-sh"># ./tcpretrans&quot;.
+<pre><code class="language-sh"># ./tcpretrans".
 ```时间 PID IP LADDR:LPORT T&gt; RADDR:RPORT 状态
 01:55:05 0 4 10.153.223.157:22 R&gt; 69.53.245.40:34619 已建立
 01:55:05 0 4 10.153.223.157:22 R&gt; 69.53.245.40:34619 已建立
@@ -356,7 +356,7 @@ PID    COMM         IP RADDR            LADDR            LPORT
       1024 -&gt; 2047       : 27       |*                                       |
       2048 -&gt; 4095       : 30       |*                                       |
       4096 -&gt; 8191       : 20       |                                        |
-      8192 -&gt; 16383      : 29       |*                                       |&quot;.16384 -&gt; 32767      : 809      |****************************************|
+      8192 -&gt; 16383      : 29       |*                                       |".16384 -&gt; 32767      : 809      |****************************************|
 32768 -&gt; 65535      : 64       |***                                     |
 </code></pre>
 <p>这可以帮助量化在CPU饱和期间等待获取CPU的时间损失。</p>
@@ -413,9 +413,9 @@ PID    COMM         IP RADDR            LADDR            LPORT
 <h5 id="示例-1"><a class="header" href="#示例-1">示例 1</a></h5>
 <p>假设您想要跟踪文件所有权更改。有三个系统调用，<code>chown</code>、<code>fchown</code>和<code>lchown</code>，用户可以使用它们来更改文件所有权。相应的系统调用入口是<code>SyS_[f|l]chown</code>。可以使用以下命令打印系统调用参数和调用进程的用户ID。您可以使用<code>id</code>命令查找特定用户的UID。</p>
 <pre><code class="language-sh">$ trace.py \
-  'p::SyS_chown &quot;file = %s, to_uid = %d, to_gid = %d, from_uid = %d&quot;, arg1, arg2, arg3, $uid' \
-  'p::SyS_fchown &quot;fd = %d, to_uid = %d, to_gid = %d, from_uid = %d&quot;, arg1, arg2, arg3, $uid' \
-  'p::SyS_lchown &quot;file = %s, to_uid = %d, to_gid = %d, from_uid = %d&quot;, arg1, arg2, arg3, $uid'
+  'p::SyS_chown "file = %s, to_uid = %d, to_gid = %d, from_uid = %d", arg1, arg2, arg3, $uid' \
+  'p::SyS_fchown "fd = %d, to_uid = %d, to_gid = %d, from_uid = %d", arg1, arg2, arg3, $uid' \
+  'p::SyS_lchown "file = %s, to_uid = %d, to_gid = %d, from_uid = %d", arg1, arg2, arg3, $uid'
 PID    TID    COMM         FUNC             -
 1269255 1269255 python3.6    SyS_lchown       file = /tmp/dotsync-usisgezu/tmp, to_uid = 128203, to_gid = 100, from_uid = 128203
 1269441 1269441 zstd         SyS_chown        file = /tmp/dotsync-vic7ygj0/dotsync-package.zst, to_uid = 128203, to_gid = 100, from_uid = 128203
@@ -444,16 +444,16 @@ PID    TID    COMM         FUNC
 </code></pre>
 <h5 id="示例-3"><a class="header" href="#示例-3">示例 3</a></h5>
 <p>此示例与问题 <a href="https://github.com/iovisor/bcc/issues/1231">1231</a> 和 <a href="https://github.com/iovisor/bcc/issues/1516">1516</a> 相关，其中在某些情况下，uprobes 完全无法工作。首先，你可以执行以下 <code>strace</code></p>
-<pre><code class="language-sh">$ strace trace.py 'r:bash:readline &quot;%s&quot;, retval'
+<pre><code class="language-sh">$ strace trace.py 'r:bash:readline "%s", retval'
 ...
 perf_event_open(0x7ffd968212f0, -1, 0, -1, 0x8 /* PERF_FLAG_??? */) = -1 EIO (Input/output error)
 ...
 </code></pre>
 <p><code>perf_event_open</code>系统调用返回<code>-EIO</code>。在<code>/kernel/trace</code>和<code>/kernel/events</code>目录中查找与<code>EIO</code>相关的内核uprobe代码，函数<code>uprobe_register</code>最可疑。让我们找出是否调用了这个函数，如果调用了，返回值是什么。在一个终端中使用以下命令打印出<code>uprobe_register</code>的返回值：</p>
-<pre><code class="language-sh">trace.py 'r::uprobe_register &quot;ret = %d&quot;, retval'
+<pre><code class="language-sh">trace.py 'r::uprobe_register "ret = %d", retval'
 </code></pre>
 <p>在另一个终端中运行相同的bash uretprobe跟踪示例，您应该得到：</p>
-<pre><code class="language-sh">$ trace.py 'r::uprobe_register &quot;ret = %d&quot;, retval'
+<pre><code class="language-sh">$ trace.py 'r::uprobe_register "ret = %d", retval'
 PID    TID    COMM         FUNC             -
 1041401 1041401 python2.7    uprobe_register  ret = -5
 </code></pre>
@@ -468,7 +468,7 @@ PID    TID    COMM         FUNC             -
 }
 </code></pre>
 <p>为了确认这个理论，使用以下命令找出<code>inode-&gt;i_mapping-&gt;a_ops</code>的值：</p>
-<pre><code class="language-sh">$ trace.py -I 'linux/fs.h' 'p::uprobe_register(struct inode *inode) &quot;a_ops = %llx&quot;, inode-&gt;i_mapping-&gt;a_ops'
+<pre><code class="language-sh">$ trace.py -I 'linux/fs.h' 'p::uprobe_register(struct inode *inode) "a_ops = %llx", inode-&gt;i_mapping-&gt;a_ops'
 PID    TID    COMM         FUNC             -
 814288 814288 python2.7    uprobe_register  a_ops = ffffffff81a2adc0
 ^C$ grep ffffffff81a2adc0 /proc/kallsyms
@@ -476,7 +476,7 @@ ffffffff81a2adc0 R empty_aops
 </code></pre>
 <p>内核符号<code>empty_aops</code>没有定义<code>readpage</code>，因此上述可疑条件为真。进一步检查内核源代码显示，<code>overlayfs</code>没有提供自己的<code>a_ops</code>，而其他一些文件系统（例如ext4）定义了自己的<code>a_ops</code>（例如<code>ext4_da_aops</code>），并且<code>ext4_da_aops</code>定义了<code>readpage</code>。因此，uprobe对于ext4正常工作，但在overlayfs上不正常工作。</p>
 <p>更多<a href="https://github.com/iovisor/bcc/tree/master/tools/trace_example.txt">示例</a>。</p>
-<h4 id="22-argdist更多示例"><a class="header" href="#22-argdist更多示例">2.2. argdist&quot;。更多<a href="https://github.com/iovisor/bcc/tree/master/tools/argdist_example.txt">示例</a></a></h4>
+<h4 id="22-argdist更多示例"><a class="header" href="#22-argdist更多示例">2.2. argdist"。更多<a href="https://github.com/iovisor/bcc/tree/master/tools/argdist_example.txt">示例</a></a></h4>
 <h4 id="23-funccount"><a class="header" href="#23-funccount">2.3. funccount</a></h4>
 <p>更多<a href="https://github.com/iovisor/bcc/tree/master/tools/funccount_example.txt">示例</a>.</p>
 <h2 id="网络"><a class="header" href="#网络">网络</a></h2>

@@ -236,15 +236,15 @@ typedef unsigned int u32;
 typedef int pid_t;
 const pid_t pid_filter = 0;
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC(&quot;tp/syscalls/sys_enter_write&quot;)
+SEC("tp/syscalls/sys_enter_write")
 int handle_tp(void *ctx)
 {
  pid_t pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
  if (pid_filter &amp;&amp; pid != pid_filter)
   return 0;
- bpf_printk(&quot;BPF triggered sys_enter_write from PID %d.\n&quot;, pid);
+ bpf_printk("BPF triggered sys_enter_write from PID %d.\n", pid);
  return 0;
 }
 </code></pre>
@@ -270,7 +270,7 @@ Packing ebpf object and config into package.json...
 Runing eBPF program...
 </code></pre>
 <p>运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：</p>
-<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep &quot;BPF triggered sys_enter_write&quot;
+<pre><code class="language-console">$ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_write"
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
            &lt;...&gt;-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 </code></pre>
@@ -283,7 +283,7 @@ Runing eBPF program...
 <p>如上所述， eBPF 程序的基本框架包括：</p>
 <ul>
 <li>包含头文件：需要包含 &lt;linux/bpf.h&gt; 和 &lt;bpf/bpf_helpers.h&gt; 等头文件。</li>
-<li>定义许可证：需要定义许可证，通常使用 &quot;Dual BSD/GPL&quot;。</li>
+<li>定义许可证：需要定义许可证，通常使用 "Dual BSD/GPL"。</li>
 <li>定义 BPF 函数：需要定义一个 BPF 函数，例如其名称为 handle_tp，其参数为 void *ctx，返回值为 int。通常用 C 语言编写。</li>
 <li>使用 BPF 助手函数：在例如 BPF 函数中，可以使用 BPF 助手函数 bpf_get_current_pid_tgid() 和 bpf_printk()。</li>
 <li>返回值</li>

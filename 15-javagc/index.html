@@ -182,8 +182,8 @@
 <p>在用户层面进行动态跟踪，即用户级动态跟踪（User-Level Dynamic Tracing）允许我们对任何用户级别的代码进行插桩。比如，我们可以通过在 MySQL 服务器的 <code>dispatch_command()</code> 函数上进行插桩，来跟踪服务器的查询请求：</p>
 <pre><code class="language-bash"># ./uprobe 'p:cmd /opt/bin/mysqld:_Z16dispatch_command19enum_server_commandP3THDPcj +0(%dx):string'
 Tracing uprobe cmd (p:cmd /opt/bin/mysqld:0x2dbd40 +0(%dx):string). Ctrl-C to end.
-  mysqld-2855  [001] d... 19957757.590926: cmd: (0x6dbd40) arg1=&quot;show tables&quot;
-  mysqld-2855  [001] d... 19957759.703497: cmd: (0x6dbd40) arg1=&quot;SELECT * FROM numbers&quot;
+  mysqld-2855  [001] d... 19957757.590926: cmd: (0x6dbd40) arg1="show tables"
+  mysqld-2855  [001] d... 19957759.703497: cmd: (0x6dbd40) arg1="SELECT * FROM numbers"
 [...]
 </code></pre>
 <p>这里我们使用了 <code>uprobe</code> 工具，它利用了 Linux 的内置功能：ftrace（跟踪器）和 uprobes（用户级动态跟踪，需要较新的 Linux 版本，例如 4.0 左右）。其他的跟踪器，如 perf_events 和 SystemTap，也可以实现此功能。</p>
@@ -200,7 +200,7 @@ adjust_time_range
 </code></pre>
 <p>这有 21,000 个函数。我们也可以跟踪库函数，甚至是单个的指令偏移。</p>
 <p>用户级动态跟踪的能力是非常强大的，它可以解决无数的问题。然而，使用它也有一些困难：需要确定需要跟踪的代码，处理函数参数，以及应对代码的更改。</p>
-<p>用户级静态定义跟踪（User-level Statically Defined Tracing, USDT）则可以在某种程度上解决这些问题。USDT 探针（或者称为用户级 &quot;marker&quot;）是开发者在代码的关键位置插入的跟踪宏，提供稳定且已经过文档说明的 API。这使得跟踪工作变得更加简单。</p>
+<p>用户级静态定义跟踪（User-level Statically Defined Tracing, USDT）则可以在某种程度上解决这些问题。USDT 探针（或者称为用户级 "marker"）是开发者在代码的关键位置插入的跟踪宏，提供稳定且已经过文档说明的 API。这使得跟踪工作变得更加简单。</p>
 <p>使用 USDT，我们可以简单地跟踪一个名为 <code>mysql:query__start</code> 的探针，而不是去跟踪那个名为 <code>_Z16dispatch_command19enum_server_commandP3THDPcj</code> 的 C++ 符号，也就是 <code>dispatch_command()</code> 函数。当然，我们仍然可以在需要的时候去跟踪 <code>dispatch_command()</code> 以及其他 21,000 个 mysqld 函数，但只有当 USDT 探针无法解决问题的时候我们才需要这么做。</p>
 <p>在 Linux 中的 USDT，无论是哪种形式的静态跟踪点，其实都已经存在了几十年。它最近由于 Sun 的 DTrace 工具的流行而再次受到关注，这使得许多常见的应用程序，包括 MySQL、PostgreSQL、Node.js、Java 等都加入了 USDT。SystemTap 则开发了一种可以消费这些 DTrace 探针的方式。</p>
 <p>你可能正在运行一个已经包含了 USDT 探针的 Linux 应用程序，或者可能需要重新编译（通常是 --enable-dtrace）。你可以使用 <code>readelf</code> 来进行检查，例如对于 Node.js：</p>
@@ -221,7 +221,7 @@ Notes at offset 0x00c43058 with length 0x00000494:
     Arguments: 8@%rax 8@%rdx 8@-136(%rbp) -4@-140(%rbp) 8@-72(%rbp) 8@-80(%rbp) -4@-144(%rbp)
 [...]
 </code></pre>
-<p>这就是使用 --enable-dtrace 重新编译的 node，以及安装了提供 &quot;dtrace&quot; 功能来构建 USDT 支持的 systemtap-sdt-dev 包。这里显示了两个探针：node:gc__start（开始进行垃圾回收）和 node:http__client__request。</p>
+<p>这就是使用 --enable-dtrace 重新编译的 node，以及安装了提供 "dtrace" 功能来构建 USDT 支持的 systemtap-sdt-dev 包。这里显示了两个探针：node:gc__start（开始进行垃圾回收）和 node:http__client__request。</p>
 <p>在这一点上，你可以使用 SystemTap 或者 LTTng 来跟踪这些探针。然而，内置的 Linux 跟踪器，比如 ftrace 和 perf_events，目前还无法做到这一点（尽管 perf_events 的支持正在开发中）。</p>
 <p>USDT 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  <a href="https://github.com/eunomia-bpf/bpftime">bpftime</a>。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。</p>
 <h2 id="java-gc-介绍"><a class="header" href="#java-gc-介绍">Java GC 介绍</a></h2>
@@ -236,20 +236,20 @@ Notes at offset 0x00c43058 with length 0x00000494:
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/usdt.bpf.h&gt;
-#include &quot;javagc.h&quot;
+#include "javagc.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 100);
     __type(key, uint32_t);
     __type(value, struct data_t);
-} data_map SEC(&quot;.maps&quot;);
+} data_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __type(key, int);
     __type(value, int);
-} perf_map SEC(&quot;.maps&quot;);
+} perf_map SEC(".maps");
 
 __u32 time;
 
@@ -286,38 +286,38 @@ static int gc_end(struct pt_regs *ctx)
     return 0;
 }
 
-SEC(&quot;usdt&quot;)
+SEC("usdt")
 int handle_gc_start(struct pt_regs *ctx)
 {
     return gc_start(ctx);
 }
 
-SEC(&quot;usdt&quot;)
+SEC("usdt")
 int handle_gc_end(struct pt_regs *ctx)
 {
     return gc_end(ctx);
 }
 
-SEC(&quot;usdt&quot;)
+SEC("usdt")
 int handle_mem_pool_gc_start(struct pt_regs *ctx)
 {
     return gc_start(ctx);
 }
 
-SEC(&quot;usdt&quot;)
+SEC("usdt")
 int handle_mem_pool_gc_end(struct pt_regs *ctx)
 {
     return gc_end(ctx);
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 </code></pre>
 <p>首先，我们定义了两个映射（map）：</p>
 <ul>
 <li><code>data_map</code>：这个 hashmap 存储每个进程 ID 的垃圾收集开始时间。<code>data_t</code> 结构体包含进程 ID、CPU ID 和时间戳。</li>
 <li><code>perf_map</code>：这是一个 perf event array，用于将数据发送回用户态程序。</li>
 </ul>
-<p>然后，我们有四个处理函数：<code>gc_start</code>、<code>gc_end</code> 和两个 USDT 处理函数 <code>handle_mem_pool_gc_start</code> 和 <code>handle_mem_pool_gc_end</code>。这些函数都用 BPF 的 <code>SEC(&quot;usdt&quot;)</code> 宏注解，以便在 Java 进程中捕获到与垃圾收集相关的 USDT 事件。</p>
+<p>然后，我们有四个处理函数：<code>gc_start</code>、<code>gc_end</code> 和两个 USDT 处理函数 <code>handle_mem_pool_gc_start</code> 和 <code>handle_mem_pool_gc_end</code>。这些函数都用 BPF 的 <code>SEC("usdt")</code> 宏注解，以便在 Java 进程中捕获到与垃圾收集相关的 USDT 事件。</p>
 <p><code>gc_start</code> 函数在垃圾收集开始时被调用。它首先获取当前的 CPU ID、进程 ID 和时间戳，然后将这些数据存入 <code>data_map</code>。</p>
 <p><code>gc_end</code> 函数在垃圾收集结束时被调用。它执行与 <code>gc_start</code> 类似的操作，但是它还从 <code>data_map</code> 中检索开始时间，并计算垃圾收集的持续时间。如果持续时间超过了设定的阈值（变量 <code>time</code>），那么它将数据发送回用户态程序。</p>
 <p><code>handle_gc_start</code> 和 <code>handle_gc_end</code> 是针对垃圾收集开始和结束事件的处理函数，它们分别调用了 <code>gc_start</code> 和 <code>gc_end</code>。</p>
@@ -333,17 +333,17 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
     FILE *f;
     int i = 0;
 
-    sprintf(buf, &quot;/proc/%d/maps&quot;, env.pid);
-    f = fopen(buf, &quot;r&quot;);
+    sprintf(buf, "/proc/%d/maps", env.pid);
+    f = fopen(buf, "r");
     if (!f)
         return -1;
 
-    while (fscanf(f, &quot;%zx-%zx %s %zx %*s %*d%[^\n]\n&quot;,
+    while (fscanf(f, "%zx-%zx %s %zx %*s %*d%[^\n]\n",
             &amp;seg_start, &amp;seg_end, mode, &amp;seg_off, line) == 5) {
         i = 0;
         while (isblank(line[i]))
             i++;
-        if (strstr(line + i, &quot;libjvm.so&quot;)) {
+        if (strstr(line + i, "libjvm.so")) {
             break;
         }
     }
@@ -356,34 +356,34 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
 </code></pre>
 <p>接下来，我们看到的是将 eBPF 程序（函数 <code>handle_gc_start</code> 和 <code>handle_gc_end</code>）附加到Java进程的相关USDT探针上。每个程序都通过调用 <code>bpf_program__attach_usdt</code> 函数来实现这一点，该函数的参数包括BPF程序、进程ID、二进制路径以及探针的提供者和名称。如果探针挂载成功，<code>bpf_program__attach_usdt</code> 将返回一个链接对象，该对象将存储在skeleton的链接成员中。如果挂载失败，程序将打印错误消息并进行清理。</p>
 <pre><code class="language-c">    skel-&gt;links.handle_mem_pool_gc_start = bpf_program__attach_usdt(skel-&gt;progs.handle_gc_start, env.pid,
-                                    binary_path, &quot;hotspot&quot;, &quot;mem__pool__gc__begin&quot;, NULL);
+                                    binary_path, "hotspot", "mem__pool__gc__begin", NULL);
     if (!skel-&gt;links.handle_mem_pool_gc_start) {
         err = errno;
-        fprintf(stderr, &quot;attach usdt mem__pool__gc__begin failed: %s\n&quot;, strerror(err));
+        fprintf(stderr, "attach usdt mem__pool__gc__begin failed: %s\n", strerror(err));
         goto cleanup;
     }
 
     skel-&gt;links.handle_mem_pool_gc_end = bpf_program__attach_usdt(skel-&gt;progs.handle_gc_end, env.pid,
-                                binary_path, &quot;hotspot&quot;, &quot;mem__pool__gc__end&quot;, NULL);
+                                binary_path, "hotspot", "mem__pool__gc__end", NULL);
     if (!skel-&gt;links.handle_mem_pool_gc_end) {
         err = errno;
-        fprintf(stderr, &quot;attach usdt mem__pool__gc__end failed: %s\n&quot;, strerror(err));
+        fprintf(stderr, "attach usdt mem__pool__gc__end failed: %s\n", strerror(err));
         goto cleanup;
     }
 
     skel-&gt;links.handle_gc_start = bpf_program__attach_usdt(skel-&gt;progs.handle_gc_start, env.pid,
-                                    binary_path, &quot;hotspot&quot;, &quot;gc__begin&quot;, NULL);
+                                    binary_path, "hotspot", "gc__begin", NULL);
     if (!skel-&gt;links.handle_gc_start) {
         err = errno;
-        fprintf(stderr, &quot;attach usdt gc__begin failed: %s\n&quot;, strerror(err));
+        fprintf(stderr, "attach usdt gc__begin failed: %s\n", strerror(err));
         goto cleanup;
     }
 
     skel-&gt;links.handle_gc_end = bpf_program__attach_usdt(skel-&gt;progs.handle_gc_end, env.pid,
-                binary_path, &quot;hotspot&quot;, &quot;gc__end&quot;, NULL);
+                binary_path, "hotspot", "gc__end", NULL);
     if (!skel-&gt;links.handle_gc_end) {
         err = errno;
-        fprintf(stderr, &quot;attach usdt gc__end failed: %s\n&quot;, strerror(err));
+        fprintf(stderr, "attach usdt gc__end failed: %s\n", strerror(err));
         goto cleanup;
     }
 </code></pre>
@@ -397,8 +397,8 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
 
     time(&amp;t);
     tm = localtime(&amp;t);
-    strftime(ts, sizeof(ts), &quot;%H:%M:%S&quot;, tm);
-    printf(&quot;%-8s %-7d %-7d %-7lld\n&quot;, ts, e-&gt;cpu, e-&gt;pid, e-&gt;ts/1000);
+    strftime(ts, sizeof(ts), "%H:%M:%S", tm);
+    printf("%-8s %-7d %-7d %-7lld\n", ts, e-&gt;cpu, e-&gt;pid, e-&gt;ts/1000);
 }
 </code></pre>
 <h2 id="安装依赖"><a class="header" href="#安装依赖">安装依赖</a></h2>

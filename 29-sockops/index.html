@@ -186,7 +186,7 @@
 <h2 id="示例程序"><a class="header" href="#示例程序">示例程序</a></h2>
 <p>此示例程序从发送者的套接字（出口）重定向流量至接收者的套接字（入口），<strong>跳过 TCP/IP 内核网络栈</strong>。在这个示例中，我们假定发送者和接收者都在<strong>同一台</strong>机器上运行。这个示例程序有两个部分，它们共享一个 map 定义：</p>
 <p>bpf_sockmap.h</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_endian.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 
@@ -205,7 +205,7 @@ struct {
  __uint(max_entries, 65535);
  __type(key, struct sock_key);
  __type(value, int);
-} sock_ops_map SEC(&quot;.maps&quot;);
+} sock_ops_map SEC(".maps");
 </code></pre>
 <p>这个示例程序中的 BPF 程序被分为两个部分 <code>bpf_redirect.bpf.c</code> 和 <code>bpf_contrack.bpf.c</code>。</p>
 <ul>
@@ -227,11 +227,11 @@ struct {
 </ol>
 <p>这个示例程序就是通过 BPF 实现了在本地通信时，快速将消息从发送者的套接字重定向到接收者的套接字，从而绕过了内核网络栈，以提高传输效率。</p>
 <p>bpf_redirect.bpf.c</p>
-<pre><code class="language-c">#include &quot;bpf_sockmap.h&quot;
+<pre><code class="language-c">#include "bpf_sockmap.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC(&quot;sk_msg&quot;)
+SEC("sk_msg")
 int bpf_redir(struct sk_msg_md *msg)
 {
     if(msg-&gt;remote_ip4 != LOCALHOST_IPV4 || msg-&gt;local_ip4!= LOCALHOST_IPV4) 
@@ -248,11 +248,11 @@ int bpf_redir(struct sk_msg_md *msg)
 }
 </code></pre>
 <p>bpf_contrack.bpf.c</p>
-<pre><code class="language-c">#include &quot;bpf_sockmap.h&quot;
+<pre><code class="language-c">#include "bpf_sockmap.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC(&quot;sockops&quot;)
+SEC("sockops")
 int bpf_sockops_handler(struct bpf_sock_ops *skops){
     u32 family, op;
 
@@ -275,7 +275,7 @@ int bpf_sockops_handler(struct bpf_sock_ops *skops){
         .family = skops-&gt;family,
     };
 
- bpf_printk(&quot;&gt;&gt;&gt; new connection: OP:%d, PORT:%d --&gt; %d\n&quot;, op, bpf_ntohl(key.sport), bpf_ntohl(key.dport));
+ bpf_printk("&gt;&gt;&gt; new connection: OP:%d, PORT:%d --&gt; %d\n", op, bpf_ntohl(key.sport), bpf_ntohl(key.dport));
 
  bpf_sock_hash_update(skops, &amp;sock_ops_map, &amp;key, BPF_NOEXIST);
     return BPF_OK;
@@ -298,28 +298,28 @@ set -e
 sudo mount -t bpf bpf /sys/fs/bpf/
 
 # check if old program already loaded
-if [ -e &quot;/sys/fs/bpf/bpf_sockops&quot; ]; then
-    echo &quot;&gt;&gt;&gt; bpf_sockops already loaded, uninstalling...&quot;
+if [ -e "/sys/fs/bpf/bpf_sockops" ]; then
+    echo "&gt;&gt;&gt; bpf_sockops already loaded, uninstalling..."
     ./unload.sh
-    echo &quot;&gt;&gt;&gt; old program already deleted...&quot;
+    echo "&gt;&gt;&gt; old program already deleted..."
 fi
 
 # load and attach sock_ops program
 sudo bpftool prog load bpf_contrack.bpf.o /sys/fs/bpf/bpf_sockops type sockops pinmaps /sys/fs/bpf/
-sudo bpftool cgroup attach &quot;/sys/fs/cgroup/&quot; sock_ops pinned &quot;/sys/fs/bpf/bpf_sockops&quot;
+sudo bpftool cgroup attach "/sys/fs/cgroup/" sock_ops pinned "/sys/fs/bpf/bpf_sockops"
 
 # load and attach sk_msg program 
-sudo bpftool prog load bpf_redirect.bpf.o &quot;/sys/fs/bpf/bpf_redir&quot; map name sock_ops_map pinned &quot;/sys/fs/bpf/sock_ops_map&quot;
+sudo bpftool prog load bpf_redirect.bpf.o "/sys/fs/bpf/bpf_redir" map name sock_ops_map pinned "/sys/fs/bpf/sock_ops_map"
 sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs/bpf/sock_ops_map
 </code></pre>
 <p>这是一个 BPF 的加载脚本。它的主要功能是加载和附加 BPF 程序到内核系统中，并将关联的 BPF map 一并存储（pin）到 BPF 文件系统中，以便 BPF 程序能访问和操作这些 map。</p>
 <p>让我们详细地看一下脚本的每一行是做什么的。</p>
 <ol>
 <li><code>sudo mount -t bpf bpf /sys/fs/bpf/</code> 这一行用于挂载 BPF 文件系统，使得 BPF 程序和相关的 map 可以被系统访问和操作。</li>
-<li>判断条件 <code>[ -e &quot;/sys/fs/bpf/bpf_sockops&quot; ]</code> 是检查是否已经存在 <code>/sys/fs/bpf/bpf_sockops</code> 文件，如果存在，则说明 <code>bpf_sockops</code> 程序已经被加载到系统中，那么将会通过 <code>./unload.sh</code> 脚本将其卸载。</li>
+<li>判断条件 <code>[ -e "/sys/fs/bpf/bpf_sockops" ]</code> 是检查是否已经存在 <code>/sys/fs/bpf/bpf_sockops</code> 文件，如果存在，则说明 <code>bpf_sockops</code> 程序已经被加载到系统中，那么将会通过 <code>./unload.sh</code> 脚本将其卸载。</li>
 <li><code>sudo bpftool prog load bpf_contrack.bpf.o /sys/fs/bpf/bpf_sockops type sockops pinmaps /sys/fs/bpf/</code> 这一行是加载上文中 <code>bpf_contrack.bpf.c</code> 编译得到的 BPF 对象文件 <code>bpf_contrack.bpf.o</code> 到 BPF 文件系统中，存储至 <code>/sys/fs/bpf/bpf_sockops</code>，并且指定它的类型为 <code>sockops</code>。<code>pinmaps /sys/fs/bpf/</code> 是指定将加载的 BPF 程序相关的 map 存储在 <code>/sys/fs/bpf/</code> 下。</li>
-<li><code>sudo bpftool cgroup attach &quot;/sys/fs/cgroup/&quot; sock_ops pinned &quot;/sys/fs/bpf/bpf_sockops&quot;</code> 这一行是将已经加载到 BPF 文件系统的 <code>bpf_sockops</code> 程序附加到 cgroup（此路径为&quot;/sys/fs/cgroup/&quot;）。附加后，所有属于这个 cgroup 的套接字操作都会受到 <code>bpf_sockops</code> 的影响。</li>
-<li><code>sudo bpftool prog load bpf_redirect.bpf.o &quot;/sys/fs/bpf/bpf_redir&quot; map name sock_ops_map pinned &quot;/sys/fs/bpf/sock_ops_map&quot;</code> 这一行是加载 <code>bpf_redirect.bpf.c</code> 编译得到的 BPF 对象文件 <code>bpf_redirect.bpf.o</code> 到 BPF 文件系统中，存储至 <code>/sys/fs/bpf/bpf_redir</code> ，并且指定它的相关 map为 <code>sock_ops_map</code>，这个map在 <code>/sys/fs/bpf/sock_ops_map</code> 中。</li>
+<li><code>sudo bpftool cgroup attach "/sys/fs/cgroup/" sock_ops pinned "/sys/fs/bpf/bpf_sockops"</code> 这一行是将已经加载到 BPF 文件系统的 <code>bpf_sockops</code> 程序附加到 cgroup（此路径为"/sys/fs/cgroup/"）。附加后，所有属于这个 cgroup 的套接字操作都会受到 <code>bpf_sockops</code> 的影响。</li>
+<li><code>sudo bpftool prog load bpf_redirect.bpf.o "/sys/fs/bpf/bpf_redir" map name sock_ops_map pinned "/sys/fs/bpf/sock_ops_map"</code> 这一行是加载 <code>bpf_redirect.bpf.c</code> 编译得到的 BPF 对象文件 <code>bpf_redirect.bpf.o</code> 到 BPF 文件系统中，存储至 <code>/sys/fs/bpf/bpf_redir</code> ，并且指定它的相关 map为 <code>sock_ops_map</code>，这个map在 <code>/sys/fs/bpf/sock_ops_map</code> 中。</li>
 <li><code>sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs/bpf/sock_ops_map</code> 这一行是将已经加载的 <code>bpf_redir</code> 附加到 <code>sock_ops_map</code> 上，附加方式为 <code>msg_verdict</code>，表示当该 map 对应的套接字收到消息时，将会调用 <code>bpf_redir</code> 程序处理。</li>
 </ol>
 <p>综上，此脚本的主要作用就是将两个用于处理本地套接字流量的 BPF 程序分别加载到系统并附加到正确的位置，以便它们能被正确地调用，并且确保它们可以访问和操作相关的 BPF map。</p>

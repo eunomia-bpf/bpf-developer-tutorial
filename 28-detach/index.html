@@ -175,8 +175,8 @@
                     <main>
                         <h1 id="在应用程序退出后运行-ebpf-程序ebpf-程序的生命周期"><a class="header" href="#在应用程序退出后运行-ebpf-程序ebpf-程序的生命周期">在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期</a></h1>
 <p>eBPF（Extended Berkeley Packet Filter）是 Linux 内核中的一项重大技术创新，允许用户在内核空间中执行自定义程序，而无需修改内核源代码或加载任何内核模块。这为开发人员提供了极大的灵活性，可以观察、修改和控制 Linux 系统。</p>
-<p>本文将介绍 eBPF 程序的生命周期，以及如何在用户空间应用程序退出后继续运行 eBPF 程序的方法，还将介绍如何使用 &quot;pin&quot; 在不同进程之间共享 eBPF 对象。本文是 eBPF 开发者教程的一部分，更多详细信息可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 和 <a href="https://eunomia.dev/tutorials">https://eunomia.dev/tutorials</a> 中找到。</p>
-<p>通过使用 &quot;detach&quot; 方法来运行 eBPF 程序，用户空间加载程序可以在不停止 eBPF 程序的情况下退出。另外，使用 &quot;pin&quot; 的方法可以在进程之间共享 eBPF 对象，使其保持活动状态。</p>
+<p>本文将介绍 eBPF 程序的生命周期，以及如何在用户空间应用程序退出后继续运行 eBPF 程序的方法，还将介绍如何使用 "pin" 在不同进程之间共享 eBPF 对象。本文是 eBPF 开发者教程的一部分，更多详细信息可以在 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 和 <a href="https://eunomia.dev/tutorials">https://eunomia.dev/tutorials</a> 中找到。</p>
+<p>通过使用 "detach" 方法来运行 eBPF 程序，用户空间加载程序可以在不停止 eBPF 程序的情况下退出。另外，使用 "pin" 的方法可以在进程之间共享 eBPF 对象，使其保持活动状态。</p>
 <h2 id="ebpf-程序的生命周期"><a class="header" href="#ebpf-程序的生命周期">eBPF 程序的生命周期</a></h2>
 <p>BPF对象（包括程序、映射和调试信息）通过文件描述符（FD）进行访问，并具有引用计数器。每个对象都有一个引用计数器，用于追踪对象被引用的次数。例如，当创建一个映射时，内核会分配一个struct bpf_map对象，并将其引用计数器初始化为1。然后，将映射的文件描述符返回给用户空间进程。如果进程退出或崩溃，文件描述符将被关闭，并且映射的引用计数将减少。当引用计数为零时，内存将被释放。</p>
 <p>BPF程序使用 maps 有两个阶段。首先，创建 maps 并将其文件描述符存储为BPF_LD_IMM64指令的一部分。当内核验证程序时，它会增加程序使用的 maps 的引用计数，并将程序的引用计数初始化为1。此时，用户空间可以关闭与maps 相关的文件描述符，但 maps 不会被销毁，因为程序仍然在使用它们。当程序文件描述符关闭且引用计数为零时，销毁逻辑将减少 maps 的引用计数。这允许多个不同类型的程序同时使用同一个 maps。</p>
@@ -199,7 +199,7 @@
     int err;
     err = bpf_program__pin(prog, path);
         if (err) {
-            fprintf(stdout, &quot;could not pin prog %s: %d\n&quot;, path, err);
+            fprintf(stdout, "could not pin prog %s: %d\n", path, err);
             return err;
         }
     return err;
@@ -210,7 +210,7 @@ int pin_map(struct bpf_map *map, const char* path)
     int err;
     err = bpf_map__pin(map, path);
         if (err) {
-            fprintf(stdout, &quot;could not pin map %s: %d\n&quot;, path, err);
+            fprintf(stdout, "could not pin map %s: %d\n", path, err);
             return err;
         }
     return err;
@@ -221,7 +221,7 @@ int pin_link(struct bpf_link *link, const char* path)
     int err;
     err = bpf_link__pin(link, path);
         if (err) {
-            fprintf(stdout, &quot;could not pin link %s: %d\n&quot;, path, err);
+            fprintf(stdout, "could not pin link %s: %d\n", path, err);
             return err;
         }
     return err;

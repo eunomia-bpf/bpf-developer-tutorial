@@ -198,27 +198,27 @@ CONFIG_BPF_LSM=y
 ndlock,lockdown,yama,integrity,apparmor
 </code></pre>
 <p>查看输出是否包含 bpf 选项，如果输出不包含（像上面的例子），可以通过修改 <code>/etc/default/grub</code>：</p>
-<pre><code class="language-conf">GRUB_CMDLINE_LINUX=&quot;lsm=ndlock,lockdown,yama,integrity,apparmor,bpf&quot;
+<pre><code class="language-conf">GRUB_CMDLINE_LINUX="lsm=ndlock,lockdown,yama,integrity,apparmor,bpf"
 </code></pre>
 <p>并通过 <code>update-grub2</code> 命令更新 grub 配置（不同系统的对应命令可能不同），然后重启系统。</p>
 <h2 id="编写-ebpf-程序"><a class="header" href="#编写-ebpf-程序">编写 eBPF 程序</a></h2>
 <pre><code class="language-C">// lsm-connect.bpf.c
-#include &quot;vmlinux.h&quot;
+#include "vmlinux.h"
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char LICENSE[] SEC("license") = "GPL";
 
 #define EPERM 1
 #define AF_INET 2
 
 const __u32 blockme = 16843009; // 1.1.1.1 -&gt; int
 
-SEC(&quot;lsm/socket_connect&quot;)
+SEC("lsm/socket_connect")
 int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, int addrlen, int ret)
 {
-    // Satisfying &quot;cannot override a denial&quot; rule
+    // Satisfying "cannot override a denial" rule
     if (ret != 0)
     {
         return ret;
@@ -235,11 +235,11 @@ int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, in
 
     // Where do you want to go?
     __u32 dest = addr-&gt;sin_addr.s_addr;
-    bpf_printk(&quot;lsm: found connect to %d&quot;, dest);
+    bpf_printk("lsm: found connect to %d", dest);
 
     if (dest == blockme)
     {
-        bpf_printk(&quot;lsm: blocking %d&quot;, dest);
+        bpf_printk("lsm: blocking %d", dest);
         return -EPERM;
     }
     return 0;
@@ -248,7 +248,7 @@ int BPF_PROG(restrict_connect, struct socket *sock, struct sockaddr *address, in
 </code></pre>
 <p>这是一段 C 实现的 eBPF 内核侧代码，它会阻碍所有试图通过 socket 对 1.1.1.1 的连接操作，其中：</p>
 <ul>
-<li><code>SEC(&quot;lsm/socket_connect&quot;)</code> 宏指出该程序期望的挂载点；</li>
+<li><code>SEC("lsm/socket_connect")</code> 宏指出该程序期望的挂载点；</li>
 <li>程序通过 <code>BPF_PROG</code> 宏定义（详情可查看 <a href="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/tools/lib/bpf/bpf_tracing.h">tools/lib/bpf/bpf_tracing.h</a>）；</li>
 <li><code>restrict_connect</code> 是 <code>BPF_PROG</code> 宏要求的程序名；</li>
 <li><code>ret</code> 是该挂载点上（潜在的）当前函数之前的 LSM 检查程序的返回值；</li>
@@ -293,7 +293,7 @@ Retrying.
 </code></pre>
 <p>完整源代码：<a href="https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect">https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect</a></p>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
-<p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 &quot;cannot override a denial&quot; 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
+<p>本文介绍了如何使用 BPF LSM 来限制通过 socket 对特定 IPv4 地址的访问。我们可以通过修改 GRUB 配置文件来开启 LSM 的 BPF 挂载点。在 eBPF 程序中，我们通过 <code>BPF_PROG</code> 宏定义函数，并通过 <code>SEC</code> 宏指定挂载点；在函数实现上，遵循 LSM 安全检查模块中 "cannot override a denial" 的原则，并根据 socket 连接请求的目的地址对该请求进行限制。</p>
 <p>如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 <h2 id="参考"><a class="header" href="#参考">参考</a></h2>
 <ul>

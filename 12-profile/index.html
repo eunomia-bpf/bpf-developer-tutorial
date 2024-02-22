@@ -217,21 +217,21 @@ Userspace:
 <p>内核态 eBPF 程序的实现逻辑主要是借助 perf event，对程序的堆栈进行定时采样，从而捕获程序的执行流程。</p>
 <pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2022 Meta Platforms, Inc. */
-#include &quot;vmlinux.h&quot;
+#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 
-#include &quot;profile.h&quot;
+#include "profile.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 
-SEC(&quot;perf_event&quot;)
+SEC("perf_event")
 int profile(void *ctx)
 {
     int pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
@@ -266,13 +266,13 @@ int profile(void *ctx)
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 </code></pre>
 <p>这里定义了一个类型为 <code>BPF_MAP_TYPE_RINGBUF</code> 的 eBPF  maps 。Ring Buffer 是一种高性能的循环缓冲区，用于在内核和用户空间之间传输数据。<code>max_entries</code> 设置了 Ring Buffer 的最大大小。</p>
 </li>
 <li>
 <p>定义 <code>perf_event</code> eBPF 程序：</p>
-<pre><code class="language-c">SEC(&quot;perf_event&quot;)
+<pre><code class="language-c">SEC("perf_event")
 int profile(void *ctx)
 </code></pre>
 <p>这里定义了一个名为 <code>profile</code> 的 eBPF 程序，它将在 perf 事件触发时执行。</p>
@@ -342,7 +342,7 @@ int main(){
         /* Set up performance monitoring on a CPU/Core */
         pefd = perf_event_open(&amp;attr, pid, cpu, -1, PERF_FLAG_FD_CLOEXEC);
         if (pefd &lt; 0) {
-            fprintf(stderr, &quot;Fail to set up performance monitor on a CPU/Core\n&quot;);
+            fprintf(stderr, "Fail to set up performance monitor on a CPU/Core\n");
             err = -1;
             goto cleanup;
         }
@@ -387,34 +387,34 @@ int main(){
 
     for (i = 0; i &lt; stack_sz; i++) {
         if (!result || result-&gt;size &lt;= i || !result-&gt;entries[i].size) {
-            printf(&quot;  %d [&lt;%016llx&gt;]\n&quot;, i, stack[i]);
+            printf("  %d [&lt;%016llx&gt;]\n", i, stack[i]);
             continue;
         }
 
         if (result-&gt;entries[i].size == 1) {
             sym = &amp;result-&gt;entries[i].syms[0];
             if (sym-&gt;path &amp;&amp; sym-&gt;path[0]) {
-                printf(&quot;  %d [&lt;%016llx&gt;] %s+0x%llx %s:%ld\n&quot;,
+                printf("  %d [&lt;%016llx&gt;] %s+0x%llx %s:%ld\n",
                        i, stack[i], sym-&gt;symbol,
                        stack[i] - sym-&gt;start_address,
                        sym-&gt;path, sym-&gt;line_no);
             } else {
-                printf(&quot;  %d [&lt;%016llx&gt;] %s+0x%llx\n&quot;,
+                printf("  %d [&lt;%016llx&gt;] %s+0x%llx\n",
                        i, stack[i], sym-&gt;symbol,
                        stack[i] - sym-&gt;start_address);
             }
             continue;
         }
 
-        printf(&quot;  %d [&lt;%016llx&gt;]\n&quot;, i, stack[i]);
+        printf("  %d [&lt;%016llx&gt;]\n", i, stack[i]);
         for (j = 0; j &lt; result-&gt;entries[i].size; j++) {
             sym = &amp;result-&gt;entries[i].syms[j];
             if (sym-&gt;path &amp;&amp; sym-&gt;path[0]) {
-                printf(&quot;        %s+0x%llx %s:%ld\n&quot;,
+                printf("        %s+0x%llx %s:%ld\n",
                        sym-&gt;symbol, stack[i] - sym-&gt;start_address,
                        sym-&gt;path, sym-&gt;line_no);
             } else {
-                printf(&quot;        %s+0x%llx\n&quot;, sym-&gt;symbol,
+                printf("        %s+0x%llx\n", sym-&gt;symbol,
                        stack[i] - sym-&gt;start_address);
             }
         }
@@ -431,23 +431,23 @@ static int event_handler(void *_ctx, void *data, size_t size)
     if (event-&gt;kstack_sz &lt;= 0 &amp;&amp; event-&gt;ustack_sz &lt;= 0)
         return 1;
 
-    printf(&quot;COMM: %s (pid=%d) @ CPU %d\n&quot;, event-&gt;comm, event-&gt;pid, event-&gt;cpu_id);
+    printf("COMM: %s (pid=%d) @ CPU %d\n", event-&gt;comm, event-&gt;pid, event-&gt;cpu_id);
 
     if (event-&gt;kstack_sz &gt; 0) {
-        printf(&quot;Kernel:\n&quot;);
+        printf("Kernel:\n");
         show_stack_trace(event-&gt;kstack, event-&gt;kstack_sz / sizeof(__u64), 0);
     } else {
-        printf(&quot;No Kernel Stack\n&quot;);
+        printf("No Kernel Stack\n");
     }
 
     if (event-&gt;ustack_sz &gt; 0) {
-        printf(&quot;Userspace:\n&quot;);
+        printf("Userspace:\n");
         show_stack_trace(event-&gt;ustack, event-&gt;ustack_sz / sizeof(__u64), event-&gt;pid);
     } else {
-        printf(&quot;No Userspace Stack\n&quot;);
+        printf("No Userspace Stack\n");
     }
 
-    printf(&quot;\n&quot;);
+    printf("\n");
     return 0;
 }
 </code></pre>

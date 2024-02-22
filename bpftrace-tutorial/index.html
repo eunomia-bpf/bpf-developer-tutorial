@@ -179,14 +179,14 @@
 <h1 id="1-列出所有探针"><a class="header" href="#1-列出所有探针">1. 列出所有探针</a></h1>
 <pre><code>bpftrace -l 'tracepoint:syscalls:sys_enter_*'
 </code></pre>
-<p>&quot;bpftrace -l&quot; 列出所有探针，并且可以添加搜索项。</p>
+<p>"bpftrace -l" 列出所有探针，并且可以添加搜索项。</p>
 <ul>
 <li>探针是用于捕获事件数据的检测点。</li>
 <li>搜索词支持通配符，如<code>*</code>和<code>?</code>。</li>
-<li>&quot;bpftrace -l&quot; 也可以通过管道传递给grep，进行完整的正则表达式搜索。</li>
+<li>"bpftrace -l" 也可以通过管道传递给grep，进行完整的正则表达式搜索。</li>
 </ul>
 <h1 id="2-hello-world"><a class="header" href="#2-hello-world">2. Hello World</a></h1>
-<pre><code># bpftrace -e 'BEGIN { printf(&quot;hello world\n&quot;); }'
+<pre><code># bpftrace -e 'BEGIN { printf("hello world\n"); }'
 Attaching 1 probe...
 hello world
 ^C
@@ -197,7 +197,7 @@ hello world
 <li>探针可以关联动作，把动作放到{}中。这个例子中，探针被触发时会调用printf()。</li>
 </ul>
 <h1 id="3-文件打开"><a class="header" href="#3-文件打开">3. 文件打开</a></h1>
-<pre><code># bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf(&quot;%s %s\n&quot;, comm, str(args.filename)); }'
+<pre><code># bpftrace -e 'tracepoint:syscalls:sys_enter_openat { printf("%s %s\n", comm, str(args.filename)); }'
 Attaching 1 probe...
 snmp-pass /proc/cpuinfo
 snmp-pass /proc/stat
@@ -247,9 +247,9 @@ Attaching 1 probe...
 </code></pre>
 <p>这里统计进程号为18644的进程执行内核函数sys_read()的返回值，并打印出直方图。</p>
 <ul>
-<li>/.../: 这里设置一个过滤条件(条件判断)，满足该过滤条件时才执行{}里面的动作。在这个例子中意思是只追踪进程号为18644的进程。过滤条件表达式也支持布尔运算，如(&quot;&amp;&amp;&quot;, &quot;||&quot;)。</li>
+<li>/.../: 这里设置一个过滤条件(条件判断)，满足该过滤条件时才执行{}里面的动作。在这个例子中意思是只追踪进程号为18644的进程。过滤条件表达式也支持布尔运算，如("&amp;&amp;", "||")。</li>
 <li>ret: 表示函数的返回值。对于sys_read()，它可能是-1(错误)或者成功读取的字节数。</li>
-<li>@: 类似于上节的map，但是这里没有key，即[]。该map的名称&quot;bytes&quot;会出现在输出中。</li>
+<li>@: 类似于上节的map，但是这里没有key，即[]。该map的名称"bytes"会出现在输出中。</li>
 <li>hist(): 一个map函数，用来描述直方图的参数。输出行以2次方的间隔开始，如<code>[128, 256)</code>表示值大于等于128且小于256。后面跟着位于该区间的参数个数统计，最后是ascii码表示的直方图。该图可以用来研究它的模式分布。</li>
 <li>其它的map函数还有lhist(线性直方图)，count()，sum()，avg()，min()和max()。</li>
 </ul>
@@ -274,7 +274,7 @@ Attaching 1 probe...
 </code></pre>
 <p>使用内核动态跟踪技术显示read()返回字节数的直方图。</p>
 <ul>
-<li><code>kretprobe:vfs_read</code>: 这是kretprobe类型(动态跟踪内核函数返回值)的探针，跟踪<code>vfs_read</code>内核函数。此外还有kprobe类型的探针(在下一节介绍)用于跟踪内核函数的调用。它们是功能强大的探针类型，让我们可以跟踪成千上万的内核函数。然而它们是&quot;不稳定&quot;的探针类型:由于它们可以跟踪任意内核函数，对于不同的内核版本，kprobe和kretprobe不一定能够正常工作。因为内核函数名，参数，返回值和作用等可能会变化。此外，由于它们用来跟踪底层内核的，你需要浏览内核源代码，理解这些探针的参数和返回值的意义。</li>
+<li><code>kretprobe:vfs_read</code>: 这是kretprobe类型(动态跟踪内核函数返回值)的探针，跟踪<code>vfs_read</code>内核函数。此外还有kprobe类型的探针(在下一节介绍)用于跟踪内核函数的调用。它们是功能强大的探针类型，让我们可以跟踪成千上万的内核函数。然而它们是"不稳定"的探针类型:由于它们可以跟踪任意内核函数，对于不同的内核版本，kprobe和kretprobe不一定能够正常工作。因为内核函数名，参数，返回值和作用等可能会变化。此外，由于它们用来跟踪底层内核的，你需要浏览内核源代码，理解这些探针的参数和返回值的意义。</li>
 <li>lhist(): 线性直方图函数:参数分别是value，最小值，最大值，步进值。第一个参数(<code>retval</code>)表示系统调用sys_read()返回值:即成功读取的字节数。</li>
 </ul>
 <h1 id="7-read调用的时间"><a class="header" href="#7-read调用的时间">7. read()调用的时间</a></h1>
@@ -434,7 +434,7 @@ Attaching 1 probe...
 
 kprobe:vfs_open
 {
-	printf(&quot;open path: %s\n&quot;, str(((struct path *)arg0)-&gt;dentry-&gt;d_name.name));
+	printf("open path: %s\n", str(((struct path *)arg0)-&gt;dentry-&gt;d_name.name));
 }
 
 # bpftrace path.bt

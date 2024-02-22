@@ -209,7 +209,7 @@
 </ol>
 <p>正如上文所述，eBPF 提供了一个强大的解决方案，允许我们在内核层面捕获和分析七层协议的流量，而无需对应用程序进行任何修改。这种方法为我们提供了一个独特的机会，可以更简单、更高效地处理应用层流量，特别是在微服务和分布式环境中。</p>
 <p>在处理网络流量和系统行为时，选择在内核态而非用户态进行处理有其独特的优势。首先，内核态处理可以直接访问系统资源和硬件，从而提供更高的性能和效率。其次，由于内核是操作系统的核心部分，它可以提供对系统行为的全面视图，而不受任何用户空间应用程序的限制。</p>
-<p>**无插桩追踪（&quot;zero-instrumentation observability&quot;）**的优势如下：</p>
+<p>**无插桩追踪（"zero-instrumentation observability"）**的优势如下：</p>
 <ol>
 <li><strong>性能开销小</strong>：由于不需要修改或添加额外的代码到应用程序中，所以对性能的影响最小化。</li>
 <li><strong>透明性</strong>：开发者和运维人员不需要知道应用程序的内部工作原理，也不需要访问源代码。</li>
@@ -255,7 +255,7 @@ eBPF 系统调用跟踪通常涉及将 eBPF 程序附加到与系统调用相关
 <p>总之，eBPF 的 socket filter 和 syscall 追踪都可以用于追踪 HTTP 流量，但 socket filters 更直接且更适合此目的。然而，如果您对应用程序如何与系统交互的更广泛的上下文感兴趣（例如，哪些系统调用导致了 HTTP 流量），那么系统调用跟踪将是非常有价值的。在许多高级的可观察性设置中，这两种工具可能会同时使用，以提供系统和网络行为的全面视图。</p>
 <h2 id="使用-ebpf-socket-filter-来捕获-http-流量"><a class="header" href="#使用-ebpf-socket-filter-来捕获-http-流量">使用 eBPF socket filter 来捕获 HTTP 流量</a></h2>
 <p>eBPF 代码由用户态和内核态组成，这里主要关注于内核态代码。这是使用 eBPF socket filter 技术来在内核中捕获HTTP流量的主要逻辑，完整代码如下：</p>
-<pre><code class="language-c">SEC(&quot;socket&quot;)
+<pre><code class="language-c">SEC("socket")
 int socket_handler(struct __sk_buff *skb)
 {
     struct so_event *e;
@@ -315,12 +315,12 @@ int socket_handler(struct __sk_buff *skb)
         return 0;
     }
     bpf_skb_load_bytes(skb, payload_offset, line_buffer, 7);
-    bpf_printk(&quot;%d len %d buffer: %s&quot;, payload_offset, payload_length, line_buffer);
-    if (bpf_strncmp(line_buffer, 3, &quot;GET&quot;) != 0 &amp;&amp;
-        bpf_strncmp(line_buffer, 4, &quot;POST&quot;) != 0 &amp;&amp;
-        bpf_strncmp(line_buffer, 3, &quot;PUT&quot;) != 0 &amp;&amp;
-        bpf_strncmp(line_buffer, 6, &quot;DELETE&quot;) != 0 &amp;&amp;
-        bpf_strncmp(line_buffer, 4, &quot;HTTP&quot;) != 0)
+    bpf_printk("%d len %d buffer: %s", payload_offset, payload_length, line_buffer);
+    if (bpf_strncmp(line_buffer, 3, "GET") != 0 &amp;&amp;
+        bpf_strncmp(line_buffer, 4, "POST") != 0 &amp;&amp;
+        bpf_strncmp(line_buffer, 3, "PUT") != 0 &amp;&amp;
+        bpf_strncmp(line_buffer, 6, "DELETE") != 0 &amp;&amp;
+        bpf_strncmp(line_buffer, 4, "HTTP") != 0)
     {
         return 0;
     }
@@ -346,7 +346,7 @@ int socket_handler(struct __sk_buff *skb)
 }
 </code></pre>
 <p>当分析这段eBPF程序时，我们将按照每个代码块的内容来详细解释，并提供相关的背景知识：</p>
-<pre><code class="language-c">SEC(&quot;socket&quot;)
+<pre><code class="language-c">SEC("socket")
 int socket_handler(struct __sk_buff *skb)
 {
     // ...
@@ -407,13 +407,13 @@ if (proto != ETH_P_IP)
 <li><code>frag_off = __bpf_ntohs(frag_off);</code>：将加载的片偏移字段从网络字节序（Big-Endian）转换为主机字节序。网络协议通常使用大端字节序表示数据，而主机可能使用大端或小端字节序。这里将片偏移字段转换为主机字节序，以便进一步处理。</li>
 <li><code>return frag_off &amp; (IP_MF | IP_OFFSET);</code>：这行代码通过使用位运算检查片偏移字段的值，以确定是否为IP分片。具体来说，它使用位与运算符<code>&amp;</code>将片偏移字段与两个标志位进行位与运算：
 <ul>
-<li><code>IP_MF</code>：表示&quot;更多分片&quot;标志（More Fragments）。如果这个标志位被设置为1，表示数据包是分片的一部分，还有更多分片。</li>
+<li><code>IP_MF</code>：表示"更多分片"标志（More Fragments）。如果这个标志位被设置为1，表示数据包是分片的一部分，还有更多分片。</li>
 <li><code>IP_OFFSET</code>：表示片偏移字段。如果片偏移字段不为0，表示数据包是分片的一部分，且具有片偏移值。
 如果这两个标志位中的任何一个被设置为1，那么结果就不为零，说明数据包是IP分片。如果都为零，说明数据包不是分片。</li>
 </ul>
 </li>
 </ol>
-<p>需要注意的是，IP头部的片偏移字段以8字节为单位，所以实际的片偏移值需要左移3位来得到字节偏移。此外，IP头部的&quot;更多分片&quot;标志（IP_MF）表示数据包是否有更多的分片，通常与片偏移字段一起使用来指示整个数据包的分片情况。这个函数只关心这两个标志位，如果其中一个标志被设置，就认为是IP分片。</p>
+<p>需要注意的是，IP头部的片偏移字段以8字节为单位，所以实际的片偏移值需要左移3位来得到字节偏移。此外，IP头部的"更多分片"标志（IP_MF）表示数据包是否有更多的分片，通常与片偏移字段一起使用来指示整个数据包的分片情况。这个函数只关心这两个标志位，如果其中一个标志被设置，就认为是IP分片。</p>
 <pre><code class="language-c">bpf_skb_load_bytes(skb, ETH_HLEN, &amp;hdr_len, sizeof(hdr_len));
 hdr_len &amp;= 0x0f;
 hdr_len *= 4;
@@ -479,14 +479,14 @@ if (payload_length &lt; 7 || payload_offset &lt; 0)
     return 0;
 }
 bpf_skb_load_bytes(skb, payload_offset, line_buffer, 7);
-bpf_printk(&quot;%d len %d buffer: %s&quot;, payload_offset, payload_length, line_buffer);
+bpf_printk("%d len %d buffer: %s", payload_offset, payload_length, line_buffer);
 </code></pre>
 <p>这部分代码用于加载HTTP请求行的前7个字节，存储在名为<code>line_buffer</code>的字符数组中。然后，它检查HTTP请求数据的长度是否小于7字节或偏移量是否为负数，如果满足这些条件，说明HTTP请求不完整，直接返回0。最后，它使用<code>bpf_printk</code>函数将HTTP请求行的内容打印到内核日志中，以供调试和分析。</p>
-<pre><code class="language-c">if (bpf_strncmp(line_buffer, 3, &quot;GET&quot;) != 0 &amp;&amp;
-    bpf_strncmp(line_buffer, 4, &quot;POST&quot;) != 0 &amp;&amp;
-    bpf_strncmp(line_buffer, 3, &quot;PUT&quot;) != 0 &amp;&amp;
-    bpf_strncmp(line_buffer, 6, &quot;DELETE&quot;) != 0 &amp;&amp;
-    bpf_strncmp(line_buffer, 4, &quot;HTTP&quot;) != 0)
+<pre><code class="language-c">if (bpf_strncmp(line_buffer, 3, "GET") != 0 &amp;&amp;
+    bpf_strncmp(line_buffer, 4, "POST") != 0 &amp;&amp;
+    bpf_strncmp(line_buffer, 3, "PUT") != 0 &amp;&amp;
+    bpf_strncmp(line_buffer, 6, "DELETE") != 0 &amp;&amp;
+    bpf_strncmp(line_buffer, 4, "HTTP") != 0)
 {
     return 0;
 }
@@ -534,7 +534,7 @@ return skb-&gt;len;
     sock = open_raw_sock(interface);
     if (sock &lt; 0) {
         err = -2;
-        fprintf(stderr, &quot;Failed to open raw socket\n&quot;);
+        fprintf(stderr, "Failed to open raw socket\n");
         goto cleanup;
     }
 
@@ -542,7 +542,7 @@ return skb-&gt;len;
     prog_fd = bpf_program__fd(skel-&gt;progs.socket_handler);
     if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &amp;prog_fd, sizeof(prog_fd))) {
         err = -3;
-        fprintf(stderr, &quot;Failed to attach to raw socket\n&quot;);
+        fprintf(stderr, "Failed to attach to raw socket\n");
         goto cleanup;
     }
 </code></pre>
@@ -567,14 +567,14 @@ $ sudo ./sockfilter
 <p>在另外一个窗口中，使用 python 启动一个简单的 web server：</p>
 <pre><code class="language-console">python3 -m http.server
 Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
-127.0.0.1 - - [18/Sep/2023 01:05:52] &quot;GET / HTTP/1.1&quot; 200 -
+127.0.0.1 - - [18/Sep/2023 01:05:52] "GET / HTTP/1.1" 200 -
 </code></pre>
 <p>可以使用 curl 发起请求：</p>
 <pre><code class="language-c">$ curl http://0.0.0.0:8000/
 &lt;!DOCTYPE HTML&gt;
-&lt;html lang=&quot;en&quot;&gt;
+&lt;html lang="en"&gt;
 &lt;head&gt;
-&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta charset="utf-8"&gt;
 &lt;title&gt;Directory listing for /&lt;/title&gt;
 ....
 </code></pre>
@@ -598,10 +598,10 @@ Server: SimpleHTTP/0.6 Python/3.11.4
     __uint(max_entries, 4096);
     __type(key, u64);
     __type(value, struct accept_args_t);
-} active_accept_args_map SEC(&quot;.maps&quot;);
+} active_accept_args_map SEC(".maps");
 
 // 定义在 accept 系统调用入口的追踪点
-SEC(&quot;tracepoint/syscalls/sys_enter_accept&quot;)
+SEC("tracepoint/syscalls/sys_enter_accept")
 int sys_enter_accept(struct trace_event_raw_sys_enter *ctx)
 {
     u64 id = bpf_get_current_pid_tgid();
@@ -611,7 +611,7 @@ int sys_enter_accept(struct trace_event_raw_sys_enter *ctx)
 }
 
 // 定义在 accept 系统调用退出的追踪点
-SEC(&quot;tracepoint/syscalls/sys_exit_accept&quot;)
+SEC("tracepoint/syscalls/sys_exit_accept")
 int sys_exit_accept(struct trace_event_raw_sys_exit *ctx)
 {
     // ... 处理 accept 调用的结果
@@ -629,10 +629,10 @@ struct
     __uint(max_entries, 4096);
     __type(key, u64);
     __type(value, struct data_args_t);
-} active_read_args_map SEC(&quot;.maps&quot;);
+} active_read_args_map SEC(".maps");
 
 // 定义在 read 系统调用入口的追踪点
-SEC(&quot;tracepoint/syscalls/sys_enter_read&quot;)
+SEC("tracepoint/syscalls/sys_enter_read")
 int sys_enter_read(struct trace_event_raw_sys_enter *ctx)
 {
     // ... 获取和存储 read 调用的参数
@@ -662,7 +662,7 @@ static inline void process_data(struct trace_event_raw_sys_exit *ctx,
 }
 
 // 定义在 read 系统调用退出的追踪点
-SEC(&quot;tracepoint/syscalls/sys_exit_read&quot;)
+SEC("tracepoint/syscalls/sys_exit_read")
 int sys_exit_read(struct trace_event_raw_sys_exit *ctx)
 {
     // ... 处理 read 调用的结果
@@ -675,7 +675,7 @@ int sys_exit_read(struct trace_event_raw_sys_exit *ctx)
     return 0;
 }
 
-char _license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char _license[] SEC("license") = "GPL";
 </code></pre>
 <p>这段代码简要展示了如何使用eBPF追踪Linux内核中的系统调用来捕获HTTP流量。以下是对代码的hook位置和流程的详细解释，以及需要hook哪些系统调用来实现完整的请求追踪：</p>
 <h3 id="hook-位置和流程"><a class="header" href="#hook-位置和流程"><strong>Hook 位置和流程</strong></a></h3>

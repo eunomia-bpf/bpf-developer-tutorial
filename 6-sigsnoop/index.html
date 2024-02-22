@@ -198,7 +198,7 @@ struct {
  __uint(max_entries, MAX_ENTRIES);
  __type(key, __u32);
  __type(value, struct event);
-} values SEC(&quot;.maps&quot;);
+} values SEC(".maps");
 
 
 static int probe_entry(pid_t tpid, int sig)
@@ -228,9 +228,9 @@ static int probe_exit(void *ctx, int ret)
   return 0;
 
  eventp-&gt;ret = ret;
- bpf_printk(&quot;PID %d (%s) sent signal %d &quot;,
+ bpf_printk("PID %d (%s) sent signal %d ",
            eventp-&gt;pid, eventp-&gt;comm, eventp-&gt;sig);
- bpf_printk(&quot;to PID %d, ret = %d&quot;,
+ bpf_printk("to PID %d, ret = %d",
            eventp-&gt;tpid, ret);
 
 cleanup:
@@ -238,7 +238,7 @@ cleanup:
  return 0;
 }
 
-SEC(&quot;tracepoint/syscalls/sys_enter_kill&quot;)
+SEC("tracepoint/syscalls/sys_enter_kill")
 int kill_entry(struct trace_event_raw_sys_enter *ctx)
 {
  pid_t tpid = (pid_t)ctx-&gt;args[0];
@@ -247,13 +247,13 @@ int kill_entry(struct trace_event_raw_sys_enter *ctx)
  return probe_entry(tpid, sig);
 }
 
-SEC(&quot;tracepoint/syscalls/sys_exit_kill&quot;)
+SEC("tracepoint/syscalls/sys_exit_kill")
 int kill_exit(struct trace_event_raw_sys_exit *ctx)
 {
  return probe_exit(ctx, ctx-&gt;ret);
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 </code></pre>
 <p>上面的代码定义了一个 eBPF 程序，用于捕获进程发送信号的系统调用，包括 kill、tkill 和 tgkill。它通过使用 tracepoint 来捕获系统调用的进入和退出事件，并在这些事件发生时执行指定的探针函数，例如 probe_entry 和 probe_exit。</p>
 <p>在探针函数中，我们使用 bpf_map 存储捕获的事件信息，包括发送信号的进程 ID、接收信号的进程 ID、信号值和进程的可执行文件名称。在系统调用退出时，我们将获取存储在 bpf_map 中的事件信息，并使用 bpf_printk 打印进程 ID、进程名称、发送的信号和系统调用的返回值。</p>
@@ -284,7 +284,7 @@ Runing eBPF program...
  __uint(max_entries, MAX_ENTRIES);
  __type(key, __u32);
  __type(value, struct event);
-} values SEC(&quot;.maps&quot;);
+} values SEC(".maps");
 </code></pre>
 <p>并使用一些对应的 API 进行访问，例如 bpf_map_lookup_elem、bpf_map_update_elem、bpf_map_delete_elem 等。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>

@@ -288,7 +288,7 @@
 libbpf: prog 'tracepoint__syscalls__sys_enter_open': failed to create tracepoint 'syscalls/sys_enter_open' perf event: No such file or directory
 libbpf: prog 'tracepoint__syscalls__sys_enter_open': failed to auto-attach: -2
 failed to attach skeleton
-Error: BpfError(&quot;load and attach ebpf program failed&quot;)
+Error: BpfError("load and attach ebpf program failed")
 </code></pre>
 <p>后经查看发现内核未开启 <code>CONFIG_FTRACE_SYSCALLS</code> 选项，导致无法使用 syscalls 的 tracepoint。</p>
 <h2 id="总结"><a class="header" href="#总结">总结</a></h2>
@@ -303,12 +303,10 @@ Error: BpfError(&quot;load and attach ebpf program failed&quot;)
 <p>如果希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <a href="https://github.com/eunomia-bpf/bpf-developer-tutorial">https://github.com/eunomia-bpf/bpf-developer-tutorial</a> 或网站 <a href="https://eunomia.dev/zh/tutorials/">https://eunomia.dev/zh/tutorials/</a> 以获取更多示例和完整的教程。</p>
 <h2 id="参考"><a class="header" href="#参考">参考</a></h2>
 <div class="footnote-definition" id="Google"><sup class="footnote-definition-label">2</sup>
-<p><a href="https://source.android.google.cn/docs/core/architecture/kernel/bpf">https://source.android.google.cn/docs/core/architecture/kernel/bpf</a>
-</p>
+<p><a href="https://source.android.google.cn/docs/core/architecture/kernel/bpf">https://source.android.google.cn/docs/core/architecture/kernel/bpf</a></p>
 </div>
 <div class="footnote-definition" id="WeiShu"><sup class="footnote-definition-label">1</sup>
-<p><a href="https://mp.weixin.qq.com/s/mul4n5D3nXThjxuHV7GpMA">https://mp.weixin.qq.com/s/mul4n5D3nXThjxuHV7GpMA</a>
-</p>
+<p><a href="https://mp.weixin.qq.com/s/mul4n5D3nXThjxuHV7GpMA">https://mp.weixin.qq.com/s/mul4n5D3nXThjxuHV7GpMA</a></p>
 </div>
 <div class="footnote-definition" id="SeeFlowerX"><sup class="footnote-definition-label">3</sup>
 <p><a href="https://blog.seeflower.dev/archives/138/">https://blog.seeflower.dev/archives/138/</a></p>

@@ -196,14 +196,14 @@
 </ol>
 <h2 id="kprobe-示例"><a class="header" href="#kprobe-示例">kprobe 示例</a></h2>
 <p>完整代码如下：</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC(&quot;kprobe/do_unlinkat&quot;)
+SEC("kprobe/do_unlinkat")
 int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 {
     pid_t pid;
@@ -211,31 +211,31 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
     filename = BPF_CORE_READ(name, name);
-    bpf_printk(&quot;KPROBE ENTRY pid = %d, filename = %s\n&quot;, pid, filename);
+    bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
     return 0;
 }
 
-SEC(&quot;kretprobe/do_unlinkat&quot;)
+SEC("kretprobe/do_unlinkat")
 int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 {
     pid_t pid;
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-    bpf_printk(&quot;KPROBE EXIT: pid = %d, ret = %ld\n&quot;, pid, ret);
+    bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
     return 0;
 }
 </code></pre>
 <p>这段代码是一个简单的 eBPF 程序，用于监测和捕获在 Linux 内核中执行的 unlink 系统调用。unlink 系统调用的功能是删除一个文件，这个 eBPF 程序通过使用 kprobe（内核探针）在<code>do_unlinkat</code>函数的入口和退出处放置钩子，实现对该系统调用的跟踪。</p>
 <p>首先，我们导入必要的头文件，如 vmlinux.h，bpf_helpers.h，bpf_tracing.h 和 bpf_core_read.h。接着，我们定义许可证，以允许程序在内核中运行。</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 </code></pre>
 <p>接下来，我们定义一个名为<code>BPF_KPROBE(do_unlinkat)</code>的 kprobe，当进入<code>do_unlinkat</code>函数时，它会被触发。该函数接受两个参数：<code>dfd</code>（文件描述符）和<code>name</code>（文件名结构体指针）。在这个 kprobe 中，我们获取当前进程的 PID（进程标识符），然后读取文件名。最后，我们使用<code>bpf_printk</code>函数在内核日志中打印 PID 和文件名。</p>
-<pre><code class="language-c">SEC(&quot;kprobe/do_unlinkat&quot;)
+<pre><code class="language-c">SEC("kprobe/do_unlinkat")
 int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 {
     pid_t pid;
@@ -243,18 +243,18 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
     filename = BPF_CORE_READ(name, name);
-    bpf_printk(&quot;KPROBE ENTRY pid = %d, filename = %s\n&quot;, pid, filename);
+    bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
     return 0;
 }
 </code></pre>
 <p>接下来，我们定义一个名为<code>BPF_KRETPROBE(do_unlinkat_exit)</code>的 kretprobe，当从<code>do_unlinkat</code>函数退出时，它会被触发。这个 kretprobe 的目的是捕获函数的返回值（ret）。我们再次获取当前进程的 PID，并使用<code>bpf_printk</code>函数在内核日志中打印 PID 和返回值。</p>
-<pre><code class="language-c">SEC(&quot;kretprobe/do_unlinkat&quot;)
+<pre><code class="language-c">SEC("kretprobe/do_unlinkat")
 int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 {
     pid_t pid;
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-    bpf_printk(&quot;KPROBE EXIT: pid = %d, ret = %ld\n&quot;, pid, ret);
+    bpf_printk("KPROBE EXIT: pid = %d, ret = %ld\n", pid, ret);
     return 0;
 }
 </code></pre>

@@ -231,7 +231,7 @@ union combined_alloc_info {
 <p>这里定义了两个主要的数据结构：<code>alloc_info</code> 和 <code>combined_alloc_info</code>。</p>
 <p><code>alloc_info</code> 结构体包含了一个内存分配的基本信息，包括分配的内存大小 <code>size</code>、分配发生时的时间戳 <code>timestamp_ns</code>，以及触发分配的调用堆栈 ID <code>stack_id</code>。</p>
 <p><code>combined_alloc_info</code> 是一个联合体（union），它包含一个嵌入的结构体和一个 <code>__u64</code> 类型的位图表示 <code>bits</code>。嵌入的结构体有两个成员：<code>total_size</code> 和 <code>number_of_allocs</code>，分别代表所有未释放分配的总大小和总次数。其中 40 和 24 分别表示 total_size 和 number_of_allocs这两个成员变量所占用的位数，用来限制其大小。通过这样的位数限制，可以节省combined_alloc_info结构的存储空间。同时，由于total_size和number_of_allocs在存储时是共用一个unsigned long long类型的变量bits，因此可以通过在成员变量bits上进行位运算来访问和修改total_size和number_of_allocs，从而避免了在程序中定义额外的变量和函数的复杂性。</p>
-<p>接下来，<code>memleak</code> 定义了一系列用于保存内存分配信息和分析结果的 eBPF 映射（maps）。这些映射都以 <code>SEC(&quot;.maps&quot;)</code> 的形式定义，表示它们属于 eBPF 程序的映射部分。</p>
+<p>接下来，<code>memleak</code> 定义了一系列用于保存内存分配信息和分析结果的 eBPF 映射（maps）。这些映射都以 <code>SEC(".maps")</code> 的形式定义，表示它们属于 eBPF 程序的映射部分。</p>
 <pre><code class="language-c">const volatile size_t min_size = 0;
 const volatile size_t max_size = -1;
 const volatile size_t page_size = 4096;
@@ -245,33 +245,33 @@ struct {
     __type(key, pid_t);
     __type(value, u64);
     __uint(max_entries, 10240);
-} sizes SEC(&quot;.maps&quot;);
+} sizes SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64); /* address */
     __type(value, struct alloc_info);
     __uint(max_entries, ALLOCS_MAX_ENTRIES);
-} allocs SEC(&quot;.maps&quot;);
+} allocs SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64); /* stack id */
     __type(value, union combined_alloc_info);
     __uint(max_entries, COMBINED_ALLOCS_MAX_ENTRIES);
-} combined_allocs SEC(&quot;.maps&quot;);
+} combined_allocs SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u64);
     __type(value, u64);
     __uint(max_entries, 10240);
-} memptrs SEC(&quot;.maps&quot;);
+} memptrs SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_STACK_TRACE);
     __type(key, u32);
-} stack_traces SEC(&quot;.maps&quot;);
+} stack_traces SEC(".maps");
 
 static union combined_alloc_info initial_cinfo;
 </code></pre>
@@ -285,24 +285,24 @@ static union combined_alloc_info initial_cinfo;
 <li><code>stack_traces</code>：这是一个堆栈追踪类型的映射，键为 <code>u32</code> 类型，用于存储堆栈 ID。</li>
 </ol>
 <p>以用户态的内存分配追踪部分为例，主要是挂钩内存相关的函数调用，如 <code>malloc</code>, <code>free</code>, <code>calloc</code>, <code>realloc</code>, <code>mmap</code> 和 <code>munmap</code>，以便在调用这些函数时进行数据记录。在用户态，<code>memleak</code> 主要使用了 uprobes 技术进行挂载。</p>
-<p>每个函数调用被分为 &quot;enter&quot; 和 &quot;exit&quot; 两部分。&quot;enter&quot; 部分记录的是函数调用的参数，如分配的大小或者释放的地址。&quot;exit&quot; 部分则主要用于获取函数的返回值，如分配得到的内存地址。</p>
+<p>每个函数调用被分为 "enter" 和 "exit" 两部分。"enter" 部分记录的是函数调用的参数，如分配的大小或者释放的地址。"exit" 部分则主要用于获取函数的返回值，如分配得到的内存地址。</p>
 <p>这里，<code>gen_alloc_enter</code>, <code>gen_alloc_exit</code>, <code>gen_free_enter</code> 是实现记录行为的函数，他们分别用于记录分配开始、分配结束和释放开始的相关信息。</p>
 <p>函数原型示例如下：</p>
-<pre><code class="language-c">SEC(&quot;uprobe&quot;)
+<pre><code class="language-c">SEC("uprobe")
 int BPF_KPROBE(malloc_enter, size_t size)
 {
     // 记录分配开始的相关信息
     return gen_alloc_enter(size);
 }
 
-SEC(&quot;uretprobe&quot;)
+SEC("uretprobe")
 int BPF_KRETPROBE(malloc_exit)
 {
     // 记录分配结束的相关信息
     return gen_alloc_exit(ctx);
 }
 
-SEC(&quot;uprobe&quot;)
+SEC("uprobe")
 int BPF_KPROBE(free_enter, void *address)
 {
     // 记录释放开始的相关信息
@@ -326,12 +326,12 @@ int BPF_KPROBE(free_enter, void *address)
     bpf_map_update_elem(&amp;sizes, &amp;pid, &amp;size, BPF_ANY);
 
     if (trace_all)
-        bpf_printk(&quot;alloc entered, size = %lu\n&quot;, size);
+        bpf_printk("alloc entered, size = %lu\n", size);
 
     return 0;
 }
 
-SEC(&quot;uprobe&quot;)
+SEC("uprobe")
 int BPF_KPROBE(malloc_enter, size_t size)
 {
     return gen_alloc_enter(size);
@@ -370,7 +370,7 @@ int BPF_KPROBE(malloc_enter, size_t size)
     }
 
     if (trace_all) {
-        bpf_printk(&quot;alloc exited, size = %lu, result = %lx\n&quot;,
+        bpf_printk("alloc exited, size = %lu, result = %lx\n",
                 info.size, address);
     }
 
@@ -381,7 +381,7 @@ static int gen_alloc_exit(struct pt_regs *ctx)
     return gen_alloc_exit2(ctx, PT_REGS_RC(ctx));
 }
 
-SEC(&quot;uretprobe&quot;)
+SEC("uretprobe")
 int BPF_KRETPROBE(malloc_exit)
 {
     return gen_alloc_exit(ctx);
@@ -421,7 +421,7 @@ int BPF_KRETPROBE(malloc_exit)
 
     existing_cinfo = bpf_map_lookup_elem(&amp;combined_allocs, &amp;stack_id);
     if (!existing_cinfo) {
-        bpf_printk(&quot;failed to lookup combined allocs\n&quot;);
+        bpf_printk("failed to lookup combined allocs\n");
         return;
     }
 
@@ -446,14 +446,14 @@ int BPF_KRETPROBE(malloc_exit)
     update_statistics_del(info-&gt;stack_id, info-&gt;size);
 
     if (trace_all) {
-        bpf_printk(&quot;free entered, address = %lx, size = %lu\n&quot;,
+        bpf_printk("free entered, address = %lx, size = %lu\n",
                 address, info-&gt;size);
     }
 
     return 0;
 }
 
-SEC(&quot;uprobe&quot;)
+SEC("uprobe")
 int BPF_KPROBE(free_enter, void *address)
 {
     return gen_free_enter(address);
@@ -461,7 +461,7 @@ int BPF_KPROBE(free_enter, void *address)
 </code></pre>
 <p>接下来看 <code>gen_free_enter</code> 函数。它接收一个地址作为参数，这个地址是内存分配的结果，也就是将要释放的内存的起始地址。函数首先在 <code>allocs</code> 这个 map 中使用这个地址作为键来查找对应的 <code>alloc_info</code> 结构体。如果找不到，那么就直接返回，因为这意味着这个地址并没有被分配过。如果找到了，那么就删除这个元素，并且调用 <code>update_statistics_del</code> 函数来更新统计数据。最后，如果启用了全局追踪，那么还会输出一条信息，包括这个地址以及它的大小。
 在我们追踪和统计内存分配的同时，我们也需要对内核态的内存分配和释放进行追踪。在Linux内核中，kmem_cache_alloc函数和kfree函数分别用于内核态的内存分配和释放。</p>
-<pre><code class="language-c">SEC(&quot;tracepoint/kmem/kfree&quot;)
+<pre><code class="language-c">SEC("tracepoint/kmem/kfree")
 int memleak__kfree(void *ctx)
 {
     const void *ptr;
@@ -478,7 +478,7 @@ int memleak__kfree(void *ctx)
 }
 </code></pre>
 <p>上述代码片段定义了一个函数memleak__kfree，这是一个bpf程序，会在内核调用kfree函数时执行。首先，该函数检查是否存在kfree函数。如果存在，则会读取传递给kfree函数的参数（即要释放的内存块的地址），并保存到变量ptr中；否则，会读取传递给kmem_free函数的参数（即要释放的内存块的地址），并保存到变量ptr中。接着，该函数会调用之前定义的gen_free_enter函数来处理该内存块的释放。</p>
-<pre><code class="language-c">SEC(&quot;tracepoint/kmem/kmem_cache_alloc&quot;)
+<pre><code class="language-c">SEC("tracepoint/kmem/kmem_cache_alloc")
 int memleak__kmem_cache_alloc(struct trace_event_raw_kmem_alloc *ctx)
 {
     if (wa_missing_free)

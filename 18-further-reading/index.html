@@ -197,7 +197,7 @@
 <p>随着微秒级 NVMe 存储设备的出现，Linux 内核存储堆栈开销变得显著，几乎使访问时间翻倍。我们介绍了 XRP，一个框架，允许应用程序从 eBPF 在 NVMe 驱动程序中的钩子执行用户定义的存储功能，如索引查找或聚合，安全地绕过大部分内核的存储堆栈。为了保持文件系统的语义，XRP 将少量的内核状态传播到其 NVMe 驱动程序钩子，在那里调用用户注册的 eBPF 函数。我们展示了如何利用 XRP 显著提高两个键值存储，BPF-KV，一个简单的 B+ 树键值存储，和 WiredTiger，一个流行的日志结构合并树存储引擎的吞吐量和延迟。</p>
 <p>OSDI '22 最佳论文: <a href="https://www.usenix.org/conference/osdi22/presentation/zhong">https://www.usenix.org/conference/osdi22/presentation/zhong</a></p>
 <h2 id="specification-and-verification-in-the-field-applying-formal-methods-to-bpf-just-in-time-compilers-in-the-linux-kernel"><a class="header" href="#specification-and-verification-in-the-field-applying-formal-methods-to-bpf-just-in-time-compilers-in-the-linux-kernel">Specification and verification in the field: Applying formal methods to BPF just-in-time compilers in the Linux kernel</a></h2>
-<p>本文描述了我们将形式方法应用于 Linux 内核中的一个关键组件，即 Berkeley 数据包过滤器 (BPF) 虚拟机的即时编译器 (&quot;JIT&quot;) 的经验。我们使用 Jitterbug 验证这些 JIT，这是第一个提供 JIT 正确性的精确规范的框架，能够排除实际错误，并提供一个自动化的证明策略，该策略可以扩展到实际实现。使用 Jitterbug，我们设计、实施并验证了一个新的针对 32 位 RISC-V 的 BPF JIT，在五个其他部署的 JIT 中找到并修复了 16 个之前未知的错误，并开发了新的 JIT 优化；所有这些更改都已上传到 Linux 内核。结果表明，在一个大型的、未经验证的系统中，通过仔细设计规范和证明策略，可以构建一个经过验证的组件。</p>
+<p>本文描述了我们将形式方法应用于 Linux 内核中的一个关键组件，即 Berkeley 数据包过滤器 (BPF) 虚拟机的即时编译器 ("JIT") 的经验。我们使用 Jitterbug 验证这些 JIT，这是第一个提供 JIT 正确性的精确规范的框架，能够排除实际错误，并提供一个自动化的证明策略，该策略可以扩展到实际实现。使用 Jitterbug，我们设计、实施并验证了一个新的针对 32 位 RISC-V 的 BPF JIT，在五个其他部署的 JIT 中找到并修复了 16 个之前未知的错误，并开发了新的 JIT 优化；所有这些更改都已上传到 Linux 内核。结果表明，在一个大型的、未经验证的系统中，通过仔细设计规范和证明策略，可以构建一个经过验证的组件。</p>
 <p>OSDI 20: <a href="https://www.usenix.org/conference/osdi20/presentation/nelson">https://www.usenix.org/conference/osdi20/presentation/nelson</a></p>
 <h2 id="λ-io-a-unified-io-stack-for-computational-storage"><a class="header" href="#λ-io-a-unified-io-stack-for-computational-storage">λ-IO: A Unified IO Stack for Computational Storage</a></h2>
 <p>新兴的计算存储设备为存储内计算提供了一个机会。它减少了主机与设备之间的数据移动开销，从而加速了数据密集型应用程序。在这篇文章中，我们介绍 λ-IO，一个统一的 IO 堆栈，跨主机和设备管理计算和存储资源。我们提出了一套设计 - 接口、运行时和调度 - 来解决三个关键问题。我们在全堆栈软件和硬件环境中实施了 λ-IO，并使用合成和实际应用程序对其</p>
@@ -205,7 +205,7 @@
 <p>FAST23: <a href="https://www.usenix.org/conference/fast23/presentation/yang-zhe">https://www.usenix.org/conference/fast23/presentation/yang-zhe</a></p>
 <h2 id="extension-framework-for-file-systems-in-user-space"><a class="header" href="#extension-framework-for-file-systems-in-user-space">Extension Framework for File Systems in User space</a></h2>
 <p>用户文件系统相对于其内核实现提供了许多优势，例如开发的简易性和更好的系统可靠性。然而，它们会导致重大的性能损失。我们观察到现有的用户文件系统框架非常通用；它们由一个位于内核中的最小干预层组成，该层简单地将所有低级请求转发到用户空间。虽然这种设计提供了灵活性，但由于频繁的内核-用户上下文切换，它也严重降低了性能。</p>
-<p>这项工作介绍了 ExtFUSE，一个用于开发可扩展用户文件系统的框架，该框架还允许应用程序在内核中注册&quot;薄&quot;的专用请求处理程序，以满足其特定的操作需求，同时在用户空间中保留复杂的功能。我们使用两个 FUSE 文件系统对 ExtFUSE 进行评估，结果表明 ExtFUSE 可以通过平均不到几百行的改动来提高用户文件系统的性能。ExtFUSE 可在 GitHub 上找到。</p>
+<p>这项工作介绍了 ExtFUSE，一个用于开发可扩展用户文件系统的框架，该框架还允许应用程序在内核中注册"薄"的专用请求处理程序，以满足其特定的操作需求，同时在用户空间中保留复杂的功能。我们使用两个 FUSE 文件系统对 ExtFUSE 进行评估，结果表明 ExtFUSE 可以通过平均不到几百行的改动来提高用户文件系统的性能。ExtFUSE 可在 GitHub 上找到。</p>
 <p>ATC 19: <a href="https://www.usenix.org/conference/atc19/presentation/bijlani">https://www.usenix.org/conference/atc19/presentation/bijlani</a></p>
 <h2 id="electrode-accelerating-distributed-protocols-with-ebpf"><a class="header" href="#electrode-accelerating-distributed-protocols-with-ebpf">Electrode: Accelerating Distributed Protocols with eBPF</a></h2>
 <p>在标准的Linux内核网络栈下实现分布式协议可以享受到负载感知的CPU缩放、高兼容性以及强大的安全性和隔离性。但由于过多的用户-内核切换和内核网络栈遍历，其性能较低。我们介绍了Electrode，这是一套为分布式协议设计的基于eBPF的性能优化。这些优化在网络栈之前在内核中执行，但实现了与用户空间中实现的相似功能（例如，消息广播，收集ack的仲裁），从而避免了用户-内核切换和内核网络栈遍历所带来的开销。我们展示，当应用于经典的Multi-Paxos状态机复制协议时，Electrode可以提高其吞吐量高达128.4%，并将延迟降低高达41.7%。</p>
@@ -227,9 +227,9 @@
 <p>在这项工作中，我们研究如何在 eBPF 中开发高性能的网络测量。我们以绘图为案例研究，因为它们具有支持广泛任务的能力，同时提供低内存占用和准确性保证。我们实现了 NitroSketch，一个用于用户空间网络的最先进的绘图，并表明用户空间网络的最佳实践不能直接应用于 eBPF，因为它的性能特点不同。通过应用我们学到的经验教训，我们将其性能提高了40%，与初级实现相比。</p>
 <p>SIGCOMM 23: <a href="https://dl.acm.org/doi/abs/10.1145/3594255.3594256">https://dl.acm.org/doi/abs/10.1145/3594255.3594256</a></p>
 <h2 id="spright-extracting-the-server-from-serverless-computing-high-performance-ebpf-based-event-driven-shared-memory-processing"><a class="header" href="#spright-extracting-the-server-from-serverless-computing-high-performance-ebpf-based-event-driven-shared-memory-processing">SPRIGHT: extracting the server from serverless computing! high-performance eBPF-based event-driven, shared-memory processing</a></h2>
-<p>无服务器计算在云环境中承诺提供高效、低成本的计算能力。然而，现有的解决方案，如Knative这样的开源平台，包含了繁重的组件，破坏了无服务器计算的目标。此外，这种无服务器平台缺乏数据平面优化，无法实现高效的、高性能的功能链，这也是流行的微服务开发范式的设施。它们为构建功能链使用的不必要的复杂和重复的功能严重降低了性能。&quot;冷启动&quot;延迟是另一个威慑因素。</p>
-<p>我们描述了 SPRIGHT，一个轻量级、高性能、响应式的无服务器框架。SPRIGHT 利用共享内存处理显著提高了数据平面的可伸缩性，通过避免不必要的协议处理和序列化-反序列化开销。SPRIGHT 大量利用扩展的伯克利数据包过滤器 (eBPF) 进行事件驱动处理。我们创造性地使用 eBPF 的套接字消息机制支持共享内存处理，其开销严格与负载成正比。与常驻、基于轮询的DPDK相比，SPRIGHT 在真实工作负载下实现了相同的数据平面性能，但 CPU 使用率降低了10倍。此外，eBPF 为 SPRIGHT 带来了好处，替换了繁重的无服务器组件，使我们能够以微不足道的代价保持函数处于&quot;暖&quot;状态。</p>
-<p>我们的初步实验结果显示，与 Knative 相比，SPRIGHT 在吞吐量和延迟方面实现了一个数量级的提高，同时大大减少了 CPU 使用，并消除了 &quot;冷启动&quot;的需要。</p>
+<p>无服务器计算在云环境中承诺提供高效、低成本的计算能力。然而，现有的解决方案，如Knative这样的开源平台，包含了繁重的组件，破坏了无服务器计算的目标。此外，这种无服务器平台缺乏数据平面优化，无法实现高效的、高性能的功能链，这也是流行的微服务开发范式的设施。它们为构建功能链使用的不必要的复杂和重复的功能严重降低了性能。"冷启动"延迟是另一个威慑因素。</p>
+<p>我们描述了 SPRIGHT，一个轻量级、高性能、响应式的无服务器框架。SPRIGHT 利用共享内存处理显著提高了数据平面的可伸缩性，通过避免不必要的协议处理和序列化-反序列化开销。SPRIGHT 大量利用扩展的伯克利数据包过滤器 (eBPF) 进行事件驱动处理。我们创造性地使用 eBPF 的套接字消息机制支持共享内存处理，其开销严格与负载成正比。与常驻、基于轮询的DPDK相比，SPRIGHT 在真实工作负载下实现了相同的数据平面性能，但 CPU 使用率降低了10倍。此外，eBPF 为 SPRIGHT 带来了好处，替换了繁重的无服务器组件，使我们能够以微不足道的代价保持函数处于"暖"状态。</p>
+<p>我们的初步实验结果显示，与 Knative 相比，SPRIGHT 在吞吐量和延迟方面实现了一个数量级的提高，同时大大减少了 CPU 使用，并消除了 "冷启动"的需要。</p>
 <p><a href="https://dl.acm.org/doi/10.1145/3544216.3544259">https://dl.acm.org/doi/10.1145/3544216.3544259</a></p>
 <h2 id="programmable-system-call-security-with-ebpf"><a class="header" href="#programmable-system-call-security-with-ebpf">Programmable System Call Security with eBPF</a></h2>
 <p>利用 eBPF 进行可编程的系统调用安全</p>

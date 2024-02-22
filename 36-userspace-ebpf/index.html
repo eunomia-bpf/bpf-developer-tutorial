@@ -178,7 +178,7 @@
 <p>本文旨在对用户空间的 eBPF 运行时和对应的一些应用场景进行剖析和总结。尽管大多数人对基于内核的 eBPF 已有所了解，用户空间 eBPF 的进展和应用实践同样引人注目。本文还将探讨用户空间 eBPF 运行时与 Wasm 运行时的技术比较，后者在云原生和边缘计算领域已获得广泛的关注。我们也新开源了一个用户态 eBPF 运行时 <a href="https://github.com/eunomia-bpf/bpftime">bpftime</a>。通过 LLVM <code>JIT/AOT</code> 后端支持，我们的基准测试表明 bpftime 是最快的用户空间 eBPF 运行时之一，同时还可以让内核中间的 eBPF Uprobe 无缝在用户空间运行，获得近十倍的性能提升。</p>
 <h2 id="ebpf内核的动态扩展运行时与字节码"><a class="header" href="#ebpf内核的动态扩展运行时与字节码">eBPF：内核的动态扩展运行时与字节码</a></h2>
 <h3 id="ebpf-究竟是何方神圣"><a class="header" href="#ebpf-究竟是何方神圣">eBPF 究竟是何方神圣？</a></h3>
-<p>eBPF，全称 &quot;extended Berkeley Packet Filter&quot;，是一项允许在不更改内核源代码或重启系统的情况下动态干预和修改内核行为的革命性技术。虽然 eBPF 起初是作为网络数据包过滤工具而设计，但如今已广泛应用于从性能分析到安全策略等多个方面，逐渐成为系统管理员的得力助手。</p>
+<p>eBPF，全称 "extended Berkeley Packet Filter"，是一项允许在不更改内核源代码或重启系统的情况下动态干预和修改内核行为的革命性技术。虽然 eBPF 起初是作为网络数据包过滤工具而设计，但如今已广泛应用于从性能分析到安全策略等多个方面，逐渐成为系统管理员的得力助手。</p>
 <p>eBPF 的前身，Berkeley Packet Filter (BPF) —— 20 世纪 90 年代初的产物，主要用于网络数据包的高效过滤。尽管 BPF 已被广大用户所认可，eBPF 的出现则为其带来了更为广泛的指令集，并能直接与内核数据结构互动。自 2014 年 Linux 内核引入 eBPF 以后，它的影响力迅速扩张。Linux 的核心开发团队不断地完善 eBPF，使其从一个基础的网络数据包过滤器逐渐演变为一个功能强大的字节码引擎。</p>
 <h3 id="ebpf-对现代计算和网络的深远影响"><a class="header" href="#ebpf-对现代计算和网络的深远影响">eBPF 对现代计算和网络的深远影响</a></h3>
 <p>随着现代计算环境日益复杂，实时数据的采集和深入分析显得尤为重要。在这一背景下，eBPF 凭借其卓越的动态性，为开发者和管理员提供了实时干预系统行为的强大工具。eBPF 以其卓越的灵活性在现代网络解决方案中占据核心地位。它为流量控制、负载均衡及安全策略在内核级别提供了细致的控制手段，确保了系统的性能优化和安全稳定。同时，eBPF 在系统可观察性上也做出了显著贡献，为各种系统调用和硬件事件提供了详细的可编程追踪方案，促进了问题的迅速定位和解决。</p>
@@ -291,7 +291,7 @@ continue malloc...
 </code></pre>
 <p>然后附加到该进程：</p>
 <pre><code class="language-console">$ sudo bpftime attach 101771 # 您可能需要以root身份运行make install
-Inject: &quot;/root/.bpftime/libbpftime-agent.so&quot;
+Inject: "/root/.bpftime/libbpftime-agent.so"
 成功注入。ID: 1
 </code></pre>
 <p>您可以看到原始程序的输出：</p>

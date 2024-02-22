@@ -214,17 +214,17 @@ struct data {
         int d;
 };
 
-SEC(&quot;uprobe/examples/btf-base:add_test&quot;)
+SEC("uprobe/examples/btf-base:add_test")
 int BPF_UPROBE(add_test, struct data *d)
 {
     int a = 0, c = 0;
     bpf_probe_read_user(&amp;a, sizeof(a), &amp;d-&gt;a);
     bpf_probe_read_user(&amp;c, sizeof(c), &amp;d-&gt;c);
-    bpf_printk(&quot;add_test(&amp;d) %d + %d = %d\n&quot;, a, c,  a + c);
+    bpf_printk("add_test(&amp;d) %d + %d = %d\n", a, c,  a + c);
     return a + c;
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 </code></pre>
 <p>然后，我们有两个不同版本的用户空间程序，<code>examples/btf-base</code>和<code>examples/btf-base-new</code>。两个版本中的struct <code>data</code>是不同的。</p>
 <p><code>examples/btf-base</code>：</p>
@@ -241,7 +241,7 @@ int add_test(struct data *d) {
 
 int main(int argc, char **argv) {
     struct data d = {1, 3, 4};
-    printf(&quot;add_test(&amp;d) = %d\n&quot;, add_test(&amp;d));
+    printf("add_test(&amp;d) = %d\n", add_test(&amp;d));
     return 0;
 }
 </code></pre>
@@ -259,7 +259,7 @@ int add_test(struct data *d) {
 
 int main(int argc, char **argv) {
     struct data d = {1, 2, 3, 4};
-    printf(&quot;add_test(&amp;d) = %d\n&quot;, add_test(&amp;d));
+    printf("add_test(&amp;d) = %d\n", add_test(&amp;d));
     return 0;
 }
 </code></pre>
@@ -311,17 +311,17 @@ struct data {
 #pragma clang attribute pop
 #endif
 
-SEC(&quot;uprobe/examples/btf-base:add_test&quot;)
+SEC("uprobe/examples/btf-base:add_test")
 int BPF_UPROBE(add_test, struct data *d)
 {
     int a = 0, c = 0;
     bpf_probe_read_user(&amp;a, sizeof(a), &amp;d-&gt;a);
     bpf_probe_read_user(&amp;c, sizeof(c), &amp;d-&gt;c);
-    bpf_printk(&quot;add_test(&amp;d) %d + %d = %d\n&quot;, a, c,  a + c);
+    bpf_printk("add_test(&amp;d) %d + %d = %d\n", a, c,  a + c);
     return a + c;
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 </code></pre>
 <p><code>struct data</code>的记录在eBPF程序中被保留下来。然后，我们可以使用 <code>btf-base.btf</code>来编译eBPF程序。</p>
 <p>将用户btf与内核btf合并，这样我们就有了一个完整的内核和用户空间的btf:</p>
@@ -370,7 +370,7 @@ Successfully started! Press Ctrl+C to stop.
 	);
 	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
 	if (argc != 3 &amp;&amp; argc != 2) {
-		fprintf(stderr, &quot;Usage: %s &lt;example-name&gt; [&lt;external-btf&gt;]\n&quot;, argv[0]);
+		fprintf(stderr, "Usage: %s &lt;example-name&gt; [&lt;external-btf&gt;]\n", argv[0]);
 		return 1;
 	}
 	if (argc == 3)
@@ -386,7 +386,7 @@ Successfully started! Press Ctrl+C to stop.
 	/* Load and verify BPF application */
 	skel = uprobe_bpf__open_opts(&amp;opts);
 	if (!skel) {
-		fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+		fprintf(stderr, "Failed to open and load BPF skeleton\n");
 		return 1;
 	}
 </code></pre>

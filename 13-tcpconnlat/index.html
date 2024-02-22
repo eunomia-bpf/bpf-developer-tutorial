@@ -205,19 +205,19 @@
 <p>理解了这两个队列的用途，我们就可以开始探究 tcpconnlat 的具体实现。tcpconnlat 的实现可以分为内核态和用户态两个部分，其中包括了几个主要的跟踪点：<code>tcp_v4_connect</code>, <code>tcp_v6_connect</code> 和 <code>tcp_rcv_state_process</code>。</p>
 <p>这些跟踪点主要位于内核中的 TCP/IP 网络栈。当执行相关的系统调用或内核函数时，这些跟踪点会被激活，从而触发 eBPF 程序的执行。这使我们能够捕获和测量 TCP 连接建立的整个过程。</p>
 <p>让我们先来看一下这些挂载点的源代码：</p>
-<pre><code class="language-c">SEC(&quot;kprobe/tcp_v4_connect&quot;)
+<pre><code class="language-c">SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 {
  return trace_connect(sk);
 }
 
-SEC(&quot;kprobe/tcp_v6_connect&quot;)
+SEC("kprobe/tcp_v6_connect")
 int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
 {
  return trace_connect(sk);
 }
 
-SEC(&quot;kprobe/tcp_rcv_state_process&quot;)
+SEC("kprobe/tcp_rcv_state_process")
 int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
 {
  return handle_tcp_rcv_state_process(ctx, sk);
@@ -401,7 +401,7 @@ if (inet_opt &amp;&amp; inet_opt-&gt;opt.srr) {
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
-#include &quot;tcpconnlat.h&quot;
+#include "tcpconnlat.h"
 
 #define AF_INET    2
 #define AF_INET6   10
@@ -420,13 +420,13 @@ struct {
   __uint(max_entries, 4096);
   __type(key, struct sock *);
   __type(value, struct piddata);
-} start SEC(&quot;.maps&quot;);
+} start SEC(".maps");
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
   __uint(key_size, sizeof(u32));
   __uint(value_size, sizeof(u32));
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 
 static int trace_connect(struct sock *sk)
 {
@@ -489,43 +489,43 @@ cleanup:
   return 0;
 }
 
-SEC(&quot;kprobe/tcp_v4_connect&quot;)
+SEC("kprobe/tcp_v4_connect")
 int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 {
   return trace_connect(sk);
 }
 
-SEC(&quot;kprobe/tcp_v6_connect&quot;)
+SEC("kprobe/tcp_v6_connect")
 int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
 {
   return trace_connect(sk);
 }
 
-SEC(&quot;kprobe/tcp_rcv_state_process&quot;)
+SEC("kprobe/tcp_rcv_state_process")
 int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
 {
   return handle_tcp_rcv_state_process(ctx, sk);
 }
 
-SEC(&quot;fentry/tcp_v4_connect&quot;)
+SEC("fentry/tcp_v4_connect")
 int BPF_PROG(fentry_tcp_v4_connect, struct sock *sk)
 {
   return trace_connect(sk);
 }
 
-SEC(&quot;fentry/tcp_v6_connect&quot;)
+SEC("fentry/tcp_v6_connect")
 int BPF_PROG(fentry_tcp_v6_connect, struct sock *sk)
 {
   return trace_connect(sk);
 }
 
-SEC(&quot;fentry/tcp_rcv_state_process&quot;)
+SEC("fentry/tcp_rcv_state_process")
 int BPF_PROG(fentry_tcp_rcv_state_process, struct sock *sk)
 {
   return handle_tcp_rcv_state_process(ctx, sk);
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char LICENSE[] SEC("license") = "GPL";
 </code></pre>
 <p>这个eBPF（Extended Berkeley Packet Filter）程序主要用来监控并收集TCP连接的建立时间，即从发起TCP连接请求(<code>connect</code>系统调用)到连接建立完成(SYN-ACK握手过程完成)的时间间隔。这对于监测网络延迟、服务性能分析等方面非常有用。</p>
 <p>首先，定义了两个eBPF maps：<code>start</code>和<code>events</code>。<code>start</code>是一个哈希表，用于存储发起连接请求的进程信息和时间戳，而<code>events</code>是一个<code>PERF_EVENT_ARRAY</code>类型的map，用于将事件数据传输到用户态。</p>
@@ -534,13 +534,13 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
   __uint(max_entries, 4096);
   __type(key, struct sock *);
   __type(value, struct piddata);
-} start SEC(&quot;.maps&quot;);
+} start SEC(".maps");
 
 struct {
   __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
   __uint(key_size, sizeof(u32));
   __uint(value_size, sizeof(u32));
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 </code></pre>
 <p>在<code>tcp_v4_connect</code>和<code>tcp_v6_connect</code>的kprobe处理函数<code>trace_connect</code>中，会记录下发起连接请求的进程信息（进程名、进程ID和当前时间戳），并以socket结构作为key，存储到<code>start</code>这个map中。</p>
 <pre><code class="language-c">static int trace_connect(struct sock *sk)
@@ -621,7 +621,7 @@ cleanup:
     while (!exiting) {
         err = perf_buffer__poll(pb, PERF_POLL_TIMEOUT_MS);
         if (err &lt; 0 &amp;&amp; err != -EINTR) {
-            fprintf(stderr, &quot;error polling perf buffer: %s\n&quot;, strerror(-err));
+            fprintf(stderr, "error polling perf buffer: %s\n", strerror(-err));
             goto cleanup;
         }
         /* reset err to return 0 if exiting */
@@ -643,7 +643,7 @@ cleanup:
     if (env.timestamp) {
         if (start_ts == 0)
             start_ts = e-&gt;ts_us;
-        printf(&quot;%-9.3f &quot;, (e-&gt;ts_us - start_ts) / 1000000.0);
+        printf("%-9.3f ", (e-&gt;ts_us - start_ts) / 1000000.0);
     }
     if (e-&gt;af == AF_INET) {
         s.x4.s_addr = e-&gt;saddr_v4;
@@ -652,18 +652,18 @@ cleanup:
         memcpy(&amp;s.x6.s6_addr, e-&gt;saddr_v6, sizeof(s.x6.s6_addr));
         memcpy(&amp;d.x6.s6_addr, e-&gt;daddr_v6, sizeof(d.x6.s6_addr));
     } else {
-        fprintf(stderr, &quot;broken event: event-&gt;af=%d&quot;, e-&gt;af);
+        fprintf(stderr, "broken event: event-&gt;af=%d", e-&gt;af);
         return;
     }
 
     if (env.lport) {
-        printf(&quot;%-6d %-12.12s %-2d %-16s %-6d %-16s %-5d %.2f\n&quot;, e-&gt;tgid,
+        printf("%-6d %-12.12s %-2d %-16s %-6d %-16s %-5d %.2f\n", e-&gt;tgid,
                e-&gt;comm, e-&gt;af == AF_INET ? 4 : 6,
                inet_ntop(e-&gt;af, &amp;s, src, sizeof(src)), e-&gt;lport,
                inet_ntop(e-&gt;af, &amp;d, dst, sizeof(dst)), ntohs(e-&gt;dport),
                e-&gt;delta_us / 1000.0);
     } else {
-        printf(&quot;%-6d %-12.12s %-2d %-16s %-16s %-5d %.2f\n&quot;, e-&gt;tgid, e-&gt;comm,
+        printf("%-6d %-12.12s %-2d %-16s %-16s %-5d %.2f\n", e-&gt;tgid, e-&gt;comm,
                e-&gt;af == AF_INET ? 4 : 6, inet_ntop(e-&gt;af, &amp;s, src, sizeof(src)),
                inet_ntop(e-&gt;af, &amp;d, dst, sizeof(dst)), ntohs(e-&gt;dport),
                e-&gt;delta_us / 1000.0);

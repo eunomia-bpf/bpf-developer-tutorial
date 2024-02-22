@@ -219,24 +219,24 @@ struct event {
 <h3 id="2-ebpf-程序-signalbpfc"><a class="header" href="#2-ebpf-程序-signalbpfc">2. eBPF 程序 (<code>signal.bpf.c</code>)</a></h3>
 <p>signal.bpf.c</p>
 <pre><code class="language-c">// SPDX-License-Identifier: BSD-3-Clause
-#include &quot;vmlinux.h&quot;
+#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;common.h&quot;
+#include "common.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 // Ringbuffer Map to pass messages from kernel to user
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} rb SEC(&quot;.maps&quot;);
+} rb SEC(".maps");
 
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
-SEC(&quot;tp/syscalls/sys_enter_ptrace&quot;)
+SEC("tp/syscalls/sys_enter_ptrace")
 int bpf_dos(struct trace_event_raw_sys_enter *ctx)
 {
     long ret = 0;
@@ -271,7 +271,7 @@ int bpf_dos(struct trace_event_raw_sys_enter *ctx)
 <ul>
 <li>
 <p><strong>许可证声明</strong></p>
-<p>声明了程序的许可证为 &quot;Dual BSD/GPL&quot;，这是为了满足 Linux 内核对 eBPF 程序的许可要求。</p>
+<p>声明了程序的许可证为 "Dual BSD/GPL"，这是为了满足 Linux 内核对 eBPF 程序的许可要求。</p>
 </li>
 <li>
 <p><strong>Ringbuffer Map</strong></p>

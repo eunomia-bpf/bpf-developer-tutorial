@@ -227,9 +227,9 @@ sda         0   100        1          4
 <pre><code class="language-c">#include &lt;vmlinux.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
-#include &quot;biopattern.h&quot;
-#include &quot;maps.bpf.h&quot;
-#include &quot;core_fixes.bpf.h&quot;
+#include "biopattern.h"
+#include "maps.bpf.h"
+#include "core_fixes.bpf.h"
 
 const volatile bool filter_dev = false;
 const volatile __u32 targ_dev = 0;
@@ -239,9 +239,9 @@ struct {
     __uint(max_entries, 64);
     __type(key, u32);
     __type(value, struct counter);
-} counters SEC(&quot;.maps&quot;);
+} counters SEC(".maps");
 
-SEC(&quot;tracepoint/block/block_rq_complete&quot;)
+SEC("tracepoint/block/block_rq_complete")
 int handle__block_rq_complete(void *args)
 {
     struct counter *counterp, zero = {};
@@ -278,7 +278,7 @@ int handle__block_rq_complete(void *args)
     return 0;
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char LICENSE[] SEC("license") = "GPL";
 </code></pre>
 <ol>
 <li>全局变量定义</li>
@@ -293,11 +293,11 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
         __uint(max_entries, 64);
         __type(key, u32);
         __type(value, struct counter);
-    } counters SEC(&quot;.maps&quot;);
+    } counters SEC(".maps");
 </code></pre>
 <p>这部分代码定义了一个 BPF map，类型为哈希表。该映射的键是设备的标识符，而值是一个 <code>counter</code> 结构体，用于存储设备的 I/O 统计信息。</p>
 <p>追踪点函数：</p>
-<pre><code class="language-c">    SEC(&quot;tracepoint/block/block_rq_complete&quot;)
+<pre><code class="language-c">    SEC("tracepoint/block/block_rq_complete")
     int handle__block_rq_complete(void *args)
     {
         struct counter *counterp, zero = {};
@@ -407,7 +407,7 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
         while (!bpf_map_get_next_key(fd, &amp;lookup_key, &amp;next_key)) {
             err = bpf_map_lookup_elem(fd, &amp;next_key, &amp;counter);
             if (err &lt; 0) {
-                fprintf(stderr, &quot;failed to lookup counters: %d\n&quot;, err);
+                fprintf(stderr, "failed to lookup counters: %d\n", err);
                 return -1;
             }
             lookup_key = next_key;
@@ -417,12 +417,12 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
             if (env.timestamp) {
                 time(&amp;t);
                 tm = localtime(&amp;t);
-                strftime(ts, sizeof(ts), &quot;%H:%M:%S&quot;, tm);
-                printf(&quot;%-9s &quot;, ts);
+                strftime(ts, sizeof(ts), "%H:%M:%S", tm);
+                printf("%-9s ", ts);
             }
             partition = partitions__get_by_dev(partitions, next_key);
-            printf(&quot;%-7s %5ld %5ld %8d %10lld\n&quot;,
-                partition ? partition-&gt;name : &quot;Unknown&quot;,
+            printf("%-7s %5ld %5ld %8d %10lld\n",
+                partition ? partition-&gt;name : "Unknown",
                 counter.random * 100L / total,
                 counter.sequential * 100L / total, total,
                 counter.bytes / 1024);
@@ -432,7 +432,7 @@ char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
         while (!bpf_map_get_next_key(fd, &amp;lookup_key, &amp;next_key)) {
             err = bpf_map_delete_elem(fd, &amp;next_key);
             if (err &lt; 0) {
-                fprintf(stderr, &quot;failed to cleanup counters: %d\n&quot;, err);
+                fprintf(stderr, "failed to cleanup counters: %d\n", err);
                 return -1;
             }
             lookup_key = next_key;

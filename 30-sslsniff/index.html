@@ -321,12 +321,12 @@ struct probe_SSL_data_t {
 <li>最后，将数据发送到用户空间。</li>
 </ol>
 <p>注意：我们使用了两个用户返回探针 <code>uretprobe</code> 来分别 hook <code>SSL_read</code> 和 <code>SSL_write</code> 的返回：</p>
-<pre><code class="language-c">SEC(&quot;uretprobe/SSL_read&quot;)
+<pre><code class="language-c">SEC("uretprobe/SSL_read")
 int BPF_URETPROBE(probe_SSL_read_exit) {
     return (SSL_exit(ctx, 0));  // 0 表示读操作
 }
 
-SEC(&quot;uretprobe/SSL_write&quot;)
+SEC("uretprobe/SSL_write")
 int BPF_URETPROBE(probe_SSL_write_exit) {
     return (SSL_exit(ctx, 1));  // 1 表示写操作
 }
@@ -336,7 +336,7 @@ int BPF_URETPROBE(probe_SSL_write_exit) {
 <h4 id="进入握手"><a class="header" href="#进入握手">进入握手</a></h4>
 <p>我们使用 <code>uprobe</code> 为 <code>do_handshake</code> 设置一个 probe：</p>
 <pre><code class="language-c">
-SEC(&quot;uprobe/do_handshake&quot;)
+SEC("uprobe/do_handshake")
 int BPF_UPROBE(probe_SSL_do_handshake_enter, void *ssl) {
     u64 pid_tgid = bpf_get_current_pid_tgid();
     u32 pid = pid_tgid &gt;&gt; 32;
@@ -362,7 +362,7 @@ int BPF_UPROBE(probe_SSL_do_handshake_enter, void *ssl) {
 <h4 id="退出握手"><a class="header" href="#退出握手">退出握手</a></h4>
 <p>同样，我们为 <code>do_handshake</code> 的返回设置了一个 <code>uretprobe</code>：</p>
 <pre><code class="language-c">
-SEC(&quot;uretprobe/do_handshake&quot;)
+SEC("uretprobe/do_handshake")
 int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
     u32 zero = 0;
     u64 pid_tgid = bpf_get_current_pid_tgid();
@@ -427,18 +427,18 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
 <p>上述代码片段中，根据环境变量 <code>env</code> 的设定，程序可以选择针对三种常见的加密库（OpenSSL、GnuTLS 和 NSS）进行挂载。这意味着我们可以在同一个工具中对多种库的调用进行追踪。</p>
 <p>为了实现这一功能，首先利用 <code>find_library_path</code> 函数确定库的路径。然后，根据库的类型，调用对应的 <code>attach_</code> 函数来将 eBPF 程序挂载到库函数上。</p>
 <pre><code class="language-c">    if (env.openssl) {
-        char *openssl_path = find_library_path(&quot;libssl.so&quot;);
-        printf(&quot;OpenSSL path: %s\n&quot;, openssl_path);
-        attach_openssl(obj, &quot;/lib/x86_64-linux-gnu/libssl.so.3&quot;);
+        char *openssl_path = find_library_path("libssl.so");
+        printf("OpenSSL path: %s\n", openssl_path);
+        attach_openssl(obj, "/lib/x86_64-linux-gnu/libssl.so.3");
     }
     if (env.gnutls) {
-        char *gnutls_path = find_library_path(&quot;libgnutls.so&quot;);
-        printf(&quot;GnuTLS path: %s\n&quot;, gnutls_path);
+        char *gnutls_path = find_library_path("libgnutls.so");
+        printf("GnuTLS path: %s\n", gnutls_path);
         attach_gnutls(obj, gnutls_path);
     }
     if (env.nss) {
-        char *nss_path = find_library_path(&quot;libnspr4.so&quot;);
-        printf(&quot;NSS path: %s\n&quot;, nss_path);
+        char *nss_path = find_library_path("libnspr4.so");
+        printf("NSS path: %s\n", nss_path);
         attach_nss(obj, nss_path);
     }
 </code></pre>
@@ -498,7 +498,7 @@ int attach_nss(struct sslsniff_bpf *skel, const char *lib) {
 <pre><code class="language-c">    while (!exiting) {
         err = perf_buffer__poll(pb, PERF_POLL_TIMEOUT_MS);
         if (err &lt; 0 &amp;&amp; err != -EINTR) {
-            warn(&quot;error polling perf buffer: %s\n&quot;, strerror(-err));
+            warn("error polling perf buffer: %s\n", strerror(-err));
             goto cleanup;
         }
         err = 0;
@@ -514,13 +514,13 @@ void print_event(struct probe_SSL_data_t *event, const char *evt) {
             char hex_data[MAX_BUF_SIZE * 2 + 1] = {0};  
             buf_to_hex((uint8_t *)buf, buf_size, hex_data);
             
-            printf(&quot;\n%s\n&quot;, s_mark);
+            printf("\n%s\n", s_mark);
             for (size_t i = 0; i &lt; strlen(hex_data); i += 32) {
-                printf(&quot;%.32s\n&quot;, hex_data + i);
+                printf("%.32s\n", hex_data + i);
             }
-            printf(&quot;%s\n\n&quot;, e_mark);
+            printf("%s\n\n", e_mark);
         } else {
-            printf(&quot;\n%s\n%s\n%s\n\n&quot;, s_mark, buf, e_mark);
+            printf("\n%s\n%s\n%s\n\n", s_mark, buf, e_mark);
         }
     }
 }

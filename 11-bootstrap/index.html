@@ -192,7 +192,7 @@
 </ul>
 <p>结合 libbpf 和 BTF，eBPF 程序可以在各种不同版本的内核上运行，而无需为每个内核版本单独编译。这极大地提高了 eBPF 生态系统的可移植性和兼容性，降低了开发和维护的难度。</p>
 <h2 id="什么是-bootstrap"><a class="header" href="#什么是-bootstrap">什么是 bootstrap</a></h2>
-<p>Bootstrap 是一个使用 libbpf 的完整应用，它利用 eBPF 程序来跟踪内核中的 exec() 系统调用（通过 SEC(&quot;tp/sched/sched_process_exec&quot;) handle_exec BPF 程序），这主要对应于新进程的创建（不包括 fork() 部分）。此外，它还跟踪进程的 exit() 系统调用（通过 SEC(&quot;tp/sched/sched_process_exit&quot;) handle_exit BPF 程序），以了解每个进程何时退出。</p>
+<p>Bootstrap 是一个使用 libbpf 的完整应用，它利用 eBPF 程序来跟踪内核中的 exec() 系统调用（通过 SEC("tp/sched/sched_process_exec") handle_exec BPF 程序），这主要对应于新进程的创建（不包括 fork() 部分）。此外，它还跟踪进程的 exit() 系统调用（通过 SEC("tp/sched/sched_process_exit") handle_exit BPF 程序），以了解每个进程何时退出。</p>
 <p>这两个 BPF 程序共同工作，允许捕获关于新进程的有趣信息，例如二进制文件的文件名，以及测量进程的生命周期，并在进程结束时收集有趣的统计信息，例如退出代码或消耗的资源量等。这是深入了解内核内部并观察事物如何真正运作的良好起点。</p>
 <p>Bootstrap 还使用 argp API（libc 的一部分）进行命令行参数解析，使得用户可以通过命令行选项配置应用行为。这种方式提供了灵活性，让用户能够根据实际需求自定义程序行为。虽然这些功能使用 eunomia-bpf 工具也可以实现，但是这里我们使用 libbpf 可以在用户态提供更高的可扩展性，不过也带来了不少额外的复杂度。</p>
 <h2 id="bootstrap"><a class="header" href="#bootstrap">Bootstrap</a></h2>
@@ -200,29 +200,29 @@
 <h3 id="内核态-ebpf-程序-bootstrapbpfc"><a class="header" href="#内核态-ebpf-程序-bootstrapbpfc">内核态 eBPF 程序 bootstrap.bpf.c</a></h3>
 <pre><code class="language-c">// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
-#include &quot;vmlinux.h&quot;
+#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;bootstrap.h&quot;
+#include "bootstrap.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 8192);
     __type(key, pid_t);
     __type(value, u64);
-} exec_start SEC(&quot;.maps&quot;);
+} exec_start SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} rb SEC(&quot;.maps&quot;);
+} rb SEC(".maps");
 
 const volatile unsigned long long min_duration_ns = 0;
 
-SEC(&quot;tp/sched/sched_process_exec&quot;)
+SEC("tp/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
     struct task_struct *task;
@@ -261,7 +261,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
     return 0;
 }
 
-SEC(&quot;tp/sched/sched_process_exit&quot;)
+SEC("tp/sched/sched_process_exit")
 int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 {
     struct task_struct *task;
@@ -312,30 +312,30 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 </code></pre>
 <p>这段代码是一个内核态 eBPF 程序（bootstrap.bpf.c），主要用于跟踪 exec() 和 exit() 系统调用。它通过 eBPF 程序捕获进程的创建和退出事件，并将相关信息发送到用户态程序进行处理。下面是对代码的详细解释。</p>
 <p>首先，我们引入所需的头文件，定义 eBPF 程序的许可证以及两个 eBPF maps：exec_start 和 rb。exec_start 是一个哈希类型的 eBPF map，用于存储进程开始执行时的时间戳。rb 是一个环形缓冲区类型的 eBPF map，用于存储捕获的事件数据，并将其发送到用户态程序。</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;bootstrap.h&quot;
+#include "bootstrap.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 8192);
     __type(key, pid_t);
     __type(value, u64);
-} exec_start SEC(&quot;.maps&quot;);
+} exec_start SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} rb SEC(&quot;.maps&quot;);
+} rb SEC(".maps");
 
 const volatile unsigned long long min_duration_ns = 0;
 </code></pre>
 <p>接下来，我们定义了一个名为 handle_exec 的 eBPF 程序，它会在进程执行 exec() 系统调用时触发。首先，我们从当前进程中获取 PID，记录进程开始执行的时间戳，然后将其存储在 exec_start map 中。</p>
-<pre><code class="language-c">SEC(&quot;tp/sched/sched_process_exec&quot;)
+<pre><code class="language-c">SEC("tp/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
     // ...
@@ -368,7 +368,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
     return 0;
 </code></pre>
 <p>最后，我们定义了一个名为 handle_exit 的 eBPF 程序，它会在进程执行 exit() 系统调用时触发。首先，我们从当前进程中获取 PID 和 TID（线程 ID）。如果 PID 和 TID 不相等，说明这是一个线程退出，我们将忽略此事件。</p>
-<pre><code class="language-c">SEC(&quot;tp/sched/sched_process_exit&quot;)
+<pre><code class="language-c">SEC("tp/sched/sched_process_exit")
 int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 {
     // ...
@@ -448,27 +448,27 @@ struct event {
 #include &lt;time.h&gt;
 #include &lt;sys/resource.h&gt;
 #include &lt;bpf/libbpf.h&gt;
-#include &quot;bootstrap.h&quot;
-#include &quot;bootstrap.skel.h&quot;
+#include "bootstrap.h"
+#include "bootstrap.skel.h"
 
 static struct env {
     bool verbose;
     long min_duration_ms;
 } env;
 
-const char *argp_program_version = &quot;bootstrap 0.0&quot;;
-const char *argp_program_bug_address = &quot;&lt;bpf@vger.kernel.org&gt;&quot;;
+const char *argp_program_version = "bootstrap 0.0";
+const char *argp_program_bug_address = "&lt;bpf@vger.kernel.org&gt;";
 const char argp_program_doc[] =
-&quot;BPF bootstrap demo application.\n&quot;
-&quot;\n&quot;
-&quot;It traces process start and exits and shows associated \n&quot;
-&quot;information (filename, process duration, PID and PPID, etc).\n&quot;
-&quot;\n&quot;
-&quot;USAGE: ./bootstrap [-d &lt;min-duration-ms&gt;] [-v]\n&quot;;
+"BPF bootstrap demo application.\n"
+"\n"
+"It traces process start and exits and shows associated \n"
+"information (filename, process duration, PID and PPID, etc).\n"
+"\n"
+"USAGE: ./bootstrap [-d &lt;min-duration-ms&gt;] [-v]\n";
 
 static const struct argp_option opts[] = {
-    { &quot;verbose&quot;, 'v', NULL, 0, &quot;Verbose debug output&quot; },
-    { &quot;duration&quot;, 'd', &quot;DURATION-MS&quot;, 0, &quot;Minimum process duration (ms) to report&quot; },
+    { "verbose", 'v', NULL, 0, "Verbose debug output" },
+    { "duration", 'd', "DURATION-MS", 0, "Minimum process duration (ms) to report" },
     {},
 };
 
@@ -482,7 +482,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
         errno = 0;
         env.min_duration_ms = strtol(arg, NULL, 10);
         if (errno || env.min_duration_ms &lt;= 0) {
-            fprintf(stderr, &quot;Invalid duration: %s\n&quot;, arg);
+            fprintf(stderr, "Invalid duration: %s\n", arg);
             argp_usage(state);
         }
         break;
@@ -524,17 +524,17 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 
     time(&amp;t);
     tm = localtime(&amp;t);
-    strftime(ts, sizeof(ts), &quot;%H:%M:%S&quot;, tm);
+    strftime(ts, sizeof(ts), "%H:%M:%S", tm);
 
     if (e-&gt;exit_event) {
-        printf(&quot;%-8s %-5s %-16s %-7d %-7d [%u]&quot;,
-               ts, &quot;EXIT&quot;, e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;exit_code);
+        printf("%-8s %-5s %-16s %-7d %-7d [%u]",
+               ts, "EXIT", e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;exit_code);
         if (e-&gt;duration_ns)
-            printf(&quot; (%llums)&quot;, e-&gt;duration_ns / 1000000);
-        printf(&quot;\n&quot;);
+            printf(" (%llums)", e-&gt;duration_ns / 1000000);
+        printf("\n");
     } else {
-        printf(&quot;%-8s %-5s %-16s %-7d %-7d %s\n&quot;,
-               ts, &quot;EXEC&quot;, e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;filename);
+        printf("%-8s %-5s %-16s %-7d %-7d %s\n",
+               ts, "EXEC", e-&gt;comm, e-&gt;pid, e-&gt;ppid, e-&gt;filename);
     }
 
     return 0;
@@ -561,7 +561,7 @@ int main(int argc, char **argv)
     /* Load and verify BPF application */
     skel = bootstrap_bpf__open();
     if (!skel) {
-        fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+        fprintf(stderr, "Failed to open and load BPF skeleton\n");
         return 1;
     }
 
@@ -571,14 +571,14 @@ int main(int argc, char **argv)
     /* Load &amp; verify BPF programs */
     err = bootstrap_bpf__load(skel);
     if (err) {
-        fprintf(stderr, &quot;Failed to load and verify BPF skeleton\n&quot;);
+        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
         goto cleanup;
     }
 
     /* Attach tracepoints */
     err = bootstrap_bpf__attach(skel);
     if (err) {
-        fprintf(stderr, &quot;Failed to attach BPF skeleton\n&quot;);
+        fprintf(stderr, "Failed to attach BPF skeleton\n");
         goto cleanup;
     }
 
@@ -586,13 +586,13 @@ int main(int argc, char **argv)
     rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, NULL, NULL);
     if (!rb) {
         err = -1;
-        fprintf(stderr, &quot;Failed to create ring buffer\n&quot;);
+        fprintf(stderr, "Failed to create ring buffer\n");
         goto cleanup;
     }
 
     /* Process events */
-    printf(&quot;%-8s %-5s %-16s %-7s %-7s %s\n&quot;,
-           &quot;TIME&quot;, &quot;EVENT&quot;, &quot;COMM&quot;, &quot;PID&quot;, &quot;PPID&quot;, &quot;FILENAME/EXIT CODE&quot;);
+    printf("%-8s %-5s %-16s %-7s %-7s %s\n",
+           "TIME", "EVENT", "COMM", "PID", "PPID", "FILENAME/EXIT CODE");
     while (!exiting) {
         err = ring_buffer__poll(rb, 100 /* timeout, ms */);
         /* Ctrl-C will cause -EINTR */
@@ -601,7 +601,7 @@ int main(int argc, char **argv)
             break;
         }
         if (err &lt; 0) {
-            printf(&quot;Error polling perf buffer: %d\n&quot;, err);
+            printf("Error polling perf buffer: %d\n", err);
             break;
         }
     }
@@ -623,8 +623,8 @@ cleanup:
 </code></pre>
 <p>接下来，我们使用 argp 库来解析命令行参数：</p>
 <pre><code class="language-c">static const struct argp_option opts[] = {
-    { &quot;verbose&quot;, 'v', NULL, 0, &quot;Verbose debug output&quot; },
-    { &quot;duration&quot;, 'd', &quot;DURATION-MS&quot;, 0, &quot;Minimum process duration (ms) to report&quot; },
+    { "verbose", 'v', NULL, 0, "Verbose debug output" },
+    { "duration", 'd', "DURATION-MS", 0, "Minimum process duration (ms) to report" },
     {},
 };
 
@@ -649,7 +649,7 @@ libbpf_set_print(libbpf_print_fn);
 <p>接下来，我们打开 eBPF 脚手架（skeleton）文件，将最小持续时间参数传递给 eBPF 程序，并加载和附加 eBPF 程序：</p>
 <pre><code class="language-c">skel = bootstrap_bpf__open();
 if (!skel) {
-    fprintf(stderr, &quot;Failed to open and load BPF skeleton\n&quot;);
+    fprintf(stderr, "Failed to open and load BPF skeleton\n");
     return 1;
 }
 
@@ -657,13 +657,13 @@ skel-&gt;rodata-&gt;min_duration_ns = env.min_duration_ms * 1000000ULL;
 
 err = bootstrap_bpf__load(skel);
 if (err) {
-    fprintf(stderr, &quot;Failed to load and verify BPF skeleton\n&quot;);
+    fprintf(stderr, "Failed to load and verify BPF skeleton\n");
     goto cleanup;
 }
 
 err = bootstrap_bpf__attach(skel);
 if (err) {
-    fprintf(stderr, &quot;Failed to attach BPF skeleton\n&quot;);
+    fprintf(stderr, "Failed to attach BPF skeleton\n");
     goto cleanup;
 }
 </code></pre>
@@ -671,7 +671,7 @@ if (err) {
 <pre><code class="language-c">rb = ring_buffer__new(bpf_map__fd(skel-&gt;maps.rb), handle_event, NULL, NULL);
 if (!rb) {
     err = -1;
-    fprintf(stderr, &quot;Failed to create ring buffer\n&quot;);
+    fprintf(stderr, "Failed to create ring buffer\n");
     goto cleanup;
 }
 </code></pre>

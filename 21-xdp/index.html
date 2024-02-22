@@ -187,33 +187,33 @@
 <p>除此之外，利用内核模块和内核网络协议栈中的 hook 点也是一种思路，然而前者对内核的改动大，出错的代价高昂；后者在整套包处理流程中位置偏后，其效率不够理想。</p>
 <p>总而言之，xdp + eBPF 为可编程包处理系统提出了一种更为稳健的思路，在某种程度上权衡了上述方案的种种优点和不足，获取较高性能的同时又不会对内核的包处理流程进行过多的改变，同时借助 eBPF 虚拟机的优势将用户定义的包处理过程进行隔离和限制，提高了安全性。</p>
 <h2 id="编写-ebpf-程序"><a class="header" href="#编写-ebpf-程序">编写 eBPF 程序</a></h2>
-<pre><code class="language-C">#include &quot;vmlinux.h&quot;
+<pre><code class="language-C">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 
 /// @ifindex 1
 /// @flags 0
-/// @xdpopts {&quot;old_prog_fd&quot;:0}
-SEC(&quot;xdp&quot;)
+/// @xdpopts {"old_prog_fd":0}
+SEC("xdp")
 int xdp_pass(struct xdp_md* ctx) {
     void* data = (void*)(long)ctx-&gt;data;
     void* data_end = (void*)(long)ctx-&gt;data_end;
     int pkt_sz = data_end - data;
 
-    bpf_printk(&quot;packet size is %d&quot;, pkt_sz);
+    bpf_printk("packet size is %d", pkt_sz);
     return XDP_PASS;
 }
 
-char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char __license[] SEC("license") = "GPL";
 </code></pre>
 <p>这是一段 C 语言实现的 eBPF 内核侧代码，它能够通过 xdp 捕获所有经过目标网络设备的数据包，计算其大小并输出到 <code>trace_pipe</code> 中。</p>
 <p>值得注意的是，在代码中我们使用了以下注释：</p>
 <pre><code class="language-C">/// @ifindex 1
 /// @flags 0
-/// @xdpopts {&quot;old_prog_fd&quot;:0}
+/// @xdpopts {"old_prog_fd":0}
 </code></pre>
 <p>这是由 eunomia-bpf 提供的功能，我们可以通过这样的注释告知 eunomia-bpf 加载器此 xdp 程序想要挂载的目标网络设备编号，挂载的标志和选项。</p>
 <p>这些变量的设计基于 libbpf 提供的 API，可以通过 <a href="https://patchwork.kernel.org/project/netdevbpf/patch/20220120061422.2710637-2-andrii@kernel.org/#24705508">patchwork</a> 查看接口的详细介绍。</p>
-<p><code>SEC(&quot;xdp&quot;)</code> 宏指出 BPF 程序的类型，<code>ctx</code> 是此 BPF 程序执行的上下文，用于包处理流程。</p>
+<p><code>SEC("xdp")</code> 宏指出 BPF 程序的类型，<code>ctx</code> 是此 BPF 程序执行的上下文，用于包处理流程。</p>
 <p>在程序的最后，我们返回了 <code>XDP_PASS</code>，这表示我们的 xdp 程序会将经过目标网络设备的包正常交付给内核的网络协议栈。可以通过 <a href="https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/implementation/xdp_actions.html">XDP actions</a> 了解更多 xdp 的处理动作。</p>
 <h2 id="编译运行"><a class="header" href="#编译运行">编译运行</a></h2>
 <p>通过容器编译：</p>

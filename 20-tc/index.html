@@ -189,9 +189,9 @@
 #define TC_ACT_OK 0
 #define ETH_P_IP 0x0800 /* Internet Protocol packet */
 
-/// @tchook {&quot;ifindex&quot;:1, &quot;attach_point&quot;:&quot;BPF_TC_INGRESS&quot;}
-/// @tcopts {&quot;handle&quot;:1, &quot;priority&quot;:1}
-SEC(&quot;tc&quot;)
+/// @tchook {"ifindex":1, "attach_point":"BPF_TC_INGRESS"}
+/// @tcopts {"handle":1, "priority":1}
+SEC("tc")
 int tc_ingress(struct __sk_buff *ctx)
 {
     void *data_end = (void *)(__u64)ctx-&gt;data_end;
@@ -210,16 +210,16 @@ int tc_ingress(struct __sk_buff *ctx)
     if ((void *)(l3 + 1) &gt; data_end)
         return TC_ACT_OK;
 
-    bpf_printk(&quot;Got IP packet: tot_len: %d, ttl: %d&quot;, bpf_ntohs(l3-&gt;tot_len), l3-&gt;ttl);
+    bpf_printk("Got IP packet: tot_len: %d, ttl: %d", bpf_ntohs(l3-&gt;tot_len), l3-&gt;ttl);
     return TC_ACT_OK;
 }
 
-char __license[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char __license[] SEC("license") = "GPL";
 </code></pre>
 <p>这段代码定义了一个 eBPF 程序，它可以通过 Linux TC（Transmission Control）来捕获数据包并进行处理。在这个程序中，我们限定了只捕获 IPv4 协议的数据包，然后通过 bpf_printk 函数打印出数据包的总长度和 Time-To-Live（TTL）字段的值。</p>
 <p>需要注意的是，我们在代码中使用了一些 BPF 库函数，例如 bpf_htons 和 bpf_ntohs 函数，它们用于进行网络字节序和主机字节序之间的转换。此外，我们还使用了一些注释来为 TC 提供附加点和选项信息。例如，在这段代码的开头，我们使用了以下注释：</p>
-<pre><code class="language-c">/// @tchook {&quot;ifindex&quot;:1, &quot;attach_point&quot;:&quot;BPF_TC_INGRESS&quot;}
-/// @tcopts {&quot;handle&quot;:1, &quot;priority&quot;:1}
+<pre><code class="language-c">/// @tchook {"ifindex":1, "attach_point":"BPF_TC_INGRESS"}
+/// @tcopts {"handle":1, "priority":1}
 </code></pre>
 <p>这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。关于 libbpf 中 tc 相关的 API 可以参考 <a href="https://patchwork.kernel.org/project/netdevbpf/patch/20210512103451.989420-3-memxor@gmail.com/">patchwork</a> 中的介绍。</p>
 <p>总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。</p>

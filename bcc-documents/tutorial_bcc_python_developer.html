@@ -187,7 +187,7 @@
 </code></pre>
 <p>以下是 hello_world.py 的代码示例：</p>
 <pre><code class="language-Python">from bcc import BPF
-BPF(text='int kprobe__sys_clone(void *ctx) { bpf_trace_printk(&quot;Hello, World!\\n&quot;); return 0; }').trace_print()
+BPF(text='int kprobe__sys_clone(void *ctx) { bpf_trace_printk("Hello, World!\\n"); return 0; }').trace_print()
 </code></pre>
 <p>从中可以学到六件事情：</p>
 <ol>
@@ -211,8 +211,8 @@ BPF(text='int kprobe__sys_clone(void *ctx) { bpf_trace_printk(&quot;Hello, World
 </li>
 </ol>
 <h3 id="第二课-sys_sync"><a class="header" href="#第二课-sys_sync">第二课 sys_sync()</a></h3>
-<p>编写一个跟踪 sys_sync() 内核函数的程序。运行时打印 &quot;sys_sync() called&quot;。在跟踪时，在另一个会话中运行 <code>sync</code> 进行测试。hello_world.py 程序中包含了这一切所需的内容。</p>
-<p>通过在程序刚启动时打印 &quot;Tracing sys_sync()... Ctrl-C to end.&quot; 来改进它。提示：它只是 Python 代码。</p>
+<p>编写一个跟踪 sys_sync() 内核函数的程序。运行时打印 "sys_sync() called"。在跟踪时，在另一个会话中运行 <code>sync</code> 进行测试。hello_world.py 程序中包含了这一切所需的内容。</p>
+<p>通过在程序刚启动时打印 "Tracing sys_sync()... Ctrl-C to end." 来改进它。提示：它只是 Python 代码。</p>
 <h3 id="第三课-hello_fieldspy"><a class="header" href="#第三课-hello_fieldspy">第三课 hello_fields.py</a></h3>
 <p>该程序位于 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/hello_fields.py">examples/tracing/hello_fields.py</a>。样本输出（在另一个会话中运行命令）：</p>
 <pre><code class="language-sh"># examples/tracing/hello_fields.py
@@ -226,19 +226,19 @@ BPF(text='int kprobe__sys_clone(void *ctx) { bpf_trace_printk(&quot;Hello, World
 <pre><code class="language-Python">from bcc import BPF
 
 # 定义 BPF 程序
-prog = &quot;&quot;&quot;
+prog = """
 int hello(void *ctx) {
-    bpf_trace_printk(&quot;你好，世界！\\n&quot;);
+    bpf_trace_printk("你好，世界！\\n");
     return 0;
 }
-&quot;&quot;&quot;
+"""
 
 # 加载 BPF 程序
 b = BPF(text=prog)
-b.attach_kprobe(event=b.get_syscall_fnname(&quot;clone&quot;), fn_name=&quot;hello&quot;)
+b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")
 
 # 头部
-print(&quot;%-18s %-16s %-6s %s&quot; % (&quot;时间(s)&quot;, &quot;进程名&quot;, &quot;进程 ID&quot;, &quot;消息&quot;))
+print("%-18s %-16s %-6s %s" % ("时间(s)", "进程名", "进程 ID", "消息"))
 
 # 格式化输出
 while 1:
@@ -246,7 +246,7 @@ while 1:
         (task, pid, cpu, flags, ts, msg) = b.trace_fields()
     except ValueError:
         continue
-    print(&quot;%-18.9f %-16s %-6d %s&quot; % (ts, task, pid, msg))
+    print("%-18.9f %-16s %-6d %s" % (ts, task, pid, msg))
 </code></pre>
 <p>这与hello_world.py类似，并通过sys_clone()再次跟踪新进程，但是还有一些要学习的内容：</p>
 <ol>
@@ -257,7 +257,7 @@ while 1:
 <p><code>hello()</code>：现在我们只是声明了一个C函数，而不是使用<code>kprobe__</code>的快捷方式。我们稍后会引用它。在BPF程序中声明的所有C函数都希望在探测器上执行，因此它们都需要以<code>pt_reg* ctx</code>作为第一个参数。如果您需要定义一些不会在探测器上执行的辅助函数，则需要将其定义为<code>static inline</code>，以便由编译器内联。有时您还需要为其添加<code>_always_inline</code>函数属性。</p>
 </li>
 <li>
-<p><code>b.attach_kprobe(event=b.get_syscall_fnname(&quot;clone&quot;), fn_name=&quot;hello&quot;)</code>：为内核clone系统调用函数创建一个kprobe，该函数将执行我们定义的hello()函数。您可以多次调用attach_kprobe()，并将您的C函数附加到多个内核函数上。</p>
+<p><code>b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")</code>：为内核clone系统调用函数创建一个kprobe，该函数将执行我们定义的hello()函数。您可以多次调用attach_kprobe()，并将您的C函数附加到多个内核函数上。</p>
 </li>
 <li>
 <p><code>b.trace_fields()</code>：从trace_pipe中返回一组固定的字段。与trace_print()类似，它对于编写脚本很方便，但是对于实际的工具化需求，我们应该切换到BPF_PERF_OUTPUT()。</p>
@@ -267,7 +267,7 @@ while 1:
 <p>还记得以前系统管理员在缓慢的控制台上输入<code>sync</code>三次然后才重启吗？后来有人认为<code>sync;sync;sync</code>很聪明，将它们都写在一行上运行，尽管这违背了最初的目的！然后，sync变成了同步操作，所以更加愚蠢。无论如何。</p>
 <p>以下示例计算了<code>do_sync</code>函数被调用的速度，并且如果它在一秒钟之内被调用，则输出信息。<code>sync;sync;sync</code>将为第2个和第3个sync打印输出：</p>
 <pre><code class="language-sh"># examples/tracing/sync_timing.py
-追踪快速sync... 按Ctrl-C结束&quot;。
+追踪快速sync... 按Ctrl-C结束"。
 </code></pre>
 <p>在时间0.00秒时：检测到多个同步，上次发生在95毫秒前
 在时间0.10秒时：检测到多个同步，上次发生在96毫秒前</p>
@@ -276,7 +276,7 @@ while 1:
 from bcc import BPF
 
 # 加载BPF程序
-b = BPF(text=&quot;&quot;&quot;
+b = BPF(text="""
 #include &lt;uapi/linux/ptrace.h&gt;
 
 BPF_HASH(last);
@@ -290,7 +290,7 @@ int do_trace(struct pt_regs *ctx) {
         delta = bpf_ktime_get_ns() - *tsp;
         if (delta &lt; 1000000000) {
             // 时间小于1秒则输出
-            bpf_trace_printk(&quot;%d\\n&quot;, delta / 1000000);
+            bpf_trace_printk("%d\\n", delta / 1000000);
         }
         last.delete(&amp;key);
     }
@@ -300,10 +300,10 @@ int do_trace(struct pt_regs *ctx) {
     last.update(&amp;key, &amp;ts);
     return 0;
 }
-&quot;&quot;&quot;)
+""")
 
-b.attach_kprobe(event=b.get_syscall_fnname(&quot;sync&quot;), fn_name=&quot;do_trace&quot;)
-print(&quot;跟踪快速同步... 按Ctrl-C结束&quot;)
+b.attach_kprobe(event=b.get_syscall_fnname("sync"), fn_name="do_trace")
+print("跟踪快速同步... 按Ctrl-C结束")
 
 # 格式化输出
 start = 0
@@ -312,12 +312,12 @@ while 1:
     if start == 0:
         start = ts
     ts = ts - start
-    print(&quot;在时间%.2f秒处：检测到多个同步，上次发生在%s毫秒前&quot; % (ts, ms))
+    print("在时间%.2f秒处：检测到多个同步，上次发生在%s毫秒前" % (ts, ms))
 </code></pre>
 <p>学习内容：</p>
 <ol>
 <li><code>bpf_ktime_get_ns()</code>: 返回时间，单位为纳秒。</li>
-<li><code>BPF_HASH(last)</code>: 创建一个BPF映射对象，类型为哈希（关联数组），名为&quot;last&quot;。我们没有指定其他参数，因此默认的键和值类型为u64。</li>
+<li><code>BPF_HASH(last)</code>: 创建一个BPF映射对象，类型为哈希（关联数组），名为"last"。我们没有指定其他参数，因此默认的键和值类型为u64。</li>
 <li><code>key = 0</code>: 我们只会在哈希中存储一个键值对，其中键被硬编码为零。</li>
 <li><code>last.lookup(&amp;key)</code>: 在哈希中查找键，并如果存在则返回其值的指针，否则返回NULL。我们将键作为指针的地址传递给该函数。</li>
 <li><code>if (tsp != NULL) {</code>: 验证器要求在将从映射查找得到的指针值解引用使用之前，必须先检查其是否为null。1. <code>last.delete(&amp;key)</code>: 从哈希表中删除key。目前需要这样做是因为<a href="https://git.kernel.org/cgit/linux/kernel/git/davem/net.git/commit/?id=a6ed3ea65d9868fdf9eff84e6fe4f666b8d14b02"><code>.update()</code>中存在一个内核错误</a>（在4.8.10中已经修复）。</li>
@@ -340,7 +340,7 @@ while 1:
 REQ_WRITE = 1  # 来自include/linux/blk_types.h
 
 # 加载BPF程序
-b = BPF(text=&quot;&quot;&quot;
+b = BPF(text="""
 #include &lt;uapi/linux/ptrace.h&gt;
 #include &lt;linux/blk-mq.h&gt;
 
@@ -359,17 +359,17 @@ void trace_completion(struct pt_regs *ctx, struct request *req) {
  tsp = start.lookup(&amp;req);
  if (tsp != 0) {
   delta = bpf_ktime_get_ns() - *tsp;
-  bpf_trace_printk(&quot;%d %x %d\\n&quot;, req-&gt;__data_len,
+  bpf_trace_printk("%d %x %d\\n", req-&gt;__data_len,
       req-&gt;cmd_flags, delta / 1000);
   start.delete(&amp;req);
  }
 }
-&quot;&quot;&quot;)
+""")
 if BPF.get_kprobe_functions(b'blk_start_request'):
-        b.attach_kprobe(event=&quot;blk_start_request&quot;, fn_name=&quot;trace_start&quot;)
-b.attach_kprobe(event=&quot;blk_mq_start_request&quot;, fn_name=&quot;trace_start&quot;)
+        b.attach_kprobe(event="blk_start_request", fn_name="trace_start")
+b.attach_kprobe(event="blk_mq_start_request", fn_name="trace_start")
 if BPF.get_kprobe_functions(b'__blk_account_io_done'):
-    b.attach_kprobe(event=&quot;__blk_account_io_done&quot;, fn_name=&quot;trace_completion&quot;) else: b.attach_kprobe(event=&quot;blk_account_io_done&quot;, fn_name=&quot;trace_completion&quot;) 
+    b.attach_kprobe(event="__blk_account_io_done", fn_name="trace_completion") else: b.attach_kprobe(event="blk_account_io_done", fn_name="trace_completion") 
     [...]
 </code></pre>
 <p>学习内容：</p>
@@ -394,7 +394,7 @@ TIME(s)            COMM             PID    MESSAGE
 <pre><code class="language-Python">from bcc import BPF
 
 // 定义BPF程序
-prog = &quot;&quot;&quot;
+prog = """
 #include &lt;linux/sched.h&gt;
 
 // 在C中定义输出数据结构
@@ -416,40 +416,40 @@ int hello(struct pt_regs *ctx) {
 
     return 0;
 }
-&quot;&quot;&quot;
+"""
 
 // 加载BPF程序
 b = BPF(text=prog)
-b.attach_kprobe(event=b.get_syscall_fnname(&quot;clone&quot;), fn_name=&quot;hello&quot;)
+b.attach_kprobe(event=b.get_syscall_fnname("clone"), fn_name="hello")
 
 //标题
-print(&quot;%-18s %-16s %-6s %s&quot; % (&quot;TIME(s)&quot;, &quot;COMM&quot;, &quot;PID&quot;, &quot;MESSAGE&quot;))
+print("%-18s %-16s %-6s %s" % ("TIME(s)", "COMM", "PID", "MESSAGE"))
 
 //处理事件
 start = 0
 def print_event(cpu, data, size):
     global start
-    event = b[&quot;events&quot;].event(data)
+    event = b["events"].event(data)
     if start == 0:
             start = event.ts
     time_s = (float(event.ts - start)) / 1000000000
-    print(&quot;%-18.9f %-16s %-6d %s&quot; % (time_s, event.comm, event.pid, &quot;你好，perf_output！&quot;))
+    print("%-18.9f %-16s %-6d %s" % (time_s, event.comm, event.pid, "你好，perf_output！"))
 
 //循环并回调print_event
-b[&quot;events&quot;].open_perf_buffer(print_event)
+b["events"].open_perf_buffer(print_event)
 while 1:
     b.perf_buffer_poll()
 </code></pre>
 <p>学习的内容：</p>
 <ol>
-<li><code>struct data_t</code>: 这定义了一个C结构体，我们将用它来从内核传递数据到用户空间。1. <code>BPF_PERF_OUTPUT(events)</code>: 这里给我们的输出通道命名为&quot;events&quot;。</li>
+<li><code>struct data_t</code>: 这定义了一个C结构体，我们将用它来从内核传递数据到用户空间。1. <code>BPF_PERF_OUTPUT(events)</code>: 这里给我们的输出通道命名为"events"。</li>
 <li><code>struct data_t data = {};</code>: 创建一个空的<code>data_t</code>结构体，我们将在之后填充它。</li>
 <li><code>bpf_get_current_pid_tgid()</code>: 返回低32位的进程ID（内核视图中的PID，用户空间中通常被表示为线程ID），以及高32位的线程组ID（用户空间通常认为是PID）。通过直接将其设置为<code>u32</code>，我们丢弃了高32位。应该显示PID还是TGID？对于多线程应用程序，TGID将是相同的，所以如果你想要区分它们，你需要PID。这也是对最终用户期望的一个问题。</li>
 <li><code>bpf_get_current_comm()</code>: 将当前进程的名称填充到第一个参数的地址中。</li>
 <li><code>events.perf_submit()</code>: 通过perf环形缓冲区将事件提交给用户空间以供读取。</li>
 <li><code>def print_event()</code>: 定义一个Python函数来处理从<code>events</code>流中读取的事件。</li>
-<li><code>b[&quot;events&quot;].event(data)</code>: 现在将事件作为一个Python对象获取，该对象是根据C声明自动生成的。</li>
-<li><code>b[&quot;events&quot;].open_perf_buffer(print_event)</code>: 将Python的<code>print_event</code>函数与<code>events</code>流关联起来。</li>
+<li><code>b["events"].event(data)</code>: 现在将事件作为一个Python对象获取，该对象是根据C声明自动生成的。</li>
+<li><code>b["events"].open_perf_buffer(print_event)</code>: 将Python的<code>print_event</code>函数与<code>events</code>流关联起来。</li>
 <li><code>while 1: b.perf_buffer_poll()</code>: 阻塞等待事件。</li>
 </ol>
 <h3 id="第八课-sync_perf_outputpy"><a class="header" href="#第八课-sync_perf_outputpy">第八课。 sync_perf_output.py</a></h3>
@@ -464,7 +464,7 @@ while 1:
        2 -&gt; 3        : 0        |                                      |
        4 -&gt; 7        : 211      |**********                            |
        8 -&gt; 15       : 0        |                                      |
-      16 -&gt; 31       : 0        |                                      |&quot;.32 -&gt; 63       : 0        |                                      |
+      16 -&gt; 31       : 0        |                                      |".32 -&gt; 63       : 0        |                                      |
       64 -&gt; 127      : 1        |                                      |
      128 -&gt; 255      : 800      |**************************************|
 </code></pre>
@@ -474,7 +474,7 @@ from bcc import BPF
 from time import sleep
 
 # 加载BPF程序
-b = BPF(text=&quot;&quot;&quot;
+b = BPF(text="""
 #include &lt;uapi/linux/ptrace.h&gt;
 #include &lt;linux/blkdev.h&gt;
 
@@ -485,10 +485,10 @@ int kprobe__blk_account_io_done(struct pt_regs *ctx, struct request *req)
  dist.increment(bpf_log2l(req-&gt;__data_len / 1024));
  return 0;
 }
-&quot;&quot;&quot;)
+""")
 
 # 头部
-print(&quot;跟踪中... 按Ctrl-C结束.&quot;)
+print("跟踪中... 按Ctrl-C结束.")
 
 # 跟踪直到按下Ctrl-C
 try:
@@ -497,7 +497,7 @@ except KeyboardInterrupt:
  print()
 
 # 输出
-b[&quot;dist&quot;].print_log2_hist(&quot;kbytes&quot;)
+b["dist"].print_log2_hist("kbytes")
 </code></pre>
 <p>之前课程的总结：</p>
 <ul>
@@ -507,10 +507,10 @@ b[&quot;dist&quot;].print_log2_hist(&quot;kbytes&quot;)
 </ul>
 <p>新知识：</p>
 <ol>
-<li><code>BPF_HISTOGRAM(dist)</code>: 定义了一个名为 &quot;dist&quot; 的BPF映射对象，它是一个直方图。</li>
+<li><code>BPF_HISTOGRAM(dist)</code>: 定义了一个名为 "dist" 的BPF映射对象，它是一个直方图。</li>
 <li><code>dist.increment()</code>: 默认情况下，将第一个参数提供的直方图桶索引加1。也可以作为第二个参数传递自定义的增量。</li>
 <li><code>bpf_log2l()</code>: 返回所提供值的对数值。这将成为我们直方图的索引，这样我们构建了一个以2为底的幂直方图。</li>
-<li><code>b[&quot;dist&quot;].print_log2_hist(&quot;kbytes&quot;)</code>: 以2为底的幂形式打印 &quot;dist&quot; 直方图，列标题为 &quot;kbytes&quot;。这样只有桶计数从内核传输到用户空间，因此效率高。</li>
+<li><code>b["dist"].print_log2_hist("kbytes")</code>: 以2为底的幂形式打印 "dist" 直方图，列标题为 "kbytes"。这样只有桶计数从内核传输到用户空间，因此效率高。</li>
 </ol>
 <h3 id="lesson-10-disklatencypy-lesson-11-vfsreadlatpy"><a class="header" href="#lesson-10-disklatencypy-lesson-11-vfsreadlatpy">Lesson 10. disklatency.py”。#### Lesson 11. vfsreadlat.py</a></h3>
 <p>这个例子分为独立的Python和C文件。示例输出：</p>
@@ -552,9 +552,9 @@ b[&quot;dist&quot;].print_log2_hist(&quot;kbytes&quot;)
 <p>浏览 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.py">examples/tracing/vfsreadlat.py</a> 和 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/vfsreadlat.c">examples/tracing/vfsreadlat.c</a> 中的代码。</p>
 <p>学习的内容:</p>
 <ol>
-<li><code>b = BPF(src_file = &quot;vfsreadlat.c&quot;)</code>: 从单独的源代码文件中读取 BPF C 程序。</li>
-<li><code>b.attach_kretprobe(event=&quot;vfs_read&quot;, fn_name=&quot;do_return&quot;)</code>: 将 BPF C 函数 <code>do_return()</code> 链接到内核函数 <code>vfs_read()</code> 的返回值上。这是一个 kretprobe：用于检测函数返回值，而不是函数的入口。</li>
-<li><code>b[&quot;dist&quot;].clear()</code>: 清除直方图。</li>
+<li><code>b = BPF(src_file = "vfsreadlat.c")</code>: 从单独的源代码文件中读取 BPF C 程序。</li>
+<li><code>b.attach_kretprobe(event="vfs_read", fn_name="do_return")</code>: 将 BPF C 函数 <code>do_return()</code> 链接到内核函数 <code>vfs_read()</code> 的返回值上。这是一个 kretprobe：用于检测函数返回值，而不是函数的入口。</li>
+<li><code>b["dist"].clear()</code>: 清除直方图。</li>
 </ol>
 <h3 id="lesson-12-urandomreadpy"><a class="header" href="#lesson-12-urandomreadpy">Lesson 12. urandomread.py</a></h3>
 <p>当运行 <code>dd if=/dev/urandom of=/dev/null bs=8k count=5</code> 时进行跟踪：</p>
@@ -568,20 +568,20 @@ TIME(s)            COMM             PID    GOTBITS
 24652837.728888001 dd               24692  65536
 </code></pre>
 <p>哈！我意外地捕捉到了 smtp。代码在 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/urandomread.py">examples/tracing/urandomread.py</a> 中：</p>
-<pre><code class="language-Python">from __future__ import print_function&quot;.```python
+<pre><code class="language-Python">from __future__ import print_function".```python
 from bcc import BPF
 
 # 加载BPF程序
-b = BPF(text=&quot;&quot;&quot;
+b = BPF(text="""
 TRACEPOINT_PROBE(random, urandom_read) {
     // args is from /sys/kernel/debug/tracing/events/random/urandom_read/format
-    bpf_trace_printk(&quot;%d\\n&quot;, args-&gt;got_bits);
+    bpf_trace_printk("%d\\n", args-&gt;got_bits);
     return 0;
 }
-&quot;&quot;&quot;)
+""")
 
 # header
-print(&quot;%-18s %-16s %-6s %s&quot; % (&quot;TIME(s)&quot;, &quot;COMM&quot;, &quot;PID&quot;, &quot;GOTBITS&quot;))
+print("%-18s %-16s %-6s %s" % ("TIME(s)", "COMM", "PID", "GOTBITS"))
 
 # format output
 while 1:
@@ -589,7 +589,7 @@ while 1:
         (task, pid, cpu, flags, ts, msg) = b.trace_fields()
     except ValueError:
         continue
-    print(&quot;%-18.9f %-16s %-6d %s&quot; % (ts, task, pid, msg))
+    print("%-18.9f %-16s %-6d %s" % (ts, task, pid, msg))
 </code></pre>
 <p>要学到的东西：</p>
 <ol>
@@ -609,7 +609,7 @@ format:
  field:int pool_left; offset:12; size:4; signed:1;
  field:int input_left; offset:16; size:4; signed:1;
 
-print fmt: &quot;got_bits %d nonblocking_pool_entropy_left %d input_entropy_left %d&quot;, REC-&gt;got_bits, REC-&gt;pool_left, REC-&gt;input_left
+print fmt: "got_bits %d nonblocking_pool_entropy_left %d input_entropy_left %d", REC-&gt;got_bits, REC-&gt;pool_left, REC-&gt;input_left
 </code></pre>
 <p>在这种情况下，我们正在打印 <code>got_bits</code> 成员。</p>
 <h3 id="第13课-disksnooppy已修复"><a class="header" href="#第13课-disksnooppy已修复">第13课. disksnoop.py已修复</a></h3>
@@ -619,31 +619,31 @@ print fmt: &quot;got_bits %d nonblocking_pool_entropy_left %d input_entropy_left
 <pre><code class="language-sh"># strlen_count.py
 跟踪 strlen()... 按 Ctrl-C 结束。
 ^C     数量 字符串
-         1 &quot; &quot;
-         1 &quot;/bin/ls&quot;
-         1 &quot;.&quot;
-         1 &quot;cpudist.py.1&quot;
-         1 &quot;.bashrc&quot;
-         1 &quot;ls --color=auto&quot;
-         1 &quot;key_t&quot;
+         1 " "
+         1 "/bin/ls"
+         1 "."
+         1 "cpudist.py.1"
+         1 ".bashrc"
+         1 "ls --color=auto"
+         1 "key_t"
 [...]
-        10 &quot;a7:~# &quot;
-        10 &quot;/root&quot;
-        12 &quot;LC_ALL&quot;
-        12 &quot;en_US.UTF-8&quot;
-        13 &quot;en_US.UTF-8&quot;
-        20 &quot;~&quot;
-        70 &quot;#%^,~:-=?+/}&quot;
-       340 &quot;\x01\x1b]0;root@bgregg-test: ~\x07\x02root@bgregg-test:~# &quot;
+        10 "a7:~# "
+        10 "/root"
+        12 "LC_ALL"
+        12 "en_US.UTF-8"
+        13 "en_US.UTF-8"
+        20 "~"
+        70 "#%^,~:-=?+/}"
+       340 "\x01\x1b]0;root@bgregg-test: ~\x07\x02root@bgregg-test:~# "
 </code></pre>
-<p>这些是在跟踪时由此库函数处理的各种字符串以及它们的频率计数。例如，&quot;LC_ALL&quot; 被调用了12次。</p>
+<p>这些是在跟踪时由此库函数处理的各种字符串以及它们的频率计数。例如，"LC_ALL" 被调用了12次。</p>
 <p>代码在 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/strlen_count.py">examples/tracing/strlen_count.py</a> 中：</p>
 <pre><code class="language-Python">from __future__ import print_function
 from bcc import BPF
 from time import sleep
 
 # 载入 BPF 程序
-b = BPF(text=&quot;&quot;&quot;
+b = BPF(text="""
 #include &lt;uapi/linux/ptrace.h&gt;
 
 struct key_t {
@@ -666,11 +666,11 @@ int count(struct pt_regs *ctx) {
     }
     return 0;
 };
-&quot;&quot;&quot;)
-b.attach_uprobe(name=&quot;c&quot;, sym=&quot;strlen&quot;, fn_name=&quot;count&quot;)
+""")
+b.attach_uprobe(name="c", sym="strlen", fn_name="count")
 
 # 头部
-print(&quot;跟踪 strlen()... 按 Ctrl-C 结束。&quot;)
+print("跟踪 strlen()... 按 Ctrl-C 结束。")
 
 # 睡眠直到按下 Ctrl-C
 try:
@@ -679,14 +679,14 @@ except KeyboardInterrupt:
     pass
 
 # 打印输出
-print(&quot;%10s %s&quot; % (&quot;数量&quot;, &quot;字符串&quot;))
-counts = b.get_table(&quot;counts&quot;)
+print("%10s %s" % ("数量", "字符串"))
+counts = b.get_table("counts")
 for k, v in sorted(counts.items(), key=lambda counts: counts[1].value):
-    print(&quot;%10d \&quot;%s\&quot;&quot; % (v.value, k.c.encode('string-escape')))
+    print("%10d \"%s\"" % (v.value, k.c.encode('string-escape')))
 </code></pre>
 <p>要学习的内容：1. <code>PT_REGS_PARM1(ctx)</code>: 这个参数会获取传递给 <code>strlen()</code> 的第一个参数，也就是字符串。</p>
 <ol>
-<li><code>b.attach_uprobe(name=&quot;c&quot;, sym=&quot;strlen&quot;, fn_name=&quot;count&quot;)</code>: 附加到库 &quot;c&quot;（如果这是主程序，则使用其路径名），对用户级函数 <code>strlen()</code> 进行插装，并在执行时调用我们的 C 函数 <code>count()</code>。</li>
+<li><code>b.attach_uprobe(name="c", sym="strlen", fn_name="count")</code>: 附加到库 "c"（如果这是主程序，则使用其路径名），对用户级函数 <code>strlen()</code> 进行插装，并在执行时调用我们的 C 函数 <code>count()</code>。</li>
 </ol>
 <h3 id="第15课nodejs_http_serverpy"><a class="header" href="#第15课nodejs_http_serverpy">第15课。nodejs_http_server.py</a></h3>
 <p>本程序会对用户静态定义的跟踪 (USDT) 探测点进行插装，这是内核跟踪点的用户级版本。示例输出：</p>
@@ -702,27 +702,27 @@ from bcc import BPF, USDT
 import sys
 
 if len(sys.argv) &lt; 2:
-    print(&quot;USAGE: nodejs_http_server PID&quot;)
+    print("USAGE: nodejs_http_server PID")
     exit()
 pid = sys.argv[1]
 debug = 0
 
 # load BPF program
-bpf_text = &quot;&quot;&quot;
+bpf_text = """
 #include &lt;uapi/linux/ptrace.h&gt;
 int do_trace(struct pt_regs *ctx) {
     uint64_t addr;
     char path[128]={0};
     bpf_usdt_readarg(6, ctx, &amp;addr);
     bpf_probe_read_user(&amp;path, sizeof(path), (void *)addr);
-    bpf_trace_printk(&quot;path:%s\\n&quot;, path);
+    bpf_trace_printk("path:%s\\n", path);
     return 0;
 };
-&quot;&quot;&quot;
+"""
 
 # enable USDT probe from given PID
 u = USDT(pid=int(pid))
-u.enable_probe(probe=&quot;http__server__request&quot;, fn_name=&quot;do_trace&quot;)
+u.enable_probe(probe="http__server__request", fn_name="do_trace")
 if debug:
     print(u.get_text())
     print(bpf_text)
@@ -734,7 +734,7 @@ b = BPF(text=bpf_text, usdt_contexts=[u])
 <ol>
 <li><code>bpf_usdt_readarg(6, ctx, &amp;addr)</code>: 从 USDT 探测点中读取参数 6 的地址到 <code>addr</code>。</li>
 <li><code>bpf_probe_read_user(&amp;path, sizeof(path), (void *)addr)</code>: 现在字符串 <code>addr</code> 指向我们的 <code>path</code> 变量。</li>
-<li><code>u = USDT(pid=int(pid))</code>: 为给定的 PID 初始化 USDT 跟踪。1. <code>u.enable_probe(probe=&quot;http__server__request&quot;, fn_name=&quot;do_trace&quot;)</code>: 将我们的 <code>do_trace()</code> BPF C 函数附加到 Node.js 的 <code>http__server__request</code> USDT 探针。</li>
+<li><code>u = USDT(pid=int(pid))</code>: 为给定的 PID 初始化 USDT 跟踪。1. <code>u.enable_probe(probe="http__server__request", fn_name="do_trace")</code>: 将我们的 <code>do_trace()</code> BPF C 函数附加到 Node.js 的 <code>http__server__request</code> USDT 探针。</li>
 <li><code>b = BPF(text=bpf_text, usdt_contexts=[u])</code>: 需要将我们的 USDT 对象 <code>u</code> 传递给 BPF 对象的创建。</li>
 </ol>
 <h3 id="第16课-task_switchc"><a class="header" href="#第16课-task_switchc">第16课. task_switch.c</a></h3>
@@ -770,15 +770,15 @@ BPF 对象的 <code>[]</code> 运算符允许访问程序中的每个 BPF_HASH�
 <pre><code class="language-python">from bcc import BPF
 from time import sleep
 
-b = BPF(src_file=&quot;task_switch.c&quot;)&quot;.```markdown
+b = BPF(src_file="task_switch.c")".```markdown
 ```Chinese
-b.attach_kprobe(event=&quot;finish_task_switch&quot;, fn_name=&quot;count_sched&quot;)
+b.attach_kprobe(event="finish_task_switch", fn_name="count_sched")
 
 # 生成多个调度事件
 for i in range(0, 100): sleep(0.01)
 
-for k, v in b[&quot;stats&quot;].items():
-    print(&quot;task_switch[%5d-&gt;%5d]=%u&quot; % (k.prev_pid, k.curr_pid, v.value))
+for k, v in b["stats"].items():
+    print("task_switch[%5d-&gt;%5d]=%u" % (k.prev_pid, k.curr_pid, v.value))
 </code></pre>
 <p>这些程序可以在文件 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.c">examples/tracing/task_switch.c</a> 和 <a href="https://github.com/iovisor/bcc/tree/master/examples/tracing/task_switch.py">examples/tracing/task_switch.py</a> 中找到。</p>
 <h3 id="第17课-进一步研究"><a class="header" href="#第17课-进一步研究">第17课. 进一步研究</a></h3>

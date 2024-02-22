@@ -214,20 +214,20 @@ struct event {
 #endif /* __BOOTSTRAP_H */
 </code></pre>
 <p>源文件：exitsnoop.bpf.c</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;exitsnoop.h&quot;
+#include "exitsnoop.h"
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024);
-} rb SEC(&quot;.maps&quot;);
+} rb SEC(".maps");
 
-SEC(&quot;tp/sched/sched_process_exit&quot;)
+SEC("tp/sched/sched_process_exit")
 int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 {
     struct task_struct *task;
@@ -267,7 +267,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 <p>这段代码展示了如何使用 exitsnoop 监控进程退出事件并使用 ring buffer 向用户态打印输出：</p>
 <ol>
 <li>首先，我们引入所需的头文件和 exitsnoop.h。</li>
-<li>定义一个名为 &quot;LICENSE&quot; 的全局变量，内容为 &quot;Dual BSD/GPL&quot;，这是 eBPF 程序的许可证要求。</li>
+<li>定义一个名为 "LICENSE" 的全局变量，内容为 "Dual BSD/GPL"，这是 eBPF 程序的许可证要求。</li>
 <li>定义一个名为 rb 的 BPF_MAP_TYPE_RINGBUF 类型的映射，它将用于将内核空间的数据传输到用户空间。指定 max_entries 为 256 * 1024，代表 ring buffer 的最大容量。</li>
 <li>定义一个名为 handle_exit 的 eBPF 程序，它将在进程退出事件触发时执行。传入一个名为 ctx 的 trace_event_raw_sched_process_template 结构体指针作为参数。</li>
 <li>使用 bpf_get_current_pid_tgid() 函数获取当前任务的 PID 和 TID。对于主线程，PID 和 TID 相同；对于子线程，它们是不同的。我们只关心进程（主线程）的退出，因此在 PID 和 TID 不同时返回 0，忽略子线程退出事件。</li>

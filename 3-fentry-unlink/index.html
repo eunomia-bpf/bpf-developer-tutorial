@@ -179,29 +179,29 @@
 <h2 id="fentry"><a class="header" href="#fentry">Fentry</a></h2>
 <p>fentry（function entry）和 fexit（function exit）是 eBPF（扩展的伯克利包过滤器）中的两种探针类型，用于在 Linux 内核函数的入口和退出处进行跟踪。它们允许开发者在内核函数执行的特定阶段收集信息、修改参数或观察返回值。这种跟踪和监控功能在性能分析、故障排查和安全分析等场景中非常有用。</p>
 <p>与 kprobes 相比，fentry 和 fexit 程序有更高的性能和可用性。在这个例子中，我们可以直接访问函数的指针参数，就像在普通的 C 代码中一样，而不需要使用各种读取帮助程序。fexit 和 kretprobe 程序最大的区别在于，fexit 程序可以访问函数的输入参数和返回值，而 kretprobe 只能访问返回值。从 5.5 内核开始，fentry 和 fexit 对 eBPF 程序可用。</p>
-<pre><code class="language-c">#include &quot;vmlinux.h&quot;
+<pre><code class="language-c">#include "vmlinux.h"
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_tracing.h&gt;
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;Dual BSD/GPL&quot;;
+char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-SEC(&quot;fentry/do_unlinkat&quot;)
+SEC("fentry/do_unlinkat")
 int BPF_PROG(do_unlinkat, int dfd, struct filename *name)
 {
     pid_t pid;
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-    bpf_printk(&quot;fentry: pid = %d, filename = %s\n&quot;, pid, name-&gt;name);
+    bpf_printk("fentry: pid = %d, filename = %s\n", pid, name-&gt;name);
     return 0;
 }
 
-SEC(&quot;fexit/do_unlinkat&quot;)
+SEC("fexit/do_unlinkat")
 int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 {
     pid_t pid;
 
     pid = bpf_get_current_pid_tgid() &gt;&gt; 32;
-    bpf_printk(&quot;fexit: pid = %d, filename = %s, ret = %ld\n&quot;, pid, name-&gt;name, ret);
+    bpf_printk("fexit: pid = %d, filename = %s, ret = %ld\n", pid, name-&gt;name, ret);
     return 0;
 }
 </code></pre>

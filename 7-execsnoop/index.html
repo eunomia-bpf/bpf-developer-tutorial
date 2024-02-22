@@ -202,15 +202,15 @@ struct event {
 #include &lt;vmlinux.h&gt;
 #include &lt;bpf/bpf_helpers.h&gt;
 #include &lt;bpf/bpf_core_read.h&gt;
-#include &quot;execsnoop.h&quot;
+#include "execsnoop.h"
 
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __uint(key_size, sizeof(u32));
     __uint(value_size, sizeof(u32));
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 
-SEC(&quot;tracepoint/syscalls/sys_enter_execve&quot;)
+SEC("tracepoint/syscalls/sys_enter_execve")
 int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
 {
     u64 id;
@@ -232,7 +232,7 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
     return 0;
 }
 
-char LICENSE[] SEC(&quot;license&quot;) = &quot;GPL&quot;;
+char LICENSE[] SEC("license") = "GPL";
 </code></pre>
 <p>这段代码定义了个 eBPF 程序，用于捕获进程执行 execve 系统调用的入口。</p>
 <p>在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。</p>
@@ -261,7 +261,7 @@ TIME     PID     PPID    UID     COMM
  __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
  __uint(key_size, sizeof(u32));
  __uint(value_size, sizeof(u32));
-} events SEC(&quot;.maps&quot;);
+} events SEC(".maps");
 </code></pre>
 <p>就可以往用户态直接发送信息。</p>
 <p>更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<a href="https://github.com/eunomia-bpf/eunomia-bpf">https://github.com/eunomia-bpf/eunomia-bpf</a></p>
