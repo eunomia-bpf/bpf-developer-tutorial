@@ -1,6 +1,8 @@
 # goroutine trace
 
-**UNFINISHED YET**: The offset of goid field is hardcoded. It was only tested on the bundled `go-server-http`. It MAY NOT WORK on other go programs
+**UNFINISHED YET**: The offset of goid field is hardcoded. It was only tested on the bundled `go-server-http`. It MAY NOT WORK on other go programs.
+
+The bundled fo program was compiled using go 1.17.0. The executable and source could be found at folder `go-server-http`.
 
 This example traces the state switch of goroutines, and prints the corresponding state goid, pid and tgid.
 

@@ -12,7 +12,6 @@ enum goroutine_state {
   ENQUEUE_UNUSED,
   COPYSTACK,
   PREEMPTED,
-
 };
 
 struct goroutine_execute_data {
