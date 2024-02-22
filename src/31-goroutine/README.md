@@ -4,7 +4,7 @@
 
 The bundled fo program was compiled using go 1.17.0. The executable and source could be found at folder `go-server-http`.
 
-This example traces the state switch of goroutines, and prints the corresponding state goid, pid and tgid.
+This example traces the state switch of goroutines, and prints the corresponding state, goid, pid and tgid.
 
 ```console
 root@mnfe-pve:~/bpf-developer-tutorial/src/31-goroutine# ecc goroutine.bpf.c goroutine.h 
