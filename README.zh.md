@@ -147,6 +147,18 @@ TIME     COMM             TID     LAT(us)
 
 ![docker](imgs/docker.png)
 
+## 本地编译
+
+本地编译示例如下所示：
+
+```shell
+$ git clone https://github.com/eunomia-bpf/bpf-developer-tutorial.git
+$ cd bpf-developer-tutorial
+$ git submodule update --init --recursive # 同步 submodule 子模块
+$ cd src/24-hide
+$ make
+```
+
 ## 为什么需要基于 libbpf 和 BPF CO-RE 的教程？
 
 > 历史上，当需要开发一个BPF应用时可以选择BCC 框架，在实现各种用于Tracepoints的BPF程序时需要将BPF程序加载到内核中。BCC提供了内置的Clang编译器，可以在运行时编译BPF代码，并将其定制为符合特定主机内核的程序。这是在不断变化的内核内部下开发可维护的BPF应用程序的唯一方法。在BPF的可移植性和CO-RE一文中详细介绍了为什么会这样，以及为什么BCC是之前唯一的可行方式，此外还解释了为什么 libbpf 是目前比较好的选择。去年，Libbpf的功能和复杂性得到了重大提升，消除了与BCC之间的很多差异(特别是对Tracepoints应用来说)，并增加了很多BCC不支持的新的且强大的特性(如全局变量和BPF skeletons)。
