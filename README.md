@@ -137,6 +137,18 @@ TIME     COMM             TID     LAT(us)
 
 ![docker](imgs/docker.png)
 
+## build 
+
+The example of local compilation is shown as follows:
+
+```shell
+$ git clone https://github.com/eunomia-bpf/bpf-developer-tutorial.git
+$ cd bpf-developer-tutorial
+$ git submodule update --init --recursive # Synchronize submodule
+$ cd src/24-hide
+$ make
+```
+
 ## Why do we need tutorials based on libbpf and BPF CO-RE?
 
 > In history, when it comes to developing a BPF application, one could choose the BCC framework to load the BPF program into the kernel when implementing various BPF programs for Tracepoints. BCC provides a built-in Clang compiler that can compile BPF code at runtime and customize it into a program that conforms to a specific host kernel. This is the only way to develop maintainable BPF applications under the constantly changing internal kernel environment. The portability of BPF and the introduction of CO-RE are detailed in the article "BPF Portability and CO-RE", explaining why BCC was the only viable option before and why libbpf is now considered a better choice. Last year, Libbpf saw significant improvements in functionality and complexity, eliminating many differences with BCC (especially for Tracepoints applications) and adding many new and powerful features that BCC does not support (such as global variables and BPF skeletons)

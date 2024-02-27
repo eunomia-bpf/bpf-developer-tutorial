@@ -13,14 +13,7 @@
 #include <fcntl.h>
 
 #include "pidhide.skel.h"
-#include "common.h"
-
-// These are used by a number of
-// different programs to sync eBPF Tail Call
-// login between user space and kernel
-#define PROG_00 0
-#define PROG_01 1
-#define PROG_02 2
+#include "pidhide.h"
 
 // Setup Argument stuff
 static struct env
@@ -44,6 +37,7 @@ static const struct argp_option opts[] = {
     {"target-ppid", 't', "TARGET-PPID", 0, "Optional Parent PID, will only affect its children."},
     {},
 };
+
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
     switch (key)
@@ -74,6 +68,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
     }
     return 0;
 }
+
 static const struct argp argp = {
     .options = opts,
     .parser = parse_arg,

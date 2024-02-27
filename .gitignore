@@ -67,3 +67,5 @@ src/12-profile/profile
 ecli-server
 ecc
 ecli
+
+.vscode/
