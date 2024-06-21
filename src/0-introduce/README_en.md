@@ -117,8 +117,9 @@ The eBPF Go library provides a general-purpose eBPF library that decouples the p
 
 `libbpf-bootstrap` combines years of practice from the BPF community and provides a modern and convenient workflow for developers, achieving the goal of one-time compilation and reuse.
 
-BPF programs based on `libbpf-bootstrap` have certain naming conventions for the source files. The file for generating kernel space bytecode ends with `.bpf.c`, and the file for loading bytecode in user space ends with `.c`, and the prefixes of these two files must be the same.Instructions: Translate the following Chinese text to English
-while maintaining the original formatting: "Based on `libbpf-bootstrap`, BPF programs will compile `*.bpf.c` files into corresponding `.o` files,
+BPF programs based on `libbpf-bootstrap` have certain naming conventions for the source files. The file for generating kernel space bytecode ends with `.bpf.c`, and the file for loading bytecode in user space ends with `.c`, and the prefixes of these two files must be the same.
+
+Based on `libbpf-bootstrap`, BPF programs will compile `*.bpf.c` files into corresponding `.o` files,
 and then generate the `skeleton` file based on this file, i.e. `*.skel.h`. This file will contain some data structures defined in the kernel space,
 as well as the key functions used to load kernel space code. After the user-space code includes this file, it can call the corresponding loading function to load the bytecode into the kernel. Similarly, `libbpf-bootstrap` also has a comprehensive introduction tutorial that users can refer to [here](https://nakryiko.com/posts/libbpf-bootstrap/) for detailed introductory operations.
 
