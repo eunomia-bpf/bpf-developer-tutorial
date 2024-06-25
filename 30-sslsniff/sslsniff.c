@@ -397,7 +397,7 @@ int main(int argc, char **argv) {
 	if (env.openssl) {
 		char *openssl_path = find_library_path("libssl.so");
 		printf("OpenSSL path: %s\n", openssl_path);
-		attach_openssl(obj, "/lib/x86_64-linux-gnu/libssl.so.3");
+		attach_openssl(obj, openssl_path);
 	}
 	if (env.gnutls) {
 		char *gnutls_path = find_library_path("libgnutls.so");
