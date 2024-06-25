@@ -315,7 +315,7 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
     if (env.openssl) {
         char *openssl_path = find_library_path("libssl.so");
         printf("OpenSSL path: %s\n", openssl_path);
-        attach_openssl(obj, "/lib/x86_64-linux-gnu/libssl.so.3");
+        attach_openssl(obj, openssl_path);
     }
     if (env.gnutls) {
         char *gnutls_path = find_library_path("libgnutls.so");
@@ -343,7 +343,7 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
       skel->links.prog_name = bpf_program__attach_uprobe_opts(                 \
           skel->progs.prog_name, env.pid, binary_path, 0, &uprobe_opts);       \
     } while (false)
-    
+
 int attach_openssl(struct sslsniff_bpf *skel, const char *lib) {
     ATTACH_UPROBE_CHECKED(skel, lib, SSL_write, probe_SSL_rw_enter);
     ATTACH_URETPROBE_CHECKED(skel, lib, SSL_write, probe_SSL_write_exit);
@@ -411,9 +411,9 @@ void print_event(struct probe_SSL_data_t *event, const char *evt) {
     if (buf_size != 0) {
         if (env.hexdump) {
             // 2 characters for each byte + null terminator
-            char hex_data[MAX_BUF_SIZE * 2 + 1] = {0};  
+            char hex_data[MAX_BUF_SIZE * 2 + 1] = {0};
             buf_to_hex((uint8_t *)buf, buf_size, hex_data);
-            
+
             printf("\n%s\n", s_mark);
             for (size_t i = 0; i < strlen(hex_data); i += 32) {
                 printf("%.32s\n", hex_data + i);
@@ -477,7 +477,7 @@ curl https://example.com
 当执行 `curl` 命令后，`sslsniff` 会显示以下内容：
 
 ```txt
-    READ/RECV    0.132786160        curl             47458   1256  
+    READ/RECV    0.132786160        curl             47458   1256
     ----- DATA -----
     <!doctype html>
     ...
@@ -503,7 +503,7 @@ OpenSSL path: /lib/x86_64-linux-gnu/libssl.so.3
 GnuTLS path: /lib/x86_64-linux-gnu/libgnutls.so.30
 NSS path: /lib/x86_64-linux-gnu/libnspr4.so
 FUNC         TIME(s)            COMM             PID     LEN     LAT(ms)
-HANDSHAKE    0.000000000        curl             6460    1      1.384  WRITE/SEND   0.000115400        curl             6460    24     0.014 
+HANDSHAKE    0.000000000        curl             6460    1      1.384  WRITE/SEND   0.000115400        curl             6460    24     0.014
 ```
 
 ### 16进制输出
@@ -512,7 +512,7 @@ HANDSHAKE    0.000000000        curl             6460    1      1.384  WRITE/SEN
 
 ```console
 $ sudo ./sslsniff --hexdump
-WRITE/SEND   0.000000000        curl             16104   24    
+WRITE/SEND   0.000000000        curl             16104   24
 ----- DATA -----
 505249202a20485454502f322e300d0a
 0d0a534d0d0a0d0a
