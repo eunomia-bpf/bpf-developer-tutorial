@@ -4473,6 +4473,9 @@ char LICENSE[] SEC("license") = "GPL";
 <p>我们描述了 SPRIGHT，一个轻量级、高性能、响应式的无服务器框架。SPRIGHT 利用共享内存处理显著提高了数据平面的可伸缩性，通过避免不必要的协议处理和序列化-反序列化开销。SPRIGHT 大量利用扩展的伯克利数据包过滤器 (eBPF) 进行事件驱动处理。我们创造性地使用 eBPF 的套接字消息机制支持共享内存处理，其开销严格与负载成正比。与常驻、基于轮询的DPDK相比，SPRIGHT 在真实工作负载下实现了相同的数据平面性能，但 CPU 使用率降低了10倍。此外，eBPF 为 SPRIGHT 带来了好处，替换了繁重的无服务器组件，使我们能够以微不足道的代价保持函数处于"暖"状态。</p>
 <p>我们的初步实验结果显示，与 Knative 相比，SPRIGHT 在吞吐量和延迟方面实现了一个数量级的提高，同时大大减少了 CPU 使用，并消除了 "冷启动"的需要。</p>
 <p><a href="https://dl.acm.org/doi/10.1145/3544216.3544259">https://dl.acm.org/doi/10.1145/3544216.3544259</a></p>
+<h2 id="kgent-kernel-extensions-large-language-model-agent"><a class="header" href="#kgent-kernel-extensions-large-language-model-agent">Kgent: Kernel Extensions Large Language Model Agent</a></h2>
+<p>修改和扩展操作系统的能力是提高系统安全性、可靠性和性能的重要功能。扩展的伯克利数据包过滤器（eBPF）生态系统已经成为扩展Linux内核的标准机制，并且最近已被移植到Windows。eBPF程序将新逻辑注入内核，使系统在现有逻辑之前或之后执行这些逻辑。虽然eBPF生态系统提供了一种灵活的内核扩展机制，但目前开发人员编写eBPF程序仍然困难。eBPF开发人员必须深入了解操作系统的内部结构，以确定在何处放置逻辑，并应对eBPF验证器对其eBPF程序的控制流和数据访问施加的编程限制。本文介绍了KEN，一种通过允许使用自然语言编写内核扩展来缓解编写eBPF程序难度的替代框架。KEN利用大语言模型（LLMs）的最新进展，根据用户的英文提示生成eBPF程序。为了确保LLM的输出在语义上等同于用户的提示，KEN结合了LLM增强的程序理解、符号执行和一系列反馈循环。KEN的关键创新在于这些技术的结合。特别是，该系统以一种新颖的结构使用符号执行，使其能够结合程序综合和程序理解的结果，并建立在LLMs在每个任务中单独展示的成功基础上。为了评估KEN，我们开发了一个新的自然语言提示eBPF程序的语料库。我们显示，KEN在80%的情况下生成了正确的eBPF程序，这比LLM增强的程序综合基线提高了2.67倍。</p>
+<p>eBPF'24: <a href="https://dl.acm.org/doi/10.1145/3672197.3673434">https://dl.acm.org/doi/10.1145/3672197.3673434</a> 和arxiv <a href="https://arxiv.org/abs/2312.05531">https://arxiv.org/abs/2312.05531</a></p>
 <h2 id="programmable-system-call-security-with-ebpf"><a class="header" href="#programmable-system-call-security-with-ebpf">Programmable System Call Security with eBPF</a></h2>
 <p>利用 eBPF 进行可编程的系统调用安全</p>
 <p>系统调用过滤是一种广泛用于保护共享的 OS 内核免受不受信任的用户应用程序威胁的安全机制。但是，现有的系统调用过滤技术要么由于用户空间代理带来的上下文切换开销过于昂贵，要么缺乏足够的可编程性来表达高级策略。Seccomp 是 Linux 的系统调用过滤模块，广泛用于现代的容器技术、移动应用和系统管理服务。尽管采用了经典的 BPF 语言（cBPF），但 Seccomp 中的安全策略主要限于静态的允许列表，主要是因为 cBPF 不支持有状态的策略。因此，许多关键的安全功能无法准确地表达，和/或需要修改内核。</p>
@@ -4484,8 +4487,7 @@ char LICENSE[] SEC("license") = "GPL";
 <p><a href="https://www.usenix.org/conference/usenixsecurity23/presentation/he">https://www.usenix.org/conference/usenixsecurity23/presentation/he</a></p>
 <h2 id="comparing-security-in-ebpf-and-webassembly"><a class="header" href="#comparing-security-in-ebpf-and-webassembly">Comparing Security in eBPF and WebAssembly</a></h2>
 <p>比较 eBPF 和 WebAssembly 中的安全性</p>
-<p>本文研究了 eBPF 和 WebAssembly（Wasm）的安全性，这两种技术近年来得到了广泛的采用，尽管它们是为非常不同的用途和环境而设计的。当 eBPF 主要用于 Linux 等操作系统内核时，Wasm 是一个为基于堆栈的虚拟机设计的二进制指令格式，其用途超出了 web。鉴于 eBPF 的增长和不断扩大的雄心，Wasm 可能提供有启发性的见解，因为它围绕在如 web 浏览器和云等复杂和敌对环境中安全执行任意不受信任的程序进行设计。我们分析了两种技术的安全目标</p>
-<p>、社区发展、内存模型和执行模型，并进行了比较安全性评估，探讨了内存安全性、控制流完整性、API 访问和旁路通道。我们的结果表明，eBPF 有一个首先关注性能、其次关注安全的历史，而 Wasm 更强调安全，尽管要支付一些运行时开销。考虑 eBPF 的基于语言的限制和一个用于 API 访问的安全模型是未来工作的有益方向。</p>
+<p>本文研究了 eBPF 和 WebAssembly（Wasm）的安全性，这两种技术近年来得到了广泛的采用，尽管它们是为非常不同的用途和环境而设计的。当 eBPF 主要用于 Linux 等操作系统内核时，Wasm 是一个为基于堆栈的虚拟机设计的二进制指令格式，其用途超出了 web。鉴于 eBPF 的增长和不断扩大的雄心，Wasm 可能提供有启发性的见解，因为它围绕在如 web 浏览器和云等复杂和敌对环境中安全执行任意不受信任的程序进行设计。我们分析了两种技术的安全目标、社区发展、内存模型和执行模型，并进行了比较安全性评估，探讨了内存安全性、控制流完整性、API 访问和旁路通道。我们的结果表明，eBPF 有一个首先关注性能、其次关注安全的历史，而 Wasm 更强调安全，尽管要支付一些运行时开销。考虑 eBPF 的基于语言的限制和一个用于 API 访问的安全模型是未来工作的有益方向。</p>
 <p><a href="https://dl.acm.org/doi/abs/10.1145/3609021.3609306">https://dl.acm.org/doi/abs/10.1145/3609021.3609306</a></p>
 <p>更多内容可以在第一个 eBPF 研讨会中找到：<a href="https://conferences.sigcomm.org/sigcomm/2023/workshop-ebpf.html">https://conferences.sigcomm.org/sigcomm/2023/workshop-ebpf.html</a></p>
 <h2 id="a-flow-based-ids-using-machine-learning-in-ebpf"><a class="header" href="#a-flow-based-ids-using-machine-learning-in-ebpf">A flow-based IDS using Machine Learning in eBPF</a></h2>
