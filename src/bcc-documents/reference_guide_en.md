@@ -439,7 +439,7 @@ This instruments the `security_bpf` hook and causes it to return `-EPERM`.
 Changing `return -EPERM` to `return 0` would cause the BPF program
 to allow the operation instead.
 
-LSM probes require at least a 5.7+ kernel with the following configuation options set:
+LSM probes require at least a 5.7+ kernel with the following configuration options set:
 - `CONFIG_BPF_LSM=y`
 - `CONFIG_LSM` comma separated string must contain "bpf" (for example,
   `CONFIG_LSM="lockdown,yama,bpf"`)
@@ -829,7 +829,7 @@ Syntax: ```void* ringbuf_reserve(u64 data_size)```
 
 Return: Pointer to data struct on success, NULL on failure
 
-A method of the BPF_RINGBUF_OUTPUT table, for reserving space in the ring buffer and simultaenously
+A method of the BPF_RINGBUF_OUTPUT table, for reserving space in the ring buffer and simultaneously
 allocating a data struct for output. Must be used with one of ```ringbuf_submit``` or ```ringbuf_discard```.
 
 Examples in situ: <!-- TODO -->

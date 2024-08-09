@@ -16,7 +16,7 @@ Before starting to write eBPF programs, we need to prepare a suitable developmen
 
 To develop eBPF programs, you need to install the following software and tools:
 
-- Linux kernel: Since eBPF is a kernel technology, you need to have a relatively new version of the Linux kernel (minimium version 4.8 and above, suggested version is 5.15+ or 6.2+) to support eBPF functionality.
+- Linux kernel: Since eBPF is a kernel technology, you need to have a relatively new version of the Linux kernel (minimum version 4.8 and above, suggested version is 5.15+ or 6.2+) to support eBPF functionality.
   - If possible, install a new version of Ubuntu (e.g. 23.10) would be better. 
 - LLVM and Clang: These tools are used to compile eBPF programs. Installing the latest version of LLVM and Clang ensures that you get the best eBPF support.
 
@@ -166,7 +166,7 @@ Tracepoints are a kernel static instrumentation technique, technically just trac
 When faced with creating an eBPF project, are you confused about how to set up the environment and choose a programming language? Don't worry, we have prepared a series of GitHub templates to help you quickly start a brand new eBPF project. Just click the `Use this template` button on GitHub to get started.
 
 - <https://github.com/eunomia-bpf/libbpf-starter-template>: eBPF project template based on the C language and libbpf framework.
-- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>: eBPF project template based on the C language and cilium/ebpf framework.
+- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>: eBPF project template based on the Go language and cilium/ebpf framework.
 - <https://github.com/eunomia-bpf/libbpf-rs-starter-template>: eBPF project template based on the Rust language and libbpf-rs framework.
 - <https://github.com/eunomia-bpf/eunomia-template>: eBPF project template based on the C language and eunomia-bpf framework.
 

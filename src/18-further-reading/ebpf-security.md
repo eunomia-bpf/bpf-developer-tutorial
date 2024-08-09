@@ -269,7 +269,7 @@ An userspace eBPF runtime that allows existing eBPF applications to operate in u
 - Linux Plumbers: <https://lpc.events/event/17/contributions/1639/>
 - Repo: <https://github.com/eunomia-bpf/bpftime>
 
-> It may only limited to centain eBPF program types and usecases, not a general approach for kernel eBPF.
+> It may only limited to certain eBPF program types and usecases, not a general approach for kernel eBPF.
 
 ## Conclusion
 

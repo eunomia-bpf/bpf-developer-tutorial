@@ -41,7 +41,7 @@ eBPF 的前身，Berkeley Packet Filter (BPF) —— 20 世纪 90 年代初的�
 | Uprobe                 | 3224.172760  | 314.569110     | 4    |
 | Uretprobe              | 3996.799580  | 381.270270     | 2    |
 | Syscall Tracepoint     | 151.82801    | 232.57691      | 4    |
-| Embedding runtime      | Not avaliable |  110.008430   | 4    |
+| Embedding runtime      | Not available |  110.008430   | 4    |
 
 bpftime 可以类似 Kernel 中的 Uprobe 那样，自动将 eBPF 运行时注入到用户空间进程中，无需修改用户空间进程的代码，也无需进行重启进程即可使用。对于 ubpf 和 rbpf 而言，它们依然需要手动编写胶水代码和其他用户空间程序进行集成，相对来说限制了它们的使用场景。在某些场景下，bpftime 可能能作为 kernel eBPF 的一种替代方案，它也不依赖于具体内核版本或 Linux 平台，可以在其他平台上运行。
 
