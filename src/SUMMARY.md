@@ -26,7 +26,7 @@
 
 我们开始主要基于 `libbpf` 构建完整的 eBPF 工程，并且把它和各种应用场景结合起来进行实践。
 
-- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-boostrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
+- [lesson 11-bootstrap](11-bootstrap/README.md) 使用 libbpf-bootstrap 为 eBPF 编写原生的 libbpf 用户态代码，并建立完整的 libbpf 工程。
 - [lesson 12-profile](12-profile/README.md) 使用 eBPF 进行性能分析
 - [lesson 13-tcpconnlat](13-tcpconnlat/README.md) 记录 TCP 连接延迟，并使用 libbpf 在用户态处理数据
 - [lesson 14-tcpstates](14-tcpstates/README.md) 记录 TCP 连接状态与 TCP RTT

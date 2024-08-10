@@ -94,7 +94,7 @@ In the next part of the code, the program defines a structure called "linux_dire
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
-// These store the string represenation
+// These store the string representation
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
 const volatile int pid_to_hide_len = 0;
