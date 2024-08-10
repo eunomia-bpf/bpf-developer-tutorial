@@ -431,7 +431,7 @@ Runing eBPF program...
 <p>面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 <code>Use this template</code> 按钮，即可开始使用。</p>
 <ul>
 <li><a href="https://github.com/eunomia-bpf/libbpf-starter-template">https://github.com/eunomia-bpf/libbpf-starter-template</a>：基于C语言和 libbpf 框架的eBPF项目模板</li>
-<li><a href="https://github.com/eunomia-bpf/cilium-ebpf-starter-template">https://github.com/eunomia-bpf/cilium-ebpf-starter-template</a>：基于C语言和cilium/ebpf框架的eBPF项目模板</li>
+<li><a href="https://github.com/eunomia-bpf/cilium-ebpf-starter-template">https://github.com/eunomia-bpf/cilium-ebpf-starter-template</a>：基于Go语言和cilium/ebpf框架的eBPF项目模板</li>
 <li><a href="https://github.com/eunomia-bpf/libbpf-rs-starter-template">https://github.com/eunomia-bpf/libbpf-rs-starter-template</a>：基于Rust语言和libbpf-rs框架的eBPF项目模板</li>
 <li><a href="https://github.com/eunomia-bpf/eunomia-template">https://github.com/eunomia-bpf/eunomia-template</a>：基于C语言和eunomia-bpf框架的eBPF项目模板</li>
 </ul>
@@ -6198,7 +6198,7 @@ struct {
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
-// These store the string represenation
+// These store the string representation
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
 const volatile int pid_to_hide_len = 0;
@@ -6517,7 +6517,7 @@ yunwei     31583  0.0  0.0  17712  2612 pts/1    S+   05:42   0:00 grep --color=
 <h3 id="1-数据结构定义-signalh"><a class="header" href="#1-数据结构定义-signalh">1. 数据结构定义 (<code>signal.h</code>)</a></h3>
 <p>signal.h</p>
 <pre><code class="language-c">// Simple message structure to get events from eBPF Programs
-// in the kernel to user spcae
+// in the kernel to user space
 #define TASK_COMM_LEN 16
 struct event {
     int pid;
@@ -7364,7 +7364,7 @@ Draining current samples...
 <tr><td>Uprobe</td><td style="text-align: right">3224.172760</td><td style="text-align: right">314.569110</td><td style="text-align: right">4</td></tr>
 <tr><td>Uretprobe</td><td style="text-align: right">3996.799580</td><td style="text-align: right">381.270270</td><td style="text-align: right">2</td></tr>
 <tr><td>Syscall Tracepoint</td><td style="text-align: right">151.82801</td><td style="text-align: right">232.57691</td><td style="text-align: right">4</td></tr>
-<tr><td>Embedding runtime</td><td style="text-align: right">Not avaliable</td><td style="text-align: right">110.008430</td><td style="text-align: right">4</td></tr>
+<tr><td>Embedding runtime</td><td style="text-align: right">Not available</td><td style="text-align: right">110.008430</td><td style="text-align: right">4</td></tr>
 </tbody></table>
 </div>
 <p>bpftime 可以类似 Kernel 中的 Uprobe 那样，自动将 eBPF 运行时注入到用户空间进程中，无需修改用户空间进程的代码，也无需进行重启进程即可使用。对于 ubpf 和 rbpf 而言，它们依然需要手动编写胶水代码和其他用户空间程序进行集成，相对来说限制了它们的使用场景。在某些场景下，bpftime 可能能作为 kernel eBPF 的一种替代方案，它也不依赖于具体内核版本或 Linux 平台，可以在其他平台上运行。</p>

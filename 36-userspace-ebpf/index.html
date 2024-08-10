@@ -196,7 +196,7 @@
 <tr><td>Uprobe</td><td style="text-align: right">3224.172760</td><td style="text-align: right">314.569110</td><td style="text-align: right">4</td></tr>
 <tr><td>Uretprobe</td><td style="text-align: right">3996.799580</td><td style="text-align: right">381.270270</td><td style="text-align: right">2</td></tr>
 <tr><td>Syscall Tracepoint</td><td style="text-align: right">151.82801</td><td style="text-align: right">232.57691</td><td style="text-align: right">4</td></tr>
-<tr><td>Embedding runtime</td><td style="text-align: right">Not avaliable</td><td style="text-align: right">110.008430</td><td style="text-align: right">4</td></tr>
+<tr><td>Embedding runtime</td><td style="text-align: right">Not available</td><td style="text-align: right">110.008430</td><td style="text-align: right">4</td></tr>
 </tbody></table>
 </div>
 <p>bpftime 可以类似 Kernel 中的 Uprobe 那样，自动将 eBPF 运行时注入到用户空间进程中，无需修改用户空间进程的代码，也无需进行重启进程即可使用。对于 ubpf 和 rbpf 而言，它们依然需要手动编写胶水代码和其他用户空间程序进行集成，相对来说限制了它们的使用场景。在某些场景下，bpftime 可能能作为 kernel eBPF 的一种替代方案，它也不依赖于具体内核版本或 Linux 平台，可以在其他平台上运行。</p>
