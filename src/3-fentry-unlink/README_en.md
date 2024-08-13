@@ -47,8 +47,7 @@ The program consists of the following parts:
 3. Define fentry probe: We define an fentry probe named `BPF_PROG(do_unlinkat)` that is triggered at the entry point of the `do_unlinkat` function. This probe retrieves the PID (Process ID) of the current process and prints it along with the filename to the kernel log.
 4. Define fexit probe: We also define an fexit probe named `BPF_PROG(do_unlinkat_exit)` that is triggered at the exit point of the `do_unlinkat` function. Similar to the fentry probe, this probe also retrieves the PID of the current process and prints it along with the filename and return value to the kernel log.
 
-Through this example, you can learn how to use fentry and fexit probes in eBPF to monitor and capture kernel function calls, such as the unlink system call in this tutorial.Instructions: Translate the following Chinese text to English
-while maintaining the original formatting: "eunomia-bpf is an open source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its goal is to simplify the development, building, distribution, and running of eBPF programs. You can refer to [here](https://github.com/eunomia-bpf/eunomia-bpf) to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+Through this example, you can learn how to use fentry and fexit probes in eBPF to monitor and capture kernel function calls, such as the unlink system call in this tutorial. "eunomia-bpf is an open source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its goal is to simplify the development, building, distribution, and running of eBPF programs. You can refer to [here](https://github.com/eunomia-bpf/eunomia-bpf) to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
 
 To compile and run the above code:
 
