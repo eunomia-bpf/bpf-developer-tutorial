@@ -38,7 +38,7 @@ struct {
 SEC("uprobe/./go-server-http/main:runtime.casgstatus")
 int uprobe_runtime_casgstatus(struct pt_regs *ctx) {
   int newval = ctx->cx;
-  void *gp = ctx->ax;
+  void *gp = (void*)ctx->ax;
   struct goroutine_execute_data *data;
   u64 goid;
   if (bpf_probe_read_user(&goid, sizeof(goid), gp + GOID_OFFSET) == 0) {
