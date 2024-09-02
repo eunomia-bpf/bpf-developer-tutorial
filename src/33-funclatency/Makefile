@@ -5,7 +5,7 @@ LIBBPF_SRC := $(abspath ../third_party/libbpf/src)
 BPFTOOL_SRC := $(abspath ../third_party/bpftool/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 BPFTOOL_OUTPUT ?= $(abspath $(OUTPUT)/bpftool)
-BPFTOOL ?= $(BPFTOOL_OUTPUT)/funclatency/bpftool
+BPFTOOL ?= $(BPFTOOL_OUTPUT)/bootstrap/bpftool
 LIBBLAZESYM_SRC := $(abspath ../third_party/blazesym/)
 LIBBLAZESYM_OBJ := $(abspath $(OUTPUT)/libblazesym.a)
 LIBBLAZESYM_HEADER := $(abspath $(OUTPUT)/blazesym.h)
@@ -24,13 +24,13 @@ INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = funclatency # minimal minimal_legacy uprobe kprobe fentry usdt sockfilter tc ksyscall
+APPS = funclatency
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
 BZS_APPS :=
 else
-BZS_APPS := # profile
+BZS_APPS := 
 APPS += $(BZS_APPS)
 # Required by libblazesym
 ALL_LDFLAGS += -lrt -ldl -lpthread -lm
@@ -91,7 +91,7 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 # Build bpftool
 $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(call msg,BPFTOOL,$@)
-	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) funclatency
+	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
 
 $(LIBBLAZESYM_SRC)/target/release/libblazesym.a::

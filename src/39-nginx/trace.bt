@@ -1,0 +1,49 @@
+#!/usr/sbin/bpftrace
+
+// Monitor the start of HTTP request processing
+uprobe:/usr/sbin/nginx:ngx_http_process_request
+{
+    printf("HTTP request processing started (tid: %d)\n", tid);
+    @start[tid] = nsecs;
+}
+
+// Monitor when an HTTP request is finalized
+uretprobe:/usr/sbin/nginx:ngx_http_finalize_request
+/@start[tid]/
+{
+    $elapsed = nsecs - @start[tid];
+    printf("HTTP request processed in %d ns (tid: %d)\n", $elapsed, tid);
+    delete(@start[tid]);
+}
+
+// Monitor the start of sending a request to an upstream server
+uprobe:/usr/sbin/nginx:ngx_http_upstream_send_request
+{
+    printf("Upstream request sending started (tid: %d)\n", tid);
+    @upstream_start[tid] = nsecs;
+}
+
+// Monitor when the upstream request is sent
+uretprobe:/usr/sbin/nginx:ngx_http_upstream_send_request
+/@upstream_start[tid]/
+{
+    $elapsed = nsecs - @upstream_start[tid];
+    printf("Upstream request sent in %d ns (tid: %d)\n", $elapsed, tid);
+    delete(@upstream_start[tid]);
+}
+
+// Monitor the start of event processing
+uprobe:/usr/sbin/nginx:ngx_event_process_posted
+{
+    printf("Event processing started (tid: %d)\n", tid);
+    @event_start[tid] = nsecs;
+}
+
+// Monitor when event processing is completed
+uretprobe:/usr/sbin/nginx:ngx_event_process_posted
+/@event_start[tid]/
+{
+    $elapsed = nsecs - @event_start[tid];
+    printf("Event processed in %d ns (tid: %d)\n", $elapsed, tid);
+    delete(@event_start[tid]);
+}

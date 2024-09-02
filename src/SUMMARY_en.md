@@ -52,7 +52,10 @@ Networking and tracing:
 - [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](23-http/README.md)
 - [Accelerating network request forwarding using sockops](29-sockops/README.md)
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](30-sslsniff/README.md)
+- [Using eBPF to Trace Go Routine States](31-goroutine/README.md)
+- [Measuring Function Latency with eBPF](33-funclatency/README.md)
 - [Use uprobe to trace Rust programs](37-uprobe-rust/README.md)
+- [Using eBPF to Trace Nginx Requests](39-nginx/README.md)
 
 Security:
 
