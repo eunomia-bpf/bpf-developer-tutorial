@@ -8,7 +8,7 @@ This blog post will dive into how to measure function latency using eBPF, an inc
 
 eBPF (Extended Berkeley Packet Filter) is a revolutionary technology that allows developers to write small programs that run in the Linux kernel. Originally designed for packet filtering, eBPF has evolved into a versatile tool for tracing, monitoring, and profiling system behavior. With eBPF, you can instrument almost any part of the Linux kernel or user-space programs to collect performance data, enforce security policies, or even debug systems in real time—all without the need to modify the kernel source code or restart the system.
 
-eBPF programs are executed in a sandboxed environment within the kernel, ensuring safety and stability. These programs can attach to various hooks within the kernel, such as system calls, network events, and tracepoints, or even user-space functions using uprobes (user-level probes). The data collected by eBPF programs can then be exported to user space for analysis, making it an invaluable tool for system observability.
+eBPF programs are executed in a sandboxed environment within the kernel, ensuring safety and stability. These programs can attach to various hooks within the kernel, such as system calls, network events, and tracepoints, or even user-space functions using uprobes (user-level probes). The data collected by eBPF programs can then be exported to user space for analysis, making it an invaluable tool for system observability. `Uprobe` in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime).
 
 ## Why is Function Latency Important?
 
@@ -173,6 +173,8 @@ Exiting trace of vfs_read
 ```
 
 These commands trace the execution of the specified function, either in user-space or kernel-space, and print a histogram of the observed latencies, showing the distribution of function execution times.
+
+You can find the source code in <https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/33-funclatency>
 
 ## Conclusion
 
