@@ -1,0 +1,30 @@
+#!/usr/bin/env bpftrace
+
+
+// Trace the dispatch_command function in MySQL
+uprobe:/usr/sbin/mysqld:dispatch_command
+{
+    // Store the start time of the command execution in the map
+    @start_times[tid] = nsecs;
+    
+    // Print the process ID and command string
+    printf("MySQL command executed by PID %d: ", pid);
+    
+    // The third argument to dispatch_command is the SQL query string
+    printf("%s\n", str(arg3));
+}
+
+uretprobe:/usr/sbin/mysqld:dispatch_command
+{
+    // Retrieve the start time from the map
+    $start = @start_times[tid];
+    
+    // Calculate the latency in milliseconds
+    $delta = (nsecs - $start) / 1000000;
+    
+    // Print the latency
+    printf("Latency: %u ms\n", $delta);
+    
+    // Delete the entry from the map to avoid memory leaks
+    delete(@start_times[tid]);
+}
