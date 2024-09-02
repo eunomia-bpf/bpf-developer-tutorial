@@ -182,6 +182,6 @@ This
 
  blog post covered the basics of using eBPF to trace function latency, including an overview of the eBPF kernel code used to perform the tracing. The examples provided demonstrated how to run the tool to trace both user-space and kernel-space functions.
 
-For those interested in learning more about eBPF, including more advanced examples and tutorials, please visit our [tutorial code repository](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [Eunomia](https://eunomia.dev/tutorials/).
+For those interested in learning more about eBPF, including more advanced examples and tutorials, please visit our [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
 
 If you are looking for a production-ready tool for function latency measurement, you might want to check out the full implementation available in the [BCC repository](https://github.com/iovisor/bcc/blob/master/libbpf-tools/funclatency.c).
