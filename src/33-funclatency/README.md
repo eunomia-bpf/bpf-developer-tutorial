@@ -1,3 +1,3 @@
-# http2 from go server
+# Using eBPF to trace function latency
 
 TODO: make it work

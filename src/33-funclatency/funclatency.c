@@ -22,8 +22,6 @@
 #include <bpf/bpf.h>
 #include "funclatency.h"
 #include "funclatency.skel.h"
-#include "trace_helpers.h"
-#include "uprobe_helpers.h"
 
 #define warn(...) fprintf(stderr, __VA_ARGS__)
 
@@ -63,7 +61,7 @@ static const char program_doc[] =
 	"  ./funclatency -m do_nanosleep     # time do_nanosleep(), in milliseconds\n"
 	"  ./funclatency -u vfs_read         # time vfs_read(), in microseconds\n"
 	"  ./funclatency -p 181 vfs_read     # time process 181 only\n"
-	"  ./funclatency -p 181 c:read       # time the read() C library function\n"
+	"  ./funclatency -p 181 /usr/lib/x86_64-linux-gnu/libc.so.6:read       # time the read() C library function\n"
 	"  ./funclatency -p 181 :foo         # time foo() from pid 181's userspace\n"
 	"  ./funclatency -i 2 -d 10 vfs_read # output every 2 seconds, for 10s\n"
 	"  ./funclatency -mTi 5 vfs_read     # output every 5 seconds, with timestamps\n";
@@ -223,8 +221,6 @@ static int attach_kprobes(struct funclatency_bpf *obj)
 static int attach_uprobes(struct funclatency_bpf *obj)
 {
 	char *binary, *function;
-	char bin_path[PATH_MAX];
-	off_t func_off;
 	int ret = -1;
 	long err;
 
@@ -234,6 +230,7 @@ static int attach_uprobes(struct funclatency_bpf *obj)
 		warn("strdup failed");
 		return -1;
 	}
+	printf("tracing %s...\n", binary);
 	function = strchr(binary, ':');
 	if (!function)
 	{
@@ -242,20 +239,15 @@ static int attach_uprobes(struct funclatency_bpf *obj)
 	}
 	*function = '\0';
 	function++;
+	printf("tracing func %s in %s...\n", function, binary);
 
-	if (resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
-		goto out_binary;
-
-	func_off = get_elf_func_offset(bin_path, function);
-	if (func_off < 0)
-	{
-		warn("Could not find %s in %s\n", function, bin_path);
-		goto out_binary;
-	}
+	LIBBPF_OPTS(bpf_uprobe_opts, opts);
+	opts.func_name = function;
+	opts.retprobe = false;
 
 	obj->links.dummy_kprobe =
-		bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false,
-								   env.pid ?: -1, bin_path, func_off);
+		bpf_program__attach_uprobe_opts(obj->progs.dummy_kprobe, 
+								   env.pid ?: -1, binary, 0, &opts);
 	if (!obj->links.dummy_kprobe)
 	{
 		err = -errno;
@@ -263,9 +255,11 @@ static int attach_uprobes(struct funclatency_bpf *obj)
 		goto out_binary;
 	}
 
+	opts.retprobe = true;
+
 	obj->links.dummy_kretprobe =
-		bpf_program__attach_uprobe(obj->progs.dummy_kretprobe, true,
-								   env.pid ?: -1, bin_path, func_off);
+		bpf_program__attach_uprobe_opts(obj->progs.dummy_kretprobe, 
+								   env.pid ?: -1, binary, 0, &opts);
 	if (!obj->links.dummy_kretprobe)
 	{
 		err = -errno;
@@ -289,6 +283,10 @@ static void sig_hand(int signr)
 }
 
 static struct sigaction sigact = {.sa_handler = sig_hand};
+
+#ifndef min
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#endif
 
 static void print_stars(unsigned int val, unsigned int val_max, int width)
 {
@@ -362,9 +360,7 @@ int main(int argc, char **argv)
 	struct tm *tm;
 	char ts[32];
 	time_t t;
-	int idx, cg_map_fd;
 	int cgfd = -1;
-	bool used_fentry = false;
 
 	err = argp_parse(&argp, argc, argv, 0, NULL, &env);
 	if (err)
@@ -439,7 +435,6 @@ int main(int argc, char **argv)
 
 cleanup:
 	funclatency_bpf__destroy(obj);
-	cleanup_core_btf(&open_opts);
 	if (cgfd > 0)
 		close(cgfd);
 

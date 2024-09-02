@@ -33,13 +33,6 @@ static void entry(void)
 	bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
 }
 
-SEC("fentry/dummy_fentry")
-int BPF_PROG(dummy_fentry)
-{
-	entry();
-	return 0;
-}
-
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
@@ -74,13 +67,6 @@ static void exit(void)
 	if (slot >= MAX_SLOTS)
 		slot = MAX_SLOTS - 1;
 	__sync_fetch_and_add(&hist[slot], 1);
-}
-
-SEC("fexit/dummy_fexit")
-int BPF_PROG(dummy_fexit)
-{
-	exit();
-	return 0;
 }
 
 SEC("kretprobe/dummy_kretprobe")
