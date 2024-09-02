@@ -55,11 +55,19 @@ Android:
 
 - [Using eBPF programs on Android](src/22-android/README_en.md)
 
-Networking and tracing:
+Networking:
 
-- [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](src/23-http/README_en.md)
-- [Accelerating network request forwarding using sockops](src/29-sockops/README_en.md)
-- [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](src/30-sslsniff/README_en.md)
+- [Accelerating network request forwarding using sockops](src/29-sockops/README.md)
+
+tracing:
+
+- [Tracing HTTP requests or other layer-7 protocols using eBPF socket filter or syscall trace](src/23-http/README.md)
+- [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](src/30-sslsniff/README.md)
+- [Using eBPF to Trace Go Routine States](src/31-goroutine/README.md)
+- [Measuring Function Latency with eBPF](src/33-funclatency/README.md)
+- [Use uprobe to trace Rust programs](src/37-uprobe-rust/README.md)
+- [Using eBPF to Trace Nginx Requests](src/39-nginx/README.md)
+- [Using eBPF to Trace MySQL Queries](src/40-mysql)
 
 Security:
 
