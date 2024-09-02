@@ -28,8 +28,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-
-
 #define GOID_OFFSET 0x98
 
 struct {
