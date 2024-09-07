@@ -47,7 +47,7 @@ Test with ping:
 ## Run
 
 ```sh
-$ sudo ip netns exec lb ./xdp_lb veth0 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
+$ sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
 XDP load balancer configured with backends:
 Backend 1 - IP: 10.0.0.2, MAC: de:ad:be:ef:00:02
 Backend 2 - IP: 10.0.0.3, MAC: de:ad:be:ef:00:03

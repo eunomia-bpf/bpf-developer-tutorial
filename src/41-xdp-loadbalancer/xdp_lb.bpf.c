@@ -20,12 +20,28 @@ struct {
     __type(value, struct backend_config);
 } backends SEC(".maps");
 
-static __always_inline __u16 csum_reduce_helper(__u32 csum)
-{
-	csum = ((csum & 0xffff0000) >> 16) + (csum & 0xffff);
-	csum = ((csum & 0xffff0000) >> 16) + (csum & 0xffff);
+int client_ip = bpf_htonl(0xa000001);  
+unsigned char client_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x1};
+int load_balancer_ip = bpf_htonl(0xa00000a);
 
-	return csum;
+static __always_inline __u16
+csum_fold_helper(__u64 csum)
+{
+    int i;
+    for (i = 0; i < 4; i++)
+    {
+        if (csum >> 16)
+            csum = (csum & 0xffff) + (csum >> 16);
+    }
+    return ~csum;
+}
+
+static __always_inline __u16
+iph_csum(struct iphdr *iph)
+{
+    iph->check = 0;
+    unsigned long long csum = bpf_csum_diff(0, 0, (unsigned int *)iph, sizeof(struct iphdr), 0);
+    return csum_fold_helper(csum);
 }
 
 SEC("xdp")
@@ -33,7 +49,7 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     void *data_end = (void *)(long)ctx->data_end;
     void *data = (void *)(long)ctx->data;
 
-    bpf_printk("xdp_load_balancer received packet\n");
+    bpf_printk("xdp_load_balancer received packet");
 
     // Ethernet header
     struct ethhdr *eth = data;
@@ -52,6 +68,10 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     // Check if the protocol is TCP or UDP
     if (iph->protocol != IPPROTO_TCP && iph->protocol != IPPROTO_UDP)
         return XDP_PASS;
+    
+    bpf_printk("Source IP: 0x%x", bpf_ntohl(iph->saddr));
+    bpf_printk("Destination IP: 0x%x", bpf_ntohl(iph->daddr));
+    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
 
     // Round-robin between two backends
     static __u32 key = 0;
@@ -59,23 +79,28 @@ int xdp_load_balancer(struct xdp_md *ctx) {
 
     if (!backend)
         return XDP_PASS;
+    
+    if (iph->saddr == client_ip)
+    {
+        bpf_printk("Packet from client");
+        iph->daddr = backend->ip;
+        __builtin_memcpy(eth->h_dest, backend->mac, ETH_ALEN);
+    }
+    else
+    {
+        bpf_printk("Packet from backend");
+        iph->daddr = client_ip;
+        __builtin_memcpy(eth->h_dest, client_mac, ETH_ALEN);
+    }
 
-    // Update Ethernet source MAC address to the backend's MAC
-    // So the backend can reply directly to the load balancer
+    // Update Ethernet source MAC address to the current lb's MAC
     __builtin_memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
-    // Update Ethernet destination MAC address to the backend's MAC
-    __builtin_memcpy(eth->h_dest, backend->mac, ETH_ALEN);
 
-    // // Update IP destination address to the backend's IP
-    iph->daddr = backend->ip;
+    // Recalculate IP checksum
+	iph->check = iph_csum(iph);
 
-    // // Update IP source address (if needed, for example, to load balancer IP)
-    // // iph->saddr = bpf_htonl(YOUR_LB_IP_HERE);
-
-    // // Recalculate IP checksum
-	iph->check = ~csum_reduce_helper(bpf_csum_diff(0, 0, (__be32 *)iph, sizeof(struct iphdr), 0));
-
-    bpf_printk("Redirecting packet to backend %u, IP: 0x%x\n", key, bpf_ntohl(backend->ip));
+    bpf_printk("Redirecting packet to IP: 0x%x", bpf_ntohl(iph->daddr));
+    bpf_printk("MAC: %x:%x:%x:%x:%x:%x\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
 
     // Return XDP_TX to transmit the modified packet back to the network
     return XDP_TX;
