@@ -146,7 +146,6 @@ check_firewall_rules () {
   sudo iptables -L
 }
 
-check_connectivity
 # Run checks to verify the network
 check_interfaces
 check_ip_forwarding
