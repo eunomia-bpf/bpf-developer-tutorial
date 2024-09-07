@@ -23,6 +23,7 @@ struct {
 int client_ip = bpf_htonl(0xa000001);  
 unsigned char client_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x1};
 int load_balancer_ip = bpf_htonl(0xa00000a);
+unsigned char load_balancer_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x10};
 
 static __always_inline __u16
 csum_fold_helper(__u64 csum)
@@ -66,13 +67,13 @@ int xdp_load_balancer(struct xdp_md *ctx) {
         return XDP_PASS;
 
     // Check if the protocol is TCP or UDP
-    if (iph->protocol != IPPROTO_TCP && iph->protocol != IPPROTO_UDP)
+    if (iph->protocol != IPPROTO_TCP)
         return XDP_PASS;
     
     bpf_printk("Source IP: 0x%x", bpf_ntohl(iph->saddr));
     bpf_printk("Destination IP: 0x%x", bpf_ntohl(iph->daddr));
     bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
-
+    bpf_printk("Destination MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
     // Round-robin between two backends
     static __u32 key = 0;
     struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
@@ -93,15 +94,17 @@ int xdp_load_balancer(struct xdp_md *ctx) {
         __builtin_memcpy(eth->h_dest, client_mac, ETH_ALEN);
     }
 
+    // Update IP source address to the load balancer's IP
+    iph->saddr = load_balancer_ip;
     // Update Ethernet source MAC address to the current lb's MAC
-    __builtin_memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
+    __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
 
     // Recalculate IP checksum
 	iph->check = iph_csum(iph);
 
     bpf_printk("Redirecting packet to IP: 0x%x", bpf_ntohl(iph->daddr));
-    bpf_printk("MAC: %x:%x:%x:%x:%x:%x\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
-
+    bpf_printk("Dest MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
+    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
     // Return XDP_TX to transmit the modified packet back to the network
     return XDP_TX;
 }
