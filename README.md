@@ -1,6 +1,7 @@
 # eBPF Developer Tutorial: Learning eBPF Step by Step with Examples
 
 [![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
+[![Test and trigger downstream tutorial sync](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml)
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee Mirror](https://gitee.com/yunwei37/bpf-developer-tutorial)
@@ -65,7 +66,7 @@ tracing:
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](src/30-sslsniff/README.md)
 - [Using eBPF to Trace Go Routine States](src/31-goroutine/README.md)
 - [Measuring Function Latency with eBPF](src/33-funclatency/README.md)
-- [Use uprobe to trace Rust programs](src/37-uprobe-rust/README.md)
+- [Use Uprobe to trace Rust programs](src/37-uprobe-rust/README.md)
 - [Using eBPF to Trace Nginx Requests](src/39-nginx/README.md)
 - [Using eBPF to Trace MySQL Queries](src/40-mysql)
 
