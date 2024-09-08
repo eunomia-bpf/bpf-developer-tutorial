@@ -51,6 +51,7 @@ We'll keep the design simple but powerful, showing you how to leverage eBPF’s 
 #include <linux/ip.h>
 #include <linux/in.h>
 #include <linux/tcp.h>
+#include "xx_hash.h"
 
 struct backend_config {
     __u32 ip;
@@ -115,20 +116,21 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     if (iph->protocol != IPPROTO_TCP)
         return XDP_PASS;
     
-    bpf_printk("Source IP: 0x%x", bpf_ntohl(iph->saddr));
-    bpf_printk("Destination IP: 0x%x", bpf_ntohl(iph->daddr));
-    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
-    bpf_printk("Destination MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
-    // Round-robin between two backends
-    static __u32 key = 0;
-    struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
+    bpf_printk("Received Source IP: 0x%x", bpf_ntohl(iph->saddr));
+    bpf_printk("Received Destination IP: 0x%x", bpf_ntohl(iph->daddr));
+    bpf_printk("Received Source MAC: %x:%x:%x:%x:%x:%x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+    bpf_printk("Received Destination MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
 
-    if (!backend)
-        return XDP_PASS;
-    
     if (iph->saddr == client_ip)
     {
         bpf_printk("Packet from client");
+
+        __u32 key = xxhash32((const char*)iph, sizeof(struct iphdr), 0) % 2;
+
+        struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
+        if (!backend)
+            return XDP_PASS;
+        
         iph->daddr = backend->ip;
         __builtin_memcpy(eth->h_dest, backend->mac, ETH_ALEN);
     }
@@ -145,17 +147,19 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
 
     // Recalculate IP checksum
-    iph->check = iph_csum(iph);
+	iph->check = iph_csum(iph);
 
-    bpf_printk("Redirecting packet to IP: 0x%x", bpf_ntohl(iph->daddr));
-    bpf_printk("Dest MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
-    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+    bpf_printk("Redirecting packet to new IP 0x%x from IP 0x%x", 
+                bpf_ntohl(iph->daddr), 
+                bpf_ntohl(iph->saddr)
+            );
+    bpf_printk("New Dest MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
+    bpf_printk("New Source MAC: %x:%x:%x:%x:%x:%x\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
     // Return XDP_TX to transmit the modified packet back to the network
     return XDP_TX;
 }
 
 char _license[] SEC("license") = "GPL";
-
 ```
 
 explain that
@@ -163,6 +167,16 @@ explain that
 ## Userspace code
 
 ```c
+// xdp_lb.c
+#include <arpa/inet.h>
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <net/if.h>
+#include "xdp_lb.skel.h"  // The generated skeleton
 
 struct backend_config {
     __u32 ip;
@@ -249,7 +263,6 @@ int main(int argc, char **argv) {
     xdp_lb_bpf__destroy(skel);
     return 0;
 }
-
 ```
 
 explain that
