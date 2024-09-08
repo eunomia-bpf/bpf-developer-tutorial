@@ -40,7 +40,7 @@ The load balancer we’ll be implementing will:
 
 We'll keep the design simple but powerful, showing you how to leverage eBPF’s capabilities to create a lightweight load balancing solution.
 
-## kernel code
+## kernel eBPF code
 
 ```c
 // xdp_lb.bpf.c
@@ -147,7 +147,7 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
 
     // Recalculate IP checksum
-	iph->check = iph_csum(iph);
+    iph->check = iph_csum(iph);
 
     bpf_printk("Redirecting packet to new IP 0x%x from IP 0x%x", 
                 bpf_ntohl(iph->daddr), 
@@ -162,7 +162,115 @@ int xdp_load_balancer(struct xdp_md *ctx) {
 char _license[] SEC("license") = "GPL";
 ```
 
-explain that
+Here’s a breakdown of the key sections of the kernel code for your blog:
+
+### 1. **Header Files and Data Structures**
+
+The code begins with necessary header files like `<bpf/bpf_helpers.h>`, `<linux/if_ether.h>`, `<linux/ip.h>`, and more. These headers provide definitions for handling Ethernet frames, IP packets, and BPF helper functions.
+
+The `backend_config` struct is defined to hold the IP and MAC address of backend servers. This will later be used for routing packets based on load balancing logic.
+
+```c
+struct backend_config {
+    __u32 ip;
+    unsigned char mac[ETH_ALEN];
+};
+```
+
+### 2. **Backend and Load Balancer Configuration**
+
+The code defines an eBPF map named `backends` that stores IP and MAC addresses for two backends. The `BPF_MAP_TYPE_ARRAY` type is used to store backend configuration, with `max_entries` set to 2, indicating the load balancer will route to two backend servers.
+
+```c
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 2);
+    __type(key, __u32);
+    __type(value, struct backend_config);
+} backends SEC(".maps");
+```
+
+There are also predefined IP addresses and MAC addresses for the client and load balancer:
+
+```c
+int client_ip = bpf_htonl(0xa000001);  
+unsigned char client_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x1};
+int load_balancer_ip = bpf_htonl(0xa00000a);
+unsigned char load_balancer_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x10};
+```
+
+### 3. **Checksum Functions**
+
+The function `iph_csum()` recalculates the IP header checksum after modifying the packet's contents. It's essential to keep the integrity of IP packets when any modification is done to the headers.
+
+```c
+static __always_inline __u16 iph_csum(struct iphdr *iph) {
+    iph->check = 0;
+    unsigned long long csum = bpf_csum_diff(0, 0, (unsigned int *)iph, sizeof(struct iphdr), 0);
+    return csum_fold_helper(csum);
+}
+```
+
+### 4. **XDP Program Logic**
+
+The core of the XDP load balancer logic is implemented in the `xdp_load_balancer` function, which is attached to the XDP hook. It processes incoming packets and directs them either to a backend or back to the client.
+
+- **Initial Checks**:
+  The function begins by verifying that the packet is an Ethernet frame, then checks if it's an IP packet (IPv4) and if it's using the TCP protocol.
+
+  ```c
+  if (eth->h_proto != __constant_htons(ETH_P_IP))
+      return XDP_PASS;
+  if (iph->protocol != IPPROTO_TCP)
+      return XDP_PASS;
+  ```
+
+- **Client Packet Handling**:
+  If the source IP matches the client IP, the code hashes the IP header using `xxhash32` to determine the appropriate backend (based on the key modulo 2).
+
+  ```c
+  if (iph->saddr == client_ip) {
+      __u32 key = xxhash32((const char*)iph, sizeof(struct iphdr), 0) % 2;
+      struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
+  ```
+
+  The destination IP and MAC are replaced with those of the selected backend, and the packet is forwarded to the backend.
+
+- **Backend Packet Handling**:
+  If the packet is from a backend server, the destination is set to the client’s IP and MAC address, ensuring that the backend’s response is directed back to the client.
+
+  ```c
+  iph->daddr = client_ip;
+  __builtin_memcpy(eth->h_dest, client_mac, ETH_ALEN);
+  ```
+
+- **Rewriting IP and MAC Addresses**:
+  The source IP and MAC are updated to the load balancer’s values for all outgoing packets, ensuring that the load balancer appears as the source for both client-to-backend and backend-to-client communication.
+
+  ```c
+  iph->saddr = load_balancer_ip;
+  __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
+  ```
+
+- **Recalculate Checksum**:
+  After modifying the IP header, the checksum is recalculated using the previously defined `iph_csum()` function.
+
+  ```c
+  iph->check = iph_csum(iph);
+  ```
+
+- **Final Action**:
+  The packet is transmitted using the `XDP_TX` action, which instructs the NIC to send the modified packet.
+
+  ```c
+  return XDP_TX;
+  ```
+
+### 5. **Conclusion**
+
+This part of the blog could explain how the load balancer ensures traffic is efficiently routed between the client and two backend servers by inspecting the source IP, hashing it for load distribution, and modifying the destination IP and MAC before forwarding the packet. The `XDP_TX` action is key to the high-speed packet handling provided by eBPF in the XDP layer.
+
+This explanation can help readers understand the flow of the packet and the role of each section of the code in managing load balancing across multiple backends.
 
 ## Userspace code
 
@@ -265,9 +373,29 @@ int main(int argc, char **argv) {
 }
 ```
 
-explain that
+The userspace code provided is responsible for setting up and configuring the XDP load balancer program that runs in the kernel. It accepts command-line arguments, loads the eBPF program, attaches it to a network interface, and updates the backend configurations.
+
+### 1. **Argument Parsing and Backend Setup**
+
+The program expects five command-line arguments: the name of the network interface (`ifname`), the IP addresses and MAC addresses of two backend servers. It then parses the IP addresses using `inet_pton()` and the MAC addresses using the `parse_mac()` function, which ensures that the format of the provided MAC addresses is correct. The parsed backend information is stored in a `backend_config` structure.
+
+### 2. **Loading and Attaching the BPF Program**
+
+The BPF skeleton (generated via `xdp_lb.skel.h`) is used to open and load the XDP program into the kernel. The program then identifies the network interface by converting the interface name into an index using `if_nametoindex()`. Afterward, it attaches the loaded BPF program to this interface using `bpf_program__attach_xdp()`.
+
+### 3. **Configuring Backend Information**
+
+The backend IP and MAC addresses are written to the `backends` BPF map using `bpf_map_update_elem()`. This step ensures that the BPF program has access to the backend configurations, allowing it to route packets to the correct backend servers based on the logic in the kernel code.
+
+### 4. **Program Loop and Cleanup**
+
+The program enters an infinite loop (`while (1) { sleep(1); }`) to keep running, allowing the XDP program to continue functioning. When the user decides to exit by pressing Ctrl+C, the BPF program is detached from the network interface, and resources are cleaned up by calling `xdp_lb_bpf__destroy()`.
+
+In summary, this userspace code is responsible for configuring and managing the lifecycle of the XDP load balancer, making it easy to update backend configurations dynamically and ensuring the load balancer is correctly attached to a network interface.
 
 ## The topology of test environment
+
+The topology represents a test environment where a local machine communicates with two backend nodes (h2 and h3) through a load balancer. The local machine is connected to the load balancer via virtual Ethernet pairs (veth0 to veth6), simulating network connections in a controlled environment. Each virtual interface has its own IP and MAC address to represent different entities.
 
 ```txt
     +---------------------------+          
@@ -297,9 +425,9 @@ explain that
 +------------------+             +------------------+
 ```
 
-> If you are interested in this tutorial, please help us create a containerized version of the setup and topology! Currently the setup and teardown are based on the network namespace, it will be more friendly to have a containerized version of the setup and topology.
+The setup can be easily initialized with a script (setup.sh), and removed with a teardown script (teardown.sh).
 
-explain that
+> If you are interested in this tutorial, please help us create a containerized version of the setup and topology! Currently the setup and teardown are based on the network namespace, it will be more friendly to have a containerized version of the setup and topology.
 
 Setup:
 
@@ -313,59 +441,89 @@ Teardown:
 sudo ./teardown.sh
 ```
 
-## Run
+### Running the Load Balancer
+
+To run the XDP load balancer, execute the following command, specifying the interface and backends' IP and MAC addresses:
 
 ```console
-$ sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
+sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
+```
+
+This will configure the load balancer and print the details of the backends:
+
+```console
 XDP load balancer configured with backends:
 Backend 1 - IP: 10.0.0.2, MAC: de:ad:be:ef:00:02
 Backend 2 - IP: 10.0.0.3, MAC: de:ad:be:ef:00:03
 Press Ctrl+C to exit...
 ```
 
-Test:
+### Testing the Setup
+
+You can test the setup by starting HTTP servers on the two backend namespaces (`h2` and `h3`) and sending requests from the local machine to the load balancer:
+
+Start servers on `h2` and `h3`:
 
 ```sh
 sudo ip netns exec h2 python3 -m http.server
 sudo ip netns exec h3 python3 -m http.server
 ```
 
-and
+Then, send a request to the load balancer IP:
 
 ```sh
 curl 10.0.0.10:8000
 ```
 
-You can also see the `bpf_printk` output by:
+The load balancer will distribute traffic to the backends (`h2` and `h3`) based on the hashing function.
+
+### Monitoring with `bpf_printk`
+
+You can monitor the load balancer's activity by checking the `bpf_printk` logs. The BPF program prints diagnostic messages whenever a packet is processed. You can view these logs using:
 
 ```console
-$ sudo cat /sys/kernel/debug/tracing/trace_pipe
-
-          <idle>-0       [004] ..s2. 24174.812722: bpf_trace_printk: xdp_load_balancer received packet
-          <idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Source IP: 0xa000001
-          <idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Destination IP: 0xa00000a
-          <idle>-0       [004] .Ns2. 24174.812731: bpf_trace_printk: Received Source MAC: de:ad:be:ef:0:1
-          <idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Received Destination MAC: de:ad:be:ef:0:10
-          <idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Packet from client
-          <idle>-0       [004] .Ns2. 24174.812734: bpf_trace_printk: Redirecting packet to new IP 0xa000002 from IP 0xa00000a
-          <idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Dest MAC: de:ad:be:ef:0:2
-          <idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Source MAC: de:ad:be:ef:0:10
-
+sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
 
-Some bug might exist related to
-<https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/> in one of my system:
+Example output:
 
-You may see the results like:
+```console
+<idle>-0       [004] ..s2. 24174.812722: bpf_trace_printk: xdp_load_balancer received packet
+<idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Source IP: 0xa000001
+<idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Destination IP: 0xa00000a
+<idle>-0       [004] .Ns2. 24174.812731: bpf_trace_printk: Received Source MAC: de:ad:be:ef:0:1
+<idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Received Destination MAC: de:ad:be:ef:0:10
+<idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Packet from client
+<idle>-0       [004] .Ns2. 24174.812734: bpf_trace_printk: Redirecting packet to new IP 0xa000002 from IP 0xa00000a
+<idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Dest MAC: de:ad:be:ef:0:2
+<idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Source MAC: de:ad:be:ef:0:10
+```
+
+### Debugging Issues
+
+Some systems may experience packet loss or failure to forward packets due to issues similar to those described in this [blog post](https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/). You can debug these issues using `bpftrace` to trace XDP errors:
 
 ```sh
-$ sudo bpftrace -e  'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
-Attaching 1 probe...
-^C
+sudo bpftrace -e 'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
+```
 
+If you see an output like this:
+
+```sh
 @redir_errno[6]: 3
 ```
 
-## Conclusion
+It indicates errors related to XDP packet forwarding. The error code `6` typically points to a particular forwarding issue that can be further investigated.
 
-## References
+### Conclusion
+
+This tutorial demonstrates how to set up a simple XDP load balancer using eBPF, providing efficient traffic distribution across backend servers. For those interested in learning more about eBPF, including more advanced examples and tutorials, please visit our [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
+
+### References
+
+Here’s a simple list of XDP references for your blog:
+
+1. [XDP Programming Hands-On Tutorial](https://github.com/xdp-project/xdp-tutorial)
+2. [Getting Started with XDP – Red Hat](https://developers.redhat.com/articles/2021/09/14/get-started-xdp)
+3. [eBPF and XDP Basics – Tigera](https://www.tigera.io/blog/ebpf-xdp-the-basics-and-a-quick-tutorial/)
+4. [XDP Tutorial in bpf-developer-tutorial](https://eunomia.dev/tutorials/21-xdp/)
