@@ -53,3 +53,18 @@ Backend 1 - IP: 10.0.0.2, MAC: de:ad:be:ef:00:02
 Backend 2 - IP: 10.0.0.3, MAC: de:ad:be:ef:00:03
 Press Ctrl+C to exit...
 ```
+
+Test:
+
+```sh
+sudo ip netns exec h2 python3 -m http.server
+sudo ip netns exec h3 python3 -m http.server
+```
+
+Debug:
+
+```sh
+sudo bpftrace -e  'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
+```
+
+<https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/>
