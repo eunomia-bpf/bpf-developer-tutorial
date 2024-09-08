@@ -125,17 +125,14 @@ as well as the key functions used to load kernel space code. After the user-spac
 
 ### eunomia-bpf
 
-Developing, building, and distributing eBPF has always been a high-threshold task. The use of tools such as BCC and bpftrace has high development efficiency and good portability. However, when it comes to distribution and deployment, it requires the installation of LLVM, Clang, and other compilation environments, and the compilation process needs to be executed locally or remotely every time, resulting in substantial resource consumption. On the other hand, using the native CO-RE libbpf requires writing a considerable amount of user-mode loading code to help properly load eBPF programs and obtain reported information from the kernel. At the same time, there is no good solution for distributing and managing eBPF programs.
-
-[eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) is an open-source eBPF dynamic loading runtime and development toolchain designed to simplify the development, building, distribution, and execution of eBPF programs. It is based on the libbpf CO-RE lightweight development framework.
+[eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) is an open-source eBPF dynamic loading tool and development toolchain designed to simplify the development, building, distribution, and execution of eBPF programs. It is based on the libbpf CO-RE lightweight development framework.
 
 With eunomia-bpf, you can:
 
 - When writing eBPF programs or tools, only write kernel space code, automatically retrieve kernel space export information, and dynamically load it as a module.
-- Use WASM for user space interactive program development to control the loading and execution of the entire eBPF program, as well as the processing of related data inside the WASM virtual machine.
 - eunomia-bpf can package pre-compiled eBPF programs into universal JSON or WASM modules for distribution across architectures and kernel versions. They can be dynamically loaded and run without the need for recompilation.
 
-eunomia-bpf consists of a compilation toolchain and a runtime library. Compared with traditional frameworks such as BCC and native libbpf, it greatly simplifies the development process of eBPF programs. In most cases, only writing kernel space code is required to easily build, package, and publish complete eBPF applications. At the same time, kernel space eBPF code ensures 100% compatibility with mainstream development frameworks such as libbpf, libbpfgo, libbpf-rs, etc. When there is a need to write user-space code, it can also be developed in multiple languages with the help of WebAssembly. Compared with script tools such as bpftrace, eunomia-bpf retains similar convenience, while not only limited to tracing but also applicable to more scenarios, such as networking, security, etc.
+eunomia-bpf consists of a compilation toolchain and a runtime library. Compared with traditional frameworks such as BCC and native libbpf, it simplifies the development process of eBPF programs.
 
 > - eunomia-bpf project Github address: <https://github.com/eunomia-bpf/eunomia-bpf>
 > - gitee mirror: <https://gitee.com/anolis/eunomia>
