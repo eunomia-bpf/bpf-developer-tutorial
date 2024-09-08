@@ -62,8 +62,9 @@ sudo sysctl -w net.ipv4.ip_forward=1
 # Set the FORWARD chain policy to ACCEPT in iptables to ensure packets are forwarded
 sudo iptables -P FORWARD ACCEPT
 
-sudo ip netns exec h2 /home/ubuntu/userspace-xdp/xdp_progs/xdp_drop xdp_pass.o veth2
-sudo ip netns exec h3 /home/ubuntu/userspace-xdp/xdp_progs/xdp_drop xdp_pass.o veth4
+# maybe you can do similar things
+# sudo ip netns exec h2 bpftool load xdp_pass.o veth2
+# sudo ip netns exec h3 bpftool load  xdp_pass.o veth4
 
 # Helper function for error exit on ping failure
 function ping_or_fail() {

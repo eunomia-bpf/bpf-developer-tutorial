@@ -1,6 +1,260 @@
-# eBPF Development tutorial: implement XDP load balancer
+# eBPF Development Tutorial: XDP Load Balancer
 
-expplanation
+In this tutorial, we will guide you through the process of implementing a simple XDP (eXpress Data Path) load balancer using eBPF (Extended Berkeley Packet Filter). With just C, libbpf, and no external dependencies, this hands-on guide is perfect for developers interested in harnessing the full power of the Linux kernel to build highly efficient network applications.
+
+## Why XDP?
+
+`XDP` (eXpress Data Path) is a fast, in-kernel networking framework in Linux that allows packet processing at the earliest point in the network stack, right in the network interface card (NIC). This enables ultra-low-latency and high-throughput packet handling, making XDP ideal for tasks like load balancing, DDoS protection, and traffic filtering.
+
+### Key Features of XDP
+
+1. **Fast Packet Processing**: XDP handles packets directly at the NIC level, reducing latency and improving performance by avoiding the usual networking stack overhead.
+2. **Efficient**: Because it processes packets before they reach the kernel, XDP minimizes CPU usage and handles high traffic loads without slowing down the system.
+3. **Customizable with eBPF**: XDP programs are written using eBPF, allowing you to create custom packet-handling logic for specific use cases like dropping, redirecting, or forwarding packets.
+4. **Low CPU Overhead**: With support for zero-copy packet forwarding, XDP uses fewer system resources, making it perfect for handling high traffic with minimal CPU load.
+5. **Simple Actions**: XDP programs return predefined actions like dropping, passing, or redirecting packets, providing control over how traffic is handled.
+
+### Projects That Use XDP
+
+- `Cilium` is an open-source networking tool for cloud-native environments like Kubernetes. It uses XDP to efficiently handle packet filtering and load balancing, improving performance in high-traffic networks.
+- `Katran`, developed by Facebook, is a load balancer that uses XDP to handle millions of connections with low CPU usage. It distributes traffic efficiently across servers and is used internally at Facebook for large-scale networking.
+- `Cloudflare` uses XDP to protect against DDoS attacks. By filtering out malicious traffic at the NIC level, Cloudflare can drop attack packets before they even reach the kernel, minimizing the impact on their network.
+
+### Why Choose XDP Over Other Methods?
+
+Compared to traditional tools like `iptables` or `tc`, XDP offers:
+
+- **Speed**: It operates directly in the NIC driver, processing packets much faster than traditional methods.
+- **Flexibility**: With eBPF, you can write custom packet-handling logic to meet specific needs.
+- **Efficiency**: XDP uses fewer resources, making it suitable for environments that need to handle high traffic without overloading the system.
+
+## The Project: Building a Simple Load Balancer
+
+In this project, we will be focusing on building a load balancer using XDP. A load balancer efficiently distributes incoming network traffic across multiple backend servers to prevent any single server from becoming overwhelmed. With the combination of XDP and eBPF, we can build a load balancer that operates at the edge of the Linux networking stack, ensuring high performance even under heavy traffic conditions.
+
+The load balancer we’ll be implementing will:
+
+- Listen for incoming network packets.
+- Calculate a hash based on the packet's source IP and port, allowing us to distribute the traffic across multiple backend servers.
+- Forward the packet to the appropriate backend server based on the calculated hash.
+
+We'll keep the design simple but powerful, showing you how to leverage eBPF’s capabilities to create a lightweight load balancing solution.
+
+## kernel code
+
+```c
+// xdp_lb.bpf.c
+#include <bpf/bpf_endian.h>
+#include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+#include <linux/if_ether.h>
+#include <linux/ip.h>
+#include <linux/in.h>
+#include <linux/tcp.h>
+
+struct backend_config {
+    __u32 ip;
+    unsigned char mac[ETH_ALEN];
+};
+
+// Backend IP and MAC address map
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 2);  // Two backends
+    __type(key, __u32);
+    __type(value, struct backend_config);
+} backends SEC(".maps");
+
+int client_ip = bpf_htonl(0xa000001);  
+unsigned char client_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x1};
+int load_balancer_ip = bpf_htonl(0xa00000a);
+unsigned char load_balancer_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x10};
+
+static __always_inline __u16
+csum_fold_helper(__u64 csum)
+{
+    int i;
+    for (i = 0; i < 4; i++)
+    {
+        if (csum >> 16)
+            csum = (csum & 0xffff) + (csum >> 16);
+    }
+    return ~csum;
+}
+
+static __always_inline __u16
+iph_csum(struct iphdr *iph)
+{
+    iph->check = 0;
+    unsigned long long csum = bpf_csum_diff(0, 0, (unsigned int *)iph, sizeof(struct iphdr), 0);
+    return csum_fold_helper(csum);
+}
+
+SEC("xdp")
+int xdp_load_balancer(struct xdp_md *ctx) {
+    void *data_end = (void *)(long)ctx->data_end;
+    void *data = (void *)(long)ctx->data;
+
+    bpf_printk("xdp_load_balancer received packet");
+
+    // Ethernet header
+    struct ethhdr *eth = data;
+    if ((void *)(eth + 1) > data_end)
+        return XDP_PASS;
+
+    // Check if the packet is IP (IPv4)
+    if (eth->h_proto != __constant_htons(ETH_P_IP))
+        return XDP_PASS;
+
+    // IP header
+    struct iphdr *iph = (struct iphdr *)(eth + 1);
+    if ((void *)(iph + 1) > data_end)
+        return XDP_PASS;
+
+    // Check if the protocol is TCP or UDP
+    if (iph->protocol != IPPROTO_TCP)
+        return XDP_PASS;
+    
+    bpf_printk("Source IP: 0x%x", bpf_ntohl(iph->saddr));
+    bpf_printk("Destination IP: 0x%x", bpf_ntohl(iph->daddr));
+    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+    bpf_printk("Destination MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
+    // Round-robin between two backends
+    static __u32 key = 0;
+    struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
+
+    if (!backend)
+        return XDP_PASS;
+    
+    if (iph->saddr == client_ip)
+    {
+        bpf_printk("Packet from client");
+        iph->daddr = backend->ip;
+        __builtin_memcpy(eth->h_dest, backend->mac, ETH_ALEN);
+    }
+    else
+    {
+        bpf_printk("Packet from backend");
+        iph->daddr = client_ip;
+        __builtin_memcpy(eth->h_dest, client_mac, ETH_ALEN);
+    }
+
+    // Update IP source address to the load balancer's IP
+    iph->saddr = load_balancer_ip;
+    // Update Ethernet source MAC address to the current lb's MAC
+    __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
+
+    // Recalculate IP checksum
+    iph->check = iph_csum(iph);
+
+    bpf_printk("Redirecting packet to IP: 0x%x", bpf_ntohl(iph->daddr));
+    bpf_printk("Dest MAC: %x:%x:%x:%x:%x:%x", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
+    bpf_printk("Source MAC: %x:%x:%x:%x:%x:%x\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+    // Return XDP_TX to transmit the modified packet back to the network
+    return XDP_TX;
+}
+
+char _license[] SEC("license") = "GPL";
+
+```
+
+explain that
+
+## Userspace code
+
+```c
+
+struct backend_config {
+    __u32 ip;
+    unsigned char mac[6];
+};
+
+static int parse_mac(const char *str, unsigned char *mac) {
+    if (sscanf(str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+        fprintf(stderr, "Invalid MAC address format\n");
+        return -1;
+    }
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc != 6) {
+        fprintf(stderr, "Usage: %s <ifname> <backend1_ip> <backend1_mac> <backend2_ip> <backend2_mac>\n", argv[0]);
+        return 1;
+    }
+
+    const char *ifname = argv[1];
+    struct backend_config backend[2];
+
+    // Parse backend 1
+    if (inet_pton(AF_INET, argv[2], &backend[0].ip) != 1) {
+        fprintf(stderr, "Invalid backend 1 IP address\n");
+        return 1;
+    }
+    if (parse_mac(argv[3], backend[0].mac) < 0) {
+        return 1;
+    }
+
+    // Parse backend 2
+    if (inet_pton(AF_INET, argv[4], &backend[1].ip) != 1) {
+        fprintf(stderr, "Invalid backend 2 IP address\n");
+        return 1;
+    }
+    if (parse_mac(argv[5], backend[1].mac) < 0) {
+        return 1;
+    }
+
+    // Load and attach the BPF program
+    struct xdp_lb_bpf *skel = xdp_lb_bpf__open_and_load();
+    if (!skel) {
+        fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        return 1;
+    }
+
+    int ifindex = if_nametoindex(ifname);
+    if (ifindex < 0) {
+        perror("if_nametoindex");
+        xdp_lb_bpf__destroy(skel);
+        return 1;
+    }
+
+    if (bpf_program__attach_xdp(skel->progs.xdp_load_balancer, ifindex) < 0) {
+        fprintf(stderr, "Failed to attach XDP program\n");
+        xdp_lb_bpf__destroy(skel);
+        return 1;
+    }
+
+    // Update backend configurations
+    for (int i = 0; i < 2; i++) {
+        if (bpf_map_update_elem(bpf_map__fd(skel->maps.backends), &i, &backend[i], 0) < 0) {
+            perror("bpf_map_update_elem");
+            xdp_lb_bpf__destroy(skel);
+            return 1;
+        }
+    }
+
+    printf("XDP load balancer configured with backends:\n");
+    printf("Backend 1 - IP: %s, MAC: %s\n", argv[2], argv[3]);
+    printf("Backend 2 - IP: %s, MAC: %s\n", argv[4], argv[5]);
+
+    printf("Press Ctrl+C to exit...\n");
+    while (1) {
+        sleep(1);  // Keep the program running
+    }
+
+    // Cleanup and detach
+    bpf_xdp_detach(ifindex, 0, NULL);
+    xdp_lb_bpf__detach(skel);
+    xdp_lb_bpf__destroy(skel);
+    return 0;
+}
+
+```
+
+explain that
+
+## The topology of test environment
 
 ```txt
     +---------------------------+          
@@ -30,6 +284,10 @@ expplanation
 +------------------+             +------------------+
 ```
 
+> If you are interested in this tutorial, please help us create a containerized version of the setup and topology! Currently the setup and teardown are based on the network namespace, it will be more friendly to have a containerized version of the setup and topology.
+
+explain that
+
 Setup:
 
 ```sh
@@ -42,11 +300,9 @@ Teardown:
 sudo ./teardown.sh
 ```
 
-Test with ping:
-
 ## Run
 
-```sh
+```console
 $ sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
 XDP load balancer configured with backends:
 Backend 1 - IP: 10.0.0.2, MAC: de:ad:be:ef:00:02
@@ -61,10 +317,42 @@ sudo ip netns exec h2 python3 -m http.server
 sudo ip netns exec h3 python3 -m http.server
 ```
 
-Debug:
+and
 
 ```sh
-sudo bpftrace -e  'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
+curl 10.0.0.10:8000
 ```
 
-<https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/>
+You can also see the `bpf_printk` output by:
+
+```console
+$ sudo cat /sys/kernel/debug/tracing/trace_pipe
+
+          <idle>-0       [004] ..s2. 24174.812722: bpf_trace_printk: xdp_load_balancer received packet
+          <idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Source IP: 0xa000001
+          <idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Destination IP: 0xa00000a
+          <idle>-0       [004] .Ns2. 24174.812731: bpf_trace_printk: Received Source MAC: de:ad:be:ef:0:1
+          <idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Received Destination MAC: de:ad:be:ef:0:10
+          <idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Packet from client
+          <idle>-0       [004] .Ns2. 24174.812734: bpf_trace_printk: Redirecting packet to new IP 0xa000002 from IP 0xa00000a
+          <idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Dest MAC: de:ad:be:ef:0:2
+          <idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Source MAC: de:ad:be:ef:0:10
+
+```
+
+Some bug might exist related to
+<https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/> in one of my system:
+
+You may see the results like:
+
+```sh
+$ sudo bpftrace -e  'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
+Attaching 1 probe...
+^C
+
+@redir_errno[6]: 3
+```
+
+## Conclusion
+
+## References

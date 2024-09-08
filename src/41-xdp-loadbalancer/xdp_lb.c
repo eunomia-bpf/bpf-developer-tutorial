@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <net/if.h>
 #include "xdp_lb.skel.h"  // The generated skeleton
 
 struct backend_config {
