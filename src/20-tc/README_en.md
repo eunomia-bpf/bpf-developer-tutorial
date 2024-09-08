@@ -51,9 +51,8 @@ int tc_ingress(struct __sk_buff *ctx)
 char __license[] SEC("license") = "GPL";
 ```
 
-This code defines an eBPF program that can capture and process packets through Linux TC (Transmission Control). In this program, we limit it to capture only IPv4 protocol packets, and then print out the total length and Time-To-Live (TTL) value of the packet using the bpf_printk function.Here is the translated text:
+This code defines an eBPF program that can capture and process packets through Linux TC (Transmission Control). In this program, we limit it to capture only IPv4 protocol packets, and then print out the total length and Time-To-Live (TTL) value of the packet using the bpf_printk function.
 
-"
 What needs to be noted is that we use some BPF library functions in the code, such as the functions bpf_htons and bpf_ntohs, which are used for conversion between network byte order and host byte order. In addition, we also use some comments to provide additional points and option information for TC. For example, at the beginning of this code, we use the following comments:
 
 ```c

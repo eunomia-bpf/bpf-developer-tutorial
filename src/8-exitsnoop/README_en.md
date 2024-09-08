@@ -144,7 +144,7 @@ Run:
 ```console
 $ sudo ./ecli run package.json 
 TIME     PID     PPID    EXIT_CODE  DURATION_NS  COMM".
-format: Return only the translated content, not including the original text.21:40:09  42050  42049   0          0            which
+21:40:09  42050  42049   0          0            which
 21:40:09  42049  3517    0          0            sh
 21:40:09  42052  42051   0          0            ps
 21:40:09  42051  3517    0          0            sh

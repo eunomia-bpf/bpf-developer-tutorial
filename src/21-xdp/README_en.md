@@ -156,8 +156,8 @@ For those interested in further exploring eBPF, visit our tutorial code reposito
 
 For more information, you can refer to:
 
-+ <http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/>
-+ <http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/>
-+ <https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass>
+- <http://arthurchiao.art/blog/xdp-paper-acm-2018-zh/>
+- <http://arthurchiao.art/blog/linux-net-stack-implementation-rx-zh/>
+- <https://github.com/xdp-project/xdp-tutorial/tree/master/basic01-xdp-pass>
 
 > The original link of this article: <https://eunomia.dev/tutorials/21-xdp>

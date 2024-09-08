@@ -1,0 +1,15 @@
+[package]
+name = "xdp"
+version = "0.1.0"
+authors = ["Yusheng Zheng <chenhengqi@outlook.com>"]
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+ctrlc = { version = "3.0", features = ["termination"] }
+libc = "0.2"
+libbpf-rs = "0.19"
+structopt = "0.3"
+
+[build-dependencies]
+libbpf-cargo = "0.13"

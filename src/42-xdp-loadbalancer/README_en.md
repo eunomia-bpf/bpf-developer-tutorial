@@ -7,7 +7,7 @@ In this tutorial, we will guide you through the process of implementing a simple
 
 `XDP` (eXpress Data Path) is a fast, in-kernel networking framework in Linux that allows packet processing at the earliest point in the network stack, right in the network interface card (NIC). This enables ultra-low-latency and high-throughput packet handling, making XDP ideal for tasks like load balancing, DDoS protection, and traffic filtering.
 
-### Key Features of XDP
+Key Features of XDP
 
 1. **Fast Packet Processing**: XDP handles packets directly at the NIC level, reducing latency and improving performance by avoiding the usual networking stack overhead.
 2. **Efficient**: Because it processes packets before they reach the kernel, XDP minimizes CPU usage and handles high traffic loads without slowing down the system.
@@ -15,7 +15,7 @@ In this tutorial, we will guide you through the process of implementing a simple
 4. **Low CPU Overhead**: With support for zero-copy packet forwarding, XDP uses fewer system resources, making it perfect for handling high traffic with minimal CPU load.
 5. **Simple Actions**: XDP programs return predefined actions like dropping, passing, or redirecting packets, providing control over how traffic is handled.
 
-### Projects That Use XDP
+Projects That Use XDP
 
 - `Cilium` is an open-source networking tool for cloud-native environments like Kubernetes. It uses XDP to efficiently handle packet filtering and load balancing, improving performance in high-traffic networks.
 - `Katran`, developed by Facebook, is a load balancer that uses XDP to handle millions of connections with low CPU usage. It distributes traffic efficiently across servers and is used internally at Facebook for large-scale networking.

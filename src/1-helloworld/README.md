@@ -17,7 +17,7 @@
 要开发eBPF程序，您需要安装以下软件和工具：
 
 - Linux 内核：由于eBPF是内核技术，因此您需要具备较新版本的Linux内核（至少 4.8 及以上版本，建议至少在 5.15 以上），以支持eBPF功能。
-    - 建议使用最新的 Ubuntu 版本（例如 Ubuntu 23.10）以获得最佳的学习体验，较旧的内核 eBPF 功能支持可能相对不全。
+  - 建议使用最新的 Ubuntu 版本（例如 Ubuntu 23.10）以获得最佳的学习体验，较旧的内核 eBPF 功能支持可能相对不全。
 - LLVM 和 Clang：这些工具用于编译eBPF程序。安装最新版本的LLVM和Clang可以确保您获得最佳的eBPF支持。
 
 eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。
@@ -127,7 +127,7 @@ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 
 ```console
 $ sudo ./ecli run package.json
-Runing eBPF program...
+Running eBPF program...
 ```
 
 运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
