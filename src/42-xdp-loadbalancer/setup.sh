@@ -116,10 +116,8 @@ check_ip_forwarding () {
   echo "Checking IP forwarding status on the host..."
   sudo sysctl net.ipv4.ip_forward
 
-  for ns in lb; do
-    echo "Checking IP forwarding status in namespace $ns..."
-    sudo ip netns exec $ns sysctl net.ipv4.ip_forward
-  done
+  echo "Checking IP forwarding status in namespace $ns..."
+  sudo ip netns exec $ns sysctl net.ipv4.ip_forward
 }
 
 # Check ARP table
