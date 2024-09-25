@@ -1,22 +1,22 @@
-# eBPF Tutorial by Example: Capturing TCP Information with XDP
+# eBPF 示例教程：使用 XDP 捕获 TCP 信息
 
-Extended Berkeley Packet Filter (eBPF) is a revolutionary technology in the Linux kernel that allows developers to run sandboxed programs within the kernel space. It enables powerful networking, security, and tracing capabilities without the need to modify the kernel source code or load kernel modules. This tutorial focuses on using eBPF with the Express Data Path (XDP) to capture TCP header information directly from network packets at the earliest point of ingress.
+扩展伯克利包过滤器（eBPF）是 Linux 内核中的一项革命性技术，允许开发者在内核空间内运行沙箱程序。它提供了强大的网络、安全和跟踪能力，无需修改内核源代码或加载内核模块。本教程重点介绍如何使用 eBPF 结合 Express Data Path（XDP），在数据包进入时的最早阶段直接捕获 TCP 头信息。
 
-## Capturing TCP Headers with XDP
+## 使用 XDP 捕获 TCP 头信息
 
-Capturing network packets is essential for monitoring, debugging, and securing network communications. Traditional tools like `tcpdump` operate in user space and can incur significant overhead. By leveraging eBPF and XDP, we can capture TCP header information directly within the kernel, minimizing overhead and improving performance.
+捕获网络数据包对于监控、调试和保护网络通信至关重要。传统工具如 `tcpdump` 在用户空间运行，可能会带来显著的开销。通过利用 eBPF 和 XDP，我们可以在内核中直接捕获 TCP 头信息，最小化开销并提高性能。
 
-In this tutorial, we'll develop an XDP program that intercepts incoming TCP packets and extracts their header information. We'll store this data in a ring buffer, which a user-space program will read and display in a human-readable format.
+在本教程中，我们将开发一个 XDP 程序，该程序拦截传入的 TCP 数据包并提取其头信息。我们将这些数据存储在一个环形缓冲区中，用户空间的程序将读取并以可读的格式显示这些信息。
 
-### Why Use XDP for Packet Capturing?
+### 为什么使用 XDP 进行数据包捕获？
 
-XDP is a high-performance data path within the Linux kernel that allows for programmable packet processing at the lowest level of the network stack. By attaching an eBPF program to XDP, we can process packets immediately as they arrive, reducing latency and improving efficiency.
+XDP 是 Linux 内核中一个高性能的数据路径，允许在网络栈的最低层进行可编程的数据包处理。通过将 eBPF 程序附加到 XDP，我们可以在数据包到达时立即处理它们，减少延迟并提高效率。
 
-## Kernel eBPF Code Analysis
+## 内核 eBPF 代码分析
 
-Let's dive into the kernel-space eBPF code that captures TCP header information.
+让我们深入了解捕获 TCP 头信息的内核空间 eBPF 代码。
 
-### Full Kernel Code
+### 完整的内核代码
 
 ```c
 #include "vmlinux.h"
@@ -25,30 +25,30 @@ Let's dive into the kernel-space eBPF code that captures TCP header information.
 
 #define ETH_P_IP 0x0800
 
-// Define the ring buffer map
+// 定义环形缓冲区映射
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);  // 16 MB buffer
+    __uint(max_entries, 1 << 24);  // 16 MB 缓冲区
 } rb SEC(".maps");
 
-// Helper function to check if the packet is TCP
+// 检查数据包是否为 TCP 的辅助函数
 static bool is_tcp(struct ethhdr *eth, void *data_end)
 {
-    // Ensure Ethernet header is within bounds
+    // 确保以太网头在边界内
     if ((void *)(eth + 1) > data_end)
         return false;
 
-    // Only handle IPv4 packets
+    // 仅处理 IPv4 数据包
     if (bpf_ntohs(eth->h_proto) != ETH_P_IP)
         return false;
 
     struct iphdr *ip = (struct iphdr *)(eth + 1);
 
-    // Ensure IP header is within bounds
+    // 确保 IP 头在边界内
     if ((void *)(ip + 1) > data_end)
         return false;
 
-    // Check if the protocol is TCP
+    // 检查协议是否为 TCP
     if (ip->protocol != IPPROTO_TCP)
         return false;
 
@@ -58,65 +58,65 @@ static bool is_tcp(struct ethhdr *eth, void *data_end)
 SEC("xdp")
 int xdp_pass(struct xdp_md *ctx)
 {
-    // Pointers to packet data
+    // 数据包数据指针
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
 
-    // Parse Ethernet header
+    // 解析以太网头
     struct ethhdr *eth = data;
 
-    // Check if the packet is a TCP packet
+    // 检查数据包是否为 TCP 数据包
     if (!is_tcp(eth, data_end)) {
         return XDP_PASS;
     }
 
-    // Cast to IP header
+    // 转换为 IP 头
     struct iphdr *ip = (struct iphdr *)(eth + 1);
 
-    // Calculate IP header length
+    // 计算 IP 头长度
     int ip_hdr_len = ip->ihl * 4;
     if (ip_hdr_len < sizeof(struct iphdr)) {
         return XDP_PASS;
     }
 
-    // Ensure IP header is within packet bounds
+    // 确保 IP 头在数据包边界内
     if ((void *)ip + ip_hdr_len > data_end) {
         return XDP_PASS;
     }
 
-    // Parse TCP header
+    // 解析 TCP 头
     struct tcphdr *tcp = (struct tcphdr *)((unsigned char *)ip + ip_hdr_len);
 
-    // Ensure TCP header is within packet bounds
+    // 确保 TCP 头在数据包边界内
     if ((void *)(tcp + 1) > data_end) {
         return XDP_PASS;
     }
 
-    // Define the number of bytes you want to capture from the TCP header
+    // 定义要捕获的 TCP 头字节数
     const int tcp_header_bytes = 32;
 
-    // Ensure that the desired number of bytes does not exceed packet bounds
+    // 确保所需字节数不超过数据包边界
     if ((void *)tcp + tcp_header_bytes > data_end) {
         return XDP_PASS;
     }
 
-    // Reserve space in the ring buffer
+    // 在环形缓冲区中预留空间
     void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
     if (!ringbuf_space) {
-        return XDP_PASS;  // If reservation fails, skip processing
+        return XDP_PASS;  // 如果预留失败，跳过处理
     }
 
-    // Copy the TCP header bytes into the ring buffer
-    // Using a loop to ensure compliance with eBPF verifier
+    // 将 TCP 头字节复制到环形缓冲区
+    // 使用循环以确保符合 eBPF 验证器要求
     for (int i = 0; i < tcp_header_bytes; i++) {
         unsigned char byte = *((unsigned char *)tcp + i);
         ((unsigned char *)ringbuf_space)[i] = byte;
     }
 
-    // Submit the data to the ring buffer
+    // 将数据提交到环形缓冲区
     bpf_ringbuf_submit(ringbuf_space, 0);
 
-    // Optional: Print a debug message
+    // 可选：打印调试信息
     bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
 
     return XDP_PASS;
@@ -125,70 +125,70 @@ int xdp_pass(struct xdp_md *ctx)
 char __license[] SEC("license") = "GPL";
 ```
 
-### Code Explanation
+### 代码解释
 
-#### Defining the Ring Buffer Map
+#### 定义环形缓冲区映射
 
-We define a ring buffer map named `rb` to pass data from the kernel to user space efficiently.
+我们定义了一个名为 `rb` 的环形缓冲区映射，用于高效地将数据从内核传递到用户空间。
 
 ```c
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);  // 16 MB buffer
+    __uint(max_entries, 1 << 24);  // 16 MB 缓冲区
 } rb SEC(".maps");
 ```
 
-#### Packet Parsing and Validation
+#### 数据包解析与验证
 
-The `is_tcp` helper function checks whether the incoming packet is a TCP packet by verifying the Ethernet and IP headers.
+`is_tcp` 辅助函数通过验证以太网和 IP 头，检查传入的数据包是否为 TCP 数据包。
 
 ```c
 static bool is_tcp(struct ethhdr *eth, void *data_end)
 {
-    // ... (checks omitted for brevity)
+    // ...（检查内容略）
 }
 ```
 
-#### Capturing TCP Header Information
+#### 捕获 TCP 头信息
 
-In the `xdp_pass` function, we:
+在 `xdp_pass` 函数中，我们：
 
-1. Parse the Ethernet, IP, and TCP headers.
-2. Ensure all headers are within the packet bounds to prevent invalid memory access.
-3. Reserve space in the ring buffer to store the TCP header.
-4. Copy the TCP header bytes into the ring buffer.
-5. Submit the data to the ring buffer for user-space consumption.
+1. 解析以太网、IP 和 TCP 头。
+2. 确保所有头信息在数据包边界内，以防止无效内存访问。
+3. 在环形缓冲区中预留空间以存储 TCP 头。
+4. 将 TCP 头字节复制到环形缓冲区。
+5. 提交数据到环形缓冲区，供用户空间使用。
 
 ```c
-// Reserve space in the ring buffer
+// 在环形缓冲区中预留空间
 void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
 if (!ringbuf_space) {
     return XDP_PASS;
 }
 
-// Copy the TCP header bytes
+// 复制 TCP 头字节
 for (int i = 0; i < tcp_header_bytes; i++) {
     unsigned char byte = *((unsigned char *)tcp + i);
     ((unsigned char *)ringbuf_space)[i] = byte;
 }
 
-// Submit to ring buffer
+// 提交到环形缓冲区
 bpf_ringbuf_submit(ringbuf_space, 0);
 ```
 
-#### Using bpf_printk for Debugging
+#### 使用 bpf_printk 进行调试
 
-The `bpf_printk` function logs messages to the kernel's trace pipe, which can be invaluable for debugging.
+`bpf_printk` 函数将消息记录到内核的跟踪管道，对于调试非常有用。
 
 ```c
 bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
 ```
 
-## User-Space Code Analysis
+## 用户空间代码分析
 
-Let's examine the user-space program that reads the captured TCP headers from the ring buffer and displays them.
+让我们查看用户空间程序，该程序从环形缓冲区中读取捕获的 TCP 头信息并显示。
 
-### Full User-Space Code
+### 完整的用户空间代码
 
 ```c
 #include <stdio.h>
@@ -201,17 +201,17 @@ Let's examine the user-space program that reads the captured TCP headers from th
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 
-#include "xdp-tcpdump.skel.h"  // Generated skeleton header
+#include "xdp-tcpdump.skel.h"  // 生成的骨架头文件
 
-// Callback function to handle events from the ring buffer
+// 处理环形缓冲区事件的回调函数
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    if (data_sz < 20) {  // Minimum TCP header size
+    if (data_sz < 20) {  // 最小 TCP 头大小
         fprintf(stderr, "Received incomplete TCP header\n");
         return 0;
     }
 
-    // Parse the raw TCP header bytes
+    // 解析原始 TCP 头字节
     struct tcphdr {
         uint16_t source;
         uint16_t dest;
@@ -230,7 +230,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
         uint16_t window;
         uint16_t check;
         uint16_t urg_ptr;
-        // Options and padding may follow
+        // 可能还有选项和填充
     } __attribute__((packed));
 
     if (data_sz < sizeof(struct tcphdr)) {
@@ -240,14 +240,14 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 
     struct tcphdr *tcp = (struct tcphdr *)data;
 
-    // Convert fields from network byte order to host byte order
+    // 将字段从网络字节序转换为主机字节序
     uint16_t source_port = ntohs(tcp->source);
     uint16_t dest_port = ntohs(tcp->dest);
     uint32_t seq = ntohl(tcp->seq);
     uint32_t ack_seq = ntohl(tcp->ack_seq);
     uint16_t window = ntohs(tcp->window);
 
-    // Extract flags
+    // 提取标志位
     uint8_t flags = 0;
     flags |= (tcp->fin) ? 0x01 : 0x00;
     flags |= (tcp->syn) ? 0x02 : 0x00;
@@ -259,13 +259,13 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
     flags |= (tcp->cwr) ? 0x80 : 0x00;
 
     printf("Captured TCP Header:\n");
-    printf("  Source Port: %u\n", source_port);
-    printf("  Destination Port: %u\n", dest_port);
-    printf("  Sequence Number: %u\n", seq);
-    printf("  Acknowledgment Number: %u\n", ack_seq);
-    printf("  Data Offset: %u\n", tcp->doff);
-    printf("  Flags: 0x%02x\n", flags);
-    printf("  Window Size: %u\n", window);
+    printf("  源端口: %u\n", source_port);
+    printf("  目的端口: %u\n", dest_port);
+    printf("  序列号: %u\n", seq);
+    printf("  确认号: %u\n", ack_seq);
+    printf("  数据偏移: %u\n", tcp->doff);
+    printf("  标志位: 0x%02x\n", flags);
+    printf("  窗口大小: %u\n", window);
     printf("\n");
 
     return 0;
@@ -292,7 +292,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Open and load BPF application */
+    /* 打开并加载 BPF 应用 */
     skel = xdp_tcpdump_bpf__open();
     if (!skel)
     {
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Load & verify BPF programs */
+    /* 加载并验证 BPF 程序 */
     err = xdp_tcpdump_bpf__load(skel);
     if (err)
     {
@@ -308,7 +308,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    /* Attach XDP program */
+    /* 附加 XDP 程序 */
     err = xdp_tcpdump_bpf__attach(skel);
     if (err)
     {
@@ -316,7 +316,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    /* Attach the XDP program to the specified interface */
+    /* 将 XDP 程序附加到指定的接口 */
     skel->links.xdp_pass = bpf_program__attach_xdp(skel->progs.xdp_pass, ifindex);
     if (!skel->links.xdp_pass)
     {
@@ -325,9 +325,9 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    printf("Successfully attached XDP program to interface %s\n", ifname);
+    printf("成功将 XDP 程序附加到接口 %s\n", ifname);
 
-    /* Set up ring buffer polling */
+    /* 设置环形缓冲区轮询 */
     rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
     if (!rb)
     {
@@ -336,9 +336,9 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    printf("Start polling ring buffer\n");
+    printf("开始轮询环形缓冲区\n");
 
-    /* Poll the ring buffer */
+    /* 轮询环形缓冲区 */
     while (1)
     {
         err = ring_buffer__poll(rb, -1);
@@ -358,29 +358,29 @@ cleanup:
 }
 ```
 
-### Code Explanation
+### 代码解释
 
-#### Handling Ring Buffer Events
+#### 处理环形缓冲区事件
 
-The `handle_event` function processes TCP header data received from the ring buffer.
+`handle_event` 函数处理从环形缓冲区接收到的 TCP 头数据。
 
 ```c
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    // Validate data size
+    // 验证数据大小
     if (data_sz < 20) {
         fprintf(stderr, "Received incomplete TCP header\n");
         return 0;
     }
 
-    // Parse the TCP header
-    // ... (parsing code)
+    // 解析 TCP 头
+    // ...（解析代码）
 }
 ```
 
-#### Parsing the TCP Header
+#### 解析 TCP 头
 
-We define a local `tcphdr` structure to interpret the raw bytes.
+我们定义了一个本地的 `tcphdr` 结构来解释原始字节。
 
 ```c
 struct tcphdr {
@@ -388,34 +388,34 @@ struct tcphdr {
     uint16_t dest;
     uint32_t seq;
     uint32_t ack_seq;
-    // ... (other fields)
+    // ...（其他字段）
 } __attribute__((packed));
 ```
 
-#### Displaying Captured Information
+#### 显示捕获的信息
 
-After parsing, we print the TCP header fields in a readable format.
+解析后，我们以可读的格式打印 TCP 头字段。
 
 ```c
 printf("Captured TCP Header:\n");
-printf("  Source Port: %u\n", source_port);
-printf("  Destination Port: %u\n", dest_port);
-// ... (other fields)
+printf("  源端口: %u\n", source_port);
+printf("  目的端口: %u\n", dest_port);
+// ...（其他字段）
 ```
 
-#### Setting Up the eBPF Skeleton
+#### 设置 eBPF 骨架
 
-We use the generated skeleton `xdp-tcpdump.skel.h` to load and attach the eBPF program.
+我们使用生成的骨架 `xdp-tcpdump.skel.h` 来加载和附加 eBPF 程序。
 
 ```c
-/* Open and load BPF application */
+/* 打开并加载 BPF 应用 */
 skel = xdp_tcpdump_bpf__open();
 if (!skel) {
     fprintf(stderr, "Failed to open BPF skeleton\n");
     return 1;
 }
 
-/* Load & verify BPF programs */
+/* 加载并验证 BPF 程序 */
 err = xdp_tcpdump_bpf__load(skel);
 if (err) {
     fprintf(stderr, "Failed to load and verify BPF skeleton: %d\n", err);
@@ -423,11 +423,12 @@ if (err) {
 }
 ```
 
-#### Attaching to the Network Interface
+#### 附加到网络接口
 
-We attach the XDP program to the specified network interface by name.
+我们通过接口名称将 XDP 程序附加到指定的网络接口。
 
 ```c
+/* 将 XDP 程序附加到指定的接口 */
 skel->links.xdp_pass = bpf_program__attach_xdp(skel->progs.xdp_pass, ifindex);
 if (!skel->links.xdp_pass) {
     err = -errno;
@@ -436,34 +437,34 @@ if (!skel->links.xdp_pass) {
 }
 ```
 
-## Compilation and Execution Instructions
+## 编译和执行说明
 
-### Prerequisites
+### 前提条件
 
-- A Linux system with a kernel version that supports eBPF and XDP.
-- libbpf library installed.
-- Compiler with eBPF support (clang).
+- 支持 eBPF 和 XDP 的 Linux 系统内核。
+- 安装了 libbpf 库。
+- 具有 eBPF 支持的编译器（如 clang）。
 
-### Building the Program
+### 构建程序
 
-Assuming you have cloned the repository from [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial), navigate to the `bpf-developer-tutorial/src/41-xdp-tcpdump` directory.
+假设您已从 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial) 克隆了仓库，请导航到 `bpf-developer-tutorial/src/41-xdp-tcpdump` 目录。
 
 ```bash
 cd bpf-developer-tutorial/src/41-xdp-tcpdump
 make
 ```
 
-This command compiles both the kernel eBPF code and the user-space application.
+此命令将编译内核 eBPF 代码和用户空间应用程序。
 
-### Running the Program
+### 运行程序
 
-First, identify your network interfaces:
+首先，识别您的网络接口：
 
 ```bash
 ifconfig
 ```
 
-Sample output:
+示例输出：
 
 ```
 wlp0s20f3: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
@@ -471,38 +472,38 @@ wlp0s20f3: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
         ether 00:1a:2b:3c:4d:5e  txqueuelen 1000  (Ethernet)
 ```
 
-Run the user-space program with the desired network interface:
+使用所需的网络接口运行用户空间程序：
 
 ```bash
 sudo ./xdp-tcpdump wlp0s20f3
 ```
 
-Sample output:
+示例输出：
 
 ```
-Successfully attached XDP program to interface wlp0s20f3
-Start polling ring buffer
+成功将 XDP 程序附加到接口 wlp0s20f3
+开始轮询环形缓冲区
 Captured TCP Header:
-  Source Port: 443
-  Destination Port: 53500
-  Sequence Number: 572012449
-  Acknowledgment Number: 380198588
-  Data Offset: 8
-  Flags: 0x10
-  Window Size: 16380
+  源端口: 443
+  目的端口: 53500
+  序列号: 572012449
+  确认号: 380198588
+  数据偏移: 8
+  标志位: 0x10
+  窗口大小: 16380
 ```
 
-### Complete Source Code and Resources
+### 完整的源代码和资源
 
-- **Source Code Repository:** [GitHub - bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial)
-- **Tutorial Website:** [eunomia.dev Tutorials](https://eunomia.dev/tutorials/)
+- **源代码仓库:** [GitHub - bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial)
+- **教程网站:** [eunomia.dev Tutorials](https://eunomia.dev/tutorials/)
 
-## Summary and Conclusion
+## 总结与结论
 
-In this tutorial, we explored how to use eBPF and XDP to capture TCP header information directly within the Linux kernel. By analyzing both the kernel eBPF code and the user-space application, we learned how to intercept packets, extract essential TCP fields, and communicate this data to user space efficiently using a ring buffer.
+在本教程中，我们探讨了如何使用 eBPF 和 XDP 在 Linux 内核中直接捕获 TCP 头信息。通过分析内核 eBPF 代码和用户空间应用程序，我们学习了如何拦截数据包、提取关键的 TCP 字段，并使用环形缓冲区高效地将这些数据传递到用户空间。
 
-This approach offers a high-performance alternative to traditional packet capturing methods, with minimal impact on system resources. It's a powerful technique for network monitoring, security analysis, and debugging.
+这种方法为传统的数据包捕获方法提供了一种高性能的替代方案，对系统资源的影响最小。它是网络监控、安全分析和调试的强大技术。
 
-If you would like to learn more about eBPF, visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/tutorials/>.
+如果您想了解更多关于 eBPF 的内容，请访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或我们的网站 <https://eunomia.dev/tutorials/>。
 
-Happy coding!
+编程愉快！
