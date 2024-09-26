@@ -50,6 +50,8 @@ Android:
 Networking:
 
 - [Accelerating network request forwarding using sockops](29-sockops/README.md)
+- [Capturing TCP Information with XDP](41-xdp-tcpdump/README.md)
+- [XDP Load Balancer](42-xdp-loadbalancer/README.md)
 
 tracing:
 

@@ -17,7 +17,7 @@ Before starting to write eBPF programs, we need to prepare a suitable developmen
 To develop eBPF programs, you need to install the following software and tools:
 
 - Linux kernel: Since eBPF is a kernel technology, you need to have a relatively new version of the Linux kernel (minimum version 4.8 and above, suggested version is 5.15+ or 6.2+) to support eBPF functionality.
-  - If possible, install a new version of Ubuntu (e.g. 23.10) would be better. 
+  - If possible, install a new version of Ubuntu (e.g. 23.10) would be better.
 - LLVM and Clang: These tools are used to compile eBPF programs. Installing the latest version of LLVM and Clang ensures that you get the best eBPF support.
 
 An eBPF program consists of two main parts: the kernel space part and the user space part. The kernel space part contains the actual logic of the eBPF program, while the user space part is responsible for loading, running, and monitoring the kernel space program.
@@ -58,6 +58,7 @@ eunomia-bpf compiler
 Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
 ....
 ```
+
 Note: If you are on the aarch64 platform, please use the [ecc-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc-aarch64) and [ecli-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecli-aarch64).
 
 You can also compile using the docker image:

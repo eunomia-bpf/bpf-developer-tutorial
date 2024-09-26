@@ -9,6 +9,7 @@ Kernel version | Commit
 ## JIT compiling
 
 The list of supported architectures for your kernel can be retrieved with:
+
 ```sh
 git grep HAVE_EBPF_JIT arch/
 ```
@@ -34,6 +35,7 @@ LoongArch                          | 6.1  | [`5dc615520c4d`](https://github.com/
 Several (but not all) of these *main features* translate to an eBPF program type.
 The list of such program types supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
+
 ```sh
 git grep -W 'bpf_prog_type {' include/uapi/linux/bpf.h
 ```
@@ -43,7 +45,7 @@ Feature | Kernel version | Commit
 `AF_PACKET` (libpcap/tcpdump, `cls_bpf` classifier, netfilter's `xt_bpf`, team driver's load-balancing mode…) | 3.15 | [`bd4cf0ed331a`](https://github.com/torvalds/linux/commit/bd4cf0ed331a275e9bf5a49e6d0fd55dffc551b8)
 Kernel helpers | 3.15 | [`bd4cf0ed331a`](https://github.com/torvalds/linux/commit/bd4cf0ed331a275e9bf5a49e6d0fd55dffc551b8)
 `bpf()` syscall | 3.18 | [`99c55f7d47c0`](https://github.com/torvalds/linux/commit/99c55f7d47c0dc6fc64729f37bf435abf43f4c60)
-Maps (_a.k.a._ Tables; details below) | 3.18 | [`99c55f7d47c0`](https://github.com/torvalds/linux/commit/99c55f7d47c0dc6fc64729f37bf435abf43f4c60)
+Maps (*a.k.a.* Tables; details below) | 3.18 | [`99c55f7d47c0`](https://github.com/torvalds/linux/commit/99c55f7d47c0dc6fc64729f37bf435abf43f4c60)
 BPF attached to sockets | 3.19 | [`89aa075832b0`](https://github.com/torvalds/linux/commit/89aa075832b0da4402acebd698d0411dcc82d03e)
 BPF attached to `kprobes` | 4.1 | [`2541517c32be`](https://github.com/torvalds/linux/commit/2541517c32be2531e0da59dfd7efc1ce844644f5)
 `cls_bpf` / `act_bpf` for `tc` | 4.1 | [`e2e9b6541dd4`](https://github.com/torvalds/linux/commit/e2e9b6541dd4b31848079da80fe2253daaafb549)
@@ -123,12 +125,13 @@ LSM                            | 5.7  | [`fc611f47f218`](https://github.com/torv
 lookup listening socket        | 5.9  | [`e9ddbb7707ff`](https://github.com/torvalds/linux/commit/e9ddbb7707ff5891616240026062b8c1e29864ca) | BPF_PROG_TYPE_SK_LOOKUP
 Allow executing syscalls       | 5.15 | [`79a7f8bdb159`](https://github.com/torvalds/linux/commit/79a7f8bdb159d9914b58740f3d31d602a6e4aca8) | BPF_PROG_TYPE_SYSCALL
 
-## Maps (_a.k.a._ Tables, in BCC lingo)
+## Maps (*a.k.a.* Tables, in BCC lingo)
 
 ### Map types
 
 The list of map types supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
+
 ```sh
 git grep -W 'bpf_map_type {' include/uapi/linux/bpf.h
 ```
@@ -170,6 +173,7 @@ user ringbuf                    | 6.1  | [`583c1f420173`](https://github.com/tor
 Some (but not all) of these *API features* translate to a subcommand beginning with `BPF_MAP_`.
 The list of subcommands supported in your kernel can be found in file
 [`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
+
 ```sh
 git grep -W 'bpf_cmd {' include/uapi/linux/bpf.h
 ```
@@ -222,7 +226,7 @@ Generic XDP | 4.12 | [`b5cdae3291f7`](https://github.com/torvalds/linux/commit/b
 The list of helpers supported in your kernel can be found in file."[`include/uapi/linux/bpf.h`](https://github.com/torvalds/linux/blob/master/include/uapi/linux/bpf.h):
 
 ```sh
-git grep '	FN(' include/uapi/linux/bpf.h
+git grep ' FN(' include/uapi/linux/bpf.h
 ```
 
 Alphabetical order
@@ -463,7 +467,9 @@ Note: GPL-only BPF helpers require a GPL-compatible license. The current license
 Check the list of GPL-compatible licenses in your [kernel source code](https://github.com/torvalds/linux/blob/master/include/linux/license.h).
 
 ## Program Types
+
 The list of program types and supported helper functions can be retrieved with:
+
 ```sh
 git grep -W 'func_proto(enum bpf_func_id func_id' kernel/ net/ drivers/
 ```

@@ -1,6 +1,7 @@
 # eBPF Developer Tutorial: Learning eBPF Step by Step with Examples
 
 [![CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml)
+[![Test and trigger downstream tutorial sync](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml)
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee Mirror](https://gitee.com/yunwei37/bpf-developer-tutorial)
@@ -58,6 +59,8 @@ Android:
 Networking:
 
 - [Accelerating network request forwarding using sockops](src/29-sockops/README.md)
+- [Capturing TCP Information with XDP](src/41-xdp-tcpdump/README.md)
+- [XDP Load Balancer](src/42-xdp-loadbalancer/README.md)
 
 tracing:
 
@@ -65,7 +68,7 @@ tracing:
 - [Capturing Plain Text Data of Various Libraries' SSL/TLS Using uprobe](src/30-sslsniff/README.md)
 - [Using eBPF to Trace Go Routine States](src/31-goroutine/README.md)
 - [Measuring Function Latency with eBPF](src/33-funclatency/README.md)
-- [Use uprobe to trace Rust programs](src/37-uprobe-rust/README.md)
+- [Use Uprobe to trace Rust programs](src/37-uprobe-rust/README.md)
 - [Using eBPF to Trace Nginx Requests](src/39-nginx/README.md)
 - [Using eBPF to Trace MySQL Queries](src/40-mysql)
 
@@ -89,9 +92,9 @@ Continuously updating...
 
 ## Why write this tutorial?
 
-In the process of learning eBPF, we have been inspired and helped by the [bcc python developer tutorial](src/bcc-documents/tutorial_bcc_python_developer.md). However, from the current perspective, using libbpf to develop eBPF applications is a relatively better choice. However, there seems to be few tutorials that focus on eBPF development based on libbpf and BPF CO-RE, introducing it through examples and tools. Therefore, we initiated this project, adopting a similar organization method as the bcc python developer tutorial, but using CO-RE's libbpf for development.
+In the process of learning eBPF, we have been inspired and helped by the [bcc python developer tutorial](src/bcc-documents/tutorial_bcc_python_developer.md). However, from the current perspective, using `libbpf` to develop eBPF applications is a relatively better choice.
 
-This project is mainly based on [libbpf-bootstrap](https://github.com/libbpf/libbpf-bootstrap) and [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) frameworks, and uses eunomia-bpf to help simplify the development of some user-space libbpf eBPF code, allowing developers to focus on kernel-space eBPF code development.
+This project is mainly based on [libbpf](https://github.com/libbpf/libbpf) frameworks.
 
 > - We also provide a small tool called GPTtrace, which uses ChatGPT to automatically write eBPF programs and trace Linux systems through natural language descriptions. This tool allows you to interactively learn eBPF programs: [GPTtrace](https://github.com/eunomia-bpf/GPTtrace)
 > - Feel free to raise any questions or issues related to eBPF learning, or bugs encountered in practice, in the issue or discussion section of this repository. We will do our best to help you!
@@ -145,65 +148,18 @@ TIME     COMM             TID     LAT(us)
 
 ![docker](imgs/docker.png)
 
-## build 
+## build
 
 The example of local compilation is shown as follows:
 
 ```shell
-$ git clone https://github.com/eunomia-bpf/bpf-developer-tutorial.git
-$ cd bpf-developer-tutorial
-$ git submodule update --init --recursive # Synchronize submodule
-$ cd src/24-hide
-$ make
+git clone https://github.com/eunomia-bpf/bpf-developer-tutorial.git
+cd bpf-developer-tutorial
+git submodule update --init --recursive # Synchronize submodule
+cd src/24-hide
+make
 ```
 
-## Why do we need tutorials based on libbpf and BPF CO-RE?
+## LICENSE
 
-> In history, when it comes to developing a BPF application, one could choose the BCC framework to load the BPF program into the kernel when implementing various BPF programs for Tracepoints. BCC provides a built-in Clang compiler that can compile BPF code at runtime and customize it into a program that conforms to a specific host kernel. This is the only way to develop maintainable BPF applications under the constantly changing internal kernel environment. The portability of BPF and the introduction of CO-RE are detailed in the article "BPF Portability and CO-RE", explaining why BCC was the only viable option before and why libbpf is now considered a better choice. Last year, Libbpf saw significant improvements in functionality and complexity, eliminating many differences with BCC (especially for Tracepoints applications) and adding many new and powerful features that BCC does not support (such as global variables and BPF skeletons)
->
-> Admittedly, BCC does its best to simplify the work of BPF developers, but sometimes it also increases the difficulty of problem localization and fixing while providing convenience. Users must remember its naming conventions and the autogenerated structures for Tracepoints, and they must rely on rewriting this code to read kernel data and access kprobe parameters. When using BPF maps, it is necessary to write half-object-oriented C code that does not completely match what happens in the kernel. Furthermore, BCC leads to the writing of a large amount of boilerplate code in user space, with manually configuring the most trivial parts.
->
-> As mentioned above, BCC relies on runtime compilation and embeds a large LLVM/Clang library, which creates certain gaps between BCC and an ideal usage scenario:
->
-> - High resource utilization (memory and CPU) at compile time, which may interfere with the main process in busy servers.
-> - It relies on the kernel header package and needs to be installed on each target host. Even so, if certain kernel contents are not exposed through public header files, type definitions need to be copied and pasted into the BPF code to achieve the purpose.
-> - Even the smallest compile-time errors can only be detected at runtime, followed by recompiling and restarting the user-space application. This greatly affects the iteration time of development (and increases frustration...).
->
-> Libbpf + BPF CO-RE (Compile Once - Run Everywhere) takes a different approach, considering BPF programs as normal user-space programs: they only need to be compiled into small binaries that can be deployed on target hosts without modification. libbpf acts as a loader for BPF programs, responsible for configuration work (relocating, loading, and verifying BPF programs, creating BPF maps, attaching to BPF hooks, etc.), and developers only need to focus on the correctness and performance of BPF programs. This approach minimizes overhead, eliminates dependencies, and improves the overall developer experience.
->
-> In terms of API and code conventions, libbpf adheres to the philosophy of "least surprise", where most things need to be explicitly stated: no header files are implied, and no code is rewritten. Most monotonous steps can be eliminated using simple C code and appropriate auxiliary macros. In addition, what users write is the content that needs to be executed, and the structure of BPF applications is one-to-one, finally verified and executed by the kernel.
-
-Reference: [BCC to Libbpf Conversion Guide (Translation) - Deep Dive into eBPF](https://www.ebpf.top/post/bcc-to-libbpf-guid/)
-
-## eunomia-bpf
-
-[eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) is an open-source eBPF dynamic loading runtime and development toolkit designed to simplify the development, building, distribution, and execution of eBPF programs. It is based on the libbpf CO-RE lightweight development framework.
-
-With eunomia-bpf, you can:
-
-- Write only the libbpf kernel mode code when writing eBPF programs or tools, automatically retrieving kernel mode export information.
-- Use Wasm to develop eBPF user mode programs, controlling the entire eBPF program loading and execution, as well as handling related data within the WASM virtual machine.
-- eunomia-bpf can package pre-compiled eBPF programs into universal JSON or WASM modules for distribution across architectures and kernel versions, allowing dynamic loading and execution without the need for recompilation.
-
-eunomia-bpf consists of a compilation toolchain and a runtime library. Compared to traditional frameworks like BCC and native libbpf, it greatly simplifies the development process of eBPF programs, where in most cases, only the kernel mode code needs to be written to easily build, package, and publish complete eBPF applications. At the same time, the kernel mode eBPF code guarantees compatibility with mainstream development frameworks such as libbpf, libbpfgo, libbpf-rs, and more. When user mode code needs to be written, multiple languages can be used with the help of Webassembly. Compared to script tools like bpftrace, eunomia-bpf maintains similar convenience, while not being limited to trace scenarios and can be used in various other fields such as networking and security.
-
-- eunomia-bpf project GitHub address: <https://github.com/eunomia-bpf/eunomia-bpf>
-- gitee mirror: <https://gitee.com/anolis/eunomia>
-
-## Let ChatGPT Help Us
-
-This tutorial uses ChatGPT to learn how to write eBPF programs. At the same time, we try to teach ChatGPT how to write eBPF programs. The general steps are as follows:
-
-1. Teach it the basic knowledge of eBPF programming.
-2. Show it some cases: hello world, basic structure of eBPF programs, how to use eBPF programs for tracing, and let it start writing tutorials.
-3. Manually adjust the tutorials and correct errors in the code and documents.
-4. Feed the modified code back to ChatGPT for further learning.
-5. Try to make ChatGPT generate eBPF programs and corresponding tutorial documents automatically! For example:
-
-![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
-
-The complete conversation log can be found here: [ChatGPT.md](ChatGPT.md)
-
-We have also built a demo of a command-line tool. Through training in this tutorial, it can automatically write eBPF programs and trace Linux systems using natural language descriptions: <https://github.com/eunomia-bpf/GPTtrace>
-
-![ebpf-chatgpt-signal](https://github.com/eunomia-bpf/GPTtrace/blob/main/doc/result.gif)
+MIT
