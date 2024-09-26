@@ -109,7 +109,7 @@ You need to have **Call to Action** in Summary and Conclusion
 - **Proofreading:** Check for grammatical errors and ensure technical accuracy.
 - **Accessibility:** Make sure that the tutorials are accessible to readers with varying levels of expertise in eBPF.
 
-Also, do not just list points, try to make it using paragraph unless points list is clear. using oral English and short sentence, make it attractive and easy to read, do not make it like a paper.
+Also, do not just list points, try to make it using paragraph unless points list is clear. using oral English, clear and simple words and short sentence, make it attractive and easy to read, do not make it like a paper.
 
 ## Template Summary
 
