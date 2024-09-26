@@ -24,7 +24,7 @@ INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = funclatency
+APPS = xdp-tcpdump
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)

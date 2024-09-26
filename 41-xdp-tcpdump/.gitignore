@@ -1,0 +1,6 @@
+.output
+uprobe
+merge-btf
+*.btf
+xdp_lb
+xdp-tcpdump
