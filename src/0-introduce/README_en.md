@@ -1,33 +1,118 @@
 # eBPF Tutorial by Example 0: Introduction to Core Concepts and Tools
 
+This is the first part of a comprehensive development tutorial for eBPF, designed to guide you through practical eBPF development, from beginner to advanced. It covers fundamental concepts, real-world code examples, and applications in modern systems. Rather than focusing on traditional tools like BCC, we will use modern frameworks such as `libbpf`, `Cilium`, `libbpf-rs`, and eunomia-bpf, with examples provided in `C`, `Go`, and `Rust`.
+
+The primary goal of this tutorial is to provide clear and concise examples of eBPF tools (starting with as little as 20 lines of code!) to help developers quickly grasp essential eBPF development techniques. Each example is self-contained and can be found in the directory structure, with every directory representing an independent eBPF tool. You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorial source code.
+
 ## Introduction to eBPF: Secure and Efficient Kernel Extension
 
-eBPF is a revolutionary technology that originated in the Linux kernel and allows sandbox programs to run in the kernel of an operating system. It is used to securely and efficiently extend the functionality of the kernel without the need to modify the kernel's source code or load kernel modules. By allowing the execution of sandbox programs in the operating system, eBPF enables application developers to dynamically add additional functionality to the operating system at runtime. The operating system then ensures security and execution efficiency, similar to performing native compilation with the help of a Just-In-Time (JIT) compiler and verification engine. eBPF programs are portable between kernel versions and can be automatically updated, avoiding workload interruptions and node restarts.
+eBPF (extended Berkeley Packet Filter) is a groundbreaking technology that allows developers to run small programs directly in kernel space, safely and efficiently. Unlike traditional approaches that required modifying kernel source code or loading new modules, eBPF made it possible to customize and optimize network behavior dynamically, all without disrupting system operations. This flexibility and efficiency made eBPF a pivotal technology for overcoming the limitations of traditional networking stacks.
 
-Today, eBPF is widely used in various scenarios: in modern data centers and cloud-native environments, it provides high-performance network packet processing and load balancing; it achieves observability of various fine-grained metrics with very low resource overhead, helping application developers trace applications and provide insights for performance troubleshooting; it ensures secure execution of application and container runtimes, and more. The possibilities are endless, and the innovation unleashed by eBPF in the operating system kernel has only just begun [3].
+### What Makes eBPF So Powerful?
 
-### The Future of eBPF: Kernel's JavaScript Programmable Interface
+- **Direct Kernel Interaction:** eBPF programs execute within the kernel, interacting with system-level events such as network packets, system calls, or tracepoints.
+- **Safe Execution:** eBPF ensures safety through a verifier that checks the logic of the program before it runs, preventing potential kernel crashes or security breaches.
+- **Minimal Overhead:** eBPF achieves near-native execution speed by employing a Just-In-Time (JIT) compiler, which translates eBPF bytecode into optimized machine code for the specific architecture.
 
-For browsers, the introduction of JavaScript brought programmability and initiated a tremendous revolution, transforming browsers into almost independent operating systems. Now let's return to eBPF: in order to understand the programmability impact of eBPF on the Linux kernel, it is helpful to have a high-level understanding of the structure of the Linux kernel and how it interacts with applications and hardware [4].
+## eBPF: Past, Present, and Future
 
-![kernel-arch](kernel-arch.png)
+### Past: Programmable Networking Transformed
 
-The main purpose of the Linux kernel is to abstract hardware or virtual hardware and provide a consistent API (system calls) that allows applications to run and share resources. To achieve this goal, we maintain a series of subsystems and layers to distribute these responsibilities [5]. Each subsystem typically allows some level of configuration to cater to different user requirements. If the desired behavior cannot be achieved through configuration, there are two options: either modify the kernel source code and convince the Linux kernel community that the change is necessary (waiting for several years for the new kernel version to become a commodity), or write a kernel module and regularly fix it because each kernel version may break it. In practice, neither of the two solutions is commonly used: the former is too costly, and the latter lacks portability.
+When eBPF was introduced in 2014, it revolutionized how developers approached networking by allowing small, programmable kernel-space applications to handle packet processing in real time. By hooking into key kernel points, eBPF enabled custom logic to be applied whenever a network packet arrived, leading to higher efficiency and flexibility. This allowed organizations to tailor networking behavior without the overhead of custom drivers or kernel modifications, creating an ideal solution for cloud-native and data-center environments.
+### Present: A Versatile Framework for Modern Computing Needs
 
-With eBPF, there is a new option to reprogram the behavior of the Linux kernel without modifying the kernel's source code or loading kernel modules, while ensuring a certain degree of behavioral consistency, compatibility, and security across different kernel versions [6]. To achieve this, eBPF programs also need a corresponding API that allows the execution and sharing of resources for user-defined applications. In other words, in a sense, the eBPF virtual machine also provides a mechanism similar to system calls. With the help of the communication mechanism between eBPF and user space, both the Wasm virtual machine and user space applications can have full access to this set of "system calls." On the one hand, it can programmatically extend the capabilities of traditional system calls, and on the other hand, it can achieve more efficient programmable IO processing in many layers such as networking and file systems.
+eBPF has evolved into a versatile framework that extends beyond its original purpose of networking, now encompassing observability, tracing, security, and even system resource management. eBPF programs can dynamically hook into kernel events, giving developers precise control over system behavior and performance optimization without requiring kernel modifications or reboots. This makes eBPF an essential tool for system administrators and developers who aim to monitor, optimize, and secure their environments.
 
-![new-os](new-os-model.png)
+Here are some key areas where eBPF is widely used today:
 
-As shown in the above figure, the Linux kernel of today is evolving towards a new kernel model: user-defined applications can run in both kernel space and user space, with user space accessing system resources through traditional system calls and kernel space interacting with various parts of the system through BPF Helper Calls. As of early 2023, there are already more than 220 helper system interfaces in the eBPF virtual machine in the kernel, covering a wide range of application scenarios.## Note
-It is worth noting that BPF Helper Call and system calls are not competitive. Their programming models and performance advantages are completely different and they do not completely replace each other. For the Wasm and Wasi related ecosystems, the situation is similar. The specially designed wasi interface needs to go through a long standardization process. However, it may provide better performance and portability guarantees for user-mode applications in specific scenarios. On the other hand, eBPF can provide a fast and flexible solution for extending system interfaces, while ensuring sandbox nature and portability.
+- **Networking:** eBPF offers real-time, high-speed packet filtering and processing within the kernel, allowing for the creation of custom protocol parsers and network policies without needing new drivers or system restarts. This enables highly efficient network management in cloud and data center environments.
 
-Currently, eBPF is still in the early stages. However, with the help of the kernel interfaces provided by eBPF and the ability to interact with user space, applications in the Wasm virtual machine can almost access the data and return values of any kernel or user mode function call (kprobe, uprobe...). It can collect and understand all system calls at a low cost and obtain packet-level data and socket-level data for all network operations (tracepoint, socket...). It can also add additional protocol analyzers and easily program any forwarding logic in the network packet processing solution (XDP, TC...), without leaving the packet processing environment of the Linux kernel.
+- **Observability:** eBPF enables developers to gather detailed insights into system behavior by collecting custom metrics and performing in-kernel data aggregation. By tapping into kernel tracepoints and function calls, eBPF helps identify performance issues and track down elusive bugs.
 
-Moreover, eBPF has the ability to write data to any address of a user space process (bpf_probe_write_user[7]), partially modify the return value of a kernel function (bpf_override_return[8]), and even directly execute certain system calls in kernel mode[9]. Fortunately, eBPF performs strict security checks on the bytecode before loading it into the kernel to ensure that there are no operations such as memory out-of-bounds. Moreover, many features that may expand the attack surface and pose security risks need to be explicitly enabled during kernel compilation. Before loading the bytecode into the kernel, the Wasm virtual machine can also choose to enable or disable certain eBPF features to ensure the security of the sandbox.
+- **Tracing & Profiling:** eBPF provides powerful tracing and profiling capabilities by attaching to kernel functions, tracepoints, and even user-space probes. This allows developers to gain deep insights into system and application behavior, enabling them to optimize performance and resolve complex system issues.
 
-In addition to the kernel mode eBPF runtime, eBPF can also be extended to user space, for example, [bpftime](https://github.com/eunomia-bpf/bpftime) to achieve higher performance user space tracing, performance analysis, plugins, etc.
+- **Security:** eBPF plays a vital role in real-time security monitoring. It enables deep inspection of system calls, network traffic, and other kernel activities, helping to enforce dynamic security policies and detect anomalous behavior, providing an efficient way to safeguard infrastructure.
 
-## 2. Some Tips on Learning eBPF Development
+- **Scheduler Optimization:** eBPF is increasingly used to enhance CPU scheduling, offering the ability to monitor CPU load and optimize how tasks are distributed across cores. This can lead to more efficient use of CPU resources and improved system responsiveness.
+
+- **HID (Human Interface Device) Driver Enhancements:** Developers use eBPF to optimize HID drivers for devices like keyboards, mice, and touchscreens. By adding custom logic for handling input events, eBPF improves responsiveness in latency-sensitive applications.
+
+Organizations across industries have adopted eBPF at scale:
+
+- **Google:** Uses eBPF for security auditing, packet processing, real-time performance monitoring, and optimizing CPU scheduling across its vast infrastructure.
+- **Netflix:** Leverages eBPF for network traffic analysis, ensuring high availability and performance for streaming services.
+- **Android:** Applies eBPF to optimize network usage, power consumption, and resource allocation, improving performance and battery life on millions of devices.
+- **S&P Global:** Utilizes eBPF through **Cilium** for managing networking across multiple clouds and on-premises systems, ensuring scalability and security.
+- **Shopify:** Implements eBPF with **Falco** for intrusion detection, bolstering security on its e-commerce platform.
+- **Cloudflare:** Uses eBPF for network observability, security monitoring, and performance optimization, protecting millions of websites globally.
+
+eBPF's ability to dynamically adjust system behavior and extend into user space makes it an essential technology for modern computing. Whether it's optimizing network traffic, improving security, or enhancing system performance, eBPF enables developers to address real-time requirements efficiently and safely.
+
+In addition to its kernel-mode runtime, eBPF can also be extended to user space. For example, [bpftime](https://github.com/eunomia-bpf/bpftime), a user-space eBPF runtime, allows for higher-performance tracing, performance analysis, and plugin support in user-space applications. This extension of eBPF into user space helps improve flexibility and performance in various use cases that go beyond kernel-level tasks.
+
+### Future: The Expanding Potential of eBPF
+
+Looking forward, eBPF is expected to become an even more integral part of operating systems. The focus is on improving its flexibility, modularity, and ease of use, making it accessible for an even broader range of applications. Innovations in memory management, concurrency mechanisms, and better integration with user-space applications are on the horizon. Projects are already underway to compile significant parts of the Linux kernel to the BPF instruction set, potentially revolutionizing how kernel development and analysis are performed.
+
+Advancements such as dynamic stacks, better observability tools for user space (e.g., Fast Uprobes and language-specific stack walkers), and safer program termination mechanisms will continue to strengthen eBPF’s reliability and expand its use cases. Additionally, new tools and libraries will simplify eBPF development, lowering the barrier to entry for both kernel and application developers.
+
+## Getting Started with the Tutorial
+
+This tutorial provides practical eBPF development practices, covering topics from beginner to advanced levels. We focus on hands-on examples in areas like observability, networking, and security, using frameworks like `libbpf`, `libbpf-rs`, and `eunomia-bpf`, with examples in C, Go, and Rust.
+
+### Who Is This Tutorial For?
+
+- **Developers** looking to implement custom kernel solutions.
+- **System Administrators** aiming to enhance performance and security.
+- **Tech Enthusiasts** exploring cutting-edge kernel technologies.
+
+### What Will You Learn?
+
+- **Core Concepts:** eBPF fundamentals and integration with the Linux kernel.
+- **Practical Skills:** Writing and deploying eBPF programs.
+- **Advanced Topics:** Exploring security, tracing, and future innovations in eBPF.
+
+---
+
+## Table of Contents
+
+1. **Introduction to eBPF**  
+   Basic concepts and the tools you need to get started.
+
+2. **Beginner Examples**  
+   Simple programs such as "Hello World" and basic tracing using kprobe and uprobe.
+
+3. **Observability**  
+   Examples focused on monitoring network traffic, file operations, and process behavior using eBPF.
+
+4. **Networking**  
+   Examples focused on modifying and optimizing network traffic, such as XDP, TC, and socket.
+
+5. **Security**  
+   Programs for hiding process and files, sending signals to kill process, and tracking process events for security.
+
+6. **Advanced Use Cases**  
+   Complex examples involving performance profiling, scheduler optimization, and eBPF in user space (e.g., bpftime).
+
+7. **In-Depth Topics**  
+   Exploring eBPF for Android, using eBPF for network acceleration, and securing systems through syscall modifications.
+
+## How to Use eBPF Programming
+
+Writing eBPF programs from scratch can be complex. To simplify this, LLVM introduced the ability to compile high-level language code into eBPF bytecode in 2015. The eBPF community has since built libraries like `libbpf` to manage these programs. These libraries help load eBPF bytecode into the kernel and perform essential tasks. The Linux kernel source contains numerous eBPF examples in the `samples/bpf/` directory.
+
+A typical eBPF program involves two parts: kernel space code (`*_kern.c`) and user space code (`*_user.c`). The kernel space code defines the logic, while the user space code manages loading and interacting with the kernel. However, tools like `libbpf-bootstrap` and the Go eBPF library help simplify this process, allowing for one-time compilation and easier development.
+
+### Tools for eBPF Development
+
+- **BCC**: A Python-based toolchain that simplifies writing, compiling, and loading eBPF programs. It offers many pre-built tracing tools but has limitations with dependencies and compatibility.
+- **eBPF Go Library**: A Go library that decouples the process of obtaining eBPF bytecode from the loading and management of eBPF programs.
+- **libbpf-bootstrap**: A modern scaffold based on `libbpf` that provides an efficient workflow for writing eBPF programs, offering a simple one-time compilation process for reusable bytecode.
+- **eunomia-bpf**: A toolchain for writing eBPF programs with only kernel space code. It simplifies the development of eBPF programs by dynamically loading them.
+
+These tools help reduce the complexity of developing eBPF programs, making the process more accessible to developers aiming to optimize system performance, security, and observability.
+
+## Some Tips on Learning eBPF Development
 
 This article will not provide a more detailed introduction to the principles of eBPF, but here is a learning plan and reference materials that may be of value:
 
@@ -39,10 +124,7 @@ This article will not provide a more detailed introduction to the principles of 
 Recommended:
 
 - Read the introduction to ebpf: <https://ebpf.io/> (30min)
-- Briefly understand the ebpf kernel-related documentation: <https://prototype-kernel.readthedocs.io/en/latest/bpf/> (Know where to queries, 30min)
-- Read the Chinese ebpf beginner's guide: <https://www.modb.pro/db/391570> (1h)
-- There are a lot of reference materials: <https://github.com/zoidbergwill/awesome-ebpf> (2-3h)
-- You can choose to flip through PPTs that interest you: <https://github.com/gojue/ebpf-slide> (1-2h)
+- Briefly understand the ebpf kernel-related documentation: <https://docs.ebpf.io/> (Know where to queries for tech details, 30min)
 
 Answer three questions:
 
@@ -57,7 +139,7 @@ Understand and try eBPF development frameworks:
 - bpftrace tutorial：<https://eunomia.dev/tutorials/bpftrace-tutorial/> （Try it，1h）
 - Examples of developing various tools with BCC: <https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> (Run through, 3-4h)
 - Some examples of libbpf: <https://github.com/libbpf/libbpf-bootstrap> (Run any interesting one and read the source code, 2h)
-- Tutorial based on libbpf and eunomia-bpf: <https://github.com/eunomia-bpf/bpf-developer-tutorial> (Read part 1-10, 3-4h)
+- Tutorials: <https://github.com/eunomia-bpf/bpf-developer-tutorial> (Read part 1-10, 3-4h)
 
 Other development frameworks: Go or Rust language, please search and try on your own (0-2h)
 
@@ -69,73 +151,7 @@ Answer some questions and try some experiments (2-5h):
 2. How to trace a kernel feature or function with eBPF? There are many ways, provide corresponding code examples;
 3. What are the solutions for communication between user mode and kernel mode? How to send information from user mode to kernel mode? How to pass information from kernel mode to user mode? Provide code examples;
 4. Write your own eBPF program to implement a feature;
-5. In the entire lifecycle of an eBPF program, what does it do in user mode and kernel mode?## 3. How to use eBPF programming
-
-Writing original eBPF programs is very tedious and difficult. To change this situation, llvm introduced in 2015 the ability to compile code written in high-level languages into eBPF bytecode, and the eBPF community wrapped primitive system calls such as `bpf()` and provided the `libbpf` library. These libraries include functions for loading bytecode into the kernel and other key functions. In the Linux source code package, there are numerous eBPF sample codes provided by Linux based on `libbpf`, located in the `samples/bpf/` directory.
-
-A typical `libbpf`-based eBPF program consists of two files: `*_kern.c` and `*_user.c`. The mounting points and processing functions in the kernel are written in `*_kern.c`, while the user code for injecting kernel code and performing various tasks in user space is written in `*_user.c`. For more detailed tutorials, refer to [this video](https://www.bilibili.com/video/BV1f54y1h74r?spm_id_from=333.999.0.0). However, due to the difficulty in understanding and the entry barrier, most eBPF program development at the current stage is based on tools such as:
-
-- BCC
-- BPFtrace
-- libbpf-bootstrap
-- Go eBPF library
-
-And there are newer tools such as `eunomia-bpf`.
-
-## Writing eBPF programs
-
-eBPF programs consist of a kernel space part and a user space part. The kernel space part contains the actual logic of the program, while the user space part is responsible for loading and managing the kernel space part. With the eunomia-bpf development tool, only the kernel space part needs to be written.
-
-The code in the kernel space part needs to conform to the syntax and instruction set of eBPF. eBPF programs mainly consist of several functions, each with its own specific purpose. The available function types include:
-
-- kprobe: probe function, executed before or after a specified kernel function.
-- tracepoint: tracepoint function, executed at a specified kernel tracepoint.
-- raw_tracepoint: raw tracepoint function, executed at a specified kernel raw tracepoint.
-- xdp: network data processing function, intercepting and processing network packets.
-- perf_event: performance event function, used to handle kernel performance events.
-- kretprobe: return probe function, executed when a specified kernel function returns.
-- tracepoint_return: tracepoint return function, executed when a specified kernel tracepoint returns.
-- raw_tracepoint_return: raw tracepoint return function, executed when a specified kernel raw tracepoint returns.
-
-### BCC
-
-BCC stands for BPF Compiler Collection. The project is a Python library that includes a complete toolchain for writing, compiling, and loading BPF programs, as well as tools for debugging and diagnosing performance issues.
-
-Since its release in 2015, BCC has been continuously improved by hundreds of contributors and now includes a large number of ready-to-use tracing tools. The [official project repository](https://github.com/iovisor/bcc/blob/master/docs/tutorial.md) provides a handy tutorial for users to quickly get started with BCC.
-
-Users can program in high-level languages such as Python and Lua on BCC. Compared to programming directly in C, these high-level languages are much more convenient. Users only need to design BPF programs in C, and the rest, including compilation, parsing, loading, etc., can be done by BCC.
-
-However, a drawback of using BCC is its compatibility. Each time an eBPF program based on BCC is executed, it needs to be compiled, and compiling requires users to configure related header files and corresponding implementations. In practical applications, as you may have experienced, dependency issues in compilation can be quite tricky. Therefore, in the development of this project, we have abandoned BCC and chosen the libbpf-bootstrap tool, which allows for one-time compilation and multiple runs.
-
-### eBPF Go library
-
-The eBPF Go library provides a general-purpose eBPF library that decouples the process of obtaining eBPF bytecode from the loading and management of eBPF programs, and implements similar CO- functionality as libbpf. eBPF programs are usually created by writing high-level languages and then compiled into eBPF bytecode using the clang/LLVM compiler.
-
-### libbpf
-
-`libbpf-bootstrap` is a BPF development scaffold based on the `libbpf` library, and its source code can be obtained from its [GitHub](https://github.com/libbpf/libbpf-bootstrap).
-
-`libbpf-bootstrap` combines years of practice from the BPF community and provides a modern and convenient workflow for developers, achieving the goal of one-time compilation and reuse.
-
-BPF programs based on `libbpf-bootstrap` have certain naming conventions for the source files. The file for generating kernel space bytecode ends with `.bpf.c`, and the file for loading bytecode in user space ends with `.c`, and the prefixes of these two files must be the same.
-
-Based on `libbpf-bootstrap`, BPF programs will compile `*.bpf.c` files into corresponding `.o` files,
-and then generate the `skeleton` file based on this file, i.e. `*.skel.h`. This file will contain some data structures defined in the kernel space,
-as well as the key functions used to load kernel space code. After the user-space code includes this file, it can call the corresponding loading function to load the bytecode into the kernel. Similarly, `libbpf-bootstrap` also has a comprehensive introduction tutorial that users can refer to [here](https://nakryiko.com/posts/libbpf-bootstrap/) for detailed introductory operations.
-
-### eunomia-bpf
-
-[eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) is an open-source eBPF dynamic loading tool and development toolchain designed to simplify the development, building, distribution, and execution of eBPF programs. It is based on the libbpf CO-RE lightweight development framework.
-
-With eunomia-bpf, you can:
-
-- When writing eBPF programs or tools, only write kernel space code, automatically retrieve kernel space export information, and dynamically load it as a module.
-- eunomia-bpf can package pre-compiled eBPF programs into universal JSON or WASM modules for distribution across architectures and kernel versions. They can be dynamically loaded and run without the need for recompilation.
-
-eunomia-bpf consists of a compilation toolchain and a runtime library. Compared with traditional frameworks such as BCC and native libbpf, it simplifies the development process of eBPF programs.
-
-> - eunomia-bpf project Github address: <https://github.com/eunomia-bpf/eunomia-bpf>
-> - gitee mirror: <https://gitee.com/anolis/eunomia>
+5. In the entire lifecycle of an eBPF program, what does it do in user mode and kernel mode?
 
 ## References
 
