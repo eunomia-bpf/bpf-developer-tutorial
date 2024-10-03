@@ -323,7 +323,6 @@ To compile the eBPF program, ensure you have the necessary tools installed, such
    make
    ```
 
-
 ### Running the eBPF Program
 
 Assuming you have a user-space application or a tool to load and attach the eBPF program, you can execute it to observe the interaction between the eBPF program and the custom kfunc.
@@ -373,10 +372,7 @@ Happy eBPF-ing!
 
 ## Additional Resources
 
-- **Complete Source Code Repository:** [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial)
-- **Tutorial Website:** [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/)
-
-Feel free to explore these resources for more in-depth tutorials, examples, and contributions to the eBPF ecosystem!
+If you'd like to learn more about eBPF knowledge and practices, you can visit our open source tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete code.
 
 ## Conclusion
 
