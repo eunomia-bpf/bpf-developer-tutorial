@@ -1,0 +1,68 @@
+From d3484f640bc82cff459beb85a00f7ebab20f0a41 Mon Sep 17 00:00:00 2001
+From: "Masami Hiramatsu (Google)" <mhiramat@kernel.org>
+Date: Sun, 9 Apr 2023 11:28:31 +0900
+Subject: [PATCH] tracing: fprobe: Initialize ret valiable to fix smatch error
+
+The commit 39d954200bf6 ("fprobe: Skip exit_handler if entry_handler returns
+!0") introduced a hidden dependency of 'ret' local variable in the
+fprobe_handler(), Smatch warns the `ret` can be accessed without
+initialization.
+
+	kernel/trace/fprobe.c:59 fprobe_handler()
+	error: uninitialized symbol 'ret'.
+
+kernel/trace/fprobe.c
+    49                 fpr->entry_ip = ip;
+    50                 if (fp->entry_data_size)
+    51                         entry_data = fpr->data;
+    52         }
+    53
+    54         if (fp->entry_handler)
+    55                 ret = fp->entry_handler(fp, ip, ftrace_get_regs(fregs), entry_data);
+
+ret is only initialized if there is an ->entry_handler
+
+    56
+    57         /* If entry_handler returns !0, nmissed is not counted. */
+    58         if (rh) {
+
+rh is only true if there is an ->exit_handler.  Presumably if you have
+and ->exit_handler that means you also have a ->entry_handler but Smatch
+is not smart enough to figure it out.
+
+--> 59                 if (ret)
+                           ^^^
+Warning here.
+
+    60                         rethook_recycle(rh);
+    61                 else
+    62                         rethook_hook(rh, ftrace_get_regs(fregs), true);
+    63         }
+    64 out:
+    65         ftrace_test_recursion_unlock(bit);
+    66 }
+
+Reported-by: Dan Carpenter <error27@gmail.com>
+Link: https://lore.kernel.org/all/85429a5c-a4b9-499e-b6c0-cbd313291c49@kili.mountain
+Fixes: 39d954200bf6 ("fprobe: Skip exit_handler if entry_handler returns !0")
+Signed-off-by: Masami Hiramatsu (Google) <mhiramat@kernel.org>
+---
+ kernel/trace/fprobe.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/trace/fprobe.c b/kernel/trace/fprobe.c
+index 9abb3905bc8e..293184227394 100644
+--- a/kernel/trace/fprobe.c
++++ b/kernel/trace/fprobe.c
+@@ -27,7 +27,7 @@ static void fprobe_handler(unsigned long ip, unsigned long parent_ip,
+ 	struct rethook_node *rh = NULL;
+ 	struct fprobe *fp;
+ 	void *entry_data = NULL;
+-	int bit, ret;
++	int bit, ret = 0;
+ 
+ 	fp = container_of(ops, struct fprobe, ops);
+ 	if (fprobe_disabled(fp))
+-- 
+2.34.1
+

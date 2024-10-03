@@ -1,0 +1,38 @@
+[package]
+name = "blazesym"
+description = "BlazeSym is a library that symbolizes addresses where symbol names, source file names, and line numbers can be acquired."
+version = "0.1.0"
+authors = ["Kui-Feng <thinker.li@gmail.com>"]
+license-file = "LICENSE"
+repository = "https://github.com/libbpf/blazesym"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "blazesym"
+crate-type = ["cdylib", "rlib", "staticlib"]
+
+[package.metadata.docs.rs]
+features = ["dont-generate-test-files"]
+
+[dependencies]
+nix = "0.24"
+regex = "1.6"
+crossbeam-channel = "0.5"
+libc = "0.2.137"
+
+[build-dependencies]
+anyhow = "1.0.68"
+cbindgen = {version = "0.24", optional = true}
+
+[features]
+cheader = ["cbindgen"]
+# Enable this feature to opt out of the generation of test files. That may be
+# useful when certain utilities are not installed or when there is no intention
+# to run tests.
+dont-generate-test-files = []
+# Enable code paths requiring a nightly toolchain. This feature is only meant to
+# be used for testing and benchmarking purposes, not for the core library, which
+# is expected to work on stable.
+nightly = []

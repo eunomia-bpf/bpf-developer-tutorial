@@ -1,0 +1,37 @@
+From ff8be5401b359e23ec2b74184034082564bac7c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Daniel=20M=C3=BCller?= <deso@posteo.net>
+Date: Thu, 25 May 2023 16:04:20 -0700
+Subject: [PATCH] selftests/bpf: Check whether to run selftest
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The sockopt test invokes test__start_subtest and then unconditionally
+asserts the success. That means that even if deny-listed, any test will
+still run and potentially fail.
+Evaluate the return value of test__start_subtest() to achieve the
+desired behavior, as other tests do.
+
+Signed-off-by: Daniel Müller <deso@posteo.net>
+---
+ tools/testing/selftests/bpf/prog_tests/sockopt.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/tools/testing/selftests/bpf/prog_tests/sockopt.c b/tools/testing/selftests/bpf/prog_tests/sockopt.c
+index 33dd45..9e6a5e 100644
+--- a/tools/testing/selftests/bpf/prog_tests/sockopt.c
++++ b/tools/testing/selftests/bpf/prog_tests/sockopt.c
+@@ -1060,7 +1060,9 @@ void test_sockopt(void)
+ 		return;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(tests); i++) {
+-		test__start_subtest(tests[i].descr);
++		if (!test__start_subtest(tests[i].descr))
++			continue;
++
+ 		ASSERT_OK(run_test(cgroup_fd, &tests[i]), tests[i].descr);
+ 	}
+ 
+-- 
+2.34.1
+

@@ -1,0 +1,23 @@
+# Ignore object files and kernel modules
+*.o
+*.ko
+*.mod
+*.mod.c
+*.symvers
+*.order
+
+# Ignore temporary and backup files
+*~
+*.bak
+*.tmp
+*.swp
+
+# Ignore build directory if generated
+/Module.symvers
+/Modules.markers
+/Module.markers
+/modules.order
+
+# Ignore other automatically generated files
+*.cmd
+.tmp_versions/

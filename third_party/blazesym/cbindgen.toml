@@ -1,0 +1,22 @@
+language = "C"
+include_guard = "__blazesym_h_"
+
+[export]
+item_types = ["globals", "enums", "structs", "unions", "typedefs", "opaque", "functions"]
+
+[fn]
+args = "Vertical"
+rename_args = "GeckoCase"
+
+[struct]
+associated_constants_in_body = true
+derive_eq = true
+derive_ostream = true
+
+[enum]
+add_sentinel = false
+derive_helper_methods = true
+derive_ostream = true
+
+[macro_expansion]
+bitflags = true
