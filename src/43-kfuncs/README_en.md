@@ -258,8 +258,7 @@ Skipping BTF generation for /root/bpf-developer-tutorial/src/43-kfuncs/module/he
 
    This command copies the `vmlinux` file to the appropriate build directory, enabling successful BTF generation.
 
-The complete code for this tutorial can be found in the link <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs> on GitHub.
-
+The complete code for this tutorial can be found in the link <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs> on GitHub. This is tested on Linux kernel version 6.11, and some modifications may be required for lower versions, referring to `compact.h`.
 
 ## Utilizing Your Custom kfunc in an eBPF Program
 

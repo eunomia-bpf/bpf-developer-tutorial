@@ -258,7 +258,7 @@ Skipping BTF generation for /root/bpf-developer-tutorial/src/43-kfuncs/module/he
 
     该命令将 `vmlinux` 文件复制到适当的构建目录中，确保 BTF 生成成功。
 
-本教程的完整代码可以在 GitHub 的链接 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs> 中找到。
+本教程的完整代码可以在 GitHub 的链接 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs> 中找到。这个代码在 Linux 内核版本 6.11 上进行了测试，其他低版本可能需要一些修改，参考 `compact.h`。
 
 ## 在 eBPF 程序中使用自定义 kfunc
 

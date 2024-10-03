@@ -69,3 +69,15 @@ jobs:
       run: |
         make -C src/35-user-ringbuf
         sudo timeout -s 2 3 src/35-user-ringbuf/user_ringbuf || if [ $? = 124 ]; then exit 0; else exit $?; fi
+
+    - name: test 41 xdp
+      run: |
+          make -C src/41-xdp-tcpdump
+
+    - name: test 42 xdp
+      run: |
+          make -C src/42-xdp-loadbalancer
+
+    - name: test 43 kfuncs
+      run: |
+          make -C src/43-kfuncs
