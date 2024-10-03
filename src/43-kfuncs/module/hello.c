@@ -5,17 +5,12 @@
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
 
-/* This flag implies BTF_SET8 holds kfunc(s) */
-#define BTF_SET8_KFUNCS		(1 << 0)
-#define BTF_KFUNCS_START(name) static struct btf_id_set8 __maybe_unused name = { .flags = BTF_SET8_KFUNCS };
-#define BTF_KFUNCS_END(name)
-
-__bpf_kfunc u64 bpf_kfunc_call_test(struct sock *sk, u32 a, u64 b, u32 c, u64 d);
+__bpf_kfunc u64 bpf_kfunc_call_test(u32 a, u64 b, u32 c, u64 d);
 
 /* Define a kfunc function */
 __bpf_kfunc_start_defs();
 
-__bpf_kfunc u64 bpf_kfunc_call_test(struct sock *sk, u32 a, u64 b, u32 c, u64 d)
+__bpf_kfunc u64 bpf_kfunc_call_test(u32 a, u64 b, u32 c, u64 d)
 {
 	return a + b + c + d;
 }
@@ -39,7 +34,7 @@ static int __init hello_init(void)
 
     printk(KERN_INFO "Hello, world!\n");
     // Register the BTF kfunc ID set
-    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_UNSPEC, &bpf_kfunc_example_set);
+    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_example_set);
     if (ret) {
         pr_err("bpf_kfunc_example: Failed to register BTF kfunc ID set\n");
         return ret;

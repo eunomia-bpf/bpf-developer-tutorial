@@ -6,8 +6,6 @@ KBUILD_CFLAGS += -g -O2
 all:
 	# Compile the module with BTF information
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
-	# Generate BTF from DWARF using pahole
-	pahole -J hello.o
 
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
