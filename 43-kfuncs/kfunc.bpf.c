@@ -8,7 +8,7 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 typedef int pid_t;
 
-extern u64 bpf_kfunc_call_test(u32 a, u64 b, u32 c, u64 d) __ksym;
+extern int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz) __ksym;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -16,7 +16,13 @@ SEC("kprobe/do_unlinkat")
 int handle_kprobe(void *ctx)
 {
 	pid_t pid = bpf_get_current_pid_tgid() >> 32;
-	u64 result = bpf_kfunc_call_test(1, 2, 3, 4);
-	bpf_printk("BPF triggered do_unlinkat from PID %d. Result: %lld\n", pid, result);
+	char str[] = "Hello, world!";
+	char substr[] = "wor";
+	u32 result = bpf_strstr(str, sizeof(str) - 1, substr, sizeof(substr) - 1);
+	if (result != -1)
+	{
+		bpf_printk("'%s' found in '%s' at index %d\n", substr, str, result);
+	}
+	bpf_printk("Hello, world! (pid: %d) bpf_strstr %d\n", pid, result);
 	return 0;
 }
