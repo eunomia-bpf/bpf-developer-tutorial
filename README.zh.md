@@ -1,6 +1,6 @@
 # eBPF 开发者教程与知识库：eBPF Tutorial by Example
 
-[![Test run](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml)
+[![Test example CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml)
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee 镜像](https://gitee.com/yunwei37/bpf-developer-tutorial)

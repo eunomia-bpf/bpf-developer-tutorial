@@ -1,6 +1,6 @@
 # eBPF Developer Tutorial: Learning eBPF Step by Step with Examples
 
-[![Test run](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/main.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml)
+[![Test example CI](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/test-libbpf.yml)
 [![Test and trigger downstream tutorial sync](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml/badge.svg)](https://github.com/eunomia-bpf/bpf-developer-tutorial/actions/workflows/trigger-sync.yml)
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
