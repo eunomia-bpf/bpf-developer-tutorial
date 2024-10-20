@@ -84,4 +84,7 @@ jobs:
 
     - name: test 44
       run: |
-          make -C src/43-kfuncs
+          make -C src/44-scx-simple
+    - name: test 45
+      run: |
+          make -C src/45-scx-nest
