@@ -79,6 +79,7 @@ Other:
 - [Using user ring buffer to send information to the kernel](35-user-ringbuf/README.md)
 - [Userspace eBPF Runtimes: Overview and Applications](36-userspace-ebpf/README.md)
 - [Compile Once, Run Everywhere for userspace with eBPF and BTF](38-btf-uprobe/README.md)
+- [Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules](43-kfuncs/README.md)
 
 # bcc and bpftrace tutorial
 

@@ -111,8 +111,4 @@ You need to have **Call to Action** in Summary and Conclusion
 
 Also, do not just list points, try to make it using paragraph unless points list is clear. 
 
-**The key point in tone: Using oral English, clear and simple words and short sentence, make it attractive and easy to read, do not make it like a paper. Not too much fancy words, try to be attracive**
-
-## Template Summary
-
-By following this pattern, anyone tasked with writing future blog posts will have a clear structure to adhere to, ensuring that all necessary information is included and presented in a logical order.
+The key point in tone: Using oral English, clear and simple words and short sentence, make it attractive and easy to read, do not make it like a paper. Not too much fancy words, try to be attracive.
