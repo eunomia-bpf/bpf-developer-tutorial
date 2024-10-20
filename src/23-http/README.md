@@ -1,97 +1,86 @@
-# 通过 eBPF socket filter 或 syscall trace 追踪 HTTP 请求等七层协议 - eBPF 实践教程
+# L7 Tracing with eBPF: HTTP and Beyond via Socket Filters and Syscall Tracepoints
 
-在当今的技术环境中，随着微服务、云原生应用和复杂的分布式系统的崛起，系统的可观测性已成为确保其健康、性能和安全的关键要素。特别是在微服务架构中，应用程序的组件可能分布在多个容器和服务器上，这使得传统的监控方法往往难以提供足够的深度和广度来全面了解系统的行为。这就是为什么观测七层协议，如 HTTP、gRPC、MQTT 等，变得尤为重要。
+In today's technology landscape, with the rise of microservices, cloud-native applications, and complex distributed systems, observability of systems has become a crucial factor in ensuring their health, performance, and security. Especially in a microservices architecture, application components may be distributed across multiple containers and servers, making traditional monitoring methods often insufficient to provide the depth and breadth needed to fully understand the behavior of the system. This is where observing seven-layer protocols such as HTTP, gRPC, MQTT, and more becomes particularly important.
 
-七层协议为我们提供了关于应用程序如何与其他服务和组件交互的详细信息。在微服务环境中，了解这些交互是至关重要的，因为它们经常是性能瓶颈、故障和安全问题的根源。然而，监控这些协议并不简单。传统的网络监控工具，如 tcpdump，虽然在捕获网络流量方面非常有效，但在处理七层协议的复杂性和动态性时，它们往往显得力不从心。
+Seven-layer protocols provide detailed insights into how applications interact with other services and components. In a microservices environment, understanding these interactions is vital, as they often serve as the root causes of performance bottlenecks, failures, and security issues. However, monitoring these protocols is not a straightforward task. Traditional network monitoring tools like tcpdump, while effective at capturing network traffic, often fall short when dealing with the complexity and dynamism of seven-layer protocols.
 
-这正是 eBPF 技术发挥作用的地方。eBPF 允许开发者和运维人员深入到系统的内核层，实时观测和分析系统的行为，而无需对应用程序代码进行任何修改或插入埋点。这为我们提供了一个独特的机会，可以更简单、更高效地处理应用层流量，特别是在微服务环境中。
+This is where eBPF (extended Berkeley Packet Filter) technology comes into play. eBPF allows developers and operators to delve deep into the kernel layer, observing and analyzing system behavior in real-time without the need to modify or insert instrumentation into application code. This presents a unique opportunity to handle application layer traffic more simply and efficiently, particularly in microservices environments.
 
-在本教程中，我们将深入探讨以下内容：
+In this tutorial, we will delve into the following:
 
-- 追踪七层协议，如 HTTP，以及与其相关的挑战。
-- eBPF 的 socket filter 和 syscall 追踪：这两种技术如何帮助我们在不同的内核层次追踪 HTTP 网络请求数据，以及这两种方法的优势和局限性。
-- eBPF 实践教程：如何开发一个 eBPF 程序，使用 eBPF socket filter 或 syscall 追踪来捕获和分析 HTTP 流量
+- Tracking seven-layer protocols such as HTTP and the challenges associated with them.
+- eBPF's socket filter and syscall tracing: How these two technologies assist in tracing HTTP network request data at different kernel layers, and the advantages and limitations of each.
+- eBPF practical tutorial: How to develop an eBPF program and utilize eBPF socket filter or syscall tracing to capture and analyze HTTP traffic.
 
-随着网络流量的增加和应用程序的复杂性增加，对七层协议的深入了解变得越来越重要。通过本教程，您将获得必要的知识和工具，以便更有效地监控和分析您的网络流量，从而为您的应用程序和服务器提供最佳的性能。
+As network traffic increases and applications grow in complexity, gaining a deeper understanding of seven-layer protocols becomes increasingly important. Through this tutorial, you will acquire the necessary knowledge and tools to more effectively monitor and analyze your network traffic, ultimately enhancing the performance of your applications and servers.
 
-本文是 eBPF 开发者教程的一部分，更详细的内容可以在这里找到：<https://eunomia.dev/tutorials/> 源代码在 [GitHub 仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial) 中开源。
+This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [here](https://eunomia.dev/tutorials/). The source code is available on the [GitHub repository](https://github.com/eunomia-bpf/bpf-developer-tutorial).
 
-## 追踪 HTTP, HTTP/2 等七层协议的挑战
+## Challenges in Tracking HTTP, HTTP/2, and Other Seven-Layer Protocols
 
-在现代的网络环境中，七层协议不仅仅局限于 HTTP。实际上，有许多七层协议，如 HTTP/2, gRPC, MQTT, WebSocket, AMQP 和 SMTP，它们都在不同的应用场景中发挥着关键作用。这些协议为我们提供了关于应用程序如何与其他服务和组件交互的详细信息。但是，追踪这些协议并不是一个简单的任务，尤其是在复杂的分布式系统中。
+In the modern networking environment, seven-layer protocols extend beyond just HTTP. In fact, there are many seven-layer protocols such as HTTP/2, gRPC, MQTT, WebSocket, AMQP, and SMTP, each serving critical roles in various application scenarios. These protocols provide detailed insights into how applications interact with other services and components. However, tracking these protocols is not a simple task, especially within complex distributed systems.
 
-1. **多样性和复杂性**：每种七层协议都有其特定的设计和工作原理。例如，gRPC 使用了 HTTP/2 作为其传输协议，并支持多种语言。而 MQTT 是为低带宽和不可靠的网络设计的轻量级发布/订阅消息传输协议。
+1. **Diversity and Complexity**: Each seven-layer protocol has its specific design and workings. For example, gRPC utilizes HTTP/2 as its transport protocol and supports multiple languages, while MQTT is a lightweight publish/subscribe messaging transport protocol designed for low-bandwidth and unreliable networks.
 
-2. **动态性**：许多七层协议都是动态的，这意味着它们的行为可能会根据网络条件、应用需求或其他因素而变化。
+2. **Dynamism**: Many seven-layer protocols are dynamic, meaning their behavior can change based on network conditions, application requirements, or other factors.
 
-3. **加密和安全性**：随着安全意识的增强，许多七层协议都采用了加密技术，如 TLS/SSL。这为追踪和分析带来了额外的挑战，因为需要解密流量才能进行深入的分析。
+3. **Encryption and Security**: With increased security awareness, many seven-layer protocols employ encryption technologies such as TLS/SSL. This introduces additional challenges for tracking and analysis, as decrypting traffic is required for in-depth examination.
 
-4. **高性能需求**：在高流量的生产环境中，捕获和分析七层协议的流量可能会对系统性能产生影响。传统的网络监控工具可能无法处理大量的并发会话。
+4. **High-Performance Requirements**: In high-traffic production environments, capturing and analyzing traffic for seven-layer protocols can impact system performance. Traditional network monitoring tools may struggle to handle a large number of concurrent sessions.
 
-5. **数据的完整性和连续性**：与 tcpdump 这样的工具只捕获单独的数据包不同，追踪七层协议需要捕获完整的会话，这可能涉及多个数据包。这要求工具能够正确地重组和解析这些数据包，以提供连续的会话视图。
+5. **Data Completeness and Continuity**: Unlike tools like tcpdump, which capture individual packets, tracking seven-layer protocols requires capturing complete sessions, which may involve multiple packets. This necessitates tools capable of correctly reassembling and parsing these packets to provide a continuous session view.
 
-6. **代码侵入性**：为了深入了解七层协议的行为，开发人员可能需要修改应用程序代码以添加监控功能。这不仅增加了开发和维护的复杂性，而且可能会影响应用程序的性能。
+6. **Code Intrusiveness**: To gain deeper insights into the behavior of seven-layer protocols, developers may need to modify application code to add monitoring functionalities. This not only increases development and maintenance complexity but can also impact application performance.
 
-正如上文所述，eBPF 提供了一个强大的解决方案，允许我们在内核层面捕获和分析七层协议的流量，而无需对应用程序进行任何修改。这种方法为我们提供了一个独特的机会，可以更简单、更高效地处理应用层流量，特别是在微服务和分布式环境中。
+As mentioned earlier, eBPF provides a powerful solution, allowing us to capture and analyze seven-layer protocol traffic in the kernel layer without modifying application code. This approach not only offers insights into system behavior but also ensures optimal performance and efficiency. This is why eBPF has become the preferred technology for modern observability tools, especially in production environments that demand high performance and low latency.
 
-在处理网络流量和系统行为时，选择在内核态而非用户态进行处理有其独特的优势。首先，内核态处理可以直接访问系统资源和硬件，从而提供更高的性能和效率。其次，由于内核是操作系统的核心部分，它可以提供对系统行为的全面视图，而不受任何用户空间应用程序的限制。
-
-**无插桩追踪（"zero-instrumentation observability"）**的优势如下：
-
-1. **性能开销小**：由于不需要修改或添加额外的代码到应用程序中，所以对性能的影响最小化。
-2. **透明性**：开发者和运维人员不需要知道应用程序的内部工作原理，也不需要访问源代码。
-3. **灵活性**：可以轻松地在不同的环境和应用程序中部署和使用，无需进行任何特定的配置或修改。
-4. **安全性**：由于不需要修改应用程序代码，所以降低了引入潜在安全漏洞的风险。
-
-利用 eBPF 在内核态进行无插桩追踪，我们可以实时捕获和分析系统的行为，而不需要对应用程序进行任何修改。这种方法不仅提供了对系统深入的洞察力，而且确保了最佳的性能和效率。这是为什么 eBPF 成为现代可观测性工具的首选技术，特别是在需要高性能和低延迟的生产环境中。
-
-## eBPF 中的 socket filter 与 syscall 追踪：深入解析与比较
+## eBPF Socket Filter vs. Syscall Tracing: In-Depth Analysis and Comparison
 
 ### **eBPF Socket Filter**
 
-**是什么？**
-eBPF socket filter 是经典的 Berkeley Packet Filter (BPF) 的扩展，允许在内核中直接进行更高级的数据包过滤。它在套接字层操作，使得可以精细地控制哪些数据包被用户空间应用程序处理。
+**What Is It?**
+eBPF socket filter is an extension of the classic Berkeley Packet Filter (BPF) that allows for more advanced packet filtering directly within the kernel. It operates at the socket layer, enabling fine-grained control over which packets are processed by user-space applications.
 
-**主要特点：**
+**Key Features:**
 
-- **性能**：通过在内核中直接处理数据包，eBPF socket filters 减少了用户和内核空间之间的上下文切换的开销。
-- **灵活性**：eBPF socket filters 可以附加到任何套接字，为各种协议和套接字类型提供了通用的数据包过滤机制。
-- **可编程性**：开发者可以编写自定义的 eBPF 程序来定义复杂的过滤逻辑，超越简单的数据包匹配。
+- **Performance**: By handling packets directly within the kernel, eBPF socket filters reduce the overhead of context switches between user and kernel spaces.
+- **Flexibility**: eBPF socket filters can be attached to any socket, providing a universal packet filtering mechanism for various protocols and socket types.
+- **Programmability**: Developers can write custom eBPF programs to define complex filtering logic beyond simple packet matching.
 
-**用途：**
+**Use Cases:**
 
-- **流量控制**：根据自定义条件限制或优先处理流量。
-- **安全性**：在它们到达用户空间应用程序之前丢弃恶意数据包。
-- **监控**：捕获特定数据包进行分析，而不影响其它流量。
+- **Traffic Control**: Restrict or prioritize traffic based on custom conditions.
+- **Security**: Discard malicious packets before they reach user-space applications.
+- **Monitoring**: Capture specific packets for analysis without affecting other traffic.
 
 ### **eBPF Syscall Tracing**
 
-**是什么？**
-使用 eBPF 进行的系统调用跟踪允许监视和操作应用程序发出的系统调用。系统调用是用户空间应用程序与内核交互的主要机制，因此跟踪它们可以深入了解应用程序的行为。
+**What Is It?**
+System call tracing using eBPF allows monitoring and manipulation of system calls made by applications. System calls are the primary mechanism through which user-space applications interact with the kernel, making tracing them a valuable way to understand application behavior.
 
-**主要特点：**
+**Key Features:**
 
-- **粒度**：eBPF 允许跟踪特定的系统调用，甚至是这些系统调用中的特定参数。
-- **低开销**：与其他跟踪方法相比，eBPF 系统调用跟踪旨在具有最小的性能影响。
-- **安全性**：内核验证 eBPF 程序，以确保它们不会损害系统稳定性。
+- **Granularity**: eBPF allows tracing specific system calls, even specific parameters within those system calls.
+- **Low Overhead**: Compared to other tracing methods, eBPF syscall tracing is designed to have minimal performance impact.
+- **Security**: Kernel validates eBPF programs to ensure they do not compromise system stability.
 
-**工作原理：**
-eBPF 系统调用跟踪通常涉及将 eBPF 程序附加到与系统调用相关的 tracepoints 或 kprobes。当跟踪的系统调用被调用时，执行 eBPF 程序，允许收集数据或甚至修改系统调用参数。
+**How It Works:**
+eBPF syscall tracing typically involves attaching eBPF programs to tracepoints or kprobes related to the system calls being traced. When the traced system call is invoked, the eBPF program is executed, allowing data collection or even modification of system call parameters.
 
-### eBPF 的 socket filter 和 syscall 追踪的对比
+### Comparison of eBPF Socket Filter and Syscall Tracing
 
-| 项目 | eBPF Socket Filter | eBPF Syscall Tracing |
-|------|--------------------|----------------------|
-| **操作层** | 套接字层，主要处理从套接字接收或发送的网络数据包 | 系统调用层，监视和可能更改应用程序发出的系统调用的行为 |
-| **主要用途** | 主要用于网络数据包的过滤、监控和操作 | 用于性能分析、安全监控和系统调用交互的调试 |
-| **粒度** | 专注于单个网络数据包 | 可以监视与网络无关的广泛的系统活动 |
-| **追踪 HTTP 流量** | 可以用于过滤和捕获通过套接字传递的 HTTP 数据包 | 可以跟踪与网络操作相关的系统调用 |
+| Aspect | eBPF Socket Filter | eBPF Syscall Tracing |
+| ------ | ------------------- | --------------------- |
+| **Operational Layer** | Socket layer, primarily dealing with network packets received from or sent to sockets. | System call layer, monitoring and potentially altering the behavior of system calls made by applications. |
+| **Primary Use Cases** | Mainly used for filtering, monitoring, and manipulation of network packets. | Used for performance analysis, security monitoring, and debugging of interactions with the network. |
+| **Granularity** | Focuses on individual network packets. | Can monitor a wide range of system activities, including those unrelated to networking. |
+| **Tracking HTTP Traffic** | Can be used to filter and capture HTTP packets passed through sockets. | Can trace system calls associated with networking operations, which may include HTTP traffic. |
 
-总之，eBPF 的 socket filter 和 syscall 追踪都可以用于追踪 HTTP 流量，但 socket filters 更直接且更适合此目的。然而，如果您对应用程序如何与系统交互的更广泛的上下文感兴趣（例如，哪些系统调用导致了 HTTP 流量），那么系统调用跟踪将是非常有价值的。在许多高级的可观察性设置中，这两种工具可能会同时使用，以提供系统和网络行为的全面视图。
+In summary, both eBPF socket filters and syscall tracing can be used to trace HTTP traffic, but socket filters are more direct and suitable for this purpose. However, if you are interested in the broader context of how an application interacts with the system (e.g., which system calls lead to HTTP traffic), syscall tracing can be highly valuable. In many advanced observability setups, both tools may be used simultaneously to provide a comprehensive view of system and network behavior.
 
-## 使用 eBPF socket filter 来捕获 HTTP 流量
+## Capturing HTTP Traffic with eBPF Socket Filter
 
-eBPF 代码由用户态和内核态组成，这里主要关注于内核态代码。这是使用 eBPF socket filter 技术来在内核中捕获HTTP流量的主要逻辑，完整代码如下：
+eBPF code consists of user-space and kernel-space components, and here we primarily focus on the kernel-space code. Below is the main logic for capturing HTTP traffic in the kernel using eBPF socket filter technology, and the complete code is provided:
 
 ```c
 SEC("socket")
@@ -185,7 +174,7 @@ int socket_handler(struct __sk_buff *skb)
 }
 ```
 
-当分析这段eBPF程序时，我们将按照每个代码块的内容来详细解释，并提供相关的背景知识：
+When analyzing this eBPF program, we will explain it in detail according to the content of each code block and provide relevant background knowledge:
 
 ```c
 SEC("socket")
@@ -195,7 +184,7 @@ int socket_handler(struct __sk_buff *skb)
 }
 ```
 
-这是eBPF程序的入口点，它定义了一个名为 `socket_handler` 的函数，它会被内核用于处理传入的网络数据包。这个函数位于一个名为 `socket` 的 eBPF 节（section）中，表明这个程序用于套接字处理。
+This is the entry point of the eBPF program, defining a function named `socket_handler` that the kernel uses to handle incoming network packets. This function is located in an eBPF section named `socket`, indicating that it is intended for socket handling.
 
 ```c
 struct so_event *e;
@@ -210,15 +199,15 @@ __u32 payload_length = 0;
 __u8 hdr_len;
 ```
 
-在这个代码块中，我们定义了一些变量来存储在处理数据包时需要的信息。这些变量包括了`struct so_event *e`用于存储事件信息，`verlen`、`proto`、`nhoff`、`ip_proto`、`tcp_hdr_len`、`tlen`、`payload_offset`、`payload_length`、`hdr_len`等用于存储数据包信息的变量。
+In this code block, several variables are defined to store information needed during packet processing. These variables include `struct so_event *e` for storing event information, `verlen`, `proto`, `nhoff`, `ip_proto`, `tcp_hdr_len`, `tlen`, `payload_offset`, `payload_length`, and `hdr_len` for storing packet information.
 
-- `struct so_event *e;`：这是一个指向`so_event`结构体的指针，用于存储捕获到的事件信息。该结构体的具体定义在程序的其他部分。
-- `__u8 verlen;`、`__u16 proto;`、`__u32 nhoff = ETH_HLEN;`：这些变量用于存储各种信息，例如协议类型、数据包偏移量等。`nhoff`初始化为以太网帧头部的长度，通常为14字节，因为以太网帧头部包括目标MAC地址、源MAC地址和帧类型字段。
-- `__u32 ip_proto = 0;`：这个变量用于存储IP协议的类型，初始化为0。
-- `__u32 tcp_hdr_len = 0;`：这个变量用于存储TCP头部的长度，初始化为0。
-- `__u16 tlen;`：这个变量用于存储IP数据包的总长度。
-- `__u32 payload_offset = 0;`、`__u32 payload_length = 0;`：这两个变量用于存储HTTP请求的载荷（payload）的偏移量和长度。
-- `__u8 hdr_len;`：这个变量用于存储IP头部的长度。
+- `struct so_event *e;`: This is a pointer to the `so_event` structure for storing captured event information. The specific definition of this structure is located elsewhere in the program.
+- `__u8 verlen;`, `__u16 proto;`, `__u32 nhoff = ETH_HLEN;`: These variables are used to store various pieces of information, such as protocol types, packet offsets, etc. `nhoff` is initialized to the length of the Ethernet frame header, typically 14 bytes, as Ethernet frame headers include destination MAC address, source MAC address, and frame type fields.
+- `__u32 ip_proto = 0;`: This variable is used to store the type of the IP protocol and is initialized to 0.
+- `__u32 tcp_hdr_len = 0;`: This variable is used to store the length of the TCP header and is initialized to 0.
+- `__u16 tlen;`: This variable is used to store the total length of the IP packet.
+- `__u32 payload_offset = 0;`, `__u32 payload_length = 0;`: These two variables are used to store the offset and length of the HTTP request payload.
+- `__u8 hdr_len;`: This variable is used to store the length of the IP header.
 
 ```c
 bpf_skb_load_bytes(skb, 12, &proto, 2);
@@ -227,20 +216,20 @@ if (proto != ETH_P_IP)
     return 0;
 ```
 
-在这里，代码从数据包中加载了以太网帧的类型字段，这个字段告诉我们数据包使用的网络层协议。然后，使用`__bpf_ntohs`函数将网络字节序的类型字段转换为主机字节序。接下来，代码检查类型字段是否等于IPv4的以太网帧类型（0x0800）。如果不等于，说明这个数据包不是IPv4数据包，直接返回0，放弃处理。
+Here, the code loads the Ethernet frame type field from the packet, which tells us the network layer protocol being used in the packet. It then uses the `__bpf_ntohs` function to convert the network byte order type field into host byte order. Next, the code checks if the type field is not equal to the Ethernet frame type for IPv4 (0x0800). If it's not equal, it means the packet is not an IPv4 packet, and the function returns 0, indicating that the packet should not be processed.
 
-这里需要了解以下几个概念：
+Key concepts to understand here:
 
-- 以太网帧（Ethernet Frame）：是数据链路层（第二层）的协议，用于在局域网中传输数据帧。以太网帧通常包括目标MAC地址、源MAC地址和帧类型字段。
-- 网络字节序（Network Byte Order）：网络协议通常使用大端字节序（Big-Endian）来表示数据。因此，需要将从网络中接收到的数据转换为主机字节序，以便在主机上正确解释数据。
-- IPv4帧类型（ETH_P_IP）：表示以太网帧中包含的协议类型字段，0x0800表示IPv4。
+- Ethernet Frame: The Ethernet frame is a data link layer (Layer 2) protocol used for transmitting data frames within a local area network (LAN). Ethernet frames typically include destination MAC address, source MAC address, and frame type fields.
+- Network Byte Order: Network protocols often use big-endian byte order to represent data. Therefore, data received from the network needs to be converted into host byte order for proper interpretation on the host. Here, the type field from the network is converted to host byte order for further processing.
+- IPv4 Frame Type (ETH_P_IP): This represents the frame type field in the Ethernet frame, where 0x0800 indicates IPv4.
 
 ```c
 if (ip_is_fragment(skb, nhoff))
     return 0;
 ```
 
-这一部分的代码检查是否处理IP分片。IP分片是将较大的IP数据包分割成多个小片段以进行传输的机制。在这里，如果数据包是IP分片，则直接返回0，表示不处理分片，只处理完整的数据包。
+This part of the code checks if IP fragmentation is being handled. IP fragmentation is a mechanism for splitting larger IP packets into multiple smaller fragments for transmission. Here, if the packet is an IP fragment, the function returns 0, indicating that only complete packets will be processed.
 
 ```c
 static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
@@ -253,31 +242,33 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 }
 ```
 
-上述代码是一个辅助函数，用于检查传入的IPv4数据包是否为IP分片。IP分片是一种机制，当IP数据包的大小超过了网络的最大传输单元（MTU），路由器会将其分割成多个较小的片段，以便在网络上进行传输。这个函数的目的是检查数据包的分片标志（Fragmentation Flag）以及片偏移（Fragment Offset）字段，以确定是否为分片。
+The above code is a helper function used to check if the incoming IPv4 packet is an IP fragment. IP fragmentation is a mechanism where, if the size of an IP packet exceeds the Maximum Transmission Unit (MTU) of the network, routers split it into smaller fragments for transmission across the network. The purpose of this function is to examine the fragment flags and fragment offset fields within the packet to determine if it is a fragment.
 
-下面是代码的逐行解释：
+Here's an explanation of the code line by line:
 
-1. `__u16 frag_off;`：定义一个16位无符号整数变量`frag_off`，用于存储片偏移字段的值。
-2. `bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);`：这行代码使用`bpf_skb_load_bytes`函数从数据包中加载IPv4头部的片偏移字段（`frag_off`），并加载2个字节。`nhoff`是IPv4头部在数据包中的偏移量，`offsetof(struct iphdr, frag_off)`用于计算片偏移字段在IPv4头部中的偏移量。
-3. `frag_off = __bpf_ntohs(frag_off);`：将加载的片偏移字段从网络字节序（Big-Endian）转换为主机字节序。网络协议通常使用大端字节序表示数据，而主机可能使用大端或小端字节序。这里将片偏移字段转换为主机字节序，以便进一步处理。
-4. `return frag_off & (IP_MF | IP_OFFSET);`：这行代码通过使用位运算检查片偏移字段的值，以确定是否为IP分片。具体来说，它使用位与运算符`&`将片偏移字段与两个标志位进行位与运算：
-   - `IP_MF`：表示"更多分片"标志（More Fragments）。如果这个标志位被设置为1，表示数据包是分片的一部分，还有更多分片。
-   - `IP_OFFSET`：表示片偏移字段。如果片偏移字段不为0，表示数据包是分片的一部分，且具有片偏移值。
-   如果这两个标志位中的任何一个被设置为1，那么结果就不为零，说明数据包是IP分片。如果都为零，说明数据包不是分片。
+1. `__u16 frag_off;`: Defines a 16-bit unsigned integer variable `frag_off` to store the fragment offset field.
+2. `bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);`: This line of code uses the `bpf_skb_load_bytes` function to load the fragment offset field from the packet. `nhoff` is the offset of the IP header within the packet, and `offsetof(struct iphdr, frag_off)` calculates the offset of the fragment offset field within the IPv4 header.
+3. `frag_off = __bpf_ntohs(frag_off);`: Converts the loaded fragment offset field from network byte order (big-endian) to host byte order. Network protocols typically use big-endian to represent data, and the conversion to host byte order is done for further processing.
+4. `return frag_off & (IP_MF | IP_OFFSET);`: This line of code checks the value of the fragment offset field using a bitwise AND operation with two flag values:
+   - `IP_MF`: Represents the "More Fragments" flag. If this flag is set to 1, it indicates that the packet is part of a fragmented sequence and more fragments are expected.
+   - `IP_OFFSET`: Represents the fragment offset field. If the fragment offset field is non-zero, it indicates that the packet is part of a fragmented sequence and has a fragment offset value.
+   If either of these flags is set to 1, the result is non-zero, indicating that the packet is an IP fragment. If both flags are 0, it means the packet is not fragmented.
 
-需要注意的是，IP头部的片偏移字段以8字节为单位，所以实际的片偏移值需要左移3位来得到字节偏移。此外，IP头部的"更多分片"标志（IP_MF）表示数据包是否有更多的分片，通常与片偏移字段一起使用来指示整个数据包的分片情况。这个函数只关心这两个标志位，如果其中一个标志被设置，就认为是IP分片。
+It's important to note that the fragment offset field in the IP header is specified in units of 8 bytes, so the actual byte offset is obtained by left-shifting the value by 3 bits. Additionally, the "More Fragments" flag (IP_MF) in the IP header indicates whether there are more fragments in the sequence and is typically used in conjunction with the fragment offset field to indicate the status of fragmented packets.
 
 ```c
-bpf_skb_load_bytes(skb, ETH_HLEN, &hdr_len, sizeof(hdr_len));
+bpf_skb_load_bytes(skb, ETH_HLEN, &
+
+hdr_len, sizeof(hdr_len));
 hdr_len &= 0x0f;
 hdr_len *= 4;
 ```
 
-这一部分的代码从数据包中加载IP头部的长度字段。IP头部长度字段包含了IP头部的长度信息，以4字节为单位，需要将其转换为字节数。这里通过按位与和乘以4来进行转换。
+In this part of the code, the length of the IP header is loaded from the packet. The IP header length field contains information about the length of the IP header in units of 4 bytes, and it needs to be converted to bytes. Here, it is converted by performing a bitwise AND operation with 0x0f and then multiplying it by 4.
 
-需要了解：
+Key concept:
 
-- IP头部（IP Header）：IP头部包含了关于数据包的基本信息，如源IP地址、目标IP地址、协议类型和头部校验和等。头部长度字段（IHL，Header Length）表示IP头部的长度，以4字节为单位，通常为20字节（5个4字节的字）。
+- IP Header: The IP header contains fundamental information about a packet, such as the source IP address, destination IP address, protocol type, total length, identification, flags, fragment offset, time to live (TTL), checksum, source port, and destination port.
 
 ```c
 if (hdr_len < sizeof(struct iphdr))
@@ -286,13 +277,11 @@ if (hdr_len < sizeof(struct iphdr))
 }
 ```
 
-这段代码检查IP头部的长度是否满足最小长度要求，通常IP头部的最小长度是20字节。如果IP头部的长度小于20字节，说明数据包不完整或损坏，直接返回0，放弃处理。
+This code segment checks if the length of the IP header meets the minimum length requirement, typically 20 bytes. If the length of the IP header is less than 20 bytes, it indicates an incomplete or corrupted packet, and the function returns 0, indicating that the packet should not be processed.
 
-需要了解：
+Key concept:
 
-- `struct iphdr`：这是Linux内核中定义的结构体，表示IPv4头部的格式。它包括了版本、头部长度、服务类型、总长度、
-
-标识符、标志位、片偏移、生存时间、协议、头部校验和、源IP地址和目标IP地址等字段。
+- `struct iphdr`: This is a structure defined in the Linux kernel, representing the format of an IPv4 header. It includes fields such as version, header length, service type, total length, identification, flags, fragment offset, time to live, protocol, header checksum, source IP address, and destination IP address, among others.
 
 ```c
 bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &ip_proto, 1);
@@ -302,29 +291,29 @@ if (ip_proto != IPPROTO_TCP)
 }
 ```
 
-在这里，代码从数据包中加载IP头部中的协议字段，以确定数据包使用的传输层协议。然后，它检查协议字段是否为TCP协议（IPPROTO_TCP）。如果不是TCP协议，说明不是HTTP请求或响应，直接返回0。
+Here, the code loads the protocol field from the IP header to determine the transport layer protocol used in the packet. Then, it checks if the protocol field is not equal to the value for TCP (IPPROTO_TCP). If it's not TCP, it means the packet is not an HTTP request or response, and the function returns 0.
 
-需要了解：
+Key concept:
 
-- 传输层协议：IP头部中的协议字段指示了数据包所使用的传输层协议，例如TCP、UDP或ICMP。
+- Transport Layer Protocol: The protocol field in the IP header indicates the transport layer protocol used in the packet, such as TCP, UDP, or ICMP.
 
 ```c
 tcp_hdr_len = nhoff + hdr_len;
 ```
 
-这行代码计算了TCP头部的偏移量。它将以太网帧头部的长度（`nhoff`）与IP头部的长度（`hdr_len`）相加，得到TCP头部的起始位置。
+This line of code calculates the offset of the TCP header. It adds the length of the Ethernet frame header (`nhoff`) to the length of the IP header (`hdr_len`) to obtain the starting position of the TCP header.
 
 ```c
 bpf_skb_load_bytes(skb, nhoff + 0, &verlen, 1);
 ```
 
-这行代码从数据包中加载TCP头部的第一个字节，该字节包含了TCP头部长度信息。这个长度字段以4字节为单位，需要进行后续的转换。
+This line of code loads the first byte of the TCP header from the packet, which contains information about the TCP header length. This length field is specified in units of 4 bytes and requires further conversion.
 
 ```c
 bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, tot_len), &tlen, sizeof(tlen));
 ```
 
-这行代码从数据包中加载IP头部的总长度字段。IP头部总长度字段表示整个IP数据包的长度，包括IP头部和数据部分。
+This line of code loads the total length field of the IP header from the packet. The IP header's total length field represents the overall length of the IP packet, including both the IP header and the data portion.
 
 ```c
 __u8 doff;
@@ -334,22 +323,22 @@ doff >>= 4;
 doff *= 4;
 ```
 
-这段代码用于计算TCP头部的长度。它加载TCP头部中的数据偏移字段（Data Offset，也称为头部长度字段），该字段表示TCP头部的长度以4字节为单位。代码将偏移字段的高四位清零，然后将其右移4位，最后乘以4，得到TCP头部的实际长度。
+This piece of code is used to calculate the length of the TCP header. It loads the Data Offset field (also known as the Header Length field) from the TCP header, which represents the length of the TCP header in units of 4 bytes. The code clears the high four bits of the offset field, then shifts it right by 4 bits, and finally multiplies it by 4 to obtain the actual length of the TCP header.
 
-需要了解：
+Key points to understand:
 
-- TCP头部（TCP Header）：TCP头部包含了TCP协议相关的信息，如源端口、目标端口、序列号、确认号、标志位（如SYN、ACK、FIN等）、窗口大小和校验和等。
+- TCP Header: The TCP header contains information related to the TCP protocol, such as source port, destination port, sequence number, acknowledgment number, flags (e.g., SYN, ACK, FIN), window size, and checksum.
 
 ```c
 payload_offset = ETH_HLEN + hdr_len + doff;
 payload_length = __bpf_ntohs(tlen) - hdr_len - doff;
 ```
 
-这两行代码计算HTTP请求的载荷（payload）的偏移量和长度。它们将以太网帧头部长度、IP头部长度和TCP头部长度相加，得到HTTP请求的数据部分的偏移量，然后通过减去总长度、IP头部长度和TCP头部长度，计算出HTTP请求数据的长度。
+These two lines of code calculate the offset and length of the HTTP request payload. They add the lengths of the Ethernet frame header, IP header, and TCP header together to obtain the offset to the data portion of the HTTP request. Then, by subtracting the total length, IP header length, and TCP header length from the total length field, they calculate the length of the HTTP request data.
 
-需要了解：
+Key point:
 
-- HTTP请求载荷（Payload）：HTTP请求中包含的实际数据部分，通常是HTTP请求头和请求体。
+- HTTP Request Payload: The actual data portion included in an HTTP request, typically consisting of the HTTP request headers and request body.
 
 ```c
 char line_buffer[7];
@@ -361,7 +350,7 @@ bpf_skb_load_bytes(skb, payload_offset, line_buffer, 7);
 bpf_printk("%d len %d buffer: %s", payload_offset, payload_length, line_buffer);
 ```
 
-这部分代码用于加载HTTP请求行的前7个字节，存储在名为`line_buffer`的字符数组中。然后，它检查HTTP请求数据的长度是否小于7字节或偏移量是否为负数，如果满足这些条件，说明HTTP请求不完整，直接返回0。最后，它使用`bpf_printk`函数将HTTP请求行的内容打印到内核日志中，以供调试和分析。
+This portion of the code loads the first 7 bytes of the HTTP request line and stores them in a character array named `line_buffer`. It then checks if the length of the HTTP request data is less than 7 bytes or if the offset is negative. If these conditions are met, it indicates an incomplete HTTP request, and the function returns 0. Finally, it uses the `bpf_printk` function to print the content of the HTTP request line to the kernel log for debugging and analysis.
 
 ```c
 if (bpf_strncmp(line_buffer, 3, "GET") != 0 &&
@@ -374,9 +363,9 @@ if (bpf_strncmp(line_buffer, 3, "GET") != 0 &&
 }
 ```
 
-> 注意：bpf_strncmp 这个内核 helper 在 5.17 版本中才被引入，如果你的内核版本低于 5.17，可以手动匹配字符串来实现相同的功能。
+> Note: The `bpf_strncmp` function is a helper function available from kernel version 5.17. For earlier versions, you can manually write a function to compare strings.
 
-这段代码使用`bpf_strncmp`函数比较`line_buffer`中的数据与HTTP请求方法（GET、POST、PUT、DELETE、HTTP）是否匹配。如果不匹配，说明不是HTTP请求，直接返回0，放弃处理。
+This piece of code uses the `bpf_strncmp` function to compare the data in `line_buffer` with HTTP request methods (GET, POST, PUT, DELETE, HTTP). If there is no match, indicating that it is not an HTTP request, it returns 0, indicating that it should not be processed.
 
 ```c
 e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
@@ -384,11 +373,11 @@ if (!e)
     return 0;
 ```
 
-这部分代码尝试从BPF环形缓冲区中保留一块内存以存储事件信息。如果无法保留内存块，返回0。BPF环形缓冲区用于在eBPF程序和用户空间之间传递事件数据。
+This section of the code attempts to reserve a block of memory from the BPF ring buffer to store event information. If it cannot reserve the memory block, it returns 0. The BPF ring buffer is used to pass event data between the eBPF program and user space.
 
-需要了解：
+Key point:
 
-- BPF环形缓冲区：BPF环形缓冲区是一种在eBPF程序和用户空间之间传递数据的机制。它可以用来存储事件信息，以便用户空间应用程序进行进一步处理或分析。
+- BPF Ring Buffer: The BPF ring buffer is a mechanism for passing data between eBPF programs and user space. It can be used to store event information for further processing or analysis by user space applications.
 
 ```c
 e->ip_proto = ip_proto;
@@ -406,53 +395,51 @@ bpf_ringbuf_submit(e, 0);
 return skb->len;
 ```
 
-最后，这段代码将捕获到的事件信息存储在`e`结构体中，并将
+Finally, this code segment stores the captured event information in the `e` structure and submits it to the BPF ring buffer. It includes information such as the captured IP protocol, source and destination ports, packet type, interface index, payload length, source IP address, and destination IP address. Finally, it returns the length of the packet, indicating that the packet was successfully processed.
 
-其提交到BPF环形缓冲区。它包括了捕获的IP协议、源端口和目标端口、数据包类型、接口索引、载荷长度、源IP地址和目标IP地址等信息。最后，它返回数据包的长度，表示成功处理了数据包。
+This code is primarily used to store captured event information for further processing. The BPF ring buffer is used to pass this information to user space for additional handling or logging.
 
-这段代码主要用于将捕获的事件信息存储起来，以便后续的处理和分析。 BPF环形缓冲区用于将这些信息传递到用户空间，供用户空间应用程序进一步处理或记录。
+In summary, this eBPF program's main task is to capture HTTP requests. It accomplishes this by parsing the Ethernet frame, IP header, and TCP header of incoming packets to determine if they contain HTTP requests. Information about the requests is then stored in the `so_event` structure and submitted to the BPF ring buffer. This is an efficient method for capturing HTTP traffic at the kernel level and is suitable for applications such as network monitoring and security analysis.
 
-总结：这段eBPF程序的主要任务是捕获HTTP请求，它通过解析数据包的以太网帧、IP头部和TCP头部来确定数据包是否包含HTTP请求，并将有关请求的信息存储在`so_event`结构体中，然后提交到BPF环形缓冲区。这是一种高效的方法，可以在内核层面捕获HTTP流量，适用于网络监控和安全分析等应用。
+### Potential Limitations
 
-### 潜在缺陷
+The above code has some potential limitations, and one of the main limitations is that it cannot handle URLs that span multiple packets.
 
-上述代码也存在一些潜在的缺陷，其中一个主要缺陷是它无法处理跨多个数据包的URL。
+- Cross-Packet URLs: The code checks the URL in an HTTP request by parsing a single data packet. If the URL of an HTTP request spans multiple packets, it will only examine the URL in the first packet. This can lead to missing or partially capturing long URLs that span multiple data packets.
 
-- 跨包URL：代码中通过解析单个数据包来检查HTTP请求中的URL，如果HTTP请求的URL跨足够多的数据包，那么只会检查第一个数据包中的URL部分。这会导致丢失或部分记录那些跨多个数据包的长URL。
+To address this issue, a solution often involves reassembling multiple packets to reconstruct the complete HTTP request. This may require implementing packet caching and assembly logic within the eBPF program and waiting to collect all relevant packets until the HTTP request is detected. This adds complexity and may require additional memory to handle cases where URLs span multiple packets.
 
-解决这个问题的方法通常需要对多个数据包进行重新组装，以还原完整的HTTP请求。这可能需要在eBPF程序中实现数据包的缓存和组装逻辑，并在检测到HTTP请求结束之前等待并收集所有相关数据包。这需要更复杂的逻辑和额外的内存来处理跨多个数据包的情况。
+### User-Space Code
 
-### 用户态代码
-
-用户态代码的主要目的是创建一个原始套接字（raw socket），然后将先前在内核中定义的eBPF程序附加到该套接字上，从而允许eBPF程序捕获和处理从该套接字接收到的网络数据包,例如：
+The user-space code's main purpose is to create a raw socket and then attach the previously defined eBPF program in the kernel to that socket, allowing the eBPF program to capture and process network packets received on that socket. Here's an example of the user-space code:
 
 ```c
-    /* Create raw socket for localhost interface */
-    sock = open_raw_sock(interface);
-    if (sock < 0) {
-        err = -2;
-        fprintf(stderr, "Failed to open raw socket\n");
-        goto cleanup;
-    }
+/* Create raw socket for localhost interface */
+sock = open_raw_sock(interface);
+if (sock < 0) {
+    err = -2;
+    fprintf(stderr, "Failed to open raw socket\n");
+    goto cleanup;
+}
 
-    /* Attach BPF program to raw socket */
-    prog_fd = bpf_program__fd(skel->progs.socket_handler);
-    if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd))) {
-        err = -3;
-        fprintf(stderr, "Failed to attach to raw socket\n");
-        goto cleanup;
-    }
+/* Attach BPF program to raw socket */
+prog_fd = bpf_program__fd(skel->progs.socket_handler);
+if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd))) {
+    err = -3;
+    fprintf(stderr, "Failed to attach to raw socket\n");
+    goto cleanup;
+}
 ```
 
-1. `sock = open_raw_sock(interface);`：这行代码调用了一个自定义的函数`open_raw_sock`，该函数用于创建一个原始套接字。原始套接字允许用户态应用程序直接处理网络数据包，而不经过协议栈的处理。函数`open_raw_sock`可能需要一个参数 `interface`，用于指定网络接口，以便确定从哪个接口接收数据包。如果创建套接字失败，它将返回一个负数，否则返回套接字的文件描述符`sock`。
-2. 如果`sock`的值小于0，表示打开原始套接字失败，那么将`err`设置为-2，并在标准错误流上输出一条错误信息。
-3. `prog_fd = bpf_program__fd(skel->progs.socket_handler);`：这行代码获取之前在eBPF程序定义中的套接字过滤器程序（`socket_handler`）的文件描述符，以便后续将它附加到套接字上。`skel`是一个eBPF程序对象的指针，可以通过它来访问程序集合。
-4. `setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd))`：这行代码使用`setsockopt`系统调用将eBPF程序附加到原始套接字。它设置了`SO_ATTACH_BPF`选项，将eBPF程序的文件描述符传递给该选项，以便内核知道要将哪个eBPF程序应用于这个套接字。如果附加成功，套接字将开始捕获和处理从中接收到的网络数据包。
-5. 如果`setsockopt`失败，它将`err`设置为-3，并在标准错误流上输出一条错误信息。
+1. `sock = open_raw_sock(interface);`: This line of code calls a custom function `open_raw_sock`, which is used to create a raw socket. Raw sockets allow a user-space application to handle network packets directly without going through the protocol stack. The `interface` parameter might specify the network interface from which to receive packets, determining where to capture packets from. If creating the socket fails, it returns a negative value, otherwise, it returns the file descriptor of the socket `sock`.
+2. If the value of `sock` is less than 0, indicating a failure to open the raw socket, it sets `err` to -2 and prints an error message on the standard error stream.
+3. `prog_fd = bpf_program__fd(skel->progs.socket_handler);`: This line of code retrieves the file descriptor of the socket filter program (`socket_handler`) previously defined in the eBPF program. It is necessary to attach this program to the socket. `skel` is a pointer to an eBPF program object, and it provides access to the program collection.
+4. `setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd))`: This line of code uses the `setsockopt` system call to attach the eBPF program to the raw socket. It sets the `SO_ATTACH_BPF` option and passes the file descriptor of the eBPF program to the option, letting the kernel know which eBPF program to apply to this socket. If the attachment is successful, the socket starts capturing and processing network packets received on it.
+5. If `setsockopt` fails, it sets `err` to -3 and prints an error message on the standard error stream.
 
-### 编译运行
+### Compilation and Execution
 
-完整的源代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/> 编译运行上述代码：
+The complete source code can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http>. To compile and run the code:
 
 ```console
 $ git submodule update --init --recursive
@@ -465,7 +452,7 @@ $ sudo ./sockfilter
 ...
 ```
 
-在另外一个窗口中，使用 python 启动一个简单的 web server：
+In another terminal, start a simple web server using Python:
 
 ```console
 python3 -m http.server
@@ -473,7 +460,7 @@ Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
 127.0.0.1 - - [18/Sep/2023 01:05:52] "GET / HTTP/1.1" 200 -
 ```
 
-可以使用 curl 发起请求：
+You can use `curl` to make requests:
 
 ```c
 $ curl http://0.0.0.0:8000/
@@ -485,7 +472,7 @@ $ curl http://0.0.0.0:8000/
 ....
 ```
 
-在 eBPF 程序中，可以看到打印出了 HTTP 请求的内容：
+In the eBPF program, you can see that it prints the content of HTTP requests:
 
 ```console
 127.0.0.1:34552(src) -> 127.0.0.1:8000(dst)
@@ -499,11 +486,11 @@ Server: SimpleHTTP/0.6 Python/3.11.4
 ...
 ```
 
-分别包含了请求和响应的内容。
+It captures both request and response content.
 
-## 使用 eBPF syscall tracepoint 来捕获 HTTP 流量
+## Capturing HTTP Traffic Using eBPF Syscall Tracepoints
 
-eBPF 提供了一种强大的机制，允许我们在内核级别追踪系统调用。在这个示例中，我们将使用 eBPF 追踪 accept 和 read 系统调用，以捕获 HTTP 流量。由于篇幅有限，这里我们仅仅对代码框架做简要的介绍。
+eBPF provides a powerful mechanism for tracing system calls at the kernel level. In this example, we'll use eBPF to trace the `accept` and `read` system calls to capture HTTP traffic. Due to space limitations, we'll provide a brief overview of the code framework.
 
 ```c
 struct
@@ -514,24 +501,24 @@ struct
     __type(value, struct accept_args_t);
 } active_accept_args_map SEC(".maps");
 
-// 定义在 accept 系统调用入口的追踪点
+// Define a tracepoint at the entry of the accept system call
 SEC("tracepoint/syscalls/sys_enter_accept")
 int sys_enter_accept(struct trace_event_raw_sys_enter *ctx)
 {
     u64 id = bpf_get_current_pid_tgid();
-    // ... 获取和存储 accept 调用的参数
+    // ... Get and store the arguments of the accept call
     bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
     return 0;
 }
 
-// 定义在 accept 系统调用退出的追踪点
+// Define a tracepoint at the exit of the accept system call
 SEC("tracepoint/syscalls/sys_exit_accept")
 int sys_exit_accept(struct trace_event_raw_sys_exit *ctx)
 {
-    // ... 处理 accept 调用的结果
+    // ... Process the result of the accept call
     struct accept_args_t *args =
         bpf_map_lookup_elem(&active_accept_args_map, &id);
-    // ... 获取和存储 accept 调用获得的 socket 文件描述符
+    // ... Get and store the socket file descriptor obtained from the accept call
     __u64 pid_fd = ((__u64)pid << 32) | (u32)ret_fd;
     bpf_map_update_elem(&conn_info_map, &pid_fd, &conn_info, BPF_ANY);
     // ...
@@ -545,26 +532,26 @@ struct
     __type(value, struct data_args_t);
 } active_read_args_map SEC(".maps");
 
-// 定义在 read 系统调用入口的追踪点
+// Define a tracepoint at the entry of the read system call
 SEC("tracepoint/syscalls/sys_enter_read")
 int sys_enter_read(struct trace_event_raw_sys_enter *ctx)
 {
-    // ... 获取和存储 read 调用的参数
+    // ... Get and store the arguments of the read call
     bpf_map_update_elem(&active_read_args_map, &id, &read_args, BPF_ANY);
     return 0;
 }
 
-// 辅助函数，检查是否为 HTTP 连接
+// Helper function to check if it's an HTTP connection
 static inline bool is_http_connection(const char *line_buffer, u64 bytes_count)
 {
-    // ... 检查数据是否为 HTTP 请求或响应
+    // ... Check if the data is an HTTP request or response
 }
 
-// 辅助函数，处理读取的数据
+// Helper function to process the read data
 static inline void process_data(struct trace_event_raw_sys_exit *ctx,
                                 u64 id, const struct data_args_t *args, u64 bytes_count)
 {
-    // ... 处理读取的数据，检查是否为 HTTP 流量，并发送事件
+    // ... Process the read data, check if it's HTTP traffic, and send events
     if (is_http_connection(line_buffer, bytes_count))
     {
         // ...
@@ -575,11 +562,11 @@ static inline void process_data(struct trace_event_raw_sys_exit *ctx,
     }
 }
 
-// 定义在 read 系统调用退出的追踪点
+// Define a tracepoint at the exit of the read system call
 SEC("tracepoint/syscalls/sys_exit_read")
 int sys_exit_read(struct trace_event_raw_sys_exit *ctx)
 {
-    // ... 处理 read 调用的结果
+    // ... Process the result of the read call
     struct data_args_t *read_args = bpf_map_lookup_elem(&active_read_args_map, &id);
     if (read_args != NULL)
     {
@@ -592,61 +579,61 @@ int sys_exit_read(struct trace_event_raw_sys_exit *ctx)
 char _license[] SEC("license") = "GPL";
 ```
 
-这段代码简要展示了如何使用eBPF追踪Linux内核中的系统调用来捕获HTTP流量。以下是对代码的hook位置和流程的详细解释，以及需要hook哪些系统调用来实现完整的请求追踪：
+This code briefly demonstrates how to use eBPF to trace system calls in the Linux kernel to capture HTTP traffic. Here's a detailed explanation of the hook locations and the flow, as well as the complete set of system calls that need to be hooked for comprehensive request tracing:
 
-### **Hook 位置和流程**
+### Hook Locations and Flow
 
-- 该代码使用了eBPF的Tracepoint功能，具体来说，它定义了一系列的eBPF程序，并将它们绑定到了特定的系统调用的Tracepoint上，以捕获这些系统调用的入口和退出事件。
+- The code uses eBPF Tracepoint functionality. Specifically, it defines a series of eBPF programs and binds them to specific system call Tracepoints to capture entry and exit events of these system calls.
 
-- 首先，它定义了两个eBPF哈希映射（`active_accept_args_map`和`active_read_args_map`）来存储系统调用参数。这些映射用于跟踪`accept`和`read`系统调用。
+- First, it defines two eBPF hash maps (`active_accept_args_map` and `active_read_args_map`) to store system call parameters. These maps are used to track `accept` and `read` system calls.
 
-- 接着，它定义了多个Tracepoint追踪程序，其中包括：
-  - `sys_enter_accept`：定义在`accept`系统调用的入口处，用于捕获`accept`系统调用的参数，并将它们存储在哈希映射中。
-  - `sys_exit_accept`：定义在`accept`系统调用的退出处，用于处理`accept`系统调用的结果，包括获取和存储新的套接字文件描述符以及建立连接的相关信息。
-  - `sys_enter_read`：定义在`read`系统调用的入口处，用于捕获`read`系统调用的参数，并将它们存储在哈希映射中。
-  - `sys_exit_read`：定义在`read`系统调用的退出处，用于处理`read`系统调用的结果，包括检查读取的数据是否为HTTP流量，如果是，则发送事件。
+- Next, it defines multiple Tracepoint tracing programs, including:
+  - `sys_enter_accept`: Defined at the entry of the `accept` system call, used to capture the arguments of the `accept` system call and store them in the hash map.
+  - `sys_exit_accept`: Defined at the exit of the `accept` system call, used to process the result of the `accept` system call, including obtaining and storing the new socket file descriptor and related connection information.
+  - `sys_enter_read`: Defined at the entry of the `read` system call, used to capture the arguments of the `read` system call and store them in the hash map.
+  - `sys_exit_read`: Defined at the exit of the `read` system call, used to process the result of the `read` system call, including checking if the read data is HTTP traffic and sending events.
 
-- 在`sys_exit_accept`和`sys_exit_read`中，还涉及一些数据处理和事件发送的逻辑，例如检查数据是否为HTTP连接，组装事件数据，并使用`bpf_perf_event_output`将事件发送到用户空间供进一步处理。
+- In `sys_exit_accept` and `sys_exit_read`, there is also some data processing and event sending logic, such as checking if the data is an HTTP connection, assembling event data, and using `bpf_perf_event_output` to send events to user space for further processing.
 
-### **需要 Hook 的完整系统调用**
+### Complete Set of System Calls to Hook
 
-要实现完整的HTTP请求追踪，通常需要hook的系统调用包括：
+To fully implement HTTP request tracing, the system calls that typically need to be hooked include:
 
-- `socket`：用于捕获套接字创建，以追踪新的连接。
-- `bind`：用于获取绑定的端口信息。
-- `listen`：用于开始监听连接请求。
-- `accept`：用于接受连接请求，获取新的套接字文件描述符。
-- `read`：用于捕获接收到的数据，以检查其中是否包含 HTTP 请求。
-- `write`：用于捕获发送的数据，以检查其中是否包含 HTTP 响应。
+- `socket`: Used to capture socket creation for tracking new connections.
+- `bind`: Used to obtain port information where the socket is bound.
+- `listen`: Used to start listening for connection requests.
+- `accept`: Used to accept connection requests and obtain new socket file descriptors.
+- `read`: Used to capture received data and check if it contains HTTP requests.
+- `write`: Used to capture sent data and check if it contains HTTP responses.
 
-上述代码已经涵盖了`accept`和`read`系统调用的追踪。要完整实现HTTP请求的追踪，还需要hook其他系统调用，并实现相应的逻辑来处理这些系统调用的参数和结果。
+The provided code already covers the tracing of `accept` and `read` system calls. To complete HTTP request tracing, additional system calls need to be hooked, and corresponding logic needs to be implemented to handle the parameters and results of these system calls.
 
-完整的源代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http> 中找到。
+The complete source code can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http>.
 
-## 总结
+## Summary
 
-在当今复杂的技术环境中，系统的可观测性变得至关重要，特别是在微服务和云原生应用程序的背景下。本文探讨了如何利用eBPF技术来追踪七层协议，以及在这个过程中可能面临的挑战和解决方案。以下是对本文内容的总结：
+In today's complex technological landscape, system observability has become crucial, especially in the context of microservices and cloud-native applications. This article explores how to leverage eBPF technology for tracing the seven-layer protocols, along with the challenges and solutions that may arise in this process. Here's a summary of the content covered in this article:
 
-1. **背景介绍**：
-   - 现代应用程序通常由多个微服务和分布式组件组成，因此观测整个系统的行为至关重要。
-   - 七层协议（如HTTP、gRPC、MQTT等）提供了深入了解应用程序交互的详细信息，但监控这些协议通常具有挑战性。
+1. **Introduction**:
+   - Modern applications often consist of multiple microservices and distributed components, making it essential to observe the behavior of the entire system.
+   - Seven-layer protocols (such as HTTP, gRPC, MQTT, etc.) provide detailed insights into application interactions, but monitoring these protocols can be challenging.
 
-2. **eBPF技术的作用**：
-   - eBPF允许开发者在不修改或插入应用程序代码的情况下，深入内核层来实时观测和分析系统行为。
-   - eBPF技术为监控七层协议提供了一个强大的工具，特别适用于微服务环境。
+2. **Role of eBPF Technology**:
+   - eBPF allows developers to dive deep into the kernel layer for real-time observation and analysis of system behavior without modifying or inserting application code.
+   - eBPF technology offers a powerful tool for monitoring seven-layer protocols, especially in a microservices environment.
 
-3. **追踪七层协议**：
-   - 本文介绍了如何追踪HTTP等七层协议的挑战，包括协议的复杂性和动态性。
-   - 传统的网络监控工具难以应对七层协议的复杂性。
+3. **Tracing Seven-Layer Protocols**:
+   - The article discusses the challenges of tracing seven-layer protocols, including their complexity and dynamism.
+   - Traditional network monitoring tools struggle with the complexity of seven-layer protocols.
 
-4. **eBPF的应用**：
-   - eBPF提供两种主要方法来追踪七层协议：socket filter和syscall trace。
-   - 这两种方法可以帮助捕获HTTP等协议的网络请求数据，并分析它们。
+4. **Applications of eBPF**:
+   - eBPF provides two primary methods for tracing seven-layer protocols: socket filters and syscall tracing.
+   - Both of these methods help capture network request data for protocols like HTTP and analyze them.
 
-5. **eBPF实践教程**：
-   - 本文提供了一个实际的eBPF教程，演示如何使用eBPF socket filter或syscall trace来捕获和分析HTTP流量。
-   - 教程内容包括开发eBPF程序、使用eBPF工具链和实施HTTP请求的追踪。
+5. **eBPF Practical Tutorial**:
+   - The article provides a practical eBPF tutorial demonstrating how to capture and analyze HTTP traffic using eBPF socket filters or syscall tracing.
+   - The tutorial covers the development of eBPF programs, the use of the eBPF toolchain, and the implementation of HTTP request tracing.
 
-通过这篇文章，读者可以获得深入了解如何使用eBPF技术来追踪七层协议，尤其是HTTP流量的知识。这将有助于更好地监控和分析网络流量，从而提高应用程序性能和安全性。如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+Through this article, readers can gain a deep understanding of how to use eBPF technology for tracing seven-layer protocols, particularly HTTP traffic. This knowledge will help enhance the monitoring and analysis of network traffic, thereby improving application performance and security. If you're interested in learning more about eBPF and its practical applications, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
 
-> 原文地址：<https://eunomia.dev/zh/tutorials/23-http/> 转载请注明出处。
+> The original link of this article: <https://eunomia.dev/tutorials/23-http>

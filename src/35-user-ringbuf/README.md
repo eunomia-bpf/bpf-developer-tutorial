@@ -1,42 +1,42 @@
-# eBPF开发实践：使用 user ring buffer 向内核异步发送信息
+# eBPF Development Practices: Asynchronously Send to Kernel with User Ring Buffer
 
-eBPF，即扩展的Berkeley包过滤器（Extended Berkeley Packet Filter），是Linux内核中的一种革命性技术，它允许开发者在内核态中运行自定义的“微程序”，从而在不修改内核代码的情况下改变系统行为或收集系统细粒度的性能数据。
+eBPF, or Extended Berkeley Packet Filter, is a revolutionary technology in the Linux kernel that allows developers to run custom "micro programs" in kernel mode, thereby changing system behavior or collecting fine-grained performance data without modifying kernel code.
 
-eBPF的一个独特之处是它不仅可以在内核态运行程序，从而访问系统底层的状态和资源，同时也可以通过特殊的数据结构与用户态程序进行通信。关于这方面的一个重要概念就是内核态和用户态之间的环形队列——ring buffer。在许多实时或高性能要求的应用中，环形队列是一种常用的数据结构。由于它的FIFO（先进先出）特性，使得数据在生产者和消费者之间可以持续、线性地流动，从而避免了频繁的IO操作和不必要的内存 reallocation开销。
+One unique aspect of eBPF is that it not only allows programs to run in kernel mode to access low-level system states and resources, but it can also communicate with user mode programs through special data structures. One important concept in this regard is the ring buffer between kernel mode and user mode. In many real-time or high-performance applications, the ring buffer is a commonly used data structure. Due to its FIFO (first in, first out) characteristics, data can flow continuously and linearly between the producer and the consumer, avoiding frequent IO operations and unnecessary memory reallocation overhead.
 
-在eBPF中，分别提供了两种环形队列: user ring buffer 和 kernel ring buffer，以实现用户态和内核态之间的高效数据通信。本文是 eBPF 开发者教程的一部分，更详细的内容可以在这里找到：<https://eunomia.dev/tutorials/> 源代码在 [GitHub 仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial) 中开源。
+In eBPF, two types of ring buffers are provided: user ring buffer and kernel ring buffer, to achieve efficient data communication between user mode and kernel mode. This article is part of the eBPF developer tutorial. More detailed content can be found here: <https://eunomia.dev/tutorials/> The source code is open source in the <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
 
-## 用户态和内核态环形队列—user ring buffer和kernel ring buffer
+## User mode and kernel mode ring buffers—user ring buffer and kernel ring buffer
 
-围绕内核态和用户态这两个主要运行级别，eBPF提供了两种相应的环形队列数据结构：用户态环形队列——User ring buffer和内核态环形队列——Kernel ring buffer。
+Around the two main run levels of kernel mode and user mode, eBPF provides two corresponding ring buffer data structures: User ring buffer and Kernel ring buffer.
 
-Kernel ring buffer 则由 eBPF实现，专为Linux内核设计，用于追踪和记录内核日志、性能统计信息等，它的能力是内核态和用户态数据传输的核心，可以从内核态向用户态传送数据。Kernel ring buffer 在 5.7 版本的内核中被引入，目前已经被广泛应用于内核日志系统、性能分析工具等。
+Kernel ring buffer is implemented by eBPF and is specially designed for the Linux kernel to track and record kernel logs, performance statistics, etc. It is the core of data transfer from kernel mode to user mode and can send data from kernel mode to user mode. Kernel ring buffer was introduced in the 5.7 version of the kernel and is now widely used in the kernel logging system, performance analysis tools, etc.
 
-对于内核态往用户态发送应用场景，如内核监控事件的发送、异步通知、状态更新通知等，ring buffer 数据结构都能够胜任。比如，当我们需要监听网络服务程序的大量端口状态时，这些端口的开启、关闭、错误等状态更新就需由内核实时传递到用户空间进行处理。而Linux 内核的日志系统、性能分析工具等，也需要频繁地将大量数据发送到用户空间，以支持用户人性化地展示和分析这些数据。在这些场景中，ring buffer在内核态往用户态发送数据中表现出了极高的效率。
+For scenarios where the kernel sends to user mode, such as sending kernel monitoring events, asynchronous notifications, status update notifications, etc., the ring buffer data structure can handle them. For example, when we need to monitor the status of a large number of ports of network service programs, the opening, closing, errors, and other status updates of these ports need to be real-time transferred to the user space for processing. Linux kernel's logging system, performance analysis tools, etc., also need to frequently send large amounts of data to user space to support user-friendly display and analysis of these data. In these scenarios, the ring buffer shows extremely high efficiency in sending data from the kernel to the user.
 
-User ring buffer 是基于环形缓冲器的一种新型 Map 类型，它提供了单用户空间生产者/单内核消费者的语义。这种环形队列的优点是对异步消息传递提供了优秀的支持，避免了不必要的同步操作，使得内核到用户空间的数据传输可以被优化，并且降低了系统调用的系统开销。User ring buffer 在 6.1 版本的内核中被引入，目前的使用场景相对较少。
+User ring buffer is a new type of Map type based on the ring buffer, it provides the semantics of a single user space producer/single kernel consumer. The advantage of this ring buffer is that it provides excellent support for asynchronous message passing, avoiding unnecessary synchronization operations, optimizing data transfer from the kernel to user space, and reducing the system overhead of system calls. User ring buffer was introduced in the 6.1 version of the kernel and its current use cases are relatively limited.
 
-bpftime 是一个用户空间 eBPF 运行时，允许现有 eBPF 应用程序在非特权用户空间使用相同的库和工具链运行。它为 eBPF 提供了 Uprobe 和 Syscall 跟踪点，与内核 Uprobe 相比，性能有了显著提高，而且无需手动检测代码或重启进程。运行时支持用户空间共享内存中的进程间 eBPF 映射，也兼容内核 eBPF 映射，允许与内核 eBPF 基础架构无缝运行。它包括一个适用于各种架构的高性能 LLVM JIT，以及一个适用于 x86 的轻量级 JIT 和一个解释器。GitHub 地址：<https://github.com/eunomia-bpf/bpftime>
+bpftime is a user space eBPF runtime that allows existing eBPF applications to run in unprivileged user space using the same libraries and toolchain. It provides Uprobe and Syscall tracing points for eBPF, which significantly improves performance compared to kernel Uprobe and does not require manual code detection or process restart. The runtime supports process eBPF mapping in user space shared memory, and is also compatible with kernel eBPF mapping, allowing seamless operation with the kernel eBPF infrastructure. It includes a high-performance LLVM JIT for various architectures, a lightweight JIT for x86, and an interpreter. GitHub address: <https://github.com/eunomia-bpf/bpftime>
 
-在 bpftime 中，我们使用 user ring buffer 来实现用户态 eBPF 往内核态 eBPF 发送数据，并更新内核态 eBPF 对应的 maps，让内核态和用户态的 eBPF 一起协同工作。user ring buffer 的异步特性，可以避免系统调用不必要的同步操作，从而提高了内核态和用户态之间的数据传输效率。
+In bpftime, we use the user ring buffer to implement data transmission from user mode eBPF to kernel mode eBPF, and update the maps corresponding to kernel mode eBPF, so that kernel mode and user mode eBPF can work together. The asynchronous characteristics of user ring buffer can avoid unnecessary synchronization operations of system calls, thereby improving the efficiency of data transmission between kernel mode and user mode.
 
-eBPF 的双向环形队列也和 io_uring 在某些方面有相似之处，但它们的设计初衷和应用场景有所不同：
+The bi-directional ring buffer of eBPF also has similarities to io_uring in some respects, but their design intentions and use cases are different:
 
-- **设计焦点**：io_uring主要专注于提高异步I/O操作的性能和效率，而eBPF的环形队列更多关注于内核和用户空间之间的数据通信和事件传输。
-- **应用范围**：io_uring主要用于文件I/O和网络I/O的场景，而eBPF的环形队列则更广泛，不限于I/O操作，还包括系统调用跟踪、网络数据包处理等。
-- **灵活性和扩展性**：eBPF提供了更高的灵活性和扩展性，允许用户定义复杂的数据处理逻辑，并在内核态执行。
+- **Design focus**: io_uring primarily focuses on improving the performance and efficiency of asynchronous I/O operations, while eBPF's ring buffer focuses more on data communication and event transmission between the kernel and user space.
+- **Application range**: io_uring is mainly used in file I/O and network I/O scenarios, while eBPF's ring buffer is more widespread, not limited to I/O operations, but also including system call tracing, network packet processing, etc.
+- **Flexibility and extensibility**: eBPF provides higher flexibility and extensibility, allowing users to define complex data processing logic and execute it in kernel mode.
 
-下面，我们将通过一段代码示例，详细展示如何利用 user ring buffer，实现从用户态向内核传送数据，并以 kernel ring buffer 相应地从内核态向用户态传送数据。
+Following is a code example where we will show in detail how to use user ring buffer to transmit data from user mode to the kernel, and how to respond accordingly with kernel ring buffer to transmit data from kernel mode to user mode.
 
-## 一、实现：在用户态和内核态间使用 ring buffer 传送数据
+## I. Implementation: Using Ring Buffer to Transfer Data Between User Mode and Kernel Mode
 
-借助新的 BPF MAP，我们可以实现在用户态和内核态间通过环形缓冲区传送数据。在这个示例中，我们将详细说明如何在用户空间创建一个 "用户环形缓冲区" (user ring buffer) 并向其写入数据，然后在内核空间中通过 `bpf_user_ringbuf_drain` 函数来消费这些数据。同时，我们也会使用 "内核环形缓冲区" (kernel ring buffer) 来从内核空间反馈数据到用户空间。为此，我们需要在用户空间和内核空间分别创建并操作这两个环形缓冲区。
+With the help of the new BPF MAP, we can implement the transfer of data between user mode and kernel mode through the ring buffer. In this example, we will detail how to create a "user ring buffer" in user space and write data to it and then consume this data in kernel space with the `bpf_user_ringbuf_drain` function. At the same time, we will use the "kernel ring buffer" to feed back data from kernel space to user space. To do this, we need to create and operate these two ring buffers separately in user space and kernel space.
 
-完整的代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/35-user-ringbuf> 中找到。
+The complete code can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/35-user-ringbuf>.
 
-### 创建环形缓冲区
+### Create Ring Buffer
 
-在内核空间，我们创建了一个类型为 `BPF_MAP_TYPE_USER_RINGBUF` 的 `user_ringbuf`，以及一个类型为 `BPF_MAP_TYPE_RINGBUF` 的 `kernel_ringbuf`。在用户空间，我们创建了一个 `struct ring_buffer_user` 结构体的实例，并通过 `ring_buffer_user__new` 函数和对应的操作来管理这个用户环形缓冲区。
+In kernel mode, we created a `user_ringbuf` of type `BPF_MAP_TYPE_USER_RINGBUF` and a `kernel_ringbuf` of type `BPF_MAP_TYPE_RINGBUF`. In user mode, we created an instance of the `struct ring_buffer_user` structure and managed this user ring buffer through the `ring_buffer_user__new` function and corresponding operations.
 
 ```c
     /* Set up ring buffer polling */
@@ -50,9 +50,9 @@ eBPF 的双向环形队列也和 io_uring 在某些方面有相似之处，但�
     user_ringbuf = user_ring_buffer__new(bpf_map__fd(skel->maps.user_ringbuf), NULL);
 ```
 
-### 编写内核态程序
+### Writing Kernel Mode Programs
 
-我们定义一个 `kill_exit` 的 tracepoint 程序，每当有进程退出时，它会通过 `bpf_user_ringbuf_drain` 函数读取 `user_ringbuf` 中的用户数据，然后通过 `bpf_ringbuf_reserve` 函数在 `kernel_ringbuf` 中创建一个新的记录，并写入相关信息。最后，通过 `bpf_ringbuf_submit` 函数将这个记录提交，使得该记录能够被用户空间读取。
+We define a `kill_exit` tracepoint program that will read user data from `user_ringbuf` with the `bpf_user_ringbuf_drain` function whenever a process exits. Then, it creates a new record in `kernel_ringbuf` with the `bpf_ringbuf_reserve` function and writes relevant information. Finally, the record is submitted with the `bpf_ringbuf_submit` function so that it can be read by user mode.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -115,9 +115,9 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 }
 ```
 
-### 编写用户态程序
+### Writing User Mode Programs
 
-在用户空间，我们通过 `ring_buffer_user__reserve` 函数在 ring buffer 中预留出一段空间，这段空间用于写入我们希望传递给内核的信息。然后，通过 `ring_buffer_user__submit` 函数提交数据，之后这些数据就可以在内核态被读取。
+In user mode, we reserved a section of space in the ring buffer with the `ring_buffer_user__reserve` function. This space is used to write the information we want to pass to the kernel. Then, the data is submitted using the `ring_buffer_user__submit` function, after which this data can be read and processed in kernel mode.
 
 ```c
 static int write_samples(struct user_ring_buffer *ringbuf)
@@ -155,9 +155,9 @@ done:
 }
 ```
 
-### 初始化环形缓冲区并轮询
+### Initialization of the Ring Buffer and Poll
 
-最后，对 ring buffer 进行初始化并定时轮询，这样我们就可以实时得知内核态的数据消费情况，我们还可以在用户空间对 `user_ringbuf` 进行写入操作，然后在内核态对其进行读取和处理。
+Finally, initialize the ring buffer and periodically poll, so we can know in real-time the consumption of data in kernel mode. We can also write to the `user_ringbuf` in user mode, then read and process it in kernel mode.
 
 ```c
     write_samples(user_ringbuf);
@@ -182,19 +182,19 @@ done:
     }
 ```
 
-通过以上步骤，我们实现了用户态与内核态间环形缓冲区的双向数据传输。
+Through the above steps, we have implemented two-way data transmission between user mode and kernel mode.
 
-## 二、编译和运行代码
+## II. Compile and Run the Code
 
-为了编译和运行以上代码，我们可以通过以下命令来实现：
+To compile and run the above code, we can run the following command:
 
 ```sh
 make
 ```
 
-关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+For information on how to install dependencies, refer to: <https://eunomia.dev/tutorials/11-bootstrap/>
 
-运行结果将展示如何使用 user ring buffer 和 kernel ringbuffer 在用户态和内核态间进行高效的数据传输:
+The execution result displays how to use the user ring buffer and kernel ringbuffer for efficient data transmission between user mode and kernel mode:
 
 ```console
 $ sudo ./user_ringbuf
@@ -210,14 +210,14 @@ Draining current samples...
 Draining current samples...
 ```
 
-## 总结
+## Conclusion
 
-在本篇文章中，我们介绍了如何使用eBPF的user ring buffer和kernel ring buffer在用户态和内核态之间进行数据传输。通过这种方式，我们可以有效地将用户态的数据传送给内核，或者将内核生成的数据反馈给用户，从而实现了内核态和用户态的双向通信。
+In this article, we discussed how to use eBPF's user ring buffer and kernel ring buffer for data transmission between user mode and kernel mode. Through this method, we can effectively deliver user data to the kernel or feed back kernel-generated data to the user, thus implementing two-way communication between the kernel and user modes.
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/zh/tutorials/> for more examples and complete tutorials.
 
-参考资料：
+References:
 
 1. [https://lwn.net/Articles/907056/](https://lwn.net/Articles/907056/)
 
-> 原文地址：<https://eunomia.dev/zh/tutorials/35-user-ringbuf/> 转载请注明出处。
+> Original URL: <https://eunomia.dev/zh/tutorials/35-user-ringbuf/> Please indicate the source when reprinting.

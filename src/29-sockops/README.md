@@ -1,26 +1,26 @@
-# eBPF 开发实践：使用 sockops 加速网络请求转发
+# eBPF Development Practices: Accelerating Network Request Forwarding with Sockops
 
-eBPF（扩展的伯克利数据包过滤器）是 Linux 内核中的一个强大功能，可以在无需更改内核源代码或重启内核的情况下，运行、加载和更新用户定义的代码。这种功能让 eBPF 在网络和系统性能分析、数据包过滤、安全策略等方面有了广泛的应用。
+eBPF (Extended Berkeley Packet Filter) is a powerful feature in the Linux kernel that allows running, loading, and updating user-defined code without the need to modify the kernel source code or reboot the kernel. This capability makes eBPF widely used in various areas such as network and system performance analysis, packet filtering, security policies, etc.
 
-本教程将关注 eBPF 在网络领域的应用，特别是如何使用 sockops 类型的 eBPF 程序来加速本地网络请求的转发。这种应用通常在使用软件负载均衡器进行请求转发的场景中很有价值，比如使用 Nginx 或 HAProxy 之类的工具。
+This tutorial will focus on the application of eBPF in the networking domain, specifically how to use sockops-type eBPF programs to accelerate the forwarding of local network requests. This application is often valuable in scenarios where software load balancers are used for request forwarding, such as using tools like Nginx or HAProxy.
 
-在许多工作负载中，如微服务架构下的服务间通信，通过本机进行的网络请求的性能开销可能会对整个应用的性能产生显著影响。由于这些请求必须经过本机的网络栈，其处理性能可能会成为瓶颈，尤其是在高并发的场景下。为了解决这个问题，sockops 类型的 eBPF 程序可以用于加速本地的请求转发。sockops 程序可以在内核空间管理套接字，实现在本机上的套接字之间直接转发数据包，从而降低了在 TCP/IP 栈中进行数据包转发所需的 CPU 时间。
+In many workloads, such as inter-service communication in a microservices architecture, the performance overhead of network requests made through the loopback interface can significantly impact the overall application performance. Since these requests have to go through the local network stack, their processing performance can become a bottleneck, especially in high-concurrency scenarios. To address this issue, sockops-type eBPF programs can be used to accelerate local request forwarding, providing functionality similar to direct memory access (DMA). Sockops programs can manage sockets in the kernel space and directly forward packets between sockets on the local machine, reducing the CPU time required for packet forwarding in the TCP/IP stack.
 
-本教程将会通过一个具体的示例演示如何使用 sockops 类型的 eBPF 程序来加速网络请求的转发。为了让你更好地理解如何使用 sockops 程序，我们将逐步介绍示例程序的代码，并讨论每个部分的工作原理。完整的源代码和工程可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops> 中找到。
+This tutorial will demonstrate how to use sockops-type eBPF programs to accelerate network request forwarding through a specific example. To help you understand how to use sockops programs, we will step by step introduce the code of the example program and discuss the working principle of each part. The complete source code and project can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops>.
 
-## 利用 eBPF 的 sockops 进行性能优化
+## Leveraging eBPF Sockops for Performance Optimization
 
-网络连接本质上是 socket 之间的通讯，eBPF 提供了一个 [bpf_msg_redirect_hash](https://man7.org/linux/man-pages/man7/bpf-helpers.7.html) 函数，用来将应用发出的包直接转发到对端的 socket，可以极大地加速包在内核中的处理流程。
+Network connections are essentially communication between sockets, and eBPF provides a `bpf_msg_redirect_hash` function that allows packets sent by an application to be directly forwarded to the corresponding socket on the recipient side, greatly accelerating the packet processing flow in the kernel.
 
-这里 sock_map 是记录 socket 规则的关键部分，即根据当前的数据包信息，从 sock_map 中挑选一个存在的 socket 连接来转发请求。所以需要先在 sockops 的 hook 处或者其它地方，将 socket 信息保存到 sock_map，并提供一个规则 (一般为四元组) 根据 key 查找到 socket。
+Here, the `sock_map` is a key component that stores socket rules, i.e., it selects an existing socket connection from the `sock_map` based on the current packet information. Therefore, it is necessary to save the socket information to the `sock_map` at the hook of the sockops or elsewhere and provide a rule (usually a four-tuple) to find the socket based on the key.
 
-Merbridge 项目就是这样实现了用 eBPF 代替 iptables 为 Istio 进行加速。在使用 Merbridge (eBPF) 优化之后，出入口流量会直接跳过很多内核模块，明显提高性能，如下图所示：
+The Merbridge project has achieved acceleration for Istio by replacing iptables with eBPF. After using Merbridge (eBPF) optimization, the inbound and outbound traffic bypasses many kernel modules, significantly improving performance, as shown in the following diagram:
 
 ![merbridge](merbridge.png)
 
-## 示例程序
+## Example Program
 
-此示例程序从发送者的套接字（出口）重定向流量至接收者的套接字（入口），**跳过 TCP/IP 内核网络栈**。在这个示例中，我们假定发送者和接收者都在**同一台**机器上运行。这个示例程序有两个部分，它们共享一个 map 定义：
+This example program redirects traffic from the sender’s socket (outgoing) to the recipient’s socket (incoming), bypassing the TCP/IP kernel network stack. In this example, we assume that the sender and recipient are both running on the **same** machine. This example program has two parts that share a map definition:
 
 bpf_sockmap.h
 
@@ -47,19 +47,19 @@ struct {
 } sock_ops_map SEC(".maps");
 ```
 
-这个示例程序中的 BPF 程序被分为两个部分 `bpf_redirect.bpf.c` 和 `bpf_contrack.bpf.c`。
+The BPF program in this example is divided into two parts: `bpf_redirect.bpf.c` and `bpf_contrack.bpf.c`.
 
-- `bpf_contrack.bpf.c` 中的 BPF 代码定义了一个套接字操作（`sockops`）程序，它的功能主要是当本机（使用 localhost）上的任意 TCP 连接被创建时，根据这个新连接的五元组（源地址，目标地址，源端口，目标端口，协议），在 `sock_ops_map` 这个 BPF MAP 中创建一个条目。这个 BPF MAP 被定义为 `BPF_MAP_TYPE_SOCKHASH` 类型，可以存储套接字和对应的五元组。这样使得每当本地 TCP 连接被创建的时候，这个连接的五元组信息也能够在 BPF MAP 中找到。
+- The BPF code in `bpf_contrack.bpf.c` defines a socket operation (`sockops`) program, whose main function is to create an entry in the `sock_ops_map` BPF map in which it stores the five-tuple (source address, destination address, source port, destination port, protocol) for each new TCP connection established on the local machine (using localhost). This BPF map is defined as type `BPF_MAP_TYPE_SOCKHASH` and can store sockets and their corresponding five-tuple. This allows the five-tuple information of each local TCP connection to be found in the BPF map whenever the connection is created.
 
-- `bpf_redirect.bpf.c` 中的 BPF 代码定义了一个网络消息 (sk_msg) 处理程序，当本地套接字上有消息到达时会调用这个程序。然后这个 sk_msg 程序检查该消息是否来自本地地址，如果是，根据获取的五元组信息（源地址，目标地址，源端口，目标端口，协议）在 `sock_ops_map` 查找相应的套接字，并将该消息重定向到在 `sock_ops_map` 中找到的套接字上，这样就实现了绕过内核网络栈。
+- The BPF code in `bpf_redirect.bpf.c` defines a sk_msg handler that is called when a message arrives on a local socket. The sk_msg program checks if the message is from a local address, and if so, it retrieves the five-tuple (source address, destination address, source port, destination port, protocol) from the message and looks up the corresponding socket in the `sock_ops_map` using the obtained key. Then, it redirects the message to the socket found in the `sock_ops_map`, thus bypassing the kernel network stack and directly delivering the message from the sender's socket to the receiver's socket.
 
-举个例子，我们假设有两个进程在本地运行，进程 A 绑定在 8000 端口上，进程 B 绑定在 9000 端口上，进程 A 向进程 B 发送消息。
+For example, let's assume that there are two processes running locally, process A binds to port 8000, and process B binds to port 9000. Process A sends a message to process B.
 
-1. 当进程 A 首次和进程 B 建立 TCP 连接时，触发 `bpf_contrack.bpf.c` 中的 `sockops` 程序，这个程序将五元组 `{127.0.0.1, 127.0.0.1, 8000, 9000, TCP}` 存入 `sock_ops_map`，值为进程 A 的套接字。
+1. When the TCP connection is first established between process A and process B, the `sockops` program in `bpf_contrack.bpf.c` is triggered, and it creates an entry in the `sock_ops_map` BPF map for the five-tuple `{127.0.0.1, 127.0.0.1, 8000, 9000, TCP}`, with the value being the socket of process A.
 
-2. 当进程 A 发送消息时，触发 `bpf_redirect.bpf.c` 中的 `sk_msg` 程序，然后 `sk_msg` 程序将消息从进程 A 的套接字重定向到 `sock_ops_map` 中存储的套接字（进程 A 的套接字）上，因此，消息被直接从进程 A 输送到进程 B，绕过了内核网络栈。
+2. When process A sends a message, the `sk_msg` program in `bpf_redirect.bpf.c` is triggered, and it redirects the message from process A's socket to the socket stored in the `sock_ops_map` based on the obtained five-tuple information (source address, destination address, source port, destination port, protocol). As a result, the message is directly delivered from process A to process B, bypassing the kernel network stack.
 
-这个示例程序就是通过 BPF 实现了在本地通信时，快速将消息从发送者的套接字重定向到接收者的套接字，从而绕过了内核网络栈，以提高传输效率。
+This example program uses BPF to efficiently redirect messages from the sender's socket to the recipient's socket during local communication, bypassing the kernel network stack to improve transmission efficiency.
 
 bpf_redirect.bpf.c
 
@@ -96,9 +96,9 @@ SEC("sockops")
 int bpf_sockops_handler(struct bpf_sock_ops *skops){
     u32 family, op;
 
- family = skops->family;
- op = skops->op;
- if (op != BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB
+    family = skops->family;
+    op = skops->op;
+    if (op != BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB
         && op != BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB) {
         return BPF_OK;
     }
@@ -107,7 +107,7 @@ int bpf_sockops_handler(struct bpf_sock_ops *skops){
         return BPF_OK;
     }
 
- struct sock_key key = {
+    struct sock_key key = {
         .dip = skops->remote_ip4,
         .sip = skops->local_ip4,
         .sport = bpf_htonl(skops->local_port),  /* convert to network byte order */
@@ -115,31 +115,31 @@ int bpf_sockops_handler(struct bpf_sock_ops *skops){
         .family = skops->family,
     };
 
- bpf_printk(">>> new connection: OP:%d, PORT:%d --> %d\n", op, bpf_ntohl(key.sport), bpf_ntohl(key.dport));
+    bpf_printk(">>> new connection: OP:%d, PORT:%d --> %d\n", op, bpf_ntohl(key.sport), bpf_ntohl(key.dport));
 
- bpf_sock_hash_update(skops, &sock_ops_map, &key, BPF_NOEXIST);
+    bpf_sock_hash_update(skops, &sock_ops_map, &key, BPF_NOEXIST);
     return BPF_OK;
 }
 ```
 
-### 编译 eBPF 程序
+### Compiling the eBPF Program
 
-这里我们使用 libbpf 编译这个 eBPF 程序。完整的源代码和工程可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+Here, we use libbpf to compile the eBPF program. The complete source code and project can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops>.
 
 ```shell
 # Compile the bpf program with libbpf
 make
 ```
 
-### 加载 eBPF 程序
+### Loading the eBPF Program
 
-我们编写了一个脚本来加载 eBPF 程序，它会自动加载两个 eBPF 程序并创建一个 BPF MAP：
+We have created a script to load the eBPF program, which will automatically load both eBPF programs and create a BPF map:
 
 ```shell
 sudo ./load.sh
 ```
 
-这个脚本实际上完成了这些操作：
+This script actually performs the following operations:
 
 ```sh
 #!/bin/bash
@@ -164,24 +164,24 @@ sudo bpftool prog load bpf_redirect.bpf.o "/sys/fs/bpf/bpf_redir" map name sock_
 sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs/bpf/sock_ops_map
 ```
 
-这是一个 BPF 的加载脚本。它的主要功能是加载和附加 BPF 程序到内核系统中，并将关联的 BPF map 一并存储（pin）到 BPF 文件系统中，以便 BPF 程序能访问和操作这些 map。
+This is a script for loading BPF programs. Its main function is to load and attach BPF programs to the kernel system, and store the associated BPF maps in the BPF file system so that the BPF programs can access and operate on these maps.
 
-让我们详细地看一下脚本的每一行是做什么的。
+Let's take a detailed look at what each line of the script does.
 
-1. `sudo mount -t bpf bpf /sys/fs/bpf/` 这一行用于挂载 BPF 文件系统，使得 BPF 程序和相关的 map 可以被系统访问和操作。
-2. 判断条件 `[ -e "/sys/fs/bpf/bpf_sockops" ]` 是检查是否已经存在 `/sys/fs/bpf/bpf_sockops` 文件，如果存在，则说明 `bpf_sockops` 程序已经被加载到系统中，那么将会通过 `./unload.sh` 脚本将其卸载。
-3. `sudo bpftool prog load bpf_contrack.bpf.o /sys/fs/bpf/bpf_sockops type sockops pinmaps /sys/fs/bpf/` 这一行是加载上文中 `bpf_contrack.bpf.c` 编译得到的 BPF 对象文件 `bpf_contrack.bpf.o` 到 BPF 文件系统中，存储至 `/sys/fs/bpf/bpf_sockops`，并且指定它的类型为 `sockops`。`pinmaps /sys/fs/bpf/` 是指定将加载的 BPF 程序相关的 map 存储在 `/sys/fs/bpf/` 下。
-4. `sudo bpftool cgroup attach "/sys/fs/cgroup/" sock_ops pinned "/sys/fs/bpf/bpf_sockops"` 这一行是将已经加载到 BPF 文件系统的 `bpf_sockops` 程序附加到 cgroup（此路径为"/sys/fs/cgroup/"）。附加后，所有属于这个 cgroup 的套接字操作都会受到 `bpf_sockops` 的影响。
-5. `sudo bpftool prog load bpf_redirect.bpf.o "/sys/fs/bpf/bpf_redir" map name sock_ops_map pinned "/sys/fs/bpf/sock_ops_map"` 这一行是加载 `bpf_redirect.bpf.c` 编译得到的 BPF 对象文件 `bpf_redirect.bpf.o` 到 BPF 文件系统中，存储至 `/sys/fs/bpf/bpf_redir` ，并且指定它的相关 map为 `sock_ops_map`，这个map在 `/sys/fs/bpf/sock_ops_map` 中。
-6. `sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs/bpf/sock_ops_map` 这一行是将已经加载的 `bpf_redir` 附加到 `sock_ops_map` 上，附加方式为 `msg_verdict`，表示当该 map 对应的套接字收到消息时，将会调用 `bpf_redir` 程序处理。
+1. `sudo mount -t bpf bpf /sys/fs/bpf/` mounts the BPF file system, enabling access to and operation on BPF programs and related maps by the system.
+2. The condition check `[ -e "/sys/fs/bpf/bpf_sockops" ]` checks whether the `/sys/fs/bpf/bpf_sockops` file already exists. If it does exist, it means that the `bpf_sockops` program has already been loaded into the system, so it will be uninstalled using the `./unload.sh` script.
+3. `sudo bpftool prog load bpf_contrack.bpf.o /sys/fs/bpf/bpf_sockops type sockops pinmaps /sys/fs/bpf/` loads the BPF object file `bpf_contrack.bpf.o` compiled from the `bpf_contrack.bpf.c` into the BPF file system, storing it in `/sys/fs/bpf/bpf_sockops`, and specifying its type as `sockops`. `pinmaps /sys/fs/bpf/` specifies that the BPF maps associated with the loaded BPF program will be stored under `/sys/fs/bpf/`.
+4. `sudo bpftool cgroup attach "/sys/fs/cgroup/" sock_ops pinned "/sys/fs/bpf/bpf_sockops"` attaches the `bpf_sockops` program that has been loaded into the BPF file system to the cgroup (the path is `"/sys/fs/cgroup/"`). After the attachment, all socket operations belonging to this cgroup will be affected by the `bpf_sockops` program.
+5. `sudo bpftool prog load bpf_redirect.bpf.o "/sys/fs/bpf/bpf_redir" map name sock_ops_map pinned "/sys/fs/bpf/sock_ops_map"` loads the BPF object file `bpf_redirect.bpf.o` compiled from `bpf_redirect.bpf.c` into the BPF file system, storing it in `/sys/fs/bpf/bpf_redir`, and specifying the associated map as `sock_ops_map`, which is located in `/sys/fs/bpf/sock_ops_map`.
+6. `sudo bpftool prog attach pinned /sys/fs/bpf/bpf_redir msg_verdict pinned /sys/fs/bpf/sock_ops_map` attaches the already loaded `bpf_redir` program to the `sock_ops_map` using the `msg_verdict` attachment type, which means that when the socket associated with this map receives a message, the `bpf_redir` program will be called to handle it.
 
-综上，此脚本的主要作用就是将两个用于处理本地套接字流量的 BPF 程序分别加载到系统并附加到正确的位置，以便它们能被正确地调用，并且确保它们可以访问和操作相关的 BPF map。
+In summary, the main function of this script is to load the two BPF programs used to process local socket traffic into the system and attach them to the correct locations so that they can be correctly called, ensuring that they can access and manipulate the associated BPF maps.
 
-您可以使用 [bpftool utility](https://github.com/torvalds/linux/blob/master/tools/bpf/bpftool/Documentation/bpftool-prog.rst) 检查这两个 eBPF 程序是否已经加载。
+You can use the [bpftool utility](https://github.com/torvalds/linux/blob/master/tools/bpf/bpftool/Documentation/bpftool-prog.rst) to check if these two eBPF programs have been loaded.
 
 ```console
 $ sudo bpftool prog show
-63: sock_ops  name bpf_sockops_handler  tag 275467be1d69253d  gpl
+63: sock_ops  name bpf_sockmap  tag 275467be1d69253d  gpl
  loaded_at 2019-01-24T13:07:17+0200  uid 0
  xlated 1232B  jited 750B  memlock 4096B  map_ids 58
 64: sk_msg  name bpf_redir  tag bc78074aa9dd96f4  gpl
@@ -189,69 +189,71 @@ $ sudo bpftool prog show
  xlated 304B  jited 233B  memlock 4096B  map_ids 58
 ```
 
-### 使用 iperf3 或 curl 进行测试
+### Test with iperf3 or curl
 
-运行 [iperf3](https://iperf.fr/) 服务器
+See <https://iperf.fr/> to install iperf3.
+
+Running the iperf3 Server:
 
 ```shell
 iperf3 -s -p 5001
 ```
 
-运行 [iperf3](https://iperf.fr/) 客户端
+Running the iperf3 Client:
 
 ```shell
 iperf3 -c 127.0.0.1 -t 10 -l 64k -p 5001
 ```
 
-或者也可以用 Python 和 curl 进行测试：
+Or you can use curl and python:
 
 ```sh
 python3 -m http.server
 curl http://0.0.0.0:8000/
 ```
 
-### 收集追踪
+### Collecting Traces
 
-查看``sock_ops``追踪本地连接建立
+Check the `sock_ops` trace for local connection establishments.
 
 ```console
-$ ./trace_bpf_output.sh # 实际上就是 sudo cat /sys/kernel/debug/tracing/trace_pipe
+$ ./trace_bpf_output.sh # which is basically sudo cat /sys/kernel/debug/tracing/trace_pipe
 iperf3-9516  [001] .... 22500.634108: 0: <<< ipv4 op = 4, port 18583 --> 4135
 iperf3-9516  [001] ..s1 22500.634137: 0: <<< ipv4 op = 5, port 4135 --> 18583
 iperf3-9516  [001] .... 22500.634523: 0: <<< ipv4 op = 4, port 19095 --> 4135
 iperf3-9516  [001] ..s1 22500.634536: 0: <<< ipv4 op = 5, port 4135 --> 19095
 ```
 
-当iperf3 -c建立连接后，你应该可以看到上述用于套接字建立的事件。如果你没有看到任何事件，那么 eBPF 程序可能没有正确地附加上。
+When the connection is established between `iperf3 -c` and the server, you should see the events above for socket establishment. If you don't see any events, then the eBPF programs may not have been attached correctly.
 
-此外，当``sk_msg``生效后，可以发现当使用 tcpdump 捕捉本地lo设备流量时，只能捕获三次握手和四次挥手流量，而iperf数据流量没有被捕获到。如果捕获到iperf数据流量，那么 eBPF 程序可能没有正确地附加上。
+Furthermore, when `sk_msg` takes effect, you should observe that when capturing local traffic on the loopback interface using tcpdump, only the three-way handshake and four-way termination traffic are captured, and the actual data flow of iperf is not captured. If the iperf data flow is captured, then the eBPF programs may not have been attached correctly.
 
 ```console
 $ ./trace_lo_traffic.sh # tcpdump -i lo port 5001
 
-# 三次握手
+# Three-way handshake
 13:24:07.181804 IP localhost.46506 > localhost.5001: Flags [S], seq 620239881, win 65495, options [mss 65495,sackOK,TS val 1982813394 ecr 0,nop,wscale 7], length 0
 13:24:07.181815 IP localhost.5001 > localhost.46506: Flags [S.], seq 1084484879, ack 620239882, win 65483, options [mss 65495,sackOK,TS val 1982813394 ecr 1982813394,nop,wscale 7], length 0
 13:24:07.181832 IP localhost.46506 > localhost.5001: Flags [.], ack 1, win 512, options [nop,nop,TS val 1982813394 ecr 1982813394], length 0
 
-# 四次挥手
+# Four-way termination
 13:24:12.475649 IP localhost.46506 > localhost.5001: Flags [F.], seq 1, ack 1, win 512, options [nop,nop,TS val 1982818688 ecr 1982813394], length 0
 13:24:12.479621 IP localhost.5001 > localhost.46506: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818692 ecr 1982818688], length 0
 13:24:12.481265 IP localhost.5001 > localhost.46506: Flags [F.], seq 1, ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818688], length 0
 13:24:12.481270 IP localhost.46506 > localhost.5001: Flags [.], ack 2, win 512, options [nop,nop,TS val 1982818694 ecr 1982818694], length 0
 ```
 
-### 卸载 eBPF 程序
+### Unloading the eBPF Program
 
 ```shell
 sudo ./unload.sh
 ```
 
-## 参考资料
+## References
 
-最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/。>
+Finally, if you are interested in eBPF technology and want to learn more and practice further, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> and the tutorial website at <https://eunomia.dev/>.
 
 - <https://github.com/zachidan/ebpf-sockops>
 - <https://github.com/merbridge/merbridge>
 
-> 原文地址：<https://eunomia.dev/zh/tutorials/29-sockops/> 转载请注明出处。
+> The original link of this article: <https://eunomia.dev/tutorials/29-sockops>

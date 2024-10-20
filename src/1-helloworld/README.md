@@ -1,47 +1,47 @@
-# eBPF 入门开发实践教程一：Hello World，基本框架和开发流程
+# eBPF Tutorial by Example 1: Hello World, Framework and Development
 
-在本篇博客中，我们将深入探讨eBPF（Extended Berkeley Packet Filter）的基本框架和开发流程。eBPF是一种在Linux内核上运行的强大网络和性能分析工具，它为开发者提供了在内核运行时动态加载、更新和运行用户定义代码的能力。这使得开发者可以实现高效、安全的内核级别的网络监控、性能分析和故障排查等功能。
+In this blog post, we will delve into the basic framework and development process of eBPF (Extended Berkeley Packet Filter). eBPF is a powerful network and performance analysis tool that runs on the Linux kernel, providing developers with the ability to dynamically load, update, and run user-defined code at kernel runtime. This enables developers to implement efficient, secure kernel-level network monitoring, performance analysis, and troubleshooting functionalities.
 
-本文是eBPF入门开发实践教程的第二篇，我们将重点关注如何编写一个简单的eBPF程序，并通过实际例子演示整个开发流程。在阅读本教程之前，建议您先学习第一篇教程，以便对eBPF的基本概念有个大致的了解。
+This article is the second part of the eBPF Tutorial by Example, where we will focus on how to write a simple eBPF program and demonstrate the entire development process through practical examples. Before reading this tutorial, it is recommended that you first learn the concepts of eBPF by studying the first tutorial.
 
-在开发eBPF程序时，有多种开发框架可供选择，如 BCC（BPF Compiler Collection）libbpf、cilium/ebpf、eunomia-bpf 等。虽然不同工具的特点各异，但它们的基本开发流程大致相同。在接下来的内容中，我们将深入了解这些流程，并以 Hello World 程序为例，带领读者逐步掌握eBPF开发的基本技巧。
+When developing eBPF programs, there are multiple development frameworks to choose from, such as BCC (BPF Compiler Collection) libbpf, cilium/ebpf, eunomia-bpf, etc. Although these tools have different characteristics, their basic development process is similar. In the following content, we will delve into these processes and use the Hello World program as an example to guide readers in mastering the basic skills of eBPF development.
 
-本教程将帮助您了解eBPF程序的基本结构、编译和加载过程、用户空间与内核空间的交互方式以及调试与优化技巧。通过学习本教程，您将掌握eBPF开发的基本知识，并为后续进一步学习和实践奠定坚实的基础。
+This tutorial will help you understand the basic structure of eBPF programs, the compilation and loading process, the interaction between user space and kernel space, as well as debugging and optimization techniques. By studying this tutorial, you will master the basic knowledge of eBPF development and lay a solid foundation for further learning and practice.
 
-## eBPF开发环境准备与基本开发流程
+## Preparation of eBPF Development Environment and Basic Development Process
 
-在开始编写eBPF程序之前，我们需要准备一个合适的开发环境，并了解eBPF程序的基本开发流程。本部分将详细介绍这些内容。
+Before starting to write eBPF programs, we need to prepare a suitable development environment and understand the basic development process of eBPF programs. This section will provide a detailed introduction to these subjects.
 
-### 安装必要的软件和工具
+### Installing the necessary software and tools
 
-要开发eBPF程序，您需要安装以下软件和工具：
+To develop eBPF programs, you need to install the following software and tools:
 
-- Linux 内核：由于eBPF是内核技术，因此您需要具备较新版本的Linux内核（至少 4.8 及以上版本，建议至少在 5.15 以上），以支持eBPF功能。
-  - 建议使用最新的 Ubuntu 版本（例如 Ubuntu 23.10）以获得最佳的学习体验，较旧的内核 eBPF 功能支持可能相对不全。
-- LLVM 和 Clang：这些工具用于编译eBPF程序。安装最新版本的LLVM和Clang可以确保您获得最佳的eBPF支持。
+- Linux kernel: Since eBPF is a kernel technology, you need to have a relatively new version of the Linux kernel (minimum version 4.8 and above, suggested version is 5.15+ or 6.2+) to support eBPF functionality.
+  - If possible, install a new version of Ubuntu (e.g. 23.10) would be better.
+- LLVM and Clang: These tools are used to compile eBPF programs. Installing the latest version of LLVM and Clang ensures that you get the best eBPF support.
 
-eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核态部分包含 eBPF 程序的实际逻辑，用户态部分负责加载、运行和监控内核态程序。
+An eBPF program consists of two main parts: the kernel space part and the user space part. The kernel space part contains the actual logic of the eBPF program, while the user space part is responsible for loading, running, and monitoring the kernel space program.
 
-当您选择了合适的开发框架后，如BCC（BPF Compiler Collection）、libbpf、cilium/ebpf或eunomia-bpf等，您可以开始进行用户态和内核态程序的开发。以BCC工具为例，我们将介绍eBPF程序的基本开发流程：
+Once you have chosen a suitable development framework, such as BCC (BPF Compiler Collection), libbpf, cilium/ebpf, or eunomia-bpf, you can begin developing the user space and kernel space programs. Taking the BCC tool as an example, we will introduce the basic development process of eBPF programs:
 
-1. 安装BCC工具：根据您的Linux发行版，按照BCC官方文档的指南安装BCC工具和相关依赖。
-2. 编写eBPF程序（C语言）：使用C语言编写一个简单的eBPF程序，例如Hello World程序。该程序可以在内核空间执行并完成特定任务，如统计网络数据包数量。
-3. 编写用户态程序（Python或C等）：使用Python、C等语言编写用户态程序，用于加载、运行eBPF程序以及与之交互。在这个程序中，您需要使用BCC提供的API来加载和操作内核态的eBPF程序。
-4. 编译eBPF程序：使用BCC工具，将C语言编写的eBPF程序编译成内核可以执行的字节码。BCC会在运行时动态从源码编译eBPF程序。
-5. 加载并运行eBPF程序：在用户态程序中，使用BCC提供的API加载编译好的eBPF程序到内核空间，然后运行该程序。
-6. 与eBPF程序交互：用户态程序通过BCC提供的API与eBPF程序交互，实现数据收集、分析和展示等功能。例如，您可以使用BCC API读取eBPF程序中的map数据，以获取网络数据包统计信息。
-7. 卸载eBPF程序：当不再需要eBPF程序时，用户态程序应使用BCC API将其从内核空间卸载。
-8. 调试与优化：使用 bpftool 等工具进行eBPF程序的调试和优化，提高程序性能和稳定性。
+1. Installing the BCC tool: Depending on your Linux distribution, follow the guidelines in the BCC documentation to install the BCC tool and its dependencies.
+2. Writing an eBPF program (C language): Use the C language to write a simple eBPF program, such as the Hello World program. This program can be executed in kernel space and perform specific tasks, such as counting network packets.
+3. Writing a user space program (Python or C, etc.): Use languages like Python or C to write a user space program that is responsible for loading, running, and interacting with the eBPF program. In this program, you need to use the API provided by BCC to load and manipulate the kernel space eBPF program.
+4. Compiling the eBPF program: Use the BCC tool to compile the eBPF program written in C language into bytecode that can be executed by the kernel. BCC dynamically compiles the eBPF program from source code at runtime.
+5. Loading and running the eBPF program: In the user space program, use the API provided by BCC to load the compiled eBPF program into kernel space and then run it.
+6. Interacting with the eBPF program: The user space program interacts with the eBPF program through the API provided by BCC, implementing data collection, analysis, and display functions. For example, you can use the BCC API to read map data in the eBPF program to obtain network packet statistics.
+7. Unloading the eBPF program: When the eBPF program is no longer needed, the user space program should unload it from the kernel space using the BCC API.
+8. Debugging and optimization: Use tools like bpftool to debug and optimize eBPF programs, improving program performance and stability.
 
-通过以上流程，您可以使用BCC工具开发、编译、运行和调试eBPF程序。请注意，其他框架（如libbpf、cilium/ebpf和eunomia-bpf）的开发流程大致相似但略有不同，因此在选择框架时，请参考相应的官方文档和示例。
+Through the above process, you can develop, compile, run, and debug eBPF programs using the BCC tool. Note that the development process of other frameworks, such as libbpf, cilium/ebpf, and eunomia-bpf, is similar but slightly different. Therefore, when choosing a framework, please refer to the respective official documentation and examples.
 
-通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。我们会使用 eunomia-bpf 进行演示。
+By following this process, you can develop an eBPF program that runs in the kernel. eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain. It aims to simplify the development, building, distribution, and running of eBPF programs. It is based on the libbpf CO-RE lightweight development framework, supports loading and executing eBPF programs through a user space WebAssembly (WASM) virtual machine, and packages precompiled eBPF programs into universal JSON or WASM modules for distribution. We will use eunomia-bpf for demonstration purposes.
 
-## 下载安装 eunomia-bpf 开发工具
+## Download and Install eunomia-bpf Development Tools
 
-可以通过以下步骤下载和安装 eunomia-bpf：
+You can download and install eunomia-bpf using the following steps:
 
-下载 ecli 工具，用于运行 eBPF 程序：
+Download the ecli tool for running eBPF programs:
 
 ```console
 $ wget https://aka.pw/bpf-ecli -O ecli && chmod +x ./ecli
@@ -49,21 +49,22 @@ $ ./ecli -h
 Usage: ecli [--help] [--version] [--json] [--no-cache] url-and-args
 ```
 
-下载编译器工具链，用于将 eBPF 内核代码编译为 config 文件或 WASM 模块：
+Download the compiler toolchain for compiling eBPF kernel code into config files or WASM modules:
 
 ```console
 $ wget https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc && chmod +x ./ecc
 $ ./ecc -h
 eunomia-bpf compiler
 Usage: ecc [OPTIONS] <SOURCE_PATH> [EXPORT_EVENT_HEADER]
+....
 ```
 
-注：假如在 aarch64 平台上，请从 release 下载 [ecc-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc-aarch64) 和 [ecli-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecli-aarch64).
+Note: If you are on the aarch64 platform, please use the [ecc-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecc-aarch64) and [ecli-aarch64](https://github.com/eunomia-bpf/eunomia-bpf/releases/latest/download/ecli-aarch64).
 
-也可以使用 docker 镜像进行编译：
+You can also compile using the docker image:
 
 ```console
-$ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest # 使用 docker 进行编译。`pwd` 应该包含 *.bpf.c 文件和 *.h 文件。
+$ docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest # Compile using docker. `pwd` should contain *.bpf.c files and *.h files.
 export PATH=PATH:~/.eunomia/bin
 Compiling bpf object...
 Packing ebpf object and config into /src/package.json...
@@ -71,7 +72,7 @@ Packing ebpf object and config into /src/package.json...
 
 ## Hello World - minimal eBPF program
 
-我们会先从一个简单的 eBPF 程序开始，它会在内核中打印一条消息。我们会使用 eunomia-bpf 的编译器工具链将其编译为 bpf 字节码文件，然后使用 ecli 工具加载并运行该程序。作为示例，我们可以暂时省略用户态程序的部分。
+We will start with a simple eBPF program that prints a message in the kernel. We will use the eunomia-bpf compiler toolchain to compile it into a BPF bytecode file, and then load and run the program using the ecli tool. For the sake of the example, we can temporarily disregard the user space program.
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -97,19 +98,19 @@ int handle_tp(void *ctx)
 }
 ```
 
-这段程序通过定义一个 handle_tp 函数并使用 SEC 宏把它附加到 sys_enter_write tracepoint（即在进入 write 系统调用时执行）。该函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数获取调用 write 系统调用的进程 ID，并在内核日志中打印出来。
+This program defines a handle_tp function and attaches it to the sys_enter_write tracepoint using the SEC macro (i.e., it is executed when the write system call is entered). The function retrieves the process ID of the write system call invocation using the bpf_get_current_pid_tgid and bpf_printk functions, and prints it in the kernel log.
 
-- `bpf_printk()`： 一种将信息输出到trace_pipe(/sys/kernel/debug/tracing/trace_pipe)简单机制。 在一些简单用例中这样使用没有问题， but它也有一些限制：最多3 参数； 第一个参数必须是%s(即字符串)；同时trace_pipe在内核中全局共享，其他并行使用trace_pipe的程序有可能会将 trace_pipe 的输出扰乱。 一个更好的方式是通过 BPF_PERF_OUTPUT(), 稍后将会讲到。
-- `void *ctx`：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。
-- `return 0`;：必须这样，返回0 (如果要知道why, 参考 #139  <https://github.com/iovisor/bcc/issues/139>)。
+- `bpf_trace_printk()`: A simple mechanism to output information to the trace_pipe (/sys/kernel/debug/tracing/trace_pipe). This is fine for simple use cases, but it has limitations: a maximum of 3 parameters; the first parameter must be %s (i.e., a string); and the trace_pipe is globally shared in the kernel, so other programs using the trace_pipe concurrently might disrupt its output. A better approach is to use BPF_PERF_OUTPUT(), which will be discussed later.
+- `void *ctx`: ctx is originally a parameter of a specific type, but since it is not used here, it is written as void *.
+- `return 0;`: This is necessary, returning 0 (to know why, refer to #139 <https://github.com/iovisor/bcc/issues/139>).
 
-要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：
+To compile and run this program, you can use the ecc tool and ecli command. First, on Ubuntu/Debian, execute the following command:
 
 ```shell
 sudo apt install clang llvm
 ```
 
-使用 ecc 编译程序：
+Compile the program using ecc:
 
 ```console
 $ ./ecc minimal.bpf.c
@@ -117,20 +118,20 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 ```
 
-或使用 docker 镜像进行编译：
+Or compile using a docker image:
 
 ```shell
 docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
-然后使用 ecli 运行编译后的程序：
+Then run the compiled program using ecli:
 
 ```console
 $ sudo ./ecli run package.json
 Running eBPF program...
 ```
 
-运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
+After running this program, you can view the output of the eBPF program by checking the /sys/kernel/debug/tracing/trace_pipe file:
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_write"
@@ -138,60 +139,57 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_
            <...>-3840345 [010] d... 3220701.101143: bpf_trace_printk: write system call from PID 3840345.
 ```
 
-按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。
+Once you stop the ecli process by pressing Ctrl+C, the corresponding output will also stop.
 
-注意：如果正在使用的 Linux 发行版（例如 Ubuntu ）默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：
+Note: If your Linux distribution (e.g. Ubuntu) does not have the tracing subsystem enabled by default, you may not see any output. Use the following command to enable this feature:
 
 ```console
 $ sudo su
 # echo 1 > /sys/kernel/debug/tracing/tracing_on
 ```
 
-## eBPF 程序的基本框架
+## Basic Framework of eBPF Program
 
-如上所述， eBPF 程序的基本框架包括：
+As mentioned above, the basic framework of an eBPF program includes:
 
-- 包含头文件：需要包含 <linux/bpf.h> 和 <bpf/bpf_helpers.h> 等头文件。
-- 定义许可证：需要定义许可证，通常使用 "Dual BSD/GPL"。
-- 定义 BPF 函数：需要定义一个 BPF 函数，例如其名称为 handle_tp，其参数为 void *ctx，返回值为 int。通常用 C 语言编写。
-- 使用 BPF 助手函数：在例如 BPF 函数中，可以使用 BPF 助手函数 bpf_get_current_pid_tgid() 和 bpf_printk()。
-- 返回值
+- Including header files: You need to include <linux/bpf.h> and <bpf/bpf_helpers.h> header files, among others.
+- Defining a license: You need to define a license, typically using "Dual BSD/GPL".
+- Defining a BPF function: You need to define a BPF function, for example, named handle_tp, which takes void *ctx as a parameter and returns int. This is usually written in the C language.
+- Using BPF helper functions: In the BPF function, you can use BPF helper functions such as bpf_get_current_pid_tgid() and bpf_printk().
+- Return value
 
-## tracepoints
+## Tracepoints
 
-跟踪点（tracepoints）是内核静态插桩技术，在技术上只是放置在内核源代码中的跟踪函数，实际上就是在源码中插入的一些带有控制条件的探测点，这些探测点允许事后再添加处理函数。比如在内核中，最常见的静态跟踪方法就是 printk，即输出日志。又比如：在系统调用、调度程序事件、文件系统操作和磁盘 I/O 的开始和结束时都有跟踪点。跟踪点于 2009 年在 Linux 2.6.32 版本中首次提供。跟踪点是一种稳定的 API，数量有限。
+Tracepoints are a kernel static instrumentation technique, technically just trace functions placed in the kernel source code, which are essentially probe points with control conditions inserted into the source code, allowing post-processing with additional processing functions. For example, the most common static tracing method in the kernel is printk, which outputs log messages. For example, there are tracepoints at the start and end of system calls, scheduler events, file system operations, and disk I/O. Tracepoints were first introduced in Linux version 2.6.32 in 2009. Tracepoints are a stable API and their number is limited.
 
-## GitHub 模板：轻松构建 eBPF 项目和开发环境
+## GitHub Templates: Build eBPF Projects and Development Environments Easily
 
-面对创建一个 eBPF 项目，您是否对如何开始搭建环境以及选择编程语言感到困惑？别担心，我们为您准备了一系列 GitHub 模板，以便您快速启动一个全新的eBPF项目。只需在GitHub上点击 `Use this template` 按钮，即可开始使用。
+When faced with creating an eBPF project, are you confused about how to set up the environment and choose a programming language? Don't worry, we have prepared a series of GitHub templates to help you quickly start a brand new eBPF project. Just click the `Use this template` button on GitHub to get started.
 
-- <https://github.com/eunomia-bpf/libbpf-starter-template>：基于C语言和 libbpf 框架的eBPF项目模板
-- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>：基于Go语言和cilium/ebpf框架的eBPF项目模板
-- <https://github.com/eunomia-bpf/libbpf-rs-starter-template>：基于Rust语言和libbpf-rs框架的eBPF项目模板
-- <https://github.com/eunomia-bpf/eunomia-template>：基于C语言和eunomia-bpf框架的eBPF项目模板
+- <https://github.com/eunomia-bpf/libbpf-starter-template>: eBPF project template based on the C language and libbpf framework.
+- <https://github.com/eunomia-bpf/cilium-ebpf-starter-template>: eBPF project template based on the Go language and cilium/ebpf framework.
+- <https://github.com/eunomia-bpf/libbpf-rs-starter-template>: eBPF project template based on the Rust language and libbpf-rs framework.
+- <https://github.com/eunomia-bpf/eunomia-template>: eBPF project template based on the C language and eunomia-bpf framework.
 
-这些启动模板包含以下功能：
+These starter templates include the following features:
 
-- 一个 Makefile，让您可以一键构建项目
-- 一个 Dockerfile，用于为您的 eBPF 项目自动创建一个容器化环境并发布到 Github Packages
-- GitHub Actions，用于自动化构建、测试和发布流程
-- eBPF 开发所需的所有依赖项
+- A Makefile for building the project with one command.
+- A Dockerfile for automatically creating a containerized environment for your eBPF project and publishing it to Github Packages.- GitHub Actions, used for automating build, test, and release processes
+- All dependencies required for eBPF development
 
-> 通过将现有仓库设置为模板，您和其他人可以快速生成具有相同基础结构的新仓库，从而省去了手动创建和配置的繁琐过程。借助 GitHub 模板仓库，开发者可以专注于项目的核心功能和逻辑，而无需为基础设置和结构浪费时间。更多关于模板仓库的信息，请参阅官方文档：<https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository>
+> By setting an existing repository as a template, you and others can quickly generate new repositories with the same underlying structure, eliminating the tedious process of manual creation and configuration. With GitHub template repositories, developers can focus on the core functionality and logic of their projects without wasting time on setup and structure. For more information about template repositories, please refer to the official documentation: <https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository>
 
-## 总结
+## Summary
 
-eBPF 程序的开发和使用流程可以概括为如下几个步骤：
+The development and usage process of eBPF programs can be summarized in the following steps:
 
-- 定义 eBPF 程序的接口和类型：这包括定义 eBPF 程序的接口函数，定义和实现 eBPF 内核映射（maps）和共享内存（perf events），以及定义和使用 eBPF 内核帮助函数（helpers）。
-- 编写 eBPF 程序的代码：这包括编写 eBPF 程序的主要逻辑，实现 eBPF 内核映射的读写操作，以及使用 eBPF 内核帮助函数。
-- 编译 eBPF 程序：这包括使用 eBPF 编译器（例如 clang）将 eBPF 程序代码编译为 eBPF 字节码，并生成可执行的 eBPF 内核模块。ecc 本质上也是调用 clang 编译器来编译 eBPF 程序。
-- 加载 eBPF 程序到内核：这包括将编译好的 eBPF 内核模块加载到 Linux 内核中，并将 eBPF 程序附加到指定的内核事件上。
-- 使用 eBPF 程序：这包括监测 eBPF 程序的运行情况，并使用 eBPF 内核映射和共享内存进行数据交换和共享。
-- 在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。
+- Define the interface and types of eBPF programs: This includes defining the interface functions of eBPF programs, defining and implementing eBPF kernel maps and shared memory (perf events), and defining and using eBPF kernel helper functions.
+- Write the code for eBPF programs: This includes writing the main logic of the eBPF program, implementing read and write operations on eBPF kernel maps, and using eBPF kernel helper functions.
+- Compile the eBPF program: This includes using an eBPF compiler (such as clang) to compile the eBPF program code into eBPF bytecode and generate an executable eBPF kernel module. ecc essentially calls the clang compiler to compile eBPF programs.
+- Load the eBPF program into the kernel: This includes loading the compiled eBPF kernel module into the Linux kernel and attaching the eBPF program to the specified kernel events.
+- Use the eBPF program: This includes monitoring the execution of the eBPF program and exchanging and sharing data using eBPF kernel maps and shared memory.
+- In practical development, there may be additional steps such as configuring compilation and loading parameters, managing eBPF kernel modules and kernel maps, and using other advanced features.
 
-需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。
+It should be noted that the execution of BPF programs occurs in the kernel space, so special tools and techniques are needed to write, compile, and debug BPF programs. eunomia-bpf is an open-source BPF compiler and toolkit that can help developers write and run BPF programs quickly and easily.
 
-您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
-
-> 原文地址：<https://eunomia.dev/zh/tutorials/1-helloworld/> 转载请注明出处。
+You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials, all of which are open-source. We will continue to share more about eBPF development practices to help you better understand and master eBPF technology.

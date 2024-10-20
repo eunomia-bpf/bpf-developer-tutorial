@@ -1,44 +1,45 @@
-# eBPF 开发者教程： 简单的 XDP 负载均衡器
 
-在本教程中，我们将指导您如何使用eBPF（扩展的Berkeley Packet Filter）实现一个简单的XDP（eXpress Data Path）负载均衡器。只需使用C语言和libbpf库，无需外部依赖，这是一个适合开发者的实践指南，帮助您充分利用Linux内核的强大功能来构建高效的网络应用程序。
+# eBPF Developer Tutorial: XDP Load Balancer
 
-## 为什么选择XDP？
+In this tutorial, we will guide you through the process of implementing a simple XDP (eXpress Data Path) load balancer using eBPF (Extended Berkeley Packet Filter). With just C, libbpf, and no external dependencies, this hands-on guide is perfect for developers interested in harnessing the full power of the Linux kernel to build highly efficient network applications.
 
-`XDP`（eXpress Data Path）是Linux中的一个高速、内核级网络框架，它允许在网络堆栈的最早阶段，即在网络接口卡（NIC）上处理数据包。这使得XDP可以进行超低延迟和高吞吐量的数据包处理，非常适合用于负载均衡、DDoS保护和流量过滤等任务。
+## Why XDP?
 
-XDP的关键特性:
+`XDP` (eXpress Data Path) is a fast, in-kernel networking framework in Linux that allows packet processing at the earliest point in the network stack, right in the network interface card (NIC). This enables ultra-low-latency and high-throughput packet handling, making XDP ideal for tasks like load balancing, DDoS protection, and traffic filtering.
 
-1. **快速数据包处理**：XDP直接在网络接口卡（NIC）级别处理数据包，减少了延迟，并通过避免通常的网络堆栈开销来提高性能。
-2. **高效**：由于在数据包进入内核之前处理它们，XDP最大限度地减少了CPU使用率，能够在高流量负载下保持系统的快速响应。
-3. **可定制的eBPF**：XDP程序使用eBPF编写，允许您为特定的用例创建自定义的数据包处理逻辑，例如丢弃、重定向或转发数据包。
-4. **低CPU开销**：支持零拷贝数据包转发，XDP占用更少的系统资源，非常适合在最少CPU负载的情况下处理高流量。
-5. **简单操作**：XDP程序返回预定义的操作，例如丢弃、通过或重定向数据包，提供对流量处理的控制。
+Key Features of XDP
 
-### 使用XDP的项目
+1. **Fast Packet Processing**: XDP handles packets directly at the NIC level, reducing latency and improving performance by avoiding the usual networking stack overhead.
+2. **Efficient**: Because it processes packets before they reach the kernel, XDP minimizes CPU usage and handles high traffic loads without slowing down the system.
+3. **Customizable with eBPF**: XDP programs are written using eBPF, allowing you to create custom packet-handling logic for specific use cases like dropping, redirecting, or forwarding packets.
+4. **Low CPU Overhead**: With support for zero-copy packet forwarding, XDP uses fewer system resources, making it perfect for handling high traffic with minimal CPU load.
+5. **Simple Actions**: XDP programs return predefined actions like dropping, passing, or redirecting packets, providing control over how traffic is handled.
 
-- `Cilium` 是一个为云原生环境（如Kubernetes）设计的开源网络工具。它使用XDP高效处理数据包过滤和负载均衡，提升了高流量网络中的性能。
-- `Katran` 由Facebook开发，是一个负载均衡器，它使用XDP处理数百万的连接，且CPU使用率低。它高效地将流量分发到服务器，在Facebook内部被用于大规模的网络环境。
-- `Cloudflare` 使用XDP来防御DDoS攻击。通过在NIC级别过滤恶意流量，Cloudflare可以在攻击数据包进入内核之前将其丢弃，最大限度地减少对网络的影响。
+Projects That Use XDP
 
-### 为什么选择XDP而不是其他方法？
+- `Cilium` is an open-source networking tool for cloud-native environments like Kubernetes. It uses XDP to efficiently handle packet filtering and load balancing, improving performance in high-traffic networks.
+- `Katran`, developed by Facebook, is a load balancer that uses XDP to handle millions of connections with low CPU usage. It distributes traffic efficiently across servers and is used internally at Facebook for large-scale networking.
+- `Cloudflare` uses XDP to protect against DDoS attacks. By filtering out malicious traffic at the NIC level, Cloudflare can drop attack packets before they even reach the kernel, minimizing the impact on their network.
 
-与传统工具如`iptables`或`tc`相比，XDP具有以下优势：
+### Why Choose XDP Over Other Methods?
 
-- **速度**：它直接在NIC驱动程序中操作，数据包处理速度远快于传统方法。
-- **灵活性**：通过eBPF，您可以编写自定义的数据包处理逻辑，以满足特定需求。
-- **效率**：XDP使用更少的资源，非常适合需要处理高流量而不使系统过载的环境。
+Compared to traditional tools like `iptables` or `tc`, XDP offers:
 
-## 项目：构建一个简单的负载均衡器
+- **Speed**: It operates directly in the NIC driver, processing packets much faster than traditional methods.
+- **Flexibility**: With eBPF, you can write custom packet-handling logic to meet specific needs.
+- **Efficiency**: XDP uses fewer resources, making it suitable for environments that need to handle high traffic without overloading the system.
 
-在本项目中，我们将专注于使用XDP构建一个负载均衡器。负载均衡器通过将传入的网络流量高效地分发到多个后端服务器，防止单个服务器过载。结合XDP和eBPF，我们可以构建一个运行在Linux网络堆栈边缘的负载均衡器，确保即使在高流量情况下也能保持高性能。
+## The Project: Building a Simple Load Balancer
 
-我们将实现的负载均衡器将具备以下功能：
+In this project, we will be focusing on building a load balancer using XDP. A load balancer efficiently distributes incoming network traffic across multiple backend servers to prevent any single server from becoming overwhelmed. With the combination of XDP and eBPF, we can build a load balancer that operates at the edge of the Linux networking stack, ensuring high performance even under heavy traffic conditions.
 
-- 监听传入的网络数据包。
-- 根据数据包的源IP和端口计算哈希值，从而将流量分发到多个后端服务器。
-- 根据计算出的哈希值将数据包转发到相应的后端服务器。
+The load balancer we’ll be implementing will:
 
-我们将保持设计简单但强大，向您展示如何利用eBPF的能力来创建一个轻量级的负载均衡解决方案。
+- Listen for incoming network packets.
+- Calculate a hash based on the packet's source IP and port, allowing us to distribute the traffic across multiple backend servers.
+- Forward the packet to the appropriate backend server based on the calculated hash.
+
+We'll keep the design simple but powerful, showing you how to leverage eBPF’s capabilities to create a lightweight load balancing solution.
 
 ## kernel eBPF code
 
@@ -162,13 +163,13 @@ int xdp_load_balancer(struct xdp_md *ctx) {
 char _license[] SEC("license") = "GPL";
 ```
 
-## 内核代码关键部分解读
+Here’s a breakdown of the key sections of the kernel code for your blog:
 
-### 1. **头文件和数据结构**
+### 1. **Header Files and Data Structures**
 
-代码首先包含了一些必要的头文件，例如 `<bpf/bpf_helpers.h>`、`<linux/if_ether.h>`、`<linux/ip.h>` 等。这些头文件提供了处理以太网帧、IP 数据包以及 BPF 辅助函数的定义。
+The code begins with necessary header files like `<bpf/bpf_helpers.h>`, `<linux/if_ether.h>`, `<linux/ip.h>`, and more. These headers provide definitions for handling Ethernet frames, IP packets, and BPF helper functions.
 
-`backend_config` 结构体被定义用于存储后端服务器的 IP 和 MAC 地址。这将在负载均衡逻辑中用于根据流量分配规则路由数据包。
+The `backend_config` struct is defined to hold the IP and MAC address of backend servers. This will later be used for routing packets based on load balancing logic.
 
 ```c
 struct backend_config {
@@ -177,9 +178,9 @@ struct backend_config {
 };
 ```
 
-### 2. **后端和负载均衡器配置**
+### 2. **Backend and Load Balancer Configuration**
 
-代码定义了一个名为 `backends` 的 eBPF map，用于存储两个后端的 IP 和 MAC 地址。`BPF_MAP_TYPE_ARRAY` 类型用于存储后端的配置信息，`max_entries` 设置为 2，表示该负载均衡器将把流量分配给两个后端服务器。
+The code defines an eBPF map named `backends` that stores IP and MAC addresses for two backends. The `BPF_MAP_TYPE_ARRAY` type is used to store backend configuration, with `max_entries` set to 2, indicating the load balancer will route to two backend servers.
 
 ```c
 struct {
@@ -190,7 +191,7 @@ struct {
 } backends SEC(".maps");
 ```
 
-同时也预定义了客户端和负载均衡器的 IP 地址和 MAC 地址：
+There are also predefined IP addresses and MAC addresses for the client and load balancer:
 
 ```c
 int client_ip = bpf_htonl(0xa000001);  
@@ -199,9 +200,9 @@ int load_balancer_ip = bpf_htonl(0xa00000a);
 unsigned char load_balancer_mac[ETH_ALEN] = {0xDE, 0xAD, 0xBE, 0xEF, 0x0, 0x10};
 ```
 
-### 3. **校验和函数**
+### 3. **Checksum Functions**
 
-`iph_csum()` 函数在修改数据包内容后重新计算 IP 头的校验和。在对头部进行任何修改时，确保 IP 数据包的完整性是至关重要的。
+The function `iph_csum()` recalculates the IP header checksum after modifying the packet's contents. It's essential to keep the integrity of IP packets when any modification is done to the headers.
 
 ```c
 static __always_inline __u16 iph_csum(struct iphdr *iph) {
@@ -211,12 +212,12 @@ static __always_inline __u16 iph_csum(struct iphdr *iph) {
 }
 ```
 
-### 4. **XDP 程序逻辑**
+### 4. **XDP Program Logic**
 
-XDP 负载均衡器的核心逻辑在 `xdp_load_balancer` 函数中实现，该函数附加到 XDP 钩子上。它处理传入的数据包，并根据不同情况将数据包转发到后端或回传给客户端。
+The core of the XDP load balancer logic is implemented in the `xdp_load_balancer` function, which is attached to the XDP hook. It processes incoming packets and directs them either to a backend or back to the client.
 
-- **初始检查**：
-  函数首先验证数据包是否是以太网帧，接着检查它是否是 IP 数据包（IPv4）并且使用了 TCP 协议。
+- **Initial Checks**:
+  The function begins by verifying that the packet is an Ethernet frame, then checks if it's an IP packet (IPv4) and if it's using the TCP protocol.
 
   ```c
   if (eth->h_proto != __constant_htons(ETH_P_IP))
@@ -225,8 +226,8 @@ XDP 负载均衡器的核心逻辑在 `xdp_load_balancer` 函数中实现，该�
       return XDP_PASS;
   ```
 
-- **客户端数据包处理**：
-  如果源 IP 与客户端 IP 匹配，代码使用 `xxhash32` 对 IP 头进行哈希处理，以确定相应的后端（基于 key 对 2 取模）。
+- **Client Packet Handling**:
+  If the source IP matches the client IP, the code hashes the IP header using `xxhash32` to determine the appropriate backend (based on the key modulo 2).
 
   ```c
   if (iph->saddr == client_ip) {
@@ -234,44 +235,43 @@ XDP 负载均衡器的核心逻辑在 `xdp_load_balancer` 函数中实现，该�
       struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
   ```
 
-  之后将目标 IP 和 MAC 替换为选定的后端的值，并将数据包转发到后端。
+  The destination IP and MAC are replaced with those of the selected backend, and the packet is forwarded to the backend.
 
-- **后端数据包处理**：
-  如果数据包来自后端服务器，代码将目标设置为客户端的 IP 和 MAC 地址，确保后端的响应数据包被正确地转发回客户端。
+- **Backend Packet Handling**:
+  If the packet is from a backend server, the destination is set to the client’s IP and MAC address, ensuring that the backend’s response is directed back to the client.
 
   ```c
   iph->daddr = client_ip;
   __builtin_memcpy(eth->h_dest, client_mac, ETH_ALEN);
   ```
 
-- **重写 IP 和 MAC 地址**：
-  对于所有的出站数据包，源 IP 和 MAC 地址会被更新为负载均衡器的值，以确保在客户端与后端之间通信时，负载均衡器作为源进行标识。
+- **Rewriting IP and MAC Addresses**:
+  The source IP and MAC are updated to the load balancer’s values for all outgoing packets, ensuring that the load balancer appears as the source for both client-to-backend and backend-to-client communication.
 
   ```c
   iph->saddr = load_balancer_ip;
   __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
   ```
 
-- **重新计算校验和**：
-  修改 IP 头之后，使用之前定义的 `iph_csum()` 函数重新计算校验和。
+- **Recalculate Checksum**:
+  After modifying the IP header, the checksum is recalculated using the previously defined `iph_csum()` function.
 
   ```c
   iph->check = iph_csum(iph);
   ```
 
-- **最终动作**：
-  使用 `XDP_TX` 动作发送数据包，这指示网卡将修改后的数据包传输出去。
+- **Final Action**:
+  The packet is transmitted using the `XDP_TX` action, which instructs the NIC to send the modified packet.
 
   ```c
   return XDP_TX;
   ```
 
-### 5. **结论**
+### 5. **Conclusion**
 
-在这部分博客中，可以解释负载均衡器是如何通过检查源 IP、进行哈希计算来分配流量，并通过修改目标 IP 和 MAC 来确保数据包的转发。`XDP_TX` 动作是实现 eBPF 在 XDP 层中高速数据包处理的关键。
+This part of the blog could explain how the load balancer ensures traffic is efficiently routed between the client and two backend servers by inspecting the source IP, hashing it for load distribution, and modifying the destination IP and MAC before forwarding the packet. The `XDP_TX` action is key to the high-speed packet handling provided by eBPF in the XDP layer.
 
-这一解释可以帮助读者理解数据包的流转过程，以及代码中每个部分在实现多个后端之间负载均衡的过程中所起的作用。
-
+This explanation can help readers understand the flow of the packet and the role of each section of the code in managing load balancing across multiple backends.
 
 ## Userspace code
 
@@ -374,35 +374,33 @@ int main(int argc, char **argv) {
 }
 ```
 
-### 用户空间代码概述
+The userspace code provided is responsible for setting up and configuring the XDP load balancer program that runs in the kernel. It accepts command-line arguments, loads the eBPF program, attaches it to a network interface, and updates the backend configurations.
 
-提供的用户空间代码负责设置和配置在内核中运行的 XDP 负载均衡器程序。它接受命令行参数，加载 eBPF 程序，将其附加到网络接口，并更新后端服务器的配置信息。
+### 1. **Argument Parsing and Backend Setup**
 
-### 1. **解析命令行参数和设置后端服务器**
+The program expects five command-line arguments: the name of the network interface (`ifname`), the IP addresses and MAC addresses of two backend servers. It then parses the IP addresses using `inet_pton()` and the MAC addresses using the `parse_mac()` function, which ensures that the format of the provided MAC addresses is correct. The parsed backend information is stored in a `backend_config` structure.
 
-程序期望五个命令行参数：网络接口的名称 (`ifname`)、两个后端服务器的 IP 地址和 MAC 地址。它通过 `inet_pton()` 函数解析 IP 地址，并使用 `parse_mac()` 函数解析 MAC 地址，确保提供的 MAC 地址格式正确。解析后的后端信息存储在 `backend_config` 结构体中。
+### 2. **Loading and Attaching the BPF Program**
 
-### 2. **加载并附加 BPF 程序**
+The BPF skeleton (generated via `xdp_lb.skel.h`) is used to open and load the XDP program into the kernel. The program then identifies the network interface by converting the interface name into an index using `if_nametoindex()`. Afterward, it attaches the loaded BPF program to this interface using `bpf_program__attach_xdp()`.
 
-BPF skeleton（通过 `xdp_lb.skel.h` 生成）用于打开并将 XDP 程序加载到内核中。程序通过 `if_nametoindex()` 将网络接口名称转换为索引，然后使用 `bpf_program__attach_xdp()` 将加载的 BPF 程序附加到此接口上。
+### 3. **Configuring Backend Information**
 
-### 3. **配置后端服务器信息**
+The backend IP and MAC addresses are written to the `backends` BPF map using `bpf_map_update_elem()`. This step ensures that the BPF program has access to the backend configurations, allowing it to route packets to the correct backend servers based on the logic in the kernel code.
 
-后端的 IP 和 MAC 地址被写入 `backends` BPF map 中，使用 `bpf_map_update_elem()` 函数。此步骤确保 BPF 程序能够访问后端配置，从而基于内核代码中的逻辑将数据包路由到正确的后端服务器。
+### 4. **Program Loop and Cleanup**
 
-### 4. **程序循环与清理**
+The program enters an infinite loop (`while (1) { sleep(1); }`) to keep running, allowing the XDP program to continue functioning. When the user decides to exit by pressing Ctrl+C, the BPF program is detached from the network interface, and resources are cleaned up by calling `xdp_lb_bpf__destroy()`.
 
-程序进入无限循环（`while (1) { sleep(1); }`），使 XDP 程序保持运行。当用户通过按下 Ctrl+C 退出时，BPF 程序从网络接口上卸载，并通过调用 `xdp_lb_bpf__destroy()` 清理资源。
+In summary, this userspace code is responsible for configuring and managing the lifecycle of the XDP load balancer, making it easy to update backend configurations dynamically and ensuring the load balancer is correctly attached to a network interface.
 
-总的来说，这段用户空间代码负责配置和管理 XDP 负载均衡器的生命周期，使得可以动态更新后端配置，并确保负载均衡器正确附加到网络接口上。
+## The topology of test environment
 
-### 测试环境拓扑
-
-拓扑结构表示一个测试环境，其中本地机器通过负载均衡器与两个后端节点（h2 和 h3）通信。通过虚拟以太网对（veth0 到 veth6），本地机器与负载均衡器相连，在受控环境中模拟网络连接。每个虚拟接口都有自己的 IP 和 MAC 地址，代表不同的实体。
+The topology represents a test environment where a local machine communicates with two backend nodes (h2 and h3) through a load balancer. The local machine is connected to the load balancer via virtual Ethernet pairs (veth0 to veth6), simulating network connections in a controlled environment. Each virtual interface has its own IP and MAC address to represent different entities.
 
 ```txt
     +---------------------------+          
-    |      本地机器              |
+    |      Local Machine         |
     |  IP: 10.0.0.1 (veth0)      |
     |  MAC: DE:AD:BE:EF:00:01    |
     +------------+---------------+
@@ -410,7 +408,7 @@ BPF skeleton（通过 `xdp_lb.skel.h` 生成）用于打开并将 XDP 程序加�
              | (veth1)
              |
     +--------+---------------+       
-    |    负载均衡器           |
+    |    Load Balancer       |
     |  IP: 10.0.0.10 (veth6) |
     |  MAC: DE:AD:BE:EF:00:10|
     +--------+---------------+       
@@ -428,31 +426,31 @@ BPF skeleton（通过 `xdp_lb.skel.h` 生成）用于打开并将 XDP 程序加�
 +------------------+             +------------------+
 ```
 
-这个设置可以通过脚本（`setup.sh`）轻松初始化，并通过另一个脚本（`teardown.sh`）删除。
+The setup can be easily initialized with a script (setup.sh), and removed with a teardown script (teardown.sh).
 
-> 如果您对本教程感兴趣，请帮助我们创建一个容器化的版本，简化设置和拓扑结构！目前的设置和删除过程基于网络命名空间，容器化的版本会更加友好。
+> If you are interested in this tutorial, please help us create a containerized version of the setup and topology! Currently the setup and teardown are based on the network namespace, it will be more friendly to have a containerized version of the setup and topology.
 
-初始化：
+Setup:
 
 ```sh
 sudo ./setup.sh
 ```
 
-删除：
+Teardown:
 
 ```sh
 sudo ./teardown.sh
 ```
 
-### 运行负载均衡器
+### Running the Load Balancer
 
-要运行 XDP 负载均衡器，执行以下命令，指定接口和后端服务器的 IP 和 MAC 地址：
+To run the XDP load balancer, execute the following command, specifying the interface and backends' IP and MAC addresses:
 
 ```console
 sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
 ```
 
-这将配置负载均衡器并输出后端服务器的详细信息：
+This will configure the load balancer and print the details of the backends:
 
 ```console
 XDP load balancer configured with backends:
@@ -461,67 +459,70 @@ Backend 2 - IP: 10.0.0.3, MAC: de:ad:be:ef:00:03
 Press Ctrl+C to exit...
 ```
 
-### 测试设置
+### Testing the Setup
 
-您可以通过在两个后端命名空间（`h2` 和 `h3`）启动 HTTP 服务器，并从本地机器向负载均衡器发送请求来测试设置：
+You can test the setup by starting HTTP servers on the two backend namespaces (`h2` and `h3`) and sending requests from the local machine to the load balancer:
 
-在 `h2` 和 `h3` 上启动服务器：
+Start servers on `h2` and `h3`:
 
 ```sh
 sudo ip netns exec h2 python3 -m http.server
 sudo ip netns exec h3 python3 -m http.server
 ```
 
-然后，向负载均衡器 IP 发送请求：
+Then, send a request to the load balancer IP:
 
 ```sh
 curl 10.0.0.10:8000
 ```
 
-负载均衡器将根据哈希函数将流量分配到后端服务器（`h2` 和 `h3`）。
+The load balancer will distribute traffic to the backends (`h2` and `h3`) based on the hashing function.
 
-### 使用 `bpf_printk` 进行监控
+### Monitoring with `bpf_printk`
 
-您可以通过查看 `bpf_printk` 日志来监控负载均衡器的活动。BPF 程序在处理每个数据包时会打印诊断消息。您可以使用以下命令查看这些日志：
+You can monitor the load balancer's activity by checking the `bpf_printk` logs. The BPF program prints diagnostic messages whenever a packet is processed. You can view these logs using:
 
 ```console
 sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
 
-日志示例：
+Example output:
 
 ```console
 <idle>-0       [004] ..s2. 24174.812722: bpf_trace_printk: xdp_load_balancer received packet
 <idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Source IP: 0xa000001
-<idle>-0       [004] .Ns2. 24174.812729: Received Destination IP: 0xa00000a
-<idle>-0       [004] .Ns2. 24174.812731: Received Source MAC: de:ad:be:ef:0:1
-<idle>-0       [004] .Ns2. 24174.812732: Received Destination MAC: de:ad:be:ef:0:10
-<idle>-0       [004] .Ns2. 24174.812732: Packet from client
+<idle>-0       [004] .Ns2. 24174.812729: bpf_trace_printk: Received Destination IP: 0xa00000a
+<idle>-0       [004] .Ns2. 24174.812731: bpf_trace_printk: Received Source MAC: de:ad:be:ef:0:1
+<idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Received Destination MAC: de:ad:be:ef:0:10
+<idle>-0       [004] .Ns2. 24174.812732: bpf_trace_printk: Packet from client
 <idle>-0       [004] .Ns2. 24174.812734: bpf_trace_printk: Redirecting packet to new IP 0xa000002 from IP 0xa00000a
-<idle>-0       [004] .Ns2. 24174.812735: New Dest MAC: de:ad:be:ef:0:2
-<idle>-0       [004] .Ns2. 24174.812735: New Source MAC: de:ad:be:ef:0:10
+<idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Dest MAC: de:ad:be:ef:0:2
+<idle>-0       [004] .Ns2. 24174.812735: bpf_trace_printk: New Source MAC: de:ad:be:ef:0:10
 ```
 
-### 调试问题
+### Debugging Issues
 
-某些系统可能会因为类似于此[博客文章](https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/)中描述的问题而导致数据包丢失或转发失败。您可以使用 `bpftrace` 跟踪 XDP 错误进行调试：
+Some systems may experience packet loss or failure to forward packets due to issues similar to those described in this [blog post](https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/). You can debug these issues using `bpftrace` to trace XDP errors:
 
 ```sh
 sudo bpftrace -e 'tracepoint:xdp:xdp_bulk_tx{@redir_errno[-args->err] = count();}'
 ```
 
-如果输出如下所示：
+If you see an output like this:
 
 ```sh
 @redir_errno[6]: 3
 ```
 
-这表明与 XDP 数据包转发相关的错误。错误代码 `6` 通常指向可以进一步调查的特定转发问题。
+It indicates errors related to XDP packet forwarding. The error code `6` typically points to a particular forwarding issue that can be further investigated.
 
-### 结论
+### Conclusion
 
-本教程展示了如何使用 eBPF 设置一个简单的 XDP 负载均衡器，以实现高效的流量分发。对于那些想了解更多关于 eBPF 知识的用户，包括更高级的示例和教程，请访问我们的 [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 或我们的网站 [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/)。
+This tutorial demonstrates how to set up a simple XDP load balancer using eBPF, providing efficient traffic distribution across backend servers. For those interested in learning more about eBPF, including more advanced examples and tutorials, please visit our [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
 
-### 参考文献
+### References
 
-- [XDP 编程实践教程](https://github.com/xdp-project/xdp-tutorial)
+Here’s a simple list of XDP references:
+
+1. [XDP Programming Hands-On Tutorial](https://github.com/xdp-project/xdp-tutorial)
+2. [XDP Tutorial in bpf-developer-tutorial](https://eunomia.dev/tutorials/21-xdp/)

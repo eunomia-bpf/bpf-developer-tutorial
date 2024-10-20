@@ -1,184 +1,184 @@
-# 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
+# Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules
 
-你是否曾经觉得 eBPF 的能力有限？也许你遇到了现有 eBPF 功能无法实现目标的情况。或许你需要与内核进行更深层次的交互，或者标准 eBPF 运行时无法解决的性能问题。如果你曾经希望在 eBPF 程序中拥有更多的灵活性和强大功能，那么本教程正适合你。
+Have you ever felt constrained by eBPF's capabilities? Maybe you've run into situations where the existing eBPF features just aren't enough to accomplish your goals. Perhaps you need deeper interactions with the kernel, or you're facing performance issues that the standard eBPF runtime can't solve. If you've ever wished for more flexibility and power in your eBPF programs, this tutorial is for you.
 
-## 引言：添加 `strstr` kfunc 以突破 eBPF 运行时的限制
+## Introduction: Adding a `strstr` kfunc to Break Free from eBPF Runtime Limitations
 
-**eBPF（扩展伯克利包过滤器）** 通过允许开发者在内核中运行受沙箱限制的程序，彻底改变了 Linux 系统编程。它在网络、安全和可观测性方面具有革命性的作用，能够实现强大的功能，而无需修改内核源代码或加载传统的内核模块。
+**eBPF (extended Berkeley Packet Filter)** has revolutionized Linux system programming by allowing developers to run sandboxed programs inside the kernel. It's a game-changer for networking, security, and observability, enabling powerful functionalities without the need to modify kernel source code or load traditional kernel modules.
 
-但尽管 eBPF 非常强大，它也并非没有局限性：
+But as amazing as eBPF is, it isn't without its limitations:
 
-- **功能差距：** 有时，eBPF 运行时的现有功能无法提供你所需的特定能力。
-- **复杂需求：** 某些任务需要更复杂的内核交互，而 eBPF 无法开箱即用地处理这些需求。
-- **性能问题：** 在某些情况下，eBPF 运行时的开销会引入延迟，或者在高性能需求下效率不够。
+- **Functionality Gaps:** Sometimes, the existing features of the eBPF runtime don't provide the specific capabilities you need.
+- **Complex Requirements:** Certain tasks demand more intricate kernel interactions that eBPF can't handle out of the box.
+- **Performance Issues:** In some cases, the overhead of the eBPF runtime introduces latency or isn't efficient enough for high-performance requirements.
 
-这些挑战源于**整个 eBPF 运行时的限制**，而不仅仅是其辅助函数。那么，如何在不修改内核本身的情况下克服这些障碍呢？
+These challenges stem from the limitations of the **entire eBPF runtime**, not just its helper functions. So how do you overcome these hurdles without altering the kernel itself?
 
-引入**kfunc（BPF 内核函数）**。通过在内核模块中定义你自己的 kfunc，可以将 eBPF 的能力扩展到默认限制之外。这种方法让你能够：
+Enter **kfuncs (BPF Kernel Functions)**. By defining your own kfuncs within kernel modules, you can extend eBPF's capabilities beyond its default limitations. This approach lets you:
 
-- **增强功能：** 引入标准 eBPF 运行时中不可用的新操作。
-- **定制行为：** 根据你的特定需求定制内核交互。
-- **提升性能：** 通过在内核上下文中直接执行自定义代码，优化关键路径。
+- **Enhance Functionality:** Introduce new operations that aren't available in the standard eBPF runtime.
+- **Customize Behavior:** Tailor kernel interactions to fit your specific needs.
+- **Boost Performance:** Optimize critical paths by executing custom code directly in the kernel context.
 
-**在本教程中，我们将特别添加一个 `strstr` kfunc。** 由于 eBPF 的验证器限制，直接在 eBPF 中实现字符串搜索是具有挑战性的，而将其定义为 kfunc 则允许我们安全高效地绕过这些限制，执行更复杂的操作。
+**In this tutorial, we'll specifically add a `strstr` kfunc.** While implementing a string search directly in eBPF is challenging due to verifier restrictions, defining it as a kfunc allows us to bypass these limitations and perform more complex operations safely and efficiently.
 
-最棒的是，你可以在不修改核心内核的情况下实现这一目标，保持系统的稳定性和代码的安全性。
+Best of all, you achieve this without modifying the core kernel, keeping your system stable and your code safe.
 
-在本教程中，我们将展示如何定义自定义 kfunc 以填补 eBPF 功能的任何空白。我们将逐步讲解如何创建一个引入新 kfunc 的内核模块，并演示如何在 eBPF 程序中使用它们。无论你是希望克服性能瓶颈，还是需要 eBPF 运行时未提供的功能，自定义 kfunc 都能为你的项目解锁新的可能性。
+In this tutorial, we'll show you how to define custom kfuncs to fill any gaps in eBPF's capabilities. We'll walk through creating a kernel module that introduces new kfuncs and demonstrate how to use them in your eBPF programs. Whether you're looking to overcome performance bottlenecks or need features the eBPF runtime doesn't offer, custom kfuncs can unlock new possibilities for your projects.
 
-## 理解 kfunc：扩展 eBPF 超越辅助函数
+## Understanding kfunc: Extending eBPF Beyond Helpers
 
-### 什么是 kfunc？
+### What Are kfuncs?
 
-**BPF 内核函数（kfuncs）** 是 Linux 内核中的专用函数，供 eBPF 程序使用。与标准的 eBPF 辅助函数不同，kfuncs 没有稳定的接口，并且在不同的内核版本之间可能有所变化。这种可变性意味着使用 kfuncs 的 BPF 程序需要与内核更新同步更新，以保持兼容性和稳定性。
+**BPF Kernel Functions (kfuncs)** are specialized functions within the Linux kernel that are exposed for use by eBPF programs. Unlike standard eBPF helpers, kfuncs do not have a stable interface and can vary between kernel releases. This variability means that BPF programs utilizing kfuncs need to be updated in tandem with kernel updates to maintain compatibility and stability.
 
-### 为什么使用 kfuncs？
+### Why Use kfuncs?
 
-1. **扩展功能：** kfuncs 允许执行标准 eBPF 辅助函数无法完成的操作。
-2. **定制化：** 定义针对特定用例量身定制的逻辑，增强 eBPF 程序的灵活性。
-3. **安全与稳定：** 通过将 kfuncs 封装在内核模块中，避免直接修改核心内核，保持系统完整性。
+1. **Extended Functionality:** kfuncs enable operations that standard eBPF helpers cannot perform.
+2. **Customization:** Define logic tailored to specific use cases, enhancing the flexibility of eBPF programs.
+3. **Safety and Stability:** By encapsulating kfuncs within kernel modules, you avoid direct modifications to the core kernel, preserving system integrity.
 
-### kfuncs 在 eBPF 中的角色
+### How kfuncs Fit into eBPF
 
-kfuncs 作为 eBPF 程序与更深层次内核功能之间的桥梁。它们允许 eBPF 程序执行更复杂的操作，通过暴露现有内核函数或引入专为 eBPF 交互设计的新包装函数。这种集成在确保 eBPF 程序保持安全和可维护的同时，促进了更深入的内核交互。
+kfuncs serve as bridges between eBPF programs and deeper kernel functionalities. They allow eBPF programs to perform more intricate operations by either exposing existing kernel functions or introducing new wrappers specifically designed for eBPF interactions. This integration facilitates deeper kernel interactions while ensuring that eBPF programs remain safe and maintainable.
 
-需要注意的是，Linux 内核已经包含了大量的 kfuncs。这些内置的 kfuncs 覆盖了广泛的功能，大多数开发者无需定义新的 kfuncs 就能完成任务。然而，在现有 kfuncs 无法满足特定需求的情况下，定义自定义 kfuncs 就变得必要。本教程将演示如何定义新的 kfuncs 以填补任何空白，确保你的 eBPF 程序能够利用你所需的确切功能。eBPF 也可以扩展到用户空间。在用户空间 eBPF 运行时 [bpftime](https://github.com/eunomia-bpf/bpftime) 中，我们也在实现 ufuncs，它们类似于 kfuncs，但扩展了用户空间应用程序。
+It's important to note that the Linux kernel already includes a plethora of kfuncs. These built-in kfuncs cover a wide range of functionalities, allowing most developers to accomplish their tasks without the need to define new ones. However, in cases where the existing kfuncs do not meet specific requirements, defining custom kfuncs becomes necessary. This tutorial demonstrates how to define new kfuncs to fill any gaps, ensuring that your eBPF programs can leverage the exact functionality you need. eBPF can also be extended to userspace. In the userspace eBPF runtime [bpftime](https://github.com/eunomia-bpf/bpftime), we are also implementing ufuncs, which are similar to kfuncs but extend userspace applications.
 
-## kfuncs 及其演变概述
+## Overview of kfuncs and Their Evolution
 
-要理解 kfuncs 的重要性，必须了解它们与 eBPF 辅助函数的演变关系。
+To appreciate the significance of kfuncs, it's essential to understand their evolution in relation to eBPF helper functions.
 
-![累计辅助函数和 kfunc 时间线](https://raw.githubusercontent.com/eunomia-bpf/code-survey/main/imgs/cumulative_helper_kfunc_timeline.png)
+![Cumulative Helper and kfunc Timeline](https://raw.githubusercontent.com/eunomia-bpf/code-survey/main/imgs/cumulative_helper_kfunc_timeline.png)
 
-**关键要点：**
+**Key Takeaways:**
 
-- **辅助函数的稳定性：** eBPF 辅助函数保持了高度的稳定性，新增内容较少。
-- **kfuncs 的快速增长：** kfuncs 的采用和创建显著增加，表明社区有兴趣通过 kfuncs 扩展内核交互。
-- **向更深层次内核集成的转变：** 自 2023 年以来，新的用例主要利用 kfuncs 影响内核行为，显示出通过 kfuncs 实现更深层次内核集成的趋势。
+- **Stability of Helper Functions:** eBPF helper functions have remained largely stable, with minimal new additions.
+- **Rapid Growth of kfuncs:** There's been a significant increase in the adoption and creation of kfuncs, indicating the community's interest in expanding kernel interactions via kfuncs.
+- **Shift Towards Deeper Kernel Integrations:** Since 2023, new use cases predominantly leverage kfuncs to influence kernel behavior, signaling a trend towards more profound kernel integrations through eBPF.
 
-这一趋势凸显了社区通过 kfuncs 更深入地与内核集成，推动 eBPF 能力边界的决心。
+This trend underscores the community's drive to push the boundaries of what eBPF can achieve by integrating more deeply with the kernel through kfuncs.
 
-## 定义你自己的 kfunc：分步指南
+## Defining Your Own kfunc: A Step-by-Step Guide
 
-为了利用 kfuncs 的强大功能，你需要在内核模块中定义它们。这个过程确保你的自定义函数能够安全地暴露给 eBPF 程序，而无需修改核心内核。
+To harness the power of kfuncs, you'll need to define them within a kernel module. This process ensures that your custom functions are safely exposed to eBPF programs without altering the core kernel.
 
-### 编写内核模块
+### Writing the Kernel Module
 
-让我们从创建一个简单的内核模块开始，该模块定义一个 `strstr` kfunc。这个 kfunc 将执行子字符串搜索操作，作为理解机制的基础。
+Let's start by creating a simple kernel module that defines a `strstr` kfunc. This kfunc will perform a substring search operation, serving as a foundation for understanding the mechanics.
 
-#### **文件：`hello.c`**
+#### **File: `hello.c`**
 
 ```c
-#include <linux/init.h>       // 模块初始化宏
-#include <linux/module.h>     // 加载模块的核心头文件
-#include <linux/kernel.h>     // 内核日志宏
+#include <linux/init.h>       // Macros for module initialization
+#include <linux/module.h>     // Core header for loading modules
+#include <linux/kernel.h>     // Kernel logging macros
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
 
-/* 声明 kfunc 原型 */
+/* Declare the kfunc prototype */
 __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz);
 
-/* 开始 kfunc 定义 */
+/* Begin kfunc definitions */
 __bpf_kfunc_start_defs();
 
-/* 定义 bpf_strstr kfunc */
+/* Define the bpf_strstr kfunc */
 __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz)
 {
-    // 边界情况：如果 substr 为空，返回 0（假设空字符串在开始处找到）
+    // Edge case: if substr is empty, return 0 (assuming empty string is found at the start)
     if (substr__sz == 0)
     {
         return 0;
     }
-    // 边界情况：如果子字符串比主字符串长，则无法找到
+    // Edge case: if the substring is longer than the main string, it's impossible to find
     if (substr__sz > str__sz)
     {
-        return -1; // 返回 -1 表示未找到
+        return -1; // Return -1 to indicate not found
     }
-    // 遍历主字符串，考虑大小限制
+    // Iterate through the main string, considering the size limit
     for (size_t i = 0; i <= str__sz - substr__sz; i++)
     {
         size_t j = 0;
-        // 将子字符串与当前主字符串位置进行比较
+        // Compare the substring with the current position in the string
         while (j < substr__sz && str[i + j] == substr[j])
         {
             j++;
         }
-        // 如果整个子字符串都匹配
+        // If the entire substring was found
         if (j == substr__sz)
         {
-            return i; // 返回第一次匹配的索引
+            return i; // Return the index of the first match
         }
     }
-    // 如果未找到子字符串，返回 -1
+    // Return -1 if the substring is not found
     return -1;
 }
 
-/* 结束 kfunc 定义 */
+/* End kfunc definitions */
 __bpf_kfunc_end_defs();
 
-/* 定义 BTF kfuncs ID 集 */
+/* Define the BTF kfuncs ID set */
 BTF_KFUNCS_START(bpf_kfunc_example_ids_set)
 BTF_ID_FLAGS(func, bpf_strstr)
 BTF_KFUNCS_END(bpf_kfunc_example_ids_set)
 
-/* 注册 kfunc ID 集 */
+/* Register the kfunc ID set */
 static const struct btf_kfunc_id_set bpf_kfunc_example_set = {
     .owner = THIS_MODULE,
     .set = &bpf_kfunc_example_ids_set,
 };
 
-/* 模块加载时执行的函数 */
+/* Function executed when the module is loaded */
 static int __init hello_init(void)
 {
     int ret;
 
     printk(KERN_INFO "Hello, world!\n");
-    /* 注册 BPF_PROG_TYPE_KPROBE 的 BTF kfunc ID 集 */
+    /* Register the BTF kfunc ID set for BPF_PROG_TYPE_KPROBE */
     ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_example_set);
     if (ret)
     {
-        pr_err("bpf_kfunc_example: 注册 BTF kfunc ID 集失败\n");
+        pr_err("bpf_kfunc_example: Failed to register BTF kfunc ID set\n");
         return ret;
     }
-    printk(KERN_INFO "bpf_kfunc_example: 模块加载成功\n");
-    return 0; // 成功返回 0
+    printk(KERN_INFO "bpf_kfunc_example: Module loaded successfully\n");
+    return 0; // Return 0 if successful
 }
 
-/* 模块卸载时执行的函数 */
+/* Function executed when the module is removed */
 static void __exit hello_exit(void)
 {
-    /* 取消注册 BTF kfunc ID 集 */
+    /* Unregister the BTF kfunc ID set */
     unregister_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_example_set);
-    printk(KERN_INFO "再见，世界！\n");
+    printk(KERN_INFO "Goodbye, world!\n");
 }
 
-/* 定义模块的初始化和退出点的宏 */
+/* Macros to define the module’s init and exit points */
 module_init(hello_init);
 module_exit(hello_exit);
 
-MODULE_LICENSE("GPL");                 // 许可证类型（GPL）
-MODULE_AUTHOR("Your Name");            // 模块作者
-MODULE_DESCRIPTION("一个简单的模块"); // 模块描述
-MODULE_VERSION("1.0");                 // 模块版本
+MODULE_LICENSE("GPL");                 // License type (GPL)
+MODULE_AUTHOR("Your Name");            // Module author
+MODULE_DESCRIPTION("A simple module"); // Module description
+MODULE_VERSION("1.0");                 // Module version
 ```
 
-**代码解释：**
+**Explanation of the Code:**
 
-- **声明 kfunc：** `__bpf_kfunc` 宏声明一个 eBPF 程序可以调用的函数。在这里，`bpf_strstr` 执行给定字符串中的子字符串搜索。
+- **Declaring the kfunc:** The `__bpf_kfunc` macro declares a function that eBPF programs can invoke. Here, `bpf_strstr` performs a substring search within a given string.
   
-- **BTF 定义：** `__bpf_kfunc_start_defs` 和 `__bpf_kfunc_end_defs` 宏标示 kfunc 定义的开始和结束。`BTF_KFUNCS_START` 及相关宏帮助将 kfuncs 注册到 BPF 类型格式（BTF）。
+- **BTF Definitions:** The `__bpf_kfunc_start_defs` and `__bpf_kfunc_end_defs` macros demarcate the beginning and end of kfunc definitions. The `BTF_KFUNCS_START` and related macros assist in registering the kfuncs with the BPF Type Format (BTF).
   
-- **模块初始化：** `hello_init` 函数注册 kfunc ID 集，使 `bpf_strstr` 可用于 `BPF_PROG_TYPE_KPROBE` 类型的 eBPF 程序。
+- **Module Initialization:** The `hello_init` function registers the kfunc ID set, making `bpf_strstr` available to eBPF programs of type `BPF_PROG_TYPE_KPROBE`.
   
-- **模块清理：** `hello_exit` 函数确保在模块移除时取消注册 kfunc ID 集，保持系统整洁。
+- **Module Cleanup:** The `hello_exit` function ensures that the kfunc ID set is unregistered upon module removal, maintaining system cleanliness.
 
-#### **文件：`Makefile`**
+#### **File: `Makefile`**
 
 ```makefile
-obj-m += hello.o  # hello.o 是目标
+obj-m += hello.o  # hello.o is the target
 
-# 启用 BTF 生成
+# Enable BTF generation
 KBUILD_CFLAGS += -g -O2
 
 all:
@@ -188,118 +188,118 @@ clean:
     make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 ```
 
-**Makefile 解释：**
+**Explanation of the Makefile:**
 
-- **目标定义：** `obj-m += hello.o` 指定 `hello.o` 是要构建的模块。
+- **Target Definition:** `obj-m += hello.o` specifies that `hello.o` is the module to be built.
   
-- **BTF 生成标志：** `KBUILD_CFLAGS += -g -O2` 启用调试信息和优化，便于 BTF 生成。
+- **BTF Generation Flags:** `KBUILD_CFLAGS += -g -O2` enables debug information and optimization, facilitating BTF generation.
   
-- **构建命令：**
-  - **`all`:** 通过调用内核构建系统编译内核模块。
-  - **`clean`:** 清理构建产物。
+- **Build Commands:**
+  - **`all`:** Compiles the kernel module by invoking the kernel build system.
+  - **`clean`:** Cleans up the build artifacts.
 
-**注意：** 提供的代码在 Linux 内核版本 **6.11** 上进行了测试。如果你使用的是较早的版本，可能需要实现一些变通方法，例如引用 `compact.h`。
+**Note:** The provided code has been tested on Linux kernel version **6.11**. If you're using an earlier version, you might need to implement workarounds, such as referencing `compact.h`.
 
-### 编译内核模块
+### Compiling the Kernel Module
 
-在内核模块源代码和 Makefile 就位后，按照以下步骤编译模块：
+With the kernel module source and Makefile in place, follow these steps to compile the module:
 
-1. **导航到模块目录：**
+1. **Navigate to the Module Directory:**
 
    ```bash
    cd /path/to/bpf-developer-tutorial/src/43-kfuncs/module/
    ```
 
-2. **编译模块：**
+2. **Compile the Module:**
 
    ```bash
    make
    ```
 
-   该命令将生成一个名为 `hello.ko` 的文件，即编译后的内核模块。
+   This command will generate a file named `hello.ko`, which is the compiled kernel module.
 
-### 加载内核模块
+### Loading the Kernel Module
 
-要将编译好的模块插入内核，使用 `insmod` 命令：
+To insert the compiled module into the kernel, use the `insmod` command:
 
 ```bash
 sudo insmod hello.ko
 ```
 
-### 验证模块加载
+### Verifying Module Loading
 
-加载模块后，通过检查内核日志验证其是否成功插入：
+After loading the module, verify its successful insertion by checking the kernel logs:
 
 ```bash
 dmesg | tail
 ```
 
-**预期输出：**
+**Expected Output:**
 
 ```txt
 [ 1234.5678] Hello, world!
-[ 1234.5679] bpf_kfunc_example: 模块加载成功
+[ 1234.5679] bpf_kfunc_example: Module loaded successfully
 ```
 
-### 移除内核模块
+### Removing the Kernel Module
 
-当不再需要该模块时，使用 `rmmod` 命令卸载它：
+When you no longer need the module, unload it using the `rmmod` command:
 
 ```bash
 sudo rmmod hello
 ```
 
-**验证移除：**
+**Verify Removal:**
 
 ```bash
 dmesg | tail
 ```
 
-**预期输出：**
+**Expected Output:**
 
 ```txt
-[ 1234.9876] 再见，世界！
+[ 1234.9876] Goodbye, world!
 ```
 
-## 处理编译错误
+## Handling Compilation Errors
 
-在编译过程中，可能会遇到以下错误：
+During the compilation process, you might encounter the following error:
 
 ```txt
 Skipping BTF generation for /root/bpf-developer-tutorial/src/43-kfuncs/module/hello.ko due to unavailability of vmlinux
 ```
 
-**解决方案：**
+**Solution:**
 
-1. **安装 `dwarves` 包：**
+1. **Install the `dwarves` Package:**
 
-   `dwarves` 包提供了生成 BTF 所需的工具。
+   The `dwarves` package provides tools necessary for BTF generation.
 
    ```sh
    sudo apt install dwarves
    ```
 
-2. **复制 `vmlinux` 文件：**
+2. **Copy the `vmlinux` File:**
 
-   确保包含 BTF 信息的 `vmlinux` 文件在构建目录中可用。
+   Ensure that the `vmlinux` file, which contains BTF information, is available in the build directory.
 
    ```sh
    sudo cp /sys/kernel/btf/vmlinux /usr/lib/modules/$(uname -r)/build/
    ```
 
-   该命令将 `vmlinux` 文件复制到适当的构建目录，确保成功生成 BTF。
+   This command copies the `vmlinux` file to the appropriate build directory, enabling successful BTF generation.
 
-本教程的完整代码可在 [bpf-developer-tutorial 仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs) 的 GitHub 上找到。此代码在 Linux 内核版本 6.11 上进行了测试，对于较低版本，可能需要参考 `compact.h` 进行一些修改。
+The complete code for this tutorial can be found in the [bpf-developer-tutorial repository](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs) on GitHub. This is tested on Linux kernel version 6.11, and some modifications may be required for lower versions, referring to `compact.h`.
 
-## 在 eBPF 程序中使用自定义 kfunc
+## Utilizing Your Custom kfunc in an eBPF Program
 
-有了定义自定义 `strstr` kfunc 的内核模块后，下一步是创建一个利用此函数的 eBPF 程序。此交互展示了 kfuncs 引入的增强功能。
+With the kernel module defining your custom `strstr` kfunc in place, the next step is to create an eBPF program that leverages this function. This interaction showcases the enhanced capabilities introduced by kfuncs.
 
-### 编写 eBPF 程序
+### Writing the eBPF Program
 
-创建一个附加到 `do_unlinkat` 内核函数并使用自定义 `bpf_strstr` kfunc 的 eBPF 程序。
+Create an eBPF program that attaches to the `do_unlinkat` kernel function and uses the custom `bpf_strstr` kfunc.
 
-#### **文件：`kfunc.c`**
+#### **File: `kfunc.c`**
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -311,7 +311,7 @@ Skipping BTF generation for /root/bpf-developer-tutorial/src/43-kfuncs/module/he
 typedef unsigned int u32;
 typedef long long s64;
 
-/* 声明外部 kfunc */
+/* Declare the external kfunc */
 extern int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz) __ksym;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
@@ -332,36 +332,36 @@ int handle_kprobe(struct pt_regs *ctx)
 }
 ```
 
-**eBPF 代码解释：**
+**Explanation of the eBPF Code:**
 
-- **外部 kfunc 声明：** `extern` 关键字声明 `bpf_strstr` 函数，使其在 eBPF 程序中可用。
-  
-- **Kprobe 附加：** `SEC("kprobe/do_unlinkat")` 宏将 eBPF 程序附加到 `do_unlinkat` 内核函数。每次调用 `do_unlinkat` 时，`handle_kprobe` 函数都会执行。
-  
-- **使用 kfunc：** 在 `handle_kprobe` 中，eBPF 程序调用 `bpf_strstr`，传入四个参数：
-  - `str`: 要搜索的主字符串。
-  - `str__sz`: 主字符串的大小。
-  - `substr`: 要搜索的子字符串。
-  - `substr__sz`: 子字符串的大小。
+- **External kfunc Declaration:** The `extern` keyword declares the `bpf_strstr` function, making it accessible within the eBPF program.
 
-  结果（子字符串在主字符串中的首次出现索引，或 -1 表示未找到）然后通过 `bpf_printk` 打印，显示 PID 和结果。
+- **Kprobe Attachment:** The `SEC("kprobe/do_unlinkat")` macro attaches the eBPF program to the `do_unlinkat` kernel function. Every time `do_unlinkat` is invoked, the `handle_kprobe` function executes.
 
-**重要提示：** 由于验证器限制，直接在 eBPF 中实现类似 `strstr` 的函数具有挑战性，因为这限制了循环和复杂的内存访问。通过将 `strstr` 实现为 kfunc，我们绕过了这些限制，使得在 eBPF 程序中执行更复杂和高效的字符串操作成为可能。
+- **Using the kfunc:** Within `handle_kprobe`, the eBPF program calls `bpf_strstr` with four arguments:
+  - `str`: The main string to search within.
+  - `str__sz`: The size of the main string.
+  - `substr`: The substring to search for.
+  - `substr__sz`: The size of the substring.
 
-### 编译 eBPF 程序
+  The result, which is the index of the first occurrence of `substr` in `str` or `-1` if not found, is then printed using `bpf_printk`, displaying both the PID and the result.
 
-要编译 eBPF 程序，确保你已安装必要的工具，如 `clang` 和 `llvm`。以下是编译程序的步骤：
+**Important Note:** Implementing a `strstr`-like function directly in eBPF is challenging due to verifier restrictions that limit loops and complex memory accesses. By implementing `strstr` as a kfunc, we bypass these limitations, allowing for more complex and efficient string operations within eBPF programs.
 
-1. **导航到 eBPF 程序目录：**
+### Compiling the eBPF Program
+
+To compile the eBPF program, ensure you have the necessary tools installed, such as `clang` and `llvm`. Here's how you can compile the program:
+
+1. **Navigate to the eBPF Program Directory:**
 
    ```bash
    cd /path/to/bpf-developer-tutorial/src/43-kfuncs/
    ```
 
-2. **为 eBPF 程序创建一个 `Makefile`：**
+2. **Create a `Makefile` for the eBPF Program:**
 
    ```makefile
-   # 文件：Makefile
+   # File: Makefile
 
    CLANG ?= clang
    LLVM_STRIP ?= llvm-strip
@@ -378,68 +378,68 @@ int handle_kprobe(struct pt_regs *ctx)
        rm -f kfunc.o
    ```
 
-3. **编译 eBPF 程序：**
+3. **Compile the eBPF Program:**
 
    ```bash
    make
    ```
 
-   该命令将生成一个名为 `kfunc.o` 的文件，即编译后的 eBPF 对象文件。
+   This command will generate a file named `kfunc.o`, which is the compiled eBPF object file.
 
-### 运行 eBPF 程序
+### Running the eBPF Program
 
-假设你有一个用户空间应用程序或工具来加载和附加 eBPF 程序，你可以执行它以观察 eBPF 程序与自定义 kfunc 之间的交互。
+Assuming you have a user-space application or a tool to load and attach the eBPF program, you can execute it to observe the interaction between the eBPF program and the custom kfunc.
 
-**示例输出：**
+**Sample Output:**
 
 ```bash
 # sudo ./load_kfunc
-BPF 程序已加载并成功附加。按 Ctrl-C 退出。
+BPF program loaded and attached successfully. Press Ctrl-C to exit.
 ```
 
-然后，当调用 `do_unlinkat` 函数时（例如，当文件被取消链接时），你可以检查内核日志：
+Then, when the `do_unlinkat` function is invoked (e.g., when a file is unlinked), you can check the kernel logs:
 
 ```bash
 dmesg | tail
 ```
 
-**预期输出：**
+**Expected Output:**
 
 ```txt
 [ 1234.5678] 'wor' found in 'Hello, world!' at index 7
 [ 1234.5679] Hello, world! (pid: 2075) bpf_strstr 7
 ```
 
-**输出解释：**
+**Explanation of the Output:**
 
-每次内核调用 `do_unlinkat` 函数时，eBPF 程序都会打印一条消息，指示进程的 PID 以及 kfunc 调用的结果。在此示例中，子字符串 `"wor"` 在字符串 `"Hello, world!"` 的索引 `7` 处被找到。
+Each time the `do_unlinkat` function is invoked in the kernel, the eBPF program prints a message indicating the PID of the process and the result of the kfunc call. In this example, the substring `"wor"` is found at index `7` in the string `"Hello, world!"`.
 
-## 总结与结论
+## Summary and Conclusion
 
-在本教程中，我们深入探讨了通过定义和使用自定义内核函数（kfuncs）来扩展 eBPF 的能力。以下是我们涵盖的内容回顾：
+In this tutorial, we've delved deep into extending eBPF's capabilities by defining and utilizing custom kernel functions (kfuncs). Here's a recap of what we've covered:
 
-- **理解 kfuncs：** 理解了 kfuncs 的概念及其在标准辅助函数之外增强 eBPF 的角色。
-- **定义 kfuncs：** 创建了一个内核模块，定义了自定义的 `strstr` kfunc，确保其能够安全地暴露给 eBPF 程序，而无需修改核心内核。
-- **编写包含 kfuncs 的 eBPF 程序：** 开发了一个利用自定义 kfunc 的 eBPF 程序，展示了增强的功能。
-- **编译与执行：** 提供了逐步指南，编译、加载并运行内核模块和 eBPF 程序，确保你可以在自己的系统上复制设置。
-- **错误处理：** 解决了潜在的编译问题，并提供了解决方案，确保顺利的开发体验。
+- **Understanding kfuncs:** Grasped the concept of kfuncs and their role in enhancing eBPF beyond standard helper functions.
+- **Defining kfuncs:** Created a kernel module that defines a custom `strstr` kfunc, ensuring it can be safely exposed to eBPF programs without altering the core kernel.
+- **Writing eBPF Programs with kfuncs:** Developed an eBPF program that leverages the custom kfunc to perform specific operations, demonstrating the enhanced functionality.
+- **Compilation and Execution:** Provided a step-by-step guide to compile, load, and run both the kernel module and the eBPF program, ensuring you can replicate the setup on your own system.
+- **Error Handling:** Addressed potential compilation issues and offered solutions to ensure a smooth development experience.
 
-**关键要点：**
+**Key Takeaways:**
 
-- **克服辅助函数的限制：** kfuncs 弥合了标准 eBPF 辅助函数留下的空白，提供了针对特定需求的扩展功能。
-- **维护系统稳定性：** 通过将 kfuncs 封装在内核模块中，确保系统稳定性，而无需对内核进行侵入性更改。
-- **社区驱动的演变：** kfuncs 的快速增长和采用凸显了 eBPF 社区致力于通过 kfuncs 推动内核级编程可能性的决心。
-- **利用现有 kfuncs：** 在定义新的 kfuncs 之前，探索内核提供的现有 kfuncs。它们涵盖了广泛的功能，减少了除非绝对必要，否则无需创建自定义函数的需求。
+- **Overcoming Helper Limitations:** kfuncs bridge the gaps left by standard eBPF helpers, offering extended functionality tailored to specific needs.
+- **Maintaining System Stability:** By encapsulating kfuncs within kernel modules, you ensure that system stability is maintained without making invasive changes to the kernel.
+- **Community-Driven Evolution:** The rapid growth and adoption of kfuncs highlight the eBPF community's commitment to pushing the boundaries of what's possible with kernel-level programming.
+- **Leveraging Existing kfuncs:** Before defining new kfuncs, explore the existing ones provided by the kernel. They cover a wide range of functionalities, reducing the need to create custom functions unless absolutely necessary.
 
-**准备好进一步提升你的 eBPF 技能了吗？** [访问我们的教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)并[探索我们网站上的更多教程](https://eunomia.dev/tutorials/)。深入丰富的示例，深化你的理解，并为 eBPF 的动态世界做出贡献！
+**Ready to elevate your eBPF skills even further?** [Visit our tutorial repository](https://github.com/eunomia-bpf/bpf-developer-tutorial) and [explore more tutorials on our website](https://eunomia.dev/tutorials/). Dive into a wealth of examples, deepen your understanding, and contribute to the dynamic world of eBPF!
 
-祝你在 eBPF 的旅程中愉快！
+Happy eBPF-ing!
 
-## 参考资料
+## References
 
-- [BPF 内核函数文档](https://docs.kernel.org/bpf/kfuncs.html)
-- [eBPF kfuncs 指南](https://docs.ebpf.io/linux/kfuncs/)
+- [BPF Kernel Functions Documentation](https://docs.kernel.org/bpf/kfuncs.html)
+- [eBPF kfuncs Guide](https://docs.ebpf.io/linux/kfuncs/)
 
-## 附加资源
+## Additional Resources
 
-如果你想了解更多关于 eBPF 的知识和实践，可以访问我们的开源教程代码仓库 [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 或访问我们的网站 [eunomia.dev/tutorials](https://eunomia.dev/tutorials/) 以获取更多示例和完整代码。
+If you'd like to learn more about eBPF knowledge and practices, you can visit our open-source tutorial code repository at [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [eunomia.dev/tutorials](https://eunomia.dev/tutorials/) for more examples and complete code.

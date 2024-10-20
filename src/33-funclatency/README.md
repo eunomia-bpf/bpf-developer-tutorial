@@ -1,29 +1,29 @@
-# 使用 eBPF 测量函数延迟
+# Measuring Function Latency with eBPF
 
-在现代软件系统中，了解函数的性能特性，尤其是那些对应用程序运行至关重要的函数的性能特性，是至关重要的。性能分析中的一个关键指标是**函数延迟**，即函数从开始到完成所花费的时间。通过分析函数延迟，开发人员可以识别瓶颈、优化性能，并确保系统在各种条件下高效运行。
+In modern software systems, understanding the performance characteristics of functions—especially those critical to the operation of your application—is paramount. One key metric in performance analysis is **function latency**, which is the time taken by a function to execute from start to finish. By analyzing function latency, developers can identify bottlenecks, optimize performance, and ensure that their systems operate efficiently under various conditions.
 
-本文将深入探讨如何使用 eBPF 这一强大的工具来测量函数延迟，并展示如何在内核和用户空间中进行跟踪和监控。
+This blog post will dive into how to measure function latency using eBPF, an incredibly powerful tool for tracing and monitoring both kernel and user-space programs.
 
-## 什么是 eBPF？
+## What is eBPF?
 
-eBPF（扩展伯克利包过滤器）是一项革命性的技术，它允许开发人员编写小型程序在 Linux 内核中运行。eBPF 最初是为数据包过滤设计的，但它已经发展成为一个多功能工具，用于跟踪、监控和分析系统行为。通过 eBPF，您几乎可以对 Linux 内核或用户空间的任何部分进行插桩，从而收集性能数据、执行安全策略，甚至实时调试系统——这一切都无需修改内核源码或重启系统。
+eBPF (Extended Berkeley Packet Filter) is a revolutionary technology that allows developers to write small programs that run in the Linux kernel. Originally designed for packet filtering, eBPF has evolved into a versatile tool for tracing, monitoring, and profiling system behavior. With eBPF, you can instrument almost any part of the Linux kernel or user-space programs to collect performance data, enforce security policies, or even debug systems in real time—all without the need to modify the kernel source code or restart the system.
 
-eBPF 程序在内核的沙盒环境中执行，确保了安全性和稳定性。这些程序可以附加到内核中的各种钩子上，如系统调用、网络事件和跟踪点，甚至可以通过 uprobes（用户级探针）附加到用户空间的函数。eBPF 程序收集的数据可以导出到用户空间进行分析，使其成为系统可观测性的重要工具。内核模式 eBPF 运行时的 `Uprobe` 可能会带来较大的性能开销。在这种情况下，你也可以考虑使用用户模式的 eBPF 运行时，例如 [bpftime](https://github.com/eunomia-bpf/bpftime)。
+eBPF programs are executed in a sandboxed environment within the kernel, ensuring safety and stability. These programs can attach to various hooks within the kernel, such as system calls, network events, and tracepoints, or even user-space functions using uprobes (user-level probes). The data collected by eBPF programs can then be exported to user space for analysis, making it an invaluable tool for system observability. `Uprobe` in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime).
 
-## 为什么函数延迟很重要？
+## Why is Function Latency Important?
 
-函数延迟是内核和用户空间应用程序性能分析中的一个关键指标。它提供了关于特定函数执行时间的洞察，这对以下方面至关重要：
+Function latency is a critical metric in performance analysis for both kernel and user-space applications. It provides insights into how long a particular function takes to execute, which is crucial for:
 
-- **识别性能瓶颈**：高函数延迟可能表明代码中存在需要优化的低效或问题。
-- **确保系统响应能力**：在实时系统或对延迟敏感的应用程序中，理解和最小化函数延迟对于保持响应能力至关重要。
-- **性能分析和基准测试**：通过测量各种函数的延迟，开发人员可以对系统进行基准测试，并比较不同实现或配置的性能。
-- **调试和诊断**：当系统表现出意外行为或性能下降时，测量函数延迟可以帮助定位问题的根源。
+- **Identifying Performance Bottlenecks**: High function latency may indicate inefficiencies or issues within the code that need optimization.
+- **Ensuring System Responsiveness**: In real-time systems or latency-sensitive applications, understanding and minimizing function latency is essential to maintain responsiveness.
+- **Profiling and Benchmarking**: By measuring the latency of various functions, developers can benchmark their systems and compare the performance of different implementations or configurations.
+- **Debugging and Diagnostics**: When a system exhibits unexpected behavior or performance degradation, measuring function latency can help pinpoint the source of the problem.
 
-内核空间（如系统调用、文件操作）和用户空间（如库函数）中的函数都可以进行延迟分析，从而提供系统性能的全面视图。
+Both kernel-space (e.g., system calls, file operations) and user-space (e.g., library functions) functions can be profiled for latency, providing a comprehensive view of system performance.
 
-## 用于函数延迟的 eBPF 内核代码
+## eBPF Kernel Code for Function Latency
 
-以下是一个设计用于测量函数延迟的 eBPF 程序，它通过挂钩函数的入口和出口点来实现。该程序使用 kprobes 和 kretprobes（用于内核函数）或 uprobes 和 uretprobes（用于用户空间函数）来捕获函数执行的开始和结束时间。
+Below is an eBPF program designed to measure the latency of a function by hooking into its entry and exit points. The program uses kprobes and kretprobes (for kernel functions) or uprobes and uretprobes (for user-space functions) to capture the start and end times of the function execution.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -107,27 +107,27 @@ int BPF_KRETPROBE(dummy_kretprobe)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-### 代码解释
+### Explanation of the Code
 
-1. **头文件**：代码首先包含了必要的头文件，如 `vmlinux.h`（提供内核定义）和 `bpf_helpers.h`（提供 eBPF 程序的辅助函数）。
+1. **Header Files**: The code begins by including the necessary headers like `vmlinux.h` (which provides kernel definitions) and `bpf_helpers.h` (which offers helper functions for eBPF programs).
 
-2. **全局变量**：`targ_tgid` 是目标进程 ID（或线程组 ID），`units` 确定延迟测量的时间单位（如微秒或毫秒）。
+2. **Global Variables**: `targ_tgid` is a target process ID (or thread group ID), and `units` determines the time unit for latency measurement (e.g., microseconds or milliseconds).
 
-3. **BPF 映射**：定义了一个哈希映射（`starts`），用于存储每个进程 ID 的函数执行开始时间。另一个数组（`hist`）用于存储延迟分布。
+3. **BPF Maps**: A hash map (`starts`) is defined to store the start time of function executions for each process ID. Another array (`hist`) is used to store the latency distribution.
 
-4. **入口函数**：`entry()` 函数在函数进入时捕获当前时间戳，并将其存储在以进程 ID 为键的 `starts` 映射中。
+4. **Entry Function**: The `entry()` function captures the current timestamp when the function is entered and stores it in the `starts` map keyed by the process ID.
 
-5. **出口函数**：`exit()` 函数通过将存储的开始时间与当前时间相减来计算延迟。然后将结果分类到直方图槽中，并增加该槽的计数以记录该延迟范围的发生次数。
+5. **Exit Function**: The `exit()` function calculates the latency by subtracting the stored start time from the current time. The result is then categorized into a histogram slot, which is incremented to record the occurrence of that latency range.
 
-6. **探针**：`kprobe` 和 `kretprobe` 用于附加到函数的入口和出口点。这些探针触发 `entry()` 和 `exit()` 函数来测量延迟。
+6. **Probes**: The `kprobe` and `kretprobe` are used to attach to the entry and exit points of the function, respectively. These probes trigger the `entry()` and `exit()` functions to measure the latency.
 
-7. **许可证**：该程序根据 GPL 许可证发布，以确保符合内核的许可要求。
+7. **License**: The program is licensed under GPL to ensure compliance with kernel licensing requirements.
 
-## 运行函数延迟工具
+## Running the Function Latency Tool
 
-### 用户空间函数延迟
+### User-Space Function Latency
 
-要跟踪用户空间函数（例如 `libc` 库中的 `read` 函数）的延迟，可以运行以下命令：
+To trace the latency of a user-space function, such as the `read` function in the `libc` library, you can run the following command:
 
 ```console
 # ./funclatency /usr/lib/x86_64-linux-gnu/libc.so.6:read    
@@ -152,9 +152,9 @@ Tracing /usr/lib/x86_64-linux-gnu/libc.so.6:read.  Hit Ctrl-C to exit
 Exiting trace of /usr/lib/x86_64-linux-gnu/libc.so.6:read
 ```
 
-### 内核空间函数延迟
+### Kernel-Space Function Latency
 
-要跟踪内核空间函数（例如 `vfs_read`）的延迟，可以运行以下命令：
+To trace the latency of a kernel-space function, such as `vfs_read`, run the following command:
 
 ```console
 # sudo ./funclatency -u vfs_read
@@ -168,22 +168,22 @@ Tracing vfs_read.  Hit Ctrl-C to exit
         64 -> 127        : 184      |**                                      |
        1024 -> 2047       : 0        |                                        |
        4096 -> 8191       : 5        |                                        |
-   2097152 -> 
-
-4194303    : 2        |                                        |
+   2097152 -> 4194303    : 2        |                                        |
 Exiting trace of vfs_read
 ```
 
-这些命令会跟踪指定函数（无论是在用户空间还是内核空间）的执行，并打印出观察到的延迟的直方图，显示函数执行时间的分布。
+These commands trace the execution of the specified function, either in user-space or kernel-space, and print a histogram of the observed latencies, showing the distribution of function execution times.
 
-<https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/33-funclatency>
+You can find the source code in <https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/33-funclatency>
 
-## 结论
+## Conclusion
 
-使用 eBPF 测量函数延迟可以深入了解用户空间和内核空间代码的性能。通过了解函数延迟，开发人员可以识别性能瓶颈、提高系统响应能力，并确保其应用程序的顺畅运行。
+Measuring function latency with eBPF offers deep insights into the performance of both user-space and kernel-space code. By understanding function latency, developers can identify performance bottlenecks, improve system responsiveness, and ensure the smooth operation of their applications.
 
-本文介绍了使用 eBPF 跟踪函数延迟的基本知识，包括实现该跟踪功能的 eBPF 内核代码概述。文中提供的示例展示了如何运行工具以跟踪用户空间和内核空间函数的延迟。
+This
 
-如果您有兴趣了解更多关于 eBPF 的知识，包括更多高级示例和教程，请访问我们的[教程代码库](https://github.com/eunomia-bpf/bpf-developer-tutorial)或我们的网站 [Eunomia](https://eunomia.dev/tutorials/)。
+ blog post covered the basics of using eBPF to trace function latency, including an overview of the eBPF kernel code used to perform the tracing. The examples provided demonstrated how to run the tool to trace both user-space and kernel-space functions.
 
-如果您正在寻找一个用于函数延迟测量的生产就绪工具，您可能想查看 BCC 仓库中的完整实现：[BCC 仓库](https://github.com/iovisor/bcc/blob/master/libbpf-tools/funclatency.c)。
+For those interested in learning more about eBPF, including more advanced examples and tutorials, please visit our [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our website [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
+
+If you are looking for a production-ready tool for function latency measurement, you might want to check out the full implementation available in the [BCC repository](https://github.com/iovisor/bcc/blob/master/libbpf-tools/funclatency.c).

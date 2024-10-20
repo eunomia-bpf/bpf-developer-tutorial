@@ -1,163 +1,162 @@
-# eBPF 示例教程 0：核心概念与工具简介
+# eBPF Tutorial by Example 0: Introduction to Core Concepts and Tools
 
-这是一个全面的 eBPF 开发教程的第一部分，旨在通过实用的 eBPF 开发指导您从初学者到高级用户。它涵盖了基本概念、实际代码示例以及在现代系统中的应用。我们将不再专注于传统工具如 BCC，而是使用现代框架如 `libbpf`、`Cilium`、`libbpf-rs` 和 eunomia-bpf，并提供 `C`、`Go` 和 `Rust` 的示例。
+This is the first part of a comprehensive development tutorial for eBPF, designed to guide you through practical eBPF development, from beginner to advanced. It covers fundamental concepts, real-world code examples, and applications in modern systems. Rather than focusing on traditional tools like BCC, we will use modern frameworks such as `libbpf`, `Cilium`, `libbpf-rs`, and eunomia-bpf, with examples provided in `C`, `Go`, and `Rust`.
 
-本教程的主要目标是提供清晰简洁的 eBPF 工具示例（起步只需 20 行代码！），帮助开发者快速掌握基本的 eBPF 开发技术。每个示例都是独立的，可以在目录结构中找到，每个目录代表一个独立的 eBPF 工具。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/tutorials/> 获取更多示例和完整的教程源代码。
+The primary goal of this tutorial is to provide clear and concise examples of eBPF tools (starting with as little as 20 lines of code!) to help developers quickly grasp essential eBPF development techniques. Each example is self-contained and can be found in the directory structure, with every directory representing an independent eBPF tool. You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorial source code.
 
-## eBPF 简介：安全高效的内核扩展
+## Introduction to eBPF: Secure and Efficient Kernel Extension
 
-eBPF（扩展的 Berkeley Packet Filter）是一项突破性的技术，允许开发者在内核空间中安全高效地运行小型程序。与传统方法需要修改内核源代码或加载新模块不同，eBPF 使得动态定制和优化网络行为成为可能，且不会中断系统操作。这种灵活性和高效性使 eBPF 成为克服传统网络栈限制的关键技术。
+eBPF (extended Berkeley Packet Filter) is a groundbreaking technology that allows developers to run small programs directly in kernel space, safely and efficiently. Unlike traditional approaches that required modifying kernel source code or loading new modules, eBPF made it possible to customize and optimize network behavior dynamically, all without disrupting system operations. This flexibility and efficiency made eBPF a pivotal technology for overcoming the limitations of traditional networking stacks.
 
-### eBPF 的强大之处是什么？
+### What Makes eBPF So Powerful?
 
-- **直接内核交互**：eBPF 程序在内核中执行，与系统级事件如网络包、系统调用或追踪点交互。
-- **安全执行**：eBPF 通过验证器在程序运行前检查其逻辑，防止潜在的内核崩溃或安全漏洞。
-- **最低开销**：eBPF 通过使用即时编译器（JIT），将 eBPF 字节码转换为针对特定架构的优化机器码，实现近原生执行速度。
+- **Direct Kernel Interaction:** eBPF programs execute within the kernel, interacting with system-level events such as network packets, system calls, or tracepoints.
+- **Safe Execution:** eBPF ensures safety through a verifier that checks the logic of the program before it runs, preventing potential kernel crashes or security breaches.
+- **Minimal Overhead:** eBPF achieves near-native execution speed by employing a Just-In-Time (JIT) compiler, which translates eBPF bytecode into optimized machine code for the specific architecture.
 
-## eBPF：过去、现在与未来
+## eBPF: Past, Present, and Future
 
-### 过去：可编程网络的变革
+### Past: Programmable Networking Transformed
 
-eBPF 于 2014 年推出，彻底改变了开发者处理网络的方式，允许小型可编程内核空间应用程序实时处理数据包。通过钩住关键内核点，eBPF 使得在网络包到达时应用自定义逻辑成为可能，从而提高了效率和灵活性。这使得组织能够在不需要自定义驱动程序或修改内核的情况下定制网络行为，为云原生和数据中心环境创造了理想的解决方案。
+When eBPF was introduced in 2014, it revolutionized how developers approached networking by allowing small, programmable kernel-space applications to handle packet processing in real time. By hooking into key kernel points, eBPF enabled custom logic to be applied whenever a network packet arrived, leading to higher efficiency and flexibility. This allowed organizations to tailor networking behavior without the overhead of custom drivers or kernel modifications, creating an ideal solution for cloud-native and data-center environments.
+### Present: A Versatile Framework for Modern Computing Needs
 
-### 现在：满足现代计算需求的多功能框架
+eBPF has evolved into a versatile framework that extends beyond its original purpose of networking, now encompassing observability, tracing, security, and even system resource management. eBPF programs can dynamically hook into kernel events, giving developers precise control over system behavior and performance optimization without requiring kernel modifications or reboots. This makes eBPF an essential tool for system administrators and developers who aim to monitor, optimize, and secure their environments.
 
-eBPF 已发展为一个多功能框架，超越了其最初的网络用途，现在涵盖了可观测性、追踪、安全性，甚至系统资源管理。eBPF 程序可以动态钩住内核事件，赋予开发者精确控制系统行为和性能优化的能力，而无需修改内核或重启系统。这使得 eBPF 成为系统管理员和开发者监控、优化和保护环境的必备工具。
+Here are some key areas where eBPF is widely used today:
 
-以下是 eBPF 目前广泛应用的一些关键领域：
+- **Networking:** eBPF offers real-time, high-speed packet filtering and processing within the kernel, allowing for the creation of custom protocol parsers and network policies without needing new drivers or system restarts. This enables highly efficient network management in cloud and data center environments.
 
-- **网络**：eBPF 提供内核中实时、高速的数据包过滤和处理，允许创建自定义协议解析器和网络策略，无需新驱动程序或系统重启。这在云和数据中心环境中实现了高效的网络管理。
-  
-- **可观测性**：eBPF 使开发者能够通过收集自定义指标和执行内核级数据聚合来深入了解系统行为。通过利用内核追踪点和函数调用，eBPF 有助于识别性能问题和定位难以发现的错误。
-  
-- **追踪与分析**：eBPF 提供强大的追踪和分析能力，通过附加到内核函数、追踪点甚至用户空间探针，使开发者能够深入了解系统和应用程序的行为，从而优化性能和解决复杂的系统问题。
-  
-- **安全**：eBPF 在实时安全监控中发挥重要作用。它能够深入检查系统调用、网络流量和其他内核活动，帮助执行动态安全策略和检测异常行为，为基础设施提供高效的保护。
-  
-- **调度器优化**：eBPF 越来越多地用于增强 CPU 调度，能够监控 CPU 负载并优化任务在核心之间的分配。这可以更有效地利用 CPU 资源，提高系统响应能力。
-  
-- **HID（人机接口设备）驱动增强**：开发者使用 eBPF 优化键盘、鼠标和触摸屏等设备的 HID 驱动程序。通过为处理输入事件添加自定义逻辑，eBPF 提高了对延迟敏感应用的响应速度。
+- **Observability:** eBPF enables developers to gather detailed insights into system behavior by collecting custom metrics and performing in-kernel data aggregation. By tapping into kernel tracepoints and function calls, eBPF helps identify performance issues and track down elusive bugs.
 
-各行业组织已大规模采用 eBPF：
+- **Tracing & Profiling:** eBPF provides powerful tracing and profiling capabilities by attaching to kernel functions, tracepoints, and even user-space probes. This allows developers to gain deep insights into system and application behavior, enabling them to optimize performance and resolve complex system issues.
 
-- **Google**：使用 eBPF 进行安全审计、数据包处理、实时性能监控以及优化其庞大基础设施的 CPU 调度。
-- **Netflix**：利用 eBPF 进行网络流量分析，确保流媒体服务的高可用性和性能。
-- **Android**：应用 eBPF 优化网络使用、功耗和资源分配，提升数百万设备的性能和电池寿命。
-- **S&P Global**：通过 **Cilium** 使用 eBPF 管理跨多个云和本地系统的网络，确保可扩展性和安全性。
-- **Shopify**：与 **Falco** 一起实施 eBPF 进行入侵检测，增强其电子商务平台的安全性。
-- **Cloudflare**：使用 eBPF 进行网络可观测性、安全监控和性能优化，保护全球数百万网站。
+- **Security:** eBPF plays a vital role in real-time security monitoring. It enables deep inspection of system calls, network traffic, and other kernel activities, helping to enforce dynamic security policies and detect anomalous behavior, providing an efficient way to safeguard infrastructure.
 
-eBPF 能够动态调整系统行为并扩展到用户空间，使其成为现代计算不可或缺的技术。无论是优化网络流量、提升安全性，还是增强系统性能，eBPF 都能帮助开发者高效、安全地应对实时需求。
+- **Scheduler Optimization:** eBPF is increasingly used to enhance CPU scheduling, offering the ability to monitor CPU load and optimize how tasks are distributed across cores. This can lead to more efficient use of CPU resources and improved system responsiveness.
 
-除了其内核模式运行时，eBPF 还可以扩展到用户空间。例如，[bpftime](https://github.com/eunomia-bpf/bpftime) 是一个用户空间 eBPF 运行时，允许在用户空间应用中进行高性能追踪、性能分析和插件支持。这种 eBPF 向用户空间的扩展有助于在各种超越内核级任务的用例中提高灵活性和性能。
+- **HID (Human Interface Device) Driver Enhancements:** Developers use eBPF to optimize HID drivers for devices like keyboards, mice, and touchscreens. By adding custom logic for handling input events, eBPF improves responsiveness in latency-sensitive applications.
 
-### 未来：eBPF 的扩展潜力
+Organizations across industries have adopted eBPF at scale:
 
-展望未来，预计 eBPF 将成为操作系统更为重要的一部分。重点将放在提升其灵活性、模块化和易用性上，使其能够应用于更广泛的场景。内存管理、并发机制的创新以及与用户空间应用的更好集成已在路上。已经有项目在编译 Linux 内核的关键部分到 BPF 指令集，这可能彻底改变内核开发和分析的方式。
+- **Google:** Uses eBPF for security auditing, packet processing, real-time performance monitoring, and optimizing CPU scheduling across its vast infrastructure.
+- **Netflix:** Leverages eBPF for network traffic analysis, ensuring high availability and performance for streaming services.
+- **Android:** Applies eBPF to optimize network usage, power consumption, and resource allocation, improving performance and battery life on millions of devices.
+- **S&P Global:** Utilizes eBPF through **Cilium** for managing networking across multiple clouds and on-premises systems, ensuring scalability and security.
+- **Shopify:** Implements eBPF with **Falco** for intrusion detection, bolstering security on its e-commerce platform.
+- **Cloudflare:** Uses eBPF for network observability, security monitoring, and performance optimization, protecting millions of websites globally.
 
-动态栈、更好的用户空间可观测性工具（例如快速 Uprobes 和特定语言的栈行走器）以及更安全的程序终止机制等进展将继续增强 eBPF 的可靠性并扩展其使用场景。此外，新工具和库将简化 eBPF 开发，降低内核和应用开发者的入门门槛。
+eBPF's ability to dynamically adjust system behavior and extend into user space makes it an essential technology for modern computing. Whether it's optimizing network traffic, improving security, or enhancing system performance, eBPF enables developers to address real-time requirements efficiently and safely.
 
-## 开始学习教程
+In addition to its kernel-mode runtime, eBPF can also be extended to user space. For example, [bpftime](https://github.com/eunomia-bpf/bpftime), a user-space eBPF runtime, allows for higher-performance tracing, performance analysis, and plugin support in user-space applications. This extension of eBPF into user space helps improve flexibility and performance in various use cases that go beyond kernel-level tasks.
 
-本教程提供实用的 eBPF 开发实践，涵盖从初级到高级的主题。我们专注于在可观测性、网络和安全等领域的动手示例，使用 `libbpf`、`libbpf-rs` 和 `eunomia-bpf` 等框架，并提供 C、Go 和 Rust 的示例。
+### Future: The Expanding Potential of eBPF
 
-### 本教程适合谁？
+Looking forward, eBPF is expected to become an even more integral part of operating systems. The focus is on improving its flexibility, modularity, and ease of use, making it accessible for an even broader range of applications. Innovations in memory management, concurrency mechanisms, and better integration with user-space applications are on the horizon. Projects are already underway to compile significant parts of the Linux kernel to the BPF instruction set, potentially revolutionizing how kernel development and analysis are performed.
 
-- **开发者** 希望实现自定义内核解决方案。
-- **系统管理员** 旨在提升性能和安全性。
-- **技术爱好者** 探索前沿的内核技术。
+Advancements such as dynamic stacks, better observability tools for user space (e.g., Fast Uprobes and language-specific stack walkers), and safer program termination mechanisms will continue to strengthen eBPF’s reliability and expand its use cases. Additionally, new tools and libraries will simplify eBPF development, lowering the barrier to entry for both kernel and application developers.
 
-### 你将学到什么？
+## Getting Started with the Tutorial
 
-- **核心概念**：eBPF 基础知识及其与 Linux 内核的集成。
-- **实用技能**：编写和部署 eBPF 程序。
-- **高级主题**：探索 eBPF 在安全、追踪和未来创新方面的应用。
+This tutorial provides practical eBPF development practices, covering topics from beginner to advanced levels. We focus on hands-on examples in areas like observability, networking, and security, using frameworks like `libbpf`, `libbpf-rs`, and `eunomia-bpf`, with examples in C, Go, and Rust.
+
+### Who Is This Tutorial For?
+
+- **Developers** looking to implement custom kernel solutions.
+- **System Administrators** aiming to enhance performance and security.
+- **Tech Enthusiasts** exploring cutting-edge kernel technologies.
+
+### What Will You Learn?
+
+- **Core Concepts:** eBPF fundamentals and integration with the Linux kernel.
+- **Practical Skills:** Writing and deploying eBPF programs.
+- **Advanced Topics:** Exploring security, tracing, and future innovations in eBPF.
 
 ---
 
-## 目录
+## Table of Contents
 
-1. **eBPF 简介**  
-   基本概念和入门所需的工具。
-   
-2. **初学者示例**  
-   简单的程序，如“Hello World”及使用 kprobe 和 uprobe 进行基础追踪。
-   
-3. **可观测性**  
-   侧重于使用 eBPF 监控网络流量、文件操作和进程行为的示例。
-   
-4. **网络**  
-   侧重于修改和优化网络流量的示例，如 XDP、TC 和 socket。
-   
-5. **安全**  
-   用于隐藏进程和文件、发送信号杀死进程以及跟踪进程事件以增强安全性的程序。
-   
-6. **高级用例**  
-   涉及性能分析、调度器优化和用户空间 eBPF（如 bpftime）的复杂示例。
-   
-7. **深入主题**  
-   探索 eBPF 在 Android 上的应用、使用 eBPF 进行网络加速以及通过系统调用修改来保护系统。
+1. **Introduction to eBPF**  
+   Basic concepts and the tools you need to get started.
 
-## 如何使用 eBPF 编程
+2. **Beginner Examples**  
+   Simple programs such as "Hello World" and basic tracing using kprobe and uprobe.
 
-从头编写 eBPF 程序可能较为复杂。为简化这一过程，LLVM 于 2015 年引入了将高级语言代码编译为 eBPF 字节码的能力。自那时起，eBPF 社区构建了像 `libbpf` 这样的库来管理这些程序。这些库帮助将 eBPF 字节码加载到内核中并执行基本任务。Linux 内核源代码中 `samples/bpf/` 目录包含了众多 eBPF 示例。
+3. **Observability**  
+   Examples focused on monitoring network traffic, file operations, and process behavior using eBPF.
 
-典型的 eBPF 程序包含两个部分：内核空间代码（`*_kern.c`）和用户空间代码（`*_user.c`）。内核空间代码定义逻辑，而用户空间代码负责加载和与内核交互。然而，像 `libbpf-bootstrap` 和 Go eBPF 库这样的工具简化了这一过程，允许一次性编译和更容易的开发。
+4. **Networking**  
+   Examples focused on modifying and optimizing network traffic, such as XDP, TC, and socket.
 
-### eBPF 开发工具
+5. **Security**  
+   Programs for hiding process and files, sending signals to kill process, and tracking process events for security.
 
-- **BCC**：一个基于 Python 的工具链，简化了 eBPF 程序的编写、编译和加载。它提供了许多预构建的追踪工具，但在依赖和兼容性方面存在一些限制。
-- **eBPF Go 库**：一个 Go 库，解耦了获取 eBPF 字节码的过程与加载和管理 eBPF 程序的过程。
-- **libbpf-bootstrap**：基于 `libbpf` 的现代脚手架，提供了高效的工作流用于编写 eBPF 程序，提供简单的一次性编译过程以生成可重用的字节码。
-- **eunomia-bpf**：一个用于编写仅包含内核空间代码的 eBPF 程序的工具链。它通过动态加载 eBPF 程序简化了 eBPF 程序的开发。
+6. **Advanced Use Cases**  
+   Complex examples involving performance profiling, scheduler optimization, and eBPF in user space (e.g., bpftime).
 
-这些工具有助于减少开发 eBPF 程序的复杂性，使开发者更容易优化系统性能、安全性和可观测性。
+7. **In-Depth Topics**  
+   Exploring eBPF for Android, using eBPF for network acceleration, and securing systems through syscall modifications.
 
-## 学习 eBPF 开发的一些技巧
+## How to Use eBPF Programming
 
-本文不会提供更详细的 eBPF 原理介绍，但以下是一个学习计划和参考资料，可能对您有帮助：
+Writing eBPF programs from scratch can be complex. To simplify this, LLVM introduced the ability to compile high-level language code into eBPF bytecode in 2015. The eBPF community has since built libraries like `libbpf` to manage these programs. These libraries help load eBPF bytecode into the kernel and perform essential tasks. The Linux kernel source contains numerous eBPF examples in the `samples/bpf/` directory.
 
-### eBPF 简介（5-7 小时）
+A typical eBPF program involves two parts: kernel space code (`*_kern.c`) and user space code (`*_user.c`). The kernel space code defines the logic, while the user space code manages loading and interacting with the kernel. However, tools like `libbpf-bootstrap` and the Go eBPF library help simplify this process, allowing for one-time compilation and easier development.
 
-- 使用 Google 或其他搜索引擎搜索：eBPF
-- 询问类似 ChatGPT 的工具：什么是 eBPF？
+### Tools for eBPF Development
 
-推荐：
+- **BCC**: A Python-based toolchain that simplifies writing, compiling, and loading eBPF programs. It offers many pre-built tracing tools but has limitations with dependencies and compatibility.
+- **eBPF Go Library**: A Go library that decouples the process of obtaining eBPF bytecode from the loading and management of eBPF programs.
+- **libbpf-bootstrap**: A modern scaffold based on `libbpf` that provides an efficient workflow for writing eBPF programs, offering a simple one-time compilation process for reusable bytecode.
+- **eunomia-bpf**: A toolchain for writing eBPF programs with only kernel space code. It simplifies the development of eBPF programs by dynamically loading them.
 
-- 阅读 eBPF 介绍：<https://ebpf.io/>（30 分钟）
-- 简要了解 eBPF 内核相关文档：<https://docs.ebpf.io/>（了解技术细节的查询来源，30 分钟）
+These tools help reduce the complexity of developing eBPF programs, making the process more accessible to developers aiming to optimize system performance, security, and observability.
 
-回答三个问题：
+## Some Tips on Learning eBPF Development
 
-1. 了解 eBPF 是什么？我们为什么需要它？难道不能使用内核模块吗？
-2. 它有哪些功能？它在 Linux 内核中能做什么？eBPF 程序和助手函数有哪些类型（不需要全部了解，但需要知道在哪里查找）？
-3. 它能用于哪些场景？例如，可以在哪些情况下使用？网络、安全、可观测性？
+This article will not provide a more detailed introduction to the principles of eBPF, but here is a learning plan and reference materials that may be of value:
 
-### 理解如何开发 eBPF 程序（10-15 小时）
+### Introduction to eBPF (5-7h)
 
-了解并尝试 eBPF 开发框架：
+- Google or other search engines: eBPF
+- Ask ChatGPT-like things: What is eBPF?
 
-- bpftrace 教程：<https://eunomia.dev/tutorials/bpftrace-tutorial/>（尝试，1 小时）
-- 使用 BCC 开发各种工具的示例：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md>（运行，3-4 小时）
-- libbpf 的一些示例：<https://github.com/libbpf/libbpf-bootstrap>（运行任何有趣的示例并阅读源代码，2 小时）
-- 教程：<https://github.com/eunomia-bpf/bpf-developer-tutorial>（阅读第 1-10 部分，3-4 小时）
+Recommended:
 
-其他开发框架：Go 或 Rust 语言，请自行搜索和尝试（0-2 小时）
+- Read the introduction to ebpf: <https://ebpf.io/> (30min)
+- Briefly understand the ebpf kernel-related documentation: <https://docs.ebpf.io/> (Know where to queries for tech details, 30min)
 
-如果有问题或想了解的内容，无论是否与本项目相关，都可以在该项目的讨论区开始讨论。
+Answer three questions:
 
-回答一些问题并尝试一些实验（2-5 小时）：
+1. Understand what eBPF is? Why do we need it? Can't we use kernel modules?
+2. What functions does it have? What can it do in the Linux kernel? What are the types of eBPF programs and helpers (not all of them need to be known, but need to know where to find them)?
+3. What can it be used for? For example, in which scenarios can it be used? Networking, security, observability?
 
-1. 如何开发最简单的 eBPF 程序？
-2. 如何使用 eBPF 追踪内核功能或函数？有很多方法，提供相应的代码示例；
-3. 用户模式和内核模式之间的通信解决方案有哪些？如何将信息从用户模式发送到内核模式？如何将信息从内核模式传递到用户模式？提供代码示例；
-4. 编写您自己的 eBPF 程序以实现某个功能；
-5. 在 eBPF 程序的整个生命周期中，用户模式和内核模式分别做了什么？
+### Understand how to develop eBPF programs (10-15h)
 
-## 参考资料
+Understand and try eBPF development frameworks:
 
-- eBPF 介绍：<https://ebpf.io/>
-- BPF 编译器集合（BCC）：<https://github.com/iovisor/bcc>
-- eunomia-bpf：<https://github.com/eunomia-bpf/eunomia-bpf>
+- bpftrace tutorial：<https://eunomia.dev/tutorials/bpftrace-tutorial/> （Try it，1h）
+- Examples of developing various tools with BCC: <https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> (Run through, 3-4h)
+- Some examples of libbpf: <https://github.com/libbpf/libbpf-bootstrap> (Run any interesting one and read the source code, 2h)
+- Tutorials: <https://github.com/eunomia-bpf/bpf-developer-tutorial> (Read part 1-10, 3-4h)
 
-您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/tutorials/> 获取更多示例和完整的教程源代码。所有内容均为开源。我们将继续分享更多关于 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
+Other development frameworks: Go or Rust language, please search and try on your own (0-2h)
+
+Have questions or things you want to know, whether or not they are related to this project, you can start discussing in the discussions of this project.
+
+Answer some questions and try some experiments (2-5h):
+
+1. How to develop the simplest eBPF program?
+2. How to trace a kernel feature or function with eBPF? There are many ways, provide corresponding code examples;
+3. What are the solutions for communication between user mode and kernel mode? How to send information from user mode to kernel mode? How to pass information from kernel mode to user mode? Provide code examples;
+4. Write your own eBPF program to implement a feature;
+5. In the entire lifecycle of an eBPF program, what does it do in user mode and kernel mode?
+
+## References
+
+- eBPF Introduction: <https://ebpf.io/>
+- BPF Compiler Collection (BCC): <https://github.com/iovisor/bcc>
+- eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
+
+You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorial source code. All content is open source. We will continue to share more content about eBPF development practices to help you better understand and master eBPF technology.".

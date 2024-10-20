@@ -1,24 +1,24 @@
-# eBPF 入门开发实践教程五：在 eBPF 中使用  uprobe 捕获 bash 的 readline 函数调用
+# eBPF Tutorial by Example 5: Capturing readline Function Calls with Uprobe
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-本文是 eBPF 入门开发实践教程的第五篇，主要介绍如何使用 uprobe 捕获 bash 的 readline 函数调用。
+This article is the fifth part of the eBPF Tutorial by Example, which mainly introduces how to capture readline function calls in bash using uprobe.
 
-## 什么是uprobe
+## What is uprobe
 
-uprobe是一种用户空间探针，uprobe探针允许在用户空间程序中动态插桩，插桩位置包括：函数入口、特定偏移处，以及函数返回处。当我们定义uprobe时，内核会在附加的指令上创建快速断点指令（x86机器上为int3指令），当程序执行到该指令时，内核将触发事件，程序陷入到内核态，并以回调函数的方式调用探针函数，执行完探针函数再返回到用户态继续执行后序的指令。
+uprobe is a user-space probe that allows dynamic instrumentation in user-space programs. The probe locations include function entry, specific offsets, and function returns. When we define an uprobe, the kernel creates fast breakpoint instructions (int3 instructions on x86 machines) on the attached instructions. When the program executes this instruction, the kernel triggers an event, causing the program to enter kernel mode and call the probe function through a callback function. After executing the probe function, the program returns to user mode to continue executing subsequent instructions.
 
-uprobe基于文件，当一个二进制文件中的一个函数被跟踪时，所有使用到这个文件的进程都会被插桩，包括那些尚未启动的进程，这样就可以在全系统范围内跟踪系统调用。
+uprobe is file-based. When a function in a binary file is traced, all processes that use the file are instrumented, including those that have not yet been started, allowing system calls to be tracked system-wide.
 
-uprobe适用于在用户态去解析一些内核态探针无法解析的流量，例如http2流量（报文header被编码，内核无法解码），https流量（加密流量，内核无法解密）。具体可以参考 [eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据](../30-sslsniff/README.md) 中的例子。
+uprobe is suitable for parsing some traffic in user mode that cannot be resolved by kernel mode probes, such as HTTP/2 traffic (where the header is encoded and cannot be decoded by the kernel) and HTTPS traffic (which is encrypted and cannot be decrypted by the kernel). For more information, see the example in [eBPF Tutorial by Example: Capturing SSL/TLS Plaintext Data from Multiple Libraries with Uprobe](../30-sslsniff/README.md).
 
-Uprobe 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
+Uprobe in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime). bpftime is a user mode eBPF runtime based on LLVM JIT/AOT. It can run eBPF programs in user mode and is compatible with kernel mode eBPF, avoiding context switching between kernel mode and user mode, thereby improving the execution efficiency of eBPF programs by 10 times.
 
-## 使用 uprobe 捕获 bash 的 readline 函数调用
+## Capturing readline Function Calls in bash using uprobe
 
-uprobe 是一种用于捕获用户空间函数调用的 eBPF 的探针，我们可以通过它来捕获用户空间程序调用的系统函数。
+uprobe is an eBPF probe used to capture user-space function calls, allowing us to capture system functions called by user-space programs.
 
-例如，我们可以使用 uprobe 来捕获 bash 的 readline 函数调用，从而获取用户在 bash 中输入的命令行。示例代码如下：
+For example, we can use uprobe to capture readline function calls in bash and get the command line input from the user. The example code is as follows:
 
 ```c
 #include <vmlinux.h>
@@ -28,16 +28,6 @@ uprobe 是一种用于捕获用户空间函数调用的 eBPF 的探针，我们�
 #define TASK_COMM_LEN 16
 #define MAX_LINE_SIZE 80
 
-/* Format of u[ret]probe section definition supporting auto-attach:
- * u[ret]probe/binary:function[+offset]
- *
- * binary can be an absolute/relative path or a filename; the latter is resolved to a
- * full binary path via bpf_program__attach_uprobe_opts.
- *
- * Specifying uprobe+ ensures we carry out strict matching; either "uprobe" must be
- * specified (and auto-attach is not possible) or the above format is specified for
- * auto-attach.
- */
 SEC("uretprobe//bin/bash:readline")
 int BPF_KRETPROBE(printret, const void *ret)
 {
@@ -49,7 +39,7 @@ int BPF_KRETPROBE(printret, const void *ret)
   return 0;
 
  bpf_get_current_comm(&comm, sizeof(comm));
-
+ 
  pid = bpf_get_current_pid_tgid() >> 32;
  bpf_probe_read_user_str(str, sizeof(str), ret);
 
@@ -61,65 +51,63 @@ int BPF_KRETPROBE(printret, const void *ret)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这段代码的作用是在 bash 的 readline 函数返回时执行指定的 BPF_KRETPROBE 函数，即 printret 函数。
+The purpose of this code is to execute the specified BPF_PROBE function (printret function) when the readline function in bash returns.
 
-在 printret 函数中，我们首先获取了调用 readline 函数的进程的进程名称和进程 ID，然后通过 bpf_probe_read_user_str 函数读取了用户输入的命令行字符串，最后通过 bpf_printk 函数打印出进程 ID、进程名称和输入的命令行字符串。
+In the printret function, we first obtain the process name and process ID of the process calling the readline function. Then, we use the bpf_probe_read_user_str function to read the user input command line string. Lastly, we use the bpf_printk function to print the process ID, process name, and input command line string.
 
-除此之外，我们还需要通过 SEC 宏来定义 uprobe 探针，并使用 BPF_KRETPROBE 宏来定义探针函数。
-
-在 SEC 宏中，我们需要指定 uprobe 的类型、要捕获的二进制文件的路径和要捕获的函数名称。例如，上面的代码中的 SEC 宏的定义如下：
+In addition, we also need to define the uprobe probe using the SEC macro and define the probe function using the BPF_KRETPROBE macro.In the `SEC` macro in the code above, we need to specify the type of the uprobe, the path of the binary file to capture, and the name of the function to capture. For example, the definition of the `SEC` macro in the code above is as follows:
 
 ```c
 SEC("uprobe//bin/bash:readline")
 ```
 
-这表示我们要捕获的是 /bin/bash 二进制文件中的 readline 函数。
+This indicates that we want to capture the `readline` function in the `/bin/bash` binary file.
 
-接下来，我们需要使用 BPF_KRETPROBE 宏来定义探针函数，例如：
+Next, we need to use the `BPF_KRETPROBE` macro to define the probe function. For example:
 
 ```c
 BPF_KRETPROBE(printret, const void *ret)
 ```
 
-这里的 printret 是探针函数的名称，const void *ret 是探针函数的参数，它代表被捕获的函数的返回值。
+Here, `printret` is the name of the probe function, and `const void *ret` is the parameter of the probe function, which represents the return value of the captured function.
 
-然后，我们使用了 bpf_get_current_comm 函数获取当前任务的名称，并将其存储在 comm 数组中。
-
-```c
- bpf_get_current_comm(&comm, sizeof(comm));
-```
-
-使用 bpf_get_current_pid_tgid 函数获取当前进程的 PID，并将其存储在 pid 变量中。
+Then, we use the `bpf_get_current_comm` function to get the name of the current task and store it in the `comm` array.
 
 ```c
- pid = bpf_get_current_pid_tgid() >> 32;
+bpf_get_current_comm(&comm, sizeof(comm));
 ```
 
-使用 bpf_probe_read_user_str 函数从用户空间读取 readline 函数的返回值，并将其存储在 str 数组中。
+We use the `bpf_get_current_pid_tgid` function to get the PID of the current process and store it in the `pid` variable.
 
 ```c
- bpf_probe_read_user_str(str, sizeof(str), ret);
+pid = bpf_get_current_pid_tgid() >> 32;
 ```
 
-最后使用 bpf_printk 函数输出 PID、任务名称和用户输入的字符串。
+We use the `bpf_probe_read_user_str` function to read the return value of the `readline` function from the user space and store it in the `str` array.
 
 ```c
- bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
+bpf_probe_read_user_str(str, sizeof(str), ret);
 ```
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+Finally, we use the `bpf_printk` function to output the PID, task name, and user input string.
 
-编译运行上述代码：
+```c
+bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
+```
+
+eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, build, distribution, and running of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compiler toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+
+Compile and run the above code:
 
 ```console
 $ ecc bashreadline.bpf.c
 Compiling bpf object...
 Packing ebpf object and config into package.json...
 $ sudo ecli run package.json
-Runing eBPF program...
+Running eBPF program...
 ```
 
-运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
+After running this program, you can view the output of the eBPF program by checking the file `/sys/kernel/debug/tracing/trace_pipe`:
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
@@ -127,12 +115,10 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
             bash-32969   [000] d..31 64002.056951: bpf_trace_printk: PID 32969 (bash) read: fff
 ```
 
-可以看到，我们成功的捕获了 bash 的 readline 函数调用，并获取了用户在 bash 中输入的命令行。
+You can see that we have successfully captured the `readline` function call of `bash` and obtained the command line entered by the user in `bash`.
 
-## 总结
+## Summary
 
-在上述代码中，我们使用了 SEC 宏来定义了一个 uprobe 探针，它指定了要捕获的用户空间程序 (bin/bash) 和要捕获的函数 (readline)。此外，我们还使用了 BPF_KRETPROBE 宏来定义了一个用于处理 readline 函数返回值的回调函数 (printret)。该函数可以获取到 readline 函数的返回值，并将其打印到内核日志中。通过这样的方式，我们就可以使用 eBPF 来捕获 bash 的 readline 函数调用，并获取用户在 bash 中输入的命令行。
+In the above code, we used the `SEC` macro to define an uprobe probe, which specifies the user space program (`bin/bash`) to be captured and the function (`readline`) to be captured. In addition, we used the `BPF_KRETPROBE` macro to define a callback function (`printret`) for handling the return value of the `readline` function. This function can retrieve the return value of the `readline` function and print it to the kernel log. In this way, we can use eBPF to capture the `readline` function call of `bash` and obtain the command line entered by the user in `bash`.
 
-更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
-
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> to get more examples and complete tutorials.

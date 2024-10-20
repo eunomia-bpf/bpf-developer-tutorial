@@ -1,18 +1,18 @@
-# eBPF 入门实践教程七：捕获进程执行事件，通过 perf event array 向用户态打印输出
+# eBPF Tutorial by Example 7: Capturing Process Execution, Output with perf event array
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-本文是 eBPF 入门开发实践教程的第七篇，主要介绍如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，不需要再通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出。通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。
+This article is the seventh part of the eBPF Tutorial by Example and mainly introduces how to capture process execution events in the Linux kernel and print output to the user command line via a perf event array. This eliminates the need to view the output of eBPF programs by checking the `/sys/kernel/debug/tracing/trace_pipe` file. After sending information to user space via the perf event array, complex data processing and analysis can be performed.
 
 ## perf buffer
 
-eBPF 提供了两个环形缓冲区，可以用来将信息从 eBPF 程序传输到用户区控制器。第一个是perf环形缓冲区，，它至少从内核v4.15开始就存在了。第二个是后来引入的 BPF 环形缓冲区。本文只考虑perf环形缓冲区。
+eBPF provides two circular buffers for transferring information from eBPF programs to user space controllers. The first one is the perf circular buffer, which has existed since at least kernel v4.15. The second one is the BPF circular buffer introduced later. This article only considers the perf circular buffer.
 
 ## execsnoop
 
-通过 perf event array 向用户态命令行打印输出，需要编写一个头文件，一个 C 源文件。示例代码如下：
+To print output to the user command line via the perf event array, a header file and a C source file need to be written. The example code is as follows:
 
-头文件：execsnoop.h
+Header file: execsnoop.h
 
 ```c
 #ifndef __EXECSNOOP_H
@@ -32,7 +32,7 @@ struct event {
 #endif /* __EXECSNOOP_H */
 ```
 
-源文件：execsnoop.bpf.c
+Source file: execsnoop.bpf.c
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -48,7 +48,7 @@ struct {
 } events SEC(".maps");
 
 SEC("tracepoint/syscalls/sys_enter_execve")
-int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
+int tracepoint_syscalls_sys_enter_execve(struct trace_event_raw_sys_enter* ctx)
 {
     u64 id;
     pid_t pid, tgid;
@@ -72,27 +72,27 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这段代码定义了个 eBPF 程序，用于捕获进程执行 execve 系统调用的入口。
+This code defines an eBPF program for capturing the entry of the `execve` system call.
 
-在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
+In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_probe_read_str` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
 
-使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件, 并分析进程的执行情况。
+With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+We use eunomia-bpf to compile and execute this example. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
 
-使用容器编译：
+Compile using a container:
 
 ```shell
 docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
-或者使用 ecc 编译：
+Or compile using ecc:
 
 ```shell
 ecc execsnoop.bpf.c execsnoop.h
 ```
 
-运行
+Run:
 
 ```console
 $ sudo ./ecli run package.json 
@@ -106,9 +106,9 @@ TIME     PID     PPID    UID     COMM
 21:28:30  40753  40752   1000    cpuUsage.sh
 ```
 
-## 总结
+## Summary
 
-本文介绍了如何捕获 Linux 内核中进程执行的事件，并且通过 perf event array 向用户态命令行打印输出，通过 perf event array 向用户态发送信息之后，可以进行复杂的数据处理和分析。在 libbpf 对应的内核态代码中，定义这样一个结构体和对应的头文件：
+This article introduces how to capture events of processes running in the Linux kernel and print output to the user command-line using the perf event array. After sending information to the user space via the perf event array, complex data processing and analysis can be performed. In the corresponding kernel code of libbpf, a structure and corresponding header file can be defined as follows:
 
 ```c
 struct {
@@ -118,8 +118,8 @@ struct {
 } events SEC(".maps");
 ```
 
-就可以往用户态直接发送信息。
+This allows sending information directly to the user space.
 
-更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
+For more examples and detailed development guide, please refer to the official documentation of eunomia-bpf: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) to get more examples and complete tutorials."

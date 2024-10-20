@@ -1,12 +1,12 @@
-# eBPF 入门开发实践教程六：捕获进程发送信号的系统调用集合，使用 hash map 保存状态
+# eBPF Tutorial by Example 6: Capturing Signal Sending and Store State with Hash Maps
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具，它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel that allows developers to dynamically load, update, and run user-defined code at runtime.
 
-本文是 eBPF 入门开发实践教程的第六篇，主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。
+This article is the sixth part of the eBPF Tutorial by Example. It mainly introduces how to implement an eBPF tool that captures a collection of system calls that send signals to processes and uses a hash map to store state.
 
 ## sigsnoop
 
-示例代码如下：
+The example code is as follows:
 
 ```c
 #include <vmlinux.h>
@@ -87,21 +87,21 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
-上面的代码定义了一个 eBPF 程序，用于捕获进程发送信号的系统调用，包括 kill、tkill 和 tgkill。它通过使用 tracepoint 来捕获系统调用的进入和退出事件，并在这些事件发生时执行指定的探针函数，例如 probe_entry 和 probe_exit。
+The above code defines an eBPF program for capturing system calls that send signals to processes, including kill, tkill, and tgkill. It captures the enter and exit events of system calls by using tracepoints, and executes specified probe functions such as `probe_entry` and `probe_exit` when these events occur.
 
-在探针函数中，我们使用 bpf_map 存储捕获的事件信息，包括发送信号的进程 ID、接收信号的进程 ID、信号值和进程的可执行文件名称。在系统调用退出时，我们将获取存储在 bpf_map 中的事件信息，并使用 bpf_printk 打印进程 ID、进程名称、发送的信号和系统调用的返回值。
+In the probe function, we use the bpf_map to store the captured event information, including the process ID of the sending signal, the process ID of the receiving signal, the signal value, and the name of the executable for the current task. When the system call exits, we retrieve the event information stored in the bpf_map and use bpf_printk to print the process ID, process name, sent signal, and return value of the system call.
 
-最后，我们还需要使用 SEC 宏来定义探针，并指定要捕获的系统调用的名称，以及要执行的探针函数。
+Finally, we also need to use the SEC macro to define the probe and specify the name of the system call to be captured and the probe function to be executed.
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its purpose is to simplify the development, building, distribution, and running of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> for downloading and installing the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
 
-编译运行上述代码：
+Compile and run the above code:
 
 ```shell
 docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
-或者
+or
 
 ```console
 $ ecc sigsnoop.bpf.c
@@ -109,10 +109,10 @@ Compiling bpf object...
 Generating export types...
 Packing ebpf object and config into package.json...
 $ sudo ecli run package.json
-Runing eBPF program...
+Running eBPF program...
 ```
 
-运行这段程序后，可以通过查看 /sys/kernel/debug/tracing/trace_pipe 文件来查看 eBPF 程序的输出：
+After running this program, you can view the output of the eBPF program by checking the /sys/kernel/debug/tracing/trace_pipe file:
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
@@ -122,9 +122,9 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
      systemd-journal-363     [000] d...1   672.563870: bpf_trace_printk: to PID 1527, ret = -3
 ```
 
-## 总结
+## Summary
 
-本文主要介绍如何实现一个 eBPF 工具，捕获进程发送信号的系统调用集合，使用 hash map 保存状态。使用 hash map 需要定义一个结构体：
+This article mainly introduces how to implement an eBPF tool to capture the collection of system calls sent by processes using signals and save the state using a hash map. Using a hash map requires defining a struct:
 
 ```c
 struct {
@@ -135,8 +135,6 @@ struct {
 } values SEC(".maps");
 ```
 
-并使用一些对应的 API 进行访问，例如 bpf_map_lookup_elem、bpf_map_update_elem、bpf_map_delete_elem 等。
+And using corresponding APIs for access, such as bpf_map_lookup_elem, bpf_map_update_elem, bpf_map_delete_elem, etc.
 
-更多的例子和详细的开发指南，请参考 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf>
-
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> to get more examples and complete tutorials.

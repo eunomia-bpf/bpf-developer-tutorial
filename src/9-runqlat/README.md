@@ -1,32 +1,32 @@
-# eBPF 入门开发实践教程九：捕获进程调度延迟，以直方图方式记录
+# eBPF Tutorial by Example 9: Capturing Scheduling Latency and Recording as Histogram
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool on the Linux kernel. It allows developers to dynamically load, update, and run user-defined code at runtime.
 
-runqlat 是一个 eBPF 工具，用于分析 Linux 系统的调度性能。具体来说，runqlat 用于测量一个任务在被调度到 CPU 上运行之前在运行队列中等待的时间。这些信息对于识别性能瓶颈和提高 Linux 内核调度算法的整体效率非常有用。
+runqlat is an eBPF tool used for analyzing the scheduling performance of the Linux system. Specifically, runqlat is used to measure the time a task waits in the run queue before being scheduled to run on a CPU. This information is very useful for identifying performance bottlenecks and improving the overall efficiency of the Linux kernel scheduling algorithm.
 
-## runqlat 原理
+## runqlat Principle
 
-本教程是 eBPF 入门开发实践系列的第九部分，主题是 "捕获进程调度延迟"。在此，我们将介绍一个名为 runqlat 的程序，其作用是以直方图的形式记录进程调度延迟。
+This tutorial is the ninth part of the eBPF beginner's development series, with the topic "Capturing Process Scheduling Latency". Here, we will introduce a program called runqlat, which records process scheduling latency as a histogram.
 
-Linux 操作系统使用进程来执行所有的系统和用户任务。这些进程可能被阻塞、杀死、运行，或者正在等待运行。处在后两种状态的进程数量决定了 CPU 运行队列的长度。
+The Linux operating system uses processes to execute all system and user tasks. These processes can be blocked, killed, running, or waiting to run. The number of processes in the latter two states determines the length of the CPU run queue.
 
-进程有几种可能的状态，如：
+Processes can have several possible states, such as:
 
-- 可运行或正在运行
-- 可中断睡眠
-- 不可中断睡眠
-- 停止
-- 僵尸进程
+- Runnable or running
+- Interruptible sleep
+- Uninterruptible sleep
+- Stopped
+- Zombie process
 
-等待资源或其他函数信号的进程会处在可中断或不可中断的睡眠状态：进程被置入睡眠状态，直到它需要的资源变得可用。然后，根据睡眠的类型，进程可以转移到可运行状态，或者保持睡眠。
+Processes waiting for resources or other function signals are in the interruptible or uninterruptible sleep state: the process is put to sleep until the resource it needs becomes available. Then, depending on the type of sleep, the process can transition to the runnable state or remain asleep.
 
-即使进程拥有它需要的所有资源，它也不会立即开始运行。它会转移到可运行状态，与其他处在相同状态的进程一起排队。CPU可以在接下来的几秒钟或毫秒内执行这些进程。调度器为 CPU 排列进程，并决定下一个要执行的进程。
+Even when a process has all the resources it needs, it does not start running immediately. It transitions to the runnable state and is queued together with other processes in the same state. The CPU can execute these processes in the next few seconds or milliseconds. The scheduler arranges the processes for the CPU and determines the next process to run.
 
-根据系统的硬件配置，这个可运行队列（称为 CPU 运行队列）的长度可以短也可以长。短的运行队列长度表示 CPU 没有被充分利用。另一方面，如果运行队列长，那么可能意味着 CPU 不够强大，无法执行所有的进程，或者 CPU 的核心数量不足。在理想的 CPU 利用率下，运行队列的长度将等于系统中的核心数量。
+Depending on the hardware configuration of the system, the length of this runnable queue (known as the CPU run queue) can be short or long. A short run queue length indicates that the CPU is not being fully utilized. On the other hand, if the run queue is long, it may mean that the CPU is not powerful enough to handle all the processes or that the number of CPU cores is insufficient. In an ideal CPU utilization, the length of the run queue will be equal to the number of cores in the system.
 
-进程调度延迟，也被称为 "run queue latency"，是衡量线程从变得可运行（例如，接收到中断，促使其处理更多工作）到实际在 CPU 上运行的时间。在 CPU 饱和的情况下，你可以想象线程必须等待其轮次。但在其他奇特的场景中，这也可能发生，而且在某些情况下，它可以通过调优减少，从而提高整个系统的性能。
+Process scheduling latency, also known as "run queue latency," is the time it takes for a thread to go from becoming runnable (e.g., receiving an interrupt that prompts it to do more work) to actually running on the CPU. In the case of CPU saturation, you can imagine that the thread has to wait for its turn. But in other peculiar scenarios, this can also happen, and in some cases, it can be reduced by tuning to improve the overall system performance.
 
-我们将通过一个示例来阐述如何使用 runqlat 工具。这是一个负载非常重的系统：
+We will illustrate how to use the runqlat tool through an example. This is a heavily loaded system:
 
 ```shell
 # runqlat
@@ -44,24 +44,13 @@ Tracing run queue latency... Hit Ctrl-C to end.
        256 -> 511        : 3        |                                        |
        512 -> 1023       : 5        |                                        |
       1024 -> 2047       : 27       |*                                       |
-      2048 -> 4095       : 30       |*                                       |
-      4096 -> 8191       : 20       |                                        |
-      8192 -> 16383      : 29       |*                                       |
-     16384 -> 32767      : 809      |****************************************|
-     32768 -> 65535      : 64       |***                                     |
 ```
 
-在这个输出中，我们看到了一个双模分布，一个模在0到15微秒之间，另一个模在16到65毫秒之间。这些模式在分布（它仅仅是 "count" 列的视觉表示）中显示为尖峰。例如，读取一行：在追踪过程中，809个事件落入了16384到32767微秒的范围（16到32毫秒）。
-
-在后续的教程中，我们将深入探讨如何利用 eBPF 对此类指标进行深度跟踪和分析，以更好地理解和优化系统性能。同时，我们也将学习更多关于 Linux 内核调度器、中断处理和 CPU 饱
-
-runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针来测量进程在运行队列中的时间。当进程被排队时，trace_enqueue 函数会在一个映射中记录时间戳。当进程被调度到 CPU 上运行时，handle_switch 函数会检索时间戳，并计算当前时间与排队时间之间的时间差。这个差值（或 delta）被用于更新进程的直方图，该直方图记录运行队列延迟的分布。该直方图可用于分析 Linux 内核的调度性能。
-
-## runqlat 代码实现
+## runqlat Code Implementation
 
 ### runqlat.bpf.c
 
-首先我们需要编写一个源代码文件 runqlat.bpf.c:
+First, we need to write a source code file `runqlat.bpf.c`:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -111,84 +100,84 @@ struct {
 
 static int trace_enqueue(u32 tgid, u32 pid)
 {
- u64 ts;
+u64 ts;
 
- if (!pid)
+if (!pid)
   return 0;
- if (targ_tgid && targ_tgid != tgid)
+if (targ_tgid && targ_tgid != tgid)
   return 0;
 
- ts = bpf_ktime_get_ns();
- bpf_map_update_elem(&start, &pid, &ts, BPF_ANY);
- return 0;
+ts = bpf_ktime_get_ns();
+bpf_map_update_elem(&start, &pid, &ts, BPF_ANY);
+return 0;
 }
 
 static unsigned int pid_namespace(struct task_struct *task)
 {
- struct pid *pid;
- unsigned int level;
- struct upid upid;
- unsigned int inum;
+struct pid *pid;
+unsigned int level;
+struct upid upid;
+unsigned int inum;
 
- /*  get the pid namespace by following task_active_pid_ns(),
-  *  pid->numbers[pid->level].ns
-  */
- pid = BPF_CORE_READ(task, thread_pid);
- level = BPF_CORE_READ(pid, level);
- bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
- inum = BPF_CORE_READ(upid.ns, ns.inum);
+/*  get the pid namespace by following task_active_pid_ns(),
+ *  pid->numbers[pid->level].ns
+ */
+pid = BPF_CORE_READ(task, thread_pid);
+level = BPF_CORE_READ(pid, level);
+bpf_core_read(&upid, sizeof(upid), &pid->numbers[level]);
+inum = BPF_CORE_READ(upid.ns, ns.inum);
 
- return inum;
+return inum;
 }
 
 static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
 {
- struct hist *histp;
- u64 *tsp, slot;
- u32 pid, hkey;
- s64 delta;
+struct hist *histp;
+u64 *tsp, slot;
+u32 pid, hkey;
+s64 delta;
 
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
   return 0;
 
- if (get_task_state(prev) == TASK_RUNNING)
+if (get_task_state(prev) == TASK_RUNNING)
   trace_enqueue(BPF_CORE_READ(prev, tgid), BPF_CORE_READ(prev, pid));
 
- pid = BPF_CORE_READ(next, pid);
+pid = BPF_CORE_READ(next, pid);
 
- tsp = bpf_map_lookup_elem(&start, &pid);
- if (!tsp)
+tsp = bpf_map_lookup_elem(&start, &pid);
+if (!tsp)
   return 0;
- delta = bpf_ktime_get_ns() - *tsp;
- if (delta < 0)
+delta = bpf_ktime_get_ns() - *tsp;
+if (delta < 0)
   goto cleanup;
 
- if (targ_per_process)
+if (targ_per_process)
   hkey = BPF_CORE_READ(next, tgid);
- else if (targ_per_thread)
+else if (targ_per_thread)
   hkey = pid;
- else if (targ_per_pidns)
+else if (targ_per_pidns)
   hkey = pid_namespace(next);
- else
+else
   hkey = -1;
- histp = bpf_map_lookup_or_try_init(&hists, &hkey, &zero);
- if (!histp)
+histp = bpf_map_lookup_or_try_init(&hists, &hkey, &zero);
+if (!histp)
   goto cleanup;
- if (!histp->comm[0])
+if (!histp->comm[0])
   bpf_probe_read_kernel_str(&histp->comm, sizeof(histp->comm),
      next->comm);
- if (targ_ms)
+if (targ_ms)
   delta /= 1000000U;
- else
+else
   delta /= 1000U;
- slot = log2l(delta);
- if (slot >= MAX_SLOTS)
+slot = log2l(delta);
+if (slot >= MAX_SLOTS)
   slot = MAX_SLOTS - 1;
- __sync_fetch_and_add(&histp->slots[slot], 1);
+__sync_fetch_and_add(&histp->slots[slot], 1);
 
 cleanup:
- bpf_map_delete_elem(&start, &pid);
- return 0;
+bpf_map_delete_elem(&start, &pid);
+return 0;
 }
 
 SEC("raw_tp/sched_wakeup")
@@ -218,7 +207,9 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这其中定义了一些常量和全局变量，用于过滤对应的追踪目标：
+#### Constants and Global Variables
+
+The code defines several constants and volatile global variables used for filtering corresponding tracing targets. These variables include:
 
 ```c
 #define MAX_ENTRIES 10240
@@ -232,9 +223,13 @@ const volatile bool targ_ms = false;
 const volatile pid_t targ_tgid = 0;
 ```
 
-这些变量包括最大映射项数量、任务状态、过滤选项和目标选项。这些选项可以通过用户空间程序设置，以定制 eBPF 程序的行为。
+- `MAX_ENTRIES`: The maximum number of map entries.
+- `TASK_RUNNING`: The task status value.
+- `filter_cg`, `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: Boolean variables for filtering and target options. These options can be set by user-space programs to customize the behavior of the eBPF program.
 
-接下来，定义了一些 eBPF 映射：
+#### eBPF Maps
+
+The code defines several eBPF maps including:
 
 ```c
 struct {
@@ -261,15 +256,15 @@ struct {
 } hists SEC(".maps");
 ```
 
-这些映射包括：
+- `cgroup_map`: A cgroup array map used for filtering cgroups.
+- `start`: A hash map used to store timestamps when processes are enqueued.
+- `hists`: A hash map used to store histogram data for recording process scheduling delays.
 
-- cgroup_map 用于过滤 cgroup；
-- start 用于存储进程入队时的时间戳；
-- hists 用于存储直方图数据，记录进程调度延迟。
+#### Helper Functions
 
-接下来是一些辅助函数：
+The code includes two helper functions:
 
-trace_enqueue 函数用于在进程入队时记录其时间戳：
+- `trace_enqueue`: This function is used to record the timestamp when a process is enqueued. It takes the `tgid` and `pid` values as parameters. If the `pid` value is 0 or the `targ_tgid` value is not 0 and not equal to `tgid`, the function returns 0. Otherwise, it retrieves the current timestamp using `bpf_ktime_get_ns` and updates the `start` map with the `pid` key and the timestamp value.
 
 ```c
 static int trace_enqueue(u32 tgid, u32 pid)
@@ -287,7 +282,7 @@ static int trace_enqueue(u32 tgid, u32 pid)
 }
 ```
 
-pid_namespace 函数用于获取进程所属的 PID namespace：
+- `pid_namespace`: This function is used to get the PID namespace of a process. It takes a `task_struct` pointer as a parameter and returns the PID namespace of the process. The function retrieves the PID namespace by following `task_active_pid_ns()` and `pid->numbers[pid->level].ns`.
 
 ```c
 static unsigned int pid_namespace(struct task_struct *task)
@@ -309,7 +304,7 @@ static unsigned int pid_namespace(struct task_struct *task)
 }
 ```
 
-handle_switch 函数是核心部分，用于处理调度切换事件，计算进程调度延迟并更新直方图数据：
+The `handle_switch` function is the core part, used to handle scheduling switch events, calculate process scheduling latency, and update histogram data:
 
 ```c
 static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
@@ -318,27 +313,27 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 }
 ```
 
-首先，函数根据 filter_cg 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 TASK_RUNNING，则调用 trace_enqueue 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
+Firstly, the function determines whether to filter cgroup based on the setting of `filter_cg`. Then, if the previous process state is `TASK_RUNNING`, the `trace_enqueue` function is called to record the enqueue time of the process. Then, the function looks up the enqueue timestamp of the next process. If it is not found, it returns directly. The scheduling latency (delta) is calculated, and the key for the histogram map (hkey) is determined based on different options (targ_per_process, targ_per_thread, targ_per_pidns). Then, the histogram map is looked up or initialized, and the histogram data is updated. Finally, the enqueue timestamp record of the process is deleted.
 
-接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：
+Next is the entry point of the eBPF program. The program uses three entry points to capture different scheduling events:
 
-- handle_sched_wakeup：用于处理 sched_wakeup 事件，当一个进程从睡眠状态被唤醒时触发。
-- handle_sched_wakeup_new：用于处理 sched_wakeup_new 事件，当一个新创建的进程被唤醒时触发。
-- handle_sched_switch：用于处理 sched_switch 事件，当调度器选择一个新的进程运行时触发。
+- `handle_sched_wakeup`: Used to handle the `sched_wakeup` event triggered when a process is woken up from sleep state.
+- `handle_sched_wakeup_new`: Used to handle the `sched_wakeup_new` event triggered when a newly created process is woken up.
+- `handle_sched_switch`: Used to handle the `sched_switch` event triggered when the scheduler selects a new process to run.
 
-这些入口点分别处理不同的调度事件，但都会调用 handle_switch 函数来计算进程的调度延迟并更新直方图数据。
+These entry points handle different scheduling events, but all call the `handle_switch` function to calculate the scheduling latency of the process and update the histogram data.
 
-最后，程序包含一个许可证声明：
+Finally, the program includes a license declaration:
 
 ```c
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这一声明指定了 eBPF 程序的许可证类型，这里使用的是 "GPL"。这对于许多内核功能是必需的，因为它们要求 eBPF 程序遵循 GPL 许可证。
+This declaration specifies the license type of the eBPF program, which is "GPL" in this case. This is required for many kernel features as they require eBPF programs to follow the GPL license.
 
 ### runqlat.h
 
-然后我们需要定义一个头文件`runqlat.h`，用来给用户态处理从内核态上报的事件：
+Next, we need to define a header file `runqlat.h` for handling events reported from kernel mode to user mode:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -349,16 +344,16 @@ char LICENSE[] SEC("license") = "GPL";
 #define MAX_SLOTS 26
 
 struct hist {
- __u32 slots[MAX_SLOTS];
- char comm[TASK_COMM_LEN];
+    __u32 slots[MAX_SLOTS];
+    char comm[TASK_COMM_LEN];
 };
 
 #endif /* __RUNQLAT_H */
 ```
 
-## 编译运行
+## Compilation and Execution
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+We will use `eunomia-bpf` to compile and run this example. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the `ecc` compilation toolkit and `ecli` runtime.
 
 Compile:
 
@@ -366,7 +361,7 @@ Compile:
 docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
-或者
+or
 
 ```console
 $ ecc runqlat.bpf.c runqlat.h
@@ -384,18 +379,15 @@ Usage: runqlat_bpf [--help] [--version] [--verbose] [--filter_cg] [--targ_per_pr
 A simple eBPF program
 
 Optional arguments:
-  -h, --help            shows help message and exits 
-  -v, --version         prints version information and exits 
-  --verbose             prints libbpf debug information 
-  --filter_cg           set value of bool variable filter_cg 
-  --targ_per_process    set value of bool variable targ_per_process 
-  --targ_per_thread     set value of bool variable targ_per_thread 
-  --targ_per_pidns      set value of bool variable targ_per_pidns 
-  --targ_ms             set value of bool variable targ_ms 
-  --targ_tgid           set value of pid_t variable targ_tgid 
-
-Built with eunomia-bpf framework.
-See https://github.com/eunomia-bpf/eunomia-bpf for more information.
+-h, --help            shows help message and exits 
+-v, --version         prints version information and exits 
+--verbose             prints libbpf debug information 
+--filter_cg           set value of bool variable filter_cg 
+--targ_per_process    set value of bool variable targ_per_process 
+--targ_per_thread     set value of bool variable targ_per_thread 
+--targ_per_pidns      set value of bool variable targ_per_pidns 
+--targ_ms             set value of bool variable targ_ms 
+--targ_tgid           set value of pid_t variable targ_tgid 
 
 $ sudo ecli run examples/bpftools/runqlat/package.json
 key =  4294967295
@@ -419,7 +411,7 @@ comm = rcu_preempt
      16384 -> 32767      : 1        |                                        |
 
 $ sudo ecli run examples/bpftools/runqlat/package.json --targ_per_process
-key =  3189
+key = 3189
 comm = cpptools
 
      (unit)              : count    distribution
@@ -431,19 +423,20 @@ comm = cpptools
         32 -> 63         : 11       |****************************************|
         64 -> 127        : 8        |*****************************           |
        128 -> 255        : 3        |**********                              |
+
 ```
 
-完整源代码请见：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/9-runqlat>
+Complete source code can be found at: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/9-runqlat>
 
-参考资料：
+References:
 
 - <https://www.brendangregg.com/blog/2016-10-08/linux-bcc-runqlat.html>
 - <https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.c>
 
-## 总结
+## Summary
 
-runqlat 是一个 Linux 内核 BPF 程序，通过柱状图来总结调度程序运行队列延迟，显示任务等待运行在 CPU 上的时间长度。编译这个程序可以使用 ecc 工具，运行时可以使用 ecli 命令。
+runqlat is a Linux kernel BPF program that summarizes scheduler run queue latency using a bar chart to show the length of time tasks wait to run on a CPU. To compile this program, you can use the `ecc` tool and to run it, you can use the `ecli` command.
 
-runqlat 是一种用于监控Linux内核中进程调度延迟的工具。它可以帮助您了解进程在内核中等待执行的时间，并根据这些信息优化进程调度，提高系统的性能。可以在 libbpf-tools 中找到最初的源代码：<https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
+runqlat is a tool for monitoring process scheduling latency in the Linux kernel. It can help you understand the time processes spend waiting to run in the kernel and optimize process scheduling based on this information to improve system performance. The original source code can be found in libbpf-tools: <https://github.com/iovisor/bcc/blob/master/libbpf-tools/runqlat.bpf.c>
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practices, you can visit our tutorial code repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.

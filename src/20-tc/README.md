@@ -1,18 +1,18 @@
-# eBPF 入门实践教程二十：使用 eBPF 进行 tc 流量控制
+# eBPF Tutorial by Example 20: tc Traffic Control
 
-## 背景
+## Background
 
-Linux 的流量控制子系统（Traffic Control, tc）在内核中存在了多年，类似于 iptables 和 netfilter 的关系，tc 也包括一个用户态的 tc 程序和内核态的 trafiic control 框架，主要用于从速率、顺序等方面控制数据包的发送和接收。从 Linux 4.1 开始，tc 增加了一些新的挂载点，并支持将 eBPF 程序作为 filter 加载到这些挂载点上。
+Linux's Traffic Control (tc) subsystem has been present in the kernel for many years. Similar to the relationship between iptables and netfilter, tc includes a user-space tc program and a kernel-level traffic control framework. It is mainly used to control the sending and receiving of packets in terms of rate, sequence, and other aspects. Starting from Linux 4.1, tc has added some new attachment points and supports loading eBPF programs as filters onto these attachment points.
 
-## tc 概述
+## Overview of tc
 
-从协议栈上看，tc 位于链路层，其所在位置已经完成了 sk_buff 的分配，要晚于 xdp。为了实现对数据包发送和接收的控制，tc 使用队列结构来临时保存并组织数据包，在 tc 子系统中对应的数据结构和算法控制机制被抽象为 qdisc（Queueing discipline），其对外暴露数据包入队和出队的两个回调接口，并在内部隐藏排队算法实现。在 qdisc 中我们可以基于 filter 和 class 实现复杂的树形结构，其中 filter 被挂载到 qdisc 或 class 上用于实现具体的过滤逻辑，返回值决定了该数据包是否属于特定 class。
+From the protocol stack perspective, tc is located at the link layer. Its position has already completed the allocation of sk_buff and is later than xdp. In order to control the sending and receiving of packets, tc uses a queue structure to temporarily store and organize packets. In the tc subsystem, the corresponding data structure and algorithm control mechanism are abstracted as qdisc (Queueing discipline). It exposes two callback interfaces for enqueuing and dequeuing packets externally, and internally hides the implementation of queuing algorithms. In qdisc, we can implement complex tree structures based on filters and classes. Filters are mounted on qdisc or class to implement specific filtering logic, and the return value determines whether the packet belongs to a specific class.
 
-当数据包到达顶层 qdisc 时，其入队接口被调用，其上挂载的 filter 被依次执行直到一个 filter 匹配成功；此后数据包被送入该 filter 指向的 class，进入该 class 配置的 qdisc 处理流程中。tc 框架提供了所谓 classifier-action 机制，即在数据包匹配到特定 filter 时执行该 filter 所挂载的 action 对数据包进行处理，实现了完整的数据包分类和处理机制。
+When a packet reaches the top-level qdisc, its enqueue interface is called, and the mounted filters are executed one by one until a filter matches successfully. Then the packet is sent to the class pointed to by that filter and enters the qdisc processing process configured by that class. The tc framework provides the so-called classifier-action mechanism, that is, when a packet matches a specific filter, the action mounted by that filter is executed to process the packet, implementing a complete packet classification and processing mechanism.
 
-现有的 tc 为 eBPF 提供了 direct-action 模式，它使得一个作为 filter 加载的 eBPF 程序可以返回像 `TC_ACT_OK` 等 tc action 的返回值，而不是像传统的 filter 那样仅仅返回一个 classid 并把对数据包的处理交给 action 模块。现在，eBPF 程序可以被挂载到特定的 qdisc 上，并完成对数据包的分类和处理动作。
+The existing tc provides eBPF with the direct-action mode, which allows an eBPF program loaded as a filter to return values such as `TC_ACT_OK` as tc actions, instead of just returning a classid like traditional filters and handing over the packet processing to the action module. Now, eBPF programs can be mounted on specific qdiscs to perform packet classification and processing actions.
 
-## 编写 eBPF 程序
+## Writing eBPF Programs
 
 ```c
 #include <vmlinux.h>
@@ -51,28 +51,28 @@ int tc_ingress(struct __sk_buff *ctx)
 char __license[] SEC("license") = "GPL";
 ```
 
-这段代码定义了一个 eBPF 程序，它可以通过 Linux TC（Transmission Control）来捕获数据包并进行处理。在这个程序中，我们限定了只捕获 IPv4 协议的数据包，然后通过 bpf_printk 函数打印出数据包的总长度和 Time-To-Live（TTL）字段的值。
+This code defines an eBPF program that can capture and process packets through Linux TC (Transmission Control). In this program, we limit it to capture only IPv4 protocol packets, and then print out the total length and Time-To-Live (TTL) value of the packet using the bpf_printk function.
 
-需要注意的是，我们在代码中使用了一些 BPF 库函数，例如 bpf_htons 和 bpf_ntohs 函数，它们用于进行网络字节序和主机字节序之间的转换。此外，我们还使用了一些注释来为 TC 提供附加点和选项信息。例如，在这段代码的开头，我们使用了以下注释：
+What needs to be noted is that we use some BPF library functions in the code, such as the functions bpf_htons and bpf_ntohs, which are used for conversion between network byte order and host byte order. In addition, we also use some comments to provide additional points and option information for TC. For example, at the beginning of this code, we use the following comments:
 
 ```c
 /// @tchook {"ifindex":1, "attach_point":"BPF_TC_INGRESS"}
 /// @tcopts {"handle":1, "priority":1}
 ```
 
-这些注释告诉 TC 将 eBPF 程序附加到网络接口的 ingress 附加点，并指定了 handle 和 priority 选项的值。关于 libbpf 中 tc 相关的 API 可以参考 [patchwork](https://patchwork.kernel.org/project/netdevbpf/patch/20210512103451.989420-3-memxor@gmail.com/) 中的介绍。
+These comments tell TC to attach the eBPF program to the ingress attachment point of the network interface, and specify the values of the handle and priority options. You can refer to the introduction in [patchwork](https://patchwork.kernel.org/project/netdevbpf/patch/20210512103451.989420-3-memxor@gmail.com/) for tc-related APIs in libbpf.
 
-总之，这段代码实现了一个简单的 eBPF 程序，用于捕获数据包并打印出它们的信息。
+In summary, this code implements a simple eBPF program that captures packets and prints out their information.
 
-## 编译运行
+## Compilation and Execution
 
-通过容器编译：
+Compile using a container:
 
 ```console
 docker run -it -v `pwd`/:/src/ ghcr.io/eunomia-bpf/ecc-`uname -m`:latest
 ```
 
-或是通过 `ecc` 编译：
+Or compile using `ecc`:
 
 ```console
 $ ecc tc.bpf.c
@@ -80,13 +80,13 @@ Compiling bpf object...
 Packing ebpf object and config into package.json...
 ```
 
-并通过 `ecli` 运行：
+And run using `ecli`:
 
 ```shell
 sudo ecli run ./package.json
 ```
 
-可以通过如下方式查看程序的输出：
+You can view the output of the program in the following way:
 
 ```console
 $ sudo cat /sys/kernel/debug/tracing/trace_pipe
@@ -96,13 +96,15 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
             node-1254811 [007] ..s1 8737831.674550: 0: Got IP packet: tot_len: 71, ttl: 64
 ```
 
-## 总结
+## Summary
 
-本文介绍了如何向 TC 流量控制子系统挂载 eBPF 类型的 filter 来实现对链路层数据包的排队处理。基于 eunomia-bpf 提供的通过注释向 libbpf 传递参数的方案，我们可以将自己编写的 tc BPF 程序以指定选项挂载到目标网络设备，并借助内核的 sk_buff 结构对数据包进行过滤处理。
+This article introduces how to mount eBPF type filters to the TC traffic control subsystem to achieve queuing processing of link layer packets. Based on the solution provided by eunomia-bpf to pass parameters to libbpf through comments, we can mount our own tc BPF program to the target network device with specified options and use the sk_buff structure of the kernel to filter and process packets.
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials.
 
-## 参考
+## References
 
 + <http://just4coding.com/2022/08/05/tc/>
 + <https://arthurchiao.art/blog/understanding-tc-da-mode-zh/>
+
+> The original link of this article: <https://eunomia.dev/tutorials/20-tc>

@@ -1,50 +1,50 @@
-# eBPF入门开发实践教程十三：统计 TCP 连接延时，并使用 libbpf 在用户态处理数据
+# eBPF Tutorial by Example 13: Statistics of TCP Connection Delay with libbpf
 
-eBPF (Extended Berkeley Packet Filter) 是一项强大的网络和性能分析工具，被应用在 Linux 内核上。eBPF 允许开发者动态加载、更新和运行用户定义的代码，而无需重启内核或更改内核源代码。
+eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without restarting the kernel or changing the kernel source code.
 
-本文是 eBPF 入门开发实践教程的第十三篇，主要介绍如何使用 eBPF 统计 TCP 连接延时，并使用 libbpf 在用户态处理数据。
+This article is the thirteenth installment of the eBPF Tutorial by Example, mainly about how to use eBPF to statistics TCP connection delay and process data in user space using libbpf.
 
-## 背景
+## Background
 
-在进行后端开发时，不论使用何种编程语言，我们都常常需要调用 MySQL、Redis 等数据库，或执行一些 RPC 远程调用，或者调用其他的 RESTful API。这些调用的底层，通常都是基于 TCP 协议进行的。原因是 TCP 协议具有可靠连接、错误重传、拥塞控制等优点，因此在网络传输层协议中，TCP 的应用广泛程度超过了 UDP。然而，TCP 也有一些缺点，如建立连接的延时较长。因此，也出现了一些替代方案，例如 QUIC（Quick UDP Internet Connections，快速 UDP 网络连接）。
+When developing backends, regardless of the programming language used, we often need to call databases such as MySQL and Redis, perform RPC remote calls, or call other RESTful APIs. The underlying implementation of these calls is usually based on the TCP protocol. This is because TCP protocol has advantages such as reliable connection, error retransmission, congestion control, etc., so TCP is more widely used in network transport layer protocols than UDP. However, TCP also has some drawbacks, such as longer connection establishment delay. Therefore, some alternative solutions have emerged, such as QUIC (Quick UDP Internet Connections).
 
-分析 TCP 连接延时对网络性能分析、优化以及故障排查都非常有用。
+Analyzing TCP connection delay is very useful for network performance analysis, optimization, and troubleshooting.
 
-## tcpconnlat 工具概述
+## Overview of tcpconnlat Tool
 
-`tcpconnlat` 这个工具能够跟踪内核中执行活动 TCP 连接的函数（如通过 `connect()` 系统调用），并测量并显示连接延时，即从发送 SYN 到收到响应包的时间。
+The `tcpconnlat` tool can trace the functions in the kernel that perform active TCP connections (such as using the `connect()` system call), measure and display connection delay, i.e., the time from sending SYN to receiving response packets.
 
-### TCP 连接原理
+### TCP Connection Principle
 
-TCP 连接的建立过程，常被称为“三次握手”（Three-way Handshake）。以下是整个过程的步骤：
+The process of establishing a TCP connection is often referred to as the "three-way handshake". Here are the steps of the entire process:
 
-1. 客户端向服务器发送 SYN 包：客户端通过 `connect()` 系统调用发出 SYN。这涉及到本地的系统调用以及软中断的 CPU 时间开销。
-2. SYN 包传送到服务器：这是一次网络传输，涉及到的时间取决于网络延迟。
-3. 服务器处理 SYN 包：服务器内核通过软中断接收包，然后将其放入半连接队列，并发送 SYN/ACK 响应。这主要涉及 CPU 时间开销。
-4. SYN/ACK 包传送到客户端：这是另一次网络传输。
-5. 客户端处理 SYN/ACK：客户端内核接收并处理 SYN/ACK 包，然后发送 ACK。这主要涉及软中断处理开销。
-6. ACK 包传送到服务器：这是第三次网络传输。
-7. 服务器接收 ACK：服务器内核接收并处理 ACK，然后将对应的连接从半连接队列移动到全连接队列。这涉及到一次软中断的 CPU 开销。
-8. 唤醒服务器端用户进程：被 `accept()` 系统调用阻塞的用户进程被唤醒，然后从全连接队列中取出来已经建立好的连接。这涉及一次上下文切换的CPU开销。
+1. Client sends SYN packet to the server: The client sends SYN through the `connect()` system call. This involves local system call and CPU time cost of software interrupts.
+2. SYN packet is transmitted to the server: This is a network transmission that depends on network latency.
+3. Server handles the SYN packet: The server kernel receives the packet through a software interrupt, then puts it into the listen queue and sends SYN/ACK response. This mainly involves CPU time cost.
+4. SYN/ACK packet is transmitted to the client: This is another network transmission.
+5. Client handles the SYN/ACK: The client kernel receives and handles the SYN/ACK packet, then sends ACK. This mainly involves software interrupt handling cost.
+6. ACK packet is transmitted to the server: This is the third network transmission.
+7. Server receives ACK: The server kernel receives and handles the ACK, then moves the corresponding connection from the listen queue to the established queue. This involves CPU time cost of a software interrupt.
+8. Wake up the server-side user process: The user process blocked by the `accept()` system call is awakened, and then the established connection is taken out from the established queue. This involves CPU cost of a context switch.
 
-完整的流程图如下所示：
+The complete flowchart is shown below:
 
 ![tcpconnlat1](tcpconnlat1.png)
 
-在客户端视角，在正常情况下一次TCP连接总的耗时也就就大约是一次网络RTT的耗时。但在某些情况下，可能会导致连接时的网络传输耗时上涨、CPU处理开销增加、甚至是连接失败。这种时候在发现延时过长之后，就可以结合其他信息进行分析。
+From the client's perspective, under normal circumstances, the total time for a TCP connection is approximately the time consumed by one network round-trip. However, in some cases, it may cause an increase in network transmission time, an increase in CPU processing overhead, or even connection failure. When a long delay is detected, it can be analyzed in conjunction with other information.
 
-## tcpconnlat 的 eBPF 实现
+## eBPF Implementation of tcpconnlat
 
-为了理解 TCP 的连接建立过程，我们需要理解 Linux 内核在处理 TCP 连接时所使用的两个队列：
+To understand the process of establishing a TCP connection, we need to understand two queues used by the Linux kernel when handling TCP connections:
 
-- 半连接队列（SYN 队列）：存储那些正在进行三次握手操作的 TCP 连接，服务器收到 SYN 包后，会将该连接信息存储在此队列中。
-- 全连接队列（Accept 队列）：存储已经完成三次握手，等待应用程序调用 `accept()` 函数的 TCP 连接。服务器在收到 ACK 包后，会创建一个新的连接并将其添加到此队列。
+- Listen queue (SYN queue): Stores TCP connections that are in the process of performing three-way handshake. After the server receives the SYN packet, it stores the connection information in this queue.
+- Established queue (Accept queue): Stores TCP connections that have completed three-way handshake and are waiting for the application to call the `accept()` function. After the server receives the ACK packet, it creates a new connection and adds it to this queue.
 
-理解了这两个队列的用途，我们就可以开始探究 tcpconnlat 的具体实现。tcpconnlat 的实现可以分为内核态和用户态两个部分，其中包括了几个主要的跟踪点：`tcp_v4_connect`, `tcp_v6_connect` 和 `tcp_rcv_state_process`。
+With an understanding of the purpose of these two queues, we can begin to explore the specific implementation of tcpconnlat. The implementation of tcpconnlat can be divided into two parts: kernel space and user space, which include several main trace points: `tcp_v4_connect`, `tcp_v6_connect`, and `tcp_rcv_state_process`.
 
-这些跟踪点主要位于内核中的 TCP/IP 网络栈。当执行相关的系统调用或内核函数时，这些跟踪点会被激活，从而触发 eBPF 程序的执行。这使我们能够捕获和测量 TCP 连接建立的整个过程。
+These trace points are mainly located in the TCP/IP network stack in the kernel. When executing the corresponding system call or kernel function, these trace points are activated, triggering the execution of eBPF programs. This allows us to capture and measure the entire process of establishing a TCP connection.
 
-让我们先来看一下这些挂载点的源代码：
+Let's take a look at the source code of these mounting points first:
 
 ```c
 SEC("kprobe/tcp_v4_connect")
@@ -56,23 +56,23 @@ int BPF_KPROBE(tcp_v4_connect, struct sock *sk)
 SEC("kprobe/tcp_v6_connect")
 int BPF_KPROBE(tcp_v6_connect, struct sock *sk)
 {
- return trace_connect(sk);
+  return trace_connect(sk);
 }
 
 SEC("kprobe/tcp_rcv_state_process")
 int BPF_KPROBE(tcp_rcv_state_process, struct sock *sk)
 {
- return handle_tcp_rcv_state_process(ctx, sk);
+  return handle_tcp_rcv_state_process(ctx, sk);
 }
 ```
 
-这段代码展示了三个内核探针（kprobe）的定义。`tcp_v4_connect` 和 `tcp_v6_connect` 在对应的 IPv4 和 IPv6 连接被初始化时被触发，调用 `trace_connect()` 函数，而 `tcp_rcv_state_process` 在内核处理 TCP 连接状态变化时被触发，调用 `handle_tcp_rcv_state_process()` 函数。
+This code snippet shows the definition of three kernel probes (kprobe). `tcp_v4_connect` and `tcp_v6_connect` are triggered when the corresponding IPv4 and IPv6 connections are initialized, invoking the `trace_connect()` function. On the other hand, `tcp_rcv_state_process` is triggered when the TCP connection state changes in the kernel, calling the `handle_tcp_rcv_state_process()` function.
 
-接下来的部分将分为两大块：一部分是对这些挂载点内核态部分的分析，我们将解读内核源代码来详细说明这些函数如何工作；另一部分是用户态的分析，将关注 eBPF 程序如何收集这些挂载点的数据，以及如何与用户态程序进行交互。
+The following section will be divided into two parts: one part analyzes the kernel part of these mount points, where we will delve into the kernel source code to explain how these functions work in detail. The other part analyzes the user part, focusing on how eBPF programs collect data from these mount points and interact with user-space programs.
 
-### tcp_v4_connect 函数解析
+### Analysis of tcp_v4_connect function
 
-`tcp_v4_connect`函数是Linux内核处理TCP的IPv4连接请求的主要方式。当用户态程序通过`socket`系统调用创建了一个套接字后，接着通过`connect`系统调用尝试连接到远程服务器，此时就会触发`tcp_v4_connect`函数。
+The `tcp_v4_connect` function is the main way that the Linux kernel handles TCP IPv4 connection requests. When a user-space program creates a socket through the `socket` system call and then attempts to connect to a remote server through the `connect` system call, the `tcp_v4_connect` function is triggered.
 
 ```c
 /* This will initiate an outgoing connection. */
@@ -122,7 +122,6 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
     ip_rt_put(rt);
     return -ENETUNREACH;
   }
-
   if (!inet_opt || !inet_opt->opt.srr)
     daddr = fl4->daddr;
 
@@ -205,38 +204,37 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
   return 0;
 
 failure:
-  /*
-   * This unhashes the socket and releases the local port,
-   * if necessary.
-   */
-  tcp_set_state(sk, TCP_CLOSE);
-  inet_bhash2_reset_saddr(sk);
-  ip_rt_put(rt);
-  sk->sk_route_caps = 0;
-  inet->inet_dport = 0;
-  return err;
+  /*".* This unhashes the socket and releases the local port,
+  * if necessary.
+  */
+ tcp_set_state(sk, TCP_CLOSE);
+ inet_bhash2_reset_saddr(sk);
+ ip_rt_put(rt);
+ sk->sk_route_caps = 0;
+ inet->inet_dport = 0;
+ return err;
 }
 EXPORT_SYMBOL(tcp_v4_connect);
 ```
 
-参考链接：<https://elixir.bootlin.com/linux/latest/source/net/ipv4/tcp_ipv4.c#L340>
+Reference link: <https://elixir.bootlin.com/linux/latest/source/net/ipv4/tcp_ipv4.c#L340>
 
-接下来，我们一步步分析这个函数：
+Next, let's analyze this function step by step:
 
-首先，这个函数接收三个参数：一个套接字指针`sk`，一个指向套接字地址结构的指针`uaddr`和地址的长度`addr_len`。
+First, this function takes three parameters: a socket pointer `sk`, a pointer to the socket address structure `uaddr`, and the length of the address `addr_len`.
 
 ```c
 int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 ```
 
-函数一开始就进行了参数检查，确认地址长度正确，而且地址的协议族必须是IPv4。不满足这些条件会导致函数返回错误。
+The function starts by checking the parameters, making sure the address length is correct and the address family is IPv4. If these conditions are not met, the function returns an error.
 
-接下来，函数获取目标地址，如果设置了源路由选项（这是一个高级的IP特性，通常不会被使用），那么它还会获取源路由的下一跳地址。
+Next, the function retrieves the destination address and, if a source routing option is set (an advanced IP feature that is typically not used), it also retrieves the next hop address for the source route.
 
 ```c
 nexthop = daddr = usin->sin_addr.s_addr;
 inet_opt = rcu_dereference_protected(inet->inet_opt,
-             lockdep_sock_is_held(sk));
+         lockdep_sock_is_held(sk));
 if (inet_opt && inet_opt->opt.srr) {
   if (!daddr)
     return -EINVAL;
@@ -244,23 +242,23 @@ if (inet_opt && inet_opt->opt.srr) {
 }
 ```
 
-然后，使用这些信息来寻找一个路由到目标地址的路由项。如果不能找到路由项或者路由项指向一个多播或广播地址，函数返回错误。
+Then, using this information, the function looks for a route entry to the destination address. If a route entry cannot be found or the route entry points to a multicast or broadcast address, the function returns an error.
 
-接下来，它更新了源地址，处理了一些TCP时间戳选项的状态，并设置了目标端口和地址。之后，它更新了一些其他的套接字和TCP选项，并设置了连接状态为`SYN-SENT`。
+Next, it updates the source address, handles the state of some TCP timestamp options, and sets the destination port and address. After that, it updates some other socket and TCP options and sets the connection state to `SYN-SENT`.
 
-然后，这个函数使用`inet_hash_connect`函数尝试将套接字添加到已连接的套接字的散列表中。如果这步失败，它会恢复套接字的状态并返回错误。
+Then, the function tries to add the socket to the connected sockets hash table using the `inet_hash_connect` function. If this step fails, it restores the socket state and returns an error.
 
-如果前面的步骤都成功了，接着，使用新的源和目标端口来更新路由项。如果这步失败，它会清理资源并返回错误。
+If all the previous steps succeed, it then updates the route entry with the new source and destination ports. If this step fails, it cleans up resources and returns an error.
 
-接下来，它提交目标信息到套接字，并为之后的分段偏移选择一个安全的随机值。
+Next, it commits the destination information to the socket and selects a secure random value for the sequence offset for future segments.
 
-然后，函数尝试使用TCP Fast Open（TFO）进行连接，如果不能使用TFO或者TFO尝试失败，它会使用普通的TCP三次握手进行连接。
+Then, the function tries to establish the connection using TCP Fast Open (TFO), and if TFO is not available or the TFO attempt fails, it falls back to the regular TCP three-way handshake for connection.
 
-最后，如果上面的步骤都成功了，函数返回成功，否则，它会清理所有资源并返回错误。
+Finally, if all the above steps succeed, the function returns success; otherwise, it cleans up all resources and returns an error.
 
-总的来说，`tcp_v4_connect`函数是一个处理TCP连接请求的复杂函数，它处理了很多情况，包括参数检查、路由查找、源地址选择、源路由、TCP选项处理、TCP Fast Open，等等。它的主要目标是尽可能安全和有效地建立TCP连接。
+In summary, the `tcp_v4_connect` function is a complex function that handles TCP connection requests. It handles many cases, including parameter checking, route lookup, source address selection, source routing, TCP option handling, TCP Fast Open, and more. Its main goal is to establish TCP connections as safely and efficiently as possible.
 
-### 内核态代码
+### Kernel Code
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -396,9 +394,9 @@ int BPF_PROG(fentry_tcp_rcv_state_process, struct sock *sk)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这个eBPF（Extended Berkeley Packet Filter）程序主要用来监控并收集TCP连接的建立时间，即从发起TCP连接请求(`connect`系统调用)到连接建立完成(SYN-ACK握手过程完成)的时间间隔。这对于监测网络延迟、服务性能分析等方面非常有用。
+This eBPF (Extended Berkeley Packet Filter) program is mainly used to monitor and collect the time it takes to establish TCP connections, i.e., the time interval from initiating a TCP connection request (connect system call) to the completion of the connection establishment (SYN-ACK handshake process). This is very useful for monitoring network latency, service performance analysis, and other aspects.
 
-首先，定义了两个eBPF maps：`start`和`events`。`start`是一个哈希表，用于存储发起连接请求的进程信息和时间戳，而`events`是一个`PERF_EVENT_ARRAY`类型的map，用于将事件数据传输到用户态。
+First, two eBPF maps are defined: `start` and `events`. `start` is a hash table used to store the process information and timestamp of the initiating connection request, while `events` is a map of type `PERF_EVENT_ARRAY` used to transfer event data to user space.
 
 ```c
 struct {
@@ -415,7 +413,7 @@ struct {
 } events SEC(".maps");
 ```
 
-在`tcp_v4_connect`和`tcp_v6_connect`的kprobe处理函数`trace_connect`中，会记录下发起连接请求的进程信息（进程名、进程ID和当前时间戳），并以socket结构作为key，存储到`start`这个map中。
+In the kprobe handling functions `trace_connect` of `tcp_v4_connect` and `tcp_v6_connect`, the process information (process name, process ID, and current timestamp) of the initiating connection request is recorded and stored in the `start` map with the socket structure as the key.
 
 ```c
 static int trace_connect(struct sock *sk)
@@ -434,7 +432,7 @@ static int trace_connect(struct sock *sk)
 }
 ```
 
-当TCP状态机处理到SYN-ACK包，即连接建立的时候，会触发`tcp_rcv_state_process`的kprobe处理函数`handle_tcp_rcv_state_process`。在这个函数中，首先检查socket的状态是否为`SYN-SENT`，如果是，会从`start`这个map中查找socket对应的进程信息。然后计算出从发起连接到现在的时间间隔，将该时间间隔，进程信息，以及TCP连接的详细信息（源端口，目标端口，源IP，目标IP等）作为event，通过`bpf_perf_event_output`函数发送到用户态。
+When the TCP state machine processes the SYN-ACK packet, i.e., when the connection is established, the kprobe handling function `handle_tcp_rcv_state_process` of `tcp_rcv_state_process` is triggered. In this function, it first checks if the socket state is `SYN-SENT`. If it is, it looks up the process information for the socket in the `start` map. Then it calculates the time interval from the initiation of the connection to the present and sends this time interval, process information, and TCP connection details (source port, destination port, source IP, destination IP, etc.) as an event to user space using the `bpf_perf_event_output` function.
 
 ```c
 static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
@@ -458,9 +456,7 @@ static int handle_tcp_rcv_state_process(void *ctx, struct sock *sk)
 
   event.delta_us = delta / 1000U;
   if (targ_min_us && event.delta_us < targ_min_us)
-    goto
-
- cleanup;
+    goto cleanup;
   __builtin_memcpy(&event.comm, piddatap->comm,
       sizeof(event.comm));
   event.ts_us = ts / 1000;
@@ -486,36 +482,9 @@ cleanup:
 }
 ```
 
-理解这个程序的关键在于理解Linux内核的网络栈处理流程，以及eBPF程序的运行模式。Linux内核网络栈对TCP连接建立的处理过程是，首先调用`tcp_v4_connect`或`tcp_v6_connect`函数（根据IP版本不同）发起TCP连接，然后在收到SYN-ACK包时，通过`tcp_rcv_state_process`函数来处理。eBPF程序通过在这两个关键函数上设置kprobe，可以在关键时刻得到通知并执行相应的处理代码。
+This program uses a while loop to repeatedly poll the perf event buffer. If there is an error during polling (e.g., due to a signal interruption), an error message will be printed. This polling process continues until an exit flag `exiting` is received.
 
-一些关键概念说明：
-
-- kprobe：Kernel Probe，是Linux内核中用于动态追踪内核行为的机制。可以在内核函数的入口和退出处设置断点，当断点被触发时，会执行与kprobe关联的eBPF程序。
-- map：是eBPF程序中的一种数据结构，用于在内核态和用户态之间共享数据。
-- socket：在Linux网络编程中，socket是一个抽象概念，表示一个网络连接的端点。内核中的`struct sock`结构就是对socket的实现。
-
-### 用户态数据处理
-
-用户态数据处理是使用`perf_buffer__poll`来接收并处理从内核发送到用户态的eBPF事件。`perf_buffer__poll`是libbpf库提供的一个便捷函数，用于轮询perf event buffer并处理接收到的数据。
-
-首先，让我们详细看一下主轮询循环：
-
-```c
-    /* main: poll */
-    while (!exiting) {
-        err = perf_buffer__poll(pb, PERF_POLL_TIMEOUT_MS);
-        if (err < 0 && err != -EINTR) {
-            fprintf(stderr, "error polling perf buffer: %s\n", strerror(-err));
-            goto cleanup;
-        }
-        /* reset err to return 0 if exiting */
-        err = 0;
-    }
-```
-
-这段代码使用一个while循环来反复轮询perf event buffer。如果轮询出错（例如由于信号中断），会打印出错误消息。这个轮询过程会一直持续，直到收到一个退出标志`exiting`。
-
-接下来，让我们来看看`handle_event`函数，这个函数将处理从内核发送到用户态的每一个eBPF事件：
+Next, let's take a look at the `handle_event` function, which handles every eBPF event sent from the kernel to user space:
 
 ```c
 void handle_event(void* ctx, int cpu, void* data, __u32 data_sz) {
@@ -559,19 +528,18 @@ void handle_event(void* ctx, int cpu, void* data, __u32 data_sz) {
 }
 ```
 
-`handle_event`函数的参数包括了CPU编号、指向数据的指针以及数据的大小。数据是一个`event`结构体，包含了之前在内核态计算得到的TCP连接的信息。
+The `handle_event` function takes arguments including the CPU number, a pointer to the data, and the size of the data. The data is a `event` structure that contains information about TCP connections computed in the kernel space.
 
-首先，它将接收到的事件的时间戳和起始时间戳（如果存在）进行对比，计算出事件的相对时间，并打印出来。接着，根据IP地址的类型（IPv4或IPv6），将源地址和目标地址从网络字节序转换为主机字节序。
+First, it compares the timestamp of the received event with the start timestamp (if available) to calculate the relative time of the event, and then prints it. Next, it converts the source address and destination address from network byte order to host byte order based on the IP address type (IPv4 or IPv6).
 
-最后，根据用户是否选择了显示本地端口，将进程ID、进程名称、IP版本、源IP地址、本地端口（如果有）、目标IP地址、目标端口以及连接建立时间打印出来。这个连接建立时间是我们在内核态eBPF程序中计算并发送到用户态的。
+Finally, depending on whether the user chooses to display the local port, it prints the process ID, process name, IP version, source IP address, local port (if available), destination IP address, destination port, and connection establishment time. This connection establishment time is calculated in the eBPF program running in the kernel space and sent to the user space.
 
-## 编译运行
+## Compilation and Execution
 
 ```console
 $ make
 ...
-  BPF      .output/tcpconnlat.bpf.o
-  GEN-SKEL .output/tcpconnlat.skel.h
+  BPF      .output/tcpconnlat.bpf.o".GEN-SKEL .output/tcpconnlat.skel.h
   CC       .output/tcpconnlat.o
   BINARY   tcpconnlat
 $ sudo ./tcpconnlat 
@@ -582,18 +550,22 @@ PID    COMM         IP SADDR            DADDR            DPORT LAT(ms)
 222774 ssh          4  192.168.88.15    1.15.149.151     22    25.31
 ```
 
-源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat> 关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+Source code: [https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/13-tcpconnlat)
 
-参考资料：
+References:
 
-- [tcpconnlat](https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.c)
+- [tcpconnlat](https://github.com/iovisor/bcc/blob/master/libbpf-tools/tcpconnlat.c) in bcc
 
-## 总结
+## Summary
 
-通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 来跟踪和统计 TCP 连接建立的延时。我们首先深入探讨了 eBPF 程序如何在内核态监听特定的内核函数，然后通过捕获这些函数的调用，从而得到连接建立的起始时间和结束时间，计算出延时。
+In this eBPF introductory tutorial, we learned how to use eBPF to track and measure the latency of TCP connections. We first explored how eBPF programs can attach to specific kernel functions in kernel-space and capture the start and end times of connection establishment to calculate latency.
 
-我们还进一步了解了如何使用 BPF maps 来在内核态存储和查询数据，从而在 eBPF 程序的多个部分之间共享数据。同时，我们也探讨了如何使用 perf events 来将数据从内核态发送到用户态，以便进一步处理和展示。
+We also learned how to use BPF maps to store and retrieve data in kernel-space, enabling data sharing among different parts of the eBPF program. Additionally, we discussed how to use perf events to send data from kernel-space to user-space for further processing and display.
 
-在用户态，我们介绍了如何使用 libbpf 库的 API，例如 perf_buffer__poll，来接收和处理内核态发送过来的数据。我们还讲解了如何对这些数据进行解析和打印，使得它们能以人类可读的形式显示出来。
+In user-space, we introduced the usage of libbpf library APIs, such as perf_buffer__poll, to receive and process data sent from the kernel-space. We also demonstrated how to parse and print this data in a human-readable format.
 
-如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+If you are interested in learning more about eBPF and its practical applications, please refer to the official documentation of eunomia-bpf: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf). You can also visit our tutorial code repository at [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) for more examples and complete tutorials.
+
+In the upcoming tutorials, we will dive deeper into advanced features of eBPF, such as tracing the path of network packets and fine-grained system performance monitoring. We will continue to share more content on eBPF development practices to help you better understand and master eBPF technology. We hope these resources will be valuable in your learning and practical journey with eBPF.
+
+> The original link of this article: <https://eunomia.dev/tutorials/13-tcpconnect>

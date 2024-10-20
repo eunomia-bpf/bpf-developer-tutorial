@@ -34,7 +34,7 @@ def generate_toc(base_dir, project_root):
     for directory in all_dirs:
         lesson_path = os.path.join(base_dir, directory)
         config_path = os.path.join(lesson_path, ".config")
-        readme_path = os.path.join(lesson_path, "README_en.md")
+        readme_path = os.path.join(lesson_path, "README.md")
 
         if os.path.exists(config_path) and os.path.exists(readme_path):
             # Read the .config file for 'level', 'type', and 'desc'
@@ -139,7 +139,7 @@ def generate_toc_cn(base_dir, project_root):
     for directory in all_dirs:
         lesson_path = os.path.join(base_dir, directory)
         config_path = os.path.join(lesson_path, ".config")
-        readme_path = os.path.join(lesson_path, "README.md")
+        readme_path = os.path.join(lesson_path, "README.zh.md")
 
         if os.path.exists(config_path) and os.path.exists(readme_path):
             # Read the .config file for 'level', 'type', and 'desc'
@@ -213,7 +213,7 @@ def generate_toc_cn(base_dir, project_root):
 # Example usage
 base_directory = "/root/bpf-developer-tutorial/src/"  # Replace with the actual base directory
 project_root = "/root/bpf-developer-tutorial/src/"  # The root of the project
-toc_output = generate_toc(base_directory, project_root)
-
+# toc_output = generate_toc(base_directory, project_root)
+toc_output = generate_toc_cn(base_directory, project_root)
 # Output the TOC
 print(toc_output)
