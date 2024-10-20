@@ -1,4 +1,4 @@
-# func latency
+# trace http2 request in go
 
 TODO: make it work
 

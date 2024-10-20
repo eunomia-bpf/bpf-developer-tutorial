@@ -1,6 +1,6 @@
-# eBPF Tutorial by Example: Introduction to the BPF Scheduler
+# eBPF Tutorial: Introduction to the BPF Scheduler
 
-Welcome to our deep dive into the world of eBPF with a focus on the BPF scheduler! If you're looking to extend your eBPF knowledge beyond the basics, you're in the right place. In this tutorial, we'll explore the **scx_simple scheduler**, a minimal example of the sched_ext scheduler class introduced in Linux kernel version 6.12. We'll walk you through its architecture, how it leverages BPF programs to define scheduling behavior, and guide you through compiling and running the example. By the end, you'll have a solid understanding of how to create and manage advanced scheduling policies using eBPF.
+Welcome to our deep dive into the world of eBPF with a focus on the BPF scheduler! If you're looking to extend your eBPF knowledge beyond the basics, you're in the right place. In this tutorial, we'll explore the **scx_simple scheduler**, a minimal example of the sched_ext scheduler class introduced in Linux kernel version `6.12`. We'll walk you through its architecture, how it leverages BPF programs to define scheduling behavior, and guide you through compiling and running the example. By the end, you'll have a solid understanding of how to create and manage advanced scheduling policies using eBPF.
 
 ## Understanding the Extensible BPF Scheduler
 
@@ -18,7 +18,7 @@ With these features, sched_ext provides a robust foundation for experimenting wi
 
 ## Introducing scx_simple: A Minimal sched_ext Scheduler
 
-The **scx_simple** scheduler is a straightforward example of a sched_ext scheduler. It's designed to be easy to understand and serves as a foundation for more complex scheduling policies. scx_simple can operate in two modes:
+The **scx_simple** scheduler is a straightforward example of a sched_ext scheduler in the linux tools. It's designed to be easy to understand and serves as a foundation for more complex scheduling policies. scx_simple can operate in two modes:
 
 1. **Global Weighted Virtual Time (vtime) Mode:** Prioritizes tasks based on their virtual time, allowing for fair scheduling across different workloads.
 2. **FIFO (First-In-First-Out) Mode:** Simple queue-based scheduling where tasks are executed in the order they arrive.
@@ -60,121 +60,121 @@ UEI_DEFINE(uei);
 #define SHARED_DSQ 0
 
 struct {
-	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-	__uint(key_size, sizeof(u32));
-	__uint(value_size, sizeof(u64));
-	__uint(max_entries, 2);			/* [local, global] */
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(key_size, sizeof(u32));
+    __uint(value_size, sizeof(u64));
+    __uint(max_entries, 2);   /* [local, global] */
 } stats SEC(".maps");
 
 static void stat_inc(u32 idx)
 {
-	u64 *cnt_p = bpf_map_lookup_elem(&stats, &idx);
-	if (cnt_p)
-		(*cnt_p)++;
+    u64 *cnt_p = bpf_map_lookup_elem(&stats, &idx);
+    if (cnt_p)
+        (*cnt_p)++;
 }
 
 static inline bool vtime_before(u64 a, u64 b)
 {
-	return (s64)(a - b) < 0;
+    return (s64)(a - b) < 0;
 }
 
 s32 BPF_STRUCT_OPS(simple_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wake_flags)
 {
-	bool is_idle = false;
-	s32 cpu;
+    bool is_idle = false;
+    s32 cpu;
 
-	cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &is_idle);
-	if (is_idle) {
-		stat_inc(0);	/* count local queueing */
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
-	}
+    cpu = scx_bpf_select_cpu_dfl(p, prev_cpu, wake_flags, &is_idle);
+    if (is_idle) {
+        stat_inc(0); /* count local queueing */
+        scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
+    }
 
-	return cpu;
+    return cpu;
 }
 
 void BPF_STRUCT_OPS(simple_enqueue, struct task_struct *p, u64 enq_flags)
 {
-	stat_inc(1);	/* count global queueing */
+    stat_inc(1); /* count global queueing */
 
-	if (fifo_sched) {
-		scx_bpf_dispatch(p, SHARED_DSQ, SCX_SLICE_DFL, enq_flags);
-	} else {
-		u64 vtime = p->scx.dsq_vtime;
+    if (fifo_sched) {
+        scx_bpf_dispatch(p, SHARED_DSQ, SCX_SLICE_DFL, enq_flags);
+    } else {
+        u64 vtime = p->scx.dsq_vtime;
 
-		/*
-		 * Limit the amount of budget that an idling task can accumulate
-		 * to one slice.
-		 */
-		if (vtime_before(vtime, vtime_now - SCX_SLICE_DFL))
-			vtime = vtime_now - SCX_SLICE_DFL;
+        /*
+         * Limit the amount of budget that an idling task can accumulate
+         * to one slice.
+         */
+        if (vtime_before(vtime, vtime_now - SCX_SLICE_DFL))
+            vtime = vtime_now - SCX_SLICE_DFL;
 
-		scx_bpf_dispatch_vtime(p, SHARED_DSQ, SCX_SLICE_DFL, vtime,
-				       enq_flags);
-	}
+        scx_bpf_dispatch_vtime(p, SHARED_DSQ, SCX_SLICE_DFL, vtime,
+                       enq_flags);
+    }
 }
 
 void BPF_STRUCT_OPS(simple_dispatch, s32 cpu, struct task_struct *prev)
 {
-	scx_bpf_consume(SHARED_DSQ);
+    scx_bpf_consume(SHARED_DSQ);
 }
 
 void BPF_STRUCT_OPS(simple_running, struct task_struct *p)
 {
-	if (fifo_sched)
-		return;
+    if (fifo_sched)
+        return;
 
-	/*
-	 * Global vtime always progresses forward as tasks start executing. The
-	 * test and update can be performed concurrently from multiple CPUs and
-	 * thus racy. Any error should be contained and temporary. Let's just
-	 * live with it.
-	 */
-	if (vtime_before(vtime_now, p->scx.dsq_vtime))
-		vtime_now = p->scx.dsq_vtime;
+    /*
+     * Global vtime always progresses forward as tasks start executing. The
+     * test and update can be performed concurrently from multiple CPUs and
+     * thus racy. Any error should be contained and temporary. Let's just
+     * live with it.
+     */
+    if (vtime_before(vtime_now, p->scx.dsq_vtime))
+        vtime_now = p->scx.dsq_vtime;
 }
 
 void BPF_STRUCT_OPS(simple_stopping, struct task_struct *p, bool runnable)
 {
-	if (fifo_sched)
-		return;
+    if (fifo_sched)
+        return;
 
-	/*
-	 * Scale the execution time by the inverse of the weight and charge.
-	 *
-	 * Note that the default yield implementation yields by setting
-	 * @p->scx.slice to zero and the following would treat the yielding task
-	 * as if it has consumed all its slice. If this penalizes yielding tasks
-	 * too much, determine the execution time by taking explicit timestamps
-	 * instead of depending on @p->scx.slice.
-	 */
-	p->scx.dsq_vtime += (SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
+    /*
+     * Scale the execution time by the inverse of the weight and charge.
+     *
+     * Note that the default yield implementation yields by setting
+     * @p->scx.slice to zero and the following would treat the yielding task
+     * as if it has consumed all its slice. If this penalizes yielding tasks
+     * too much, determine the execution time by taking explicit timestamps
+     * instead of depending on @p->scx.slice.
+     */
+    p->scx.dsq_vtime += (SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
 }
 
 void BPF_STRUCT_OPS(simple_enable, struct task_struct *p)
 {
-	p->scx.dsq_vtime = vtime_now;
+    p->scx.dsq_vtime = vtime_now;
 }
 
 s32 BPF_STRUCT_OPS_SLEEPABLE(simple_init)
 {
-	return scx_bpf_create_dsq(SHARED_DSQ, -1);
+    return scx_bpf_create_dsq(SHARED_DSQ, -1);
 }
 
 void BPF_STRUCT_OPS(simple_exit, struct scx_exit_info *ei)
 {
-	UEI_RECORD(uei, ei);
+    UEI_RECORD(uei, ei);
 }
 
 SCX_OPS_DEFINE(simple_ops,
-	       .select_cpu		= (void *)simple_select_cpu,
-	       .enqueue			= (void *)simple_enqueue,
-	       .dispatch		= (void *)simple_dispatch,
-	       .running			= (void *)simple_running,
-	       .stopping		= (void *)simple_stopping,
-	       .enable			= (void *)simple_enable,
-	       .init			= (void *)simple_init,
-	       .exit			= (void *)simple_exit,
-	       .name			= "simple");
+           .select_cpu  = (void *)simple_select_cpu,
+           .enqueue   = (void *)simple_enqueue,
+           .dispatch  = (void *)simple_dispatch,
+           .running   = (void *)simple_running,
+           .stopping  = (void *)simple_stopping,
+           .enable   = (void *)simple_enable,
+           .init   = (void *)simple_init,
+           .exit   = (void *)simple_exit,
+           .name   = "simple");
 ```
 
 #### Kernel-Side Breakdown
@@ -213,70 +213,70 @@ This modular structure allows scx_simple to be both simple and effective, provid
 ```c
 static void read_stats(struct scx_simple *skel, __u64 *stats)
 {
-	int nr_cpus = libbpf_num_possible_cpus();
-	__u64 cnts[2][nr_cpus];
-	__u32 idx;
+    int nr_cpus = libbpf_num_possible_cpus();
+    __u64 cnts[2][nr_cpus];
+    __u32 idx;
 
-	memset(stats, 0, sizeof(stats[0]) * 2);
+    memset(stats, 0, sizeof(stats[0]) * 2);
 
-	for (idx = 0; idx < 2; idx++) {
-		int ret, cpu;
+    for (idx = 0; idx < 2; idx++) {
+        int ret, cpu;
 
-		ret = bpf_map_lookup_elem(bpf_map__fd(skel->maps.stats),
-					  &idx, cnts[idx]);
-		if (ret < 0)
-			continue;
-		for (cpu = 0; cpu < nr_cpus; cpu++)
-			stats[idx] += cnts[idx][cpu];
-	}
+        ret = bpf_map_lookup_elem(bpf_map__fd(skel->maps.stats),
+                      &idx, cnts[idx]);
+        if (ret < 0)
+            continue;
+        for (cpu = 0; cpu < nr_cpus; cpu++)
+            stats[idx] += cnts[idx][cpu];
+    }
 }
 
 int main(int argc, char **argv)
 {
-	struct scx_simple *skel;
-	struct bpf_link *link;
-	__u32 opt;
-	__u64 ecode;
+    struct scx_simple *skel;
+    struct bpf_link *link;
+    __u32 opt;
+    __u64 ecode;
 
-	libbpf_set_print(libbpf_print_fn);
-	signal(SIGINT, sigint_handler);
-	signal(SIGTERM, sigint_handler);
+    libbpf_set_print(libbpf_print_fn);
+    signal(SIGINT, sigint_handler);
+    signal(SIGTERM, sigint_handler);
 restart:
-	skel = SCX_OPS_OPEN(simple_ops, scx_simple);
+    skel = SCX_OPS_OPEN(simple_ops, scx_simple);
 
-	while ((opt = getopt(argc, argv, "fvh")) != -1) {
-		switch (opt) {
-		case 'f':
-			skel->rodata->fifo_sched = true;
-			break;
-		case 'v':
-			verbose = true;
-			break;
-		default:
-			fprintf(stderr, help_fmt, basename(argv[0]));
-			return opt != 'h';
-		}
-	}
+    while ((opt = getopt(argc, argv, "fvh")) != -1) {
+        switch (opt) {
+        case 'f':
+            skel->rodata->fifo_sched = true;
+            break;
+        case 'v':
+            verbose = true;
+            break;
+        default:
+            fprintf(stderr, help_fmt, basename(argv[0]));
+            return opt != 'h';
+        }
+    }
 
-	SCX_OPS_LOAD(skel, simple_ops, scx_simple, uei);
-	link = SCX_OPS_ATTACH(skel, simple_ops, scx_simple);
+    SCX_OPS_LOAD(skel, simple_ops, scx_simple, uei);
+    link = SCX_OPS_ATTACH(skel, simple_ops, scx_simple);
 
-	while (!exit_req && !UEI_EXITED(skel, uei)) {
-		__u64 stats[2];
+    while (!exit_req && !UEI_EXITED(skel, uei)) {
+        __u64 stats[2];
 
-		read_stats(skel, stats);
-		printf("local=%llu global=%llu\n", stats[0], stats[1]);
-		fflush(stdout);
-		sleep(1);
-	}
+        read_stats(skel, stats);
+        printf("local=%llu global=%llu\n", stats[0], stats[1]);
+        fflush(stdout);
+        sleep(1);
+    }
 
-	bpf_link__destroy(link);
-	ecode = UEI_REPORT(skel, uei);
-	scx_simple__destroy(skel);
+    bpf_link__destroy(link);
+    ecode = UEI_REPORT(skel, uei);
+    scx_simple__destroy(skel);
 
-	if (UEI_ECODE_RESTART(ecode))
-		goto restart;
-	return 0;
+    if (UEI_ECODE_RESTART(ecode))
+        goto restart;
+    return 0;
 }
 ```
 
