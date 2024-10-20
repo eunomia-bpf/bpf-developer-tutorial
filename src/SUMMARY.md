@@ -67,6 +67,7 @@ Security:
 Scheduler:
 
 - [lesson 44-scx-simple](44-scx-simple/README.md) Introduction to the BPF Scheduler
+- [lesson 45-scx-nest](45-scx-nest/README.md) Implementing the `scx_nest` Scheduler
 
 Other:
 

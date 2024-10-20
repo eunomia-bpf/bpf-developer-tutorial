@@ -61,7 +61,9 @@ Android:
 - [lesson 34-syscall](34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
 调度器:
 
-- [lesson 44-scx-simple](44-scx-simple/README.zh.md) None
+- [lesson 44-scx-simple](44-scx-simple/README.zh.md) eBPF 教程：BPF 调度器入门
+- [lesson 45-scx-nest](45-scx-nest/README.zh.md) eBPF 示例教程：实现 `scx_nest` 调度器
+
 其他:
 
 - [lesson 35-user-ringbuf](35-user-ringbuf/README.zh.md) eBPF开发实践：使用 user ring buffer 向内核异步发送信息

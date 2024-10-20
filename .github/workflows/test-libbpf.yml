@@ -81,3 +81,7 @@ jobs:
     - name: test 43 kfuncs
       run: |
           make -C src/43-kfuncs
+
+    - name: test 44
+      run: |
+          make -C src/43-kfuncs

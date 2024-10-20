@@ -23,18 +23,11 @@ The **scx_simple** scheduler is a straightforward example of a sched_ext schedul
 1. **Global Weighted Virtual Time (vtime) Mode:** Prioritizes tasks based on their virtual time, allowing for fair scheduling across different workloads.
 2. **FIFO (First-In-First-Out) Mode:** Simple queue-based scheduling where tasks are executed in the order they arrive.
 
-### Use Case and Suitability
-
 scx_simple is particularly effective on single-socket CPUs with a uniform L3 cache topology. While the global FIFO mode can handle many workloads efficiently, it's essential to note that saturating threads might overshadow less active ones. Therefore, scx_simple is best suited for environments where a straightforward scheduling policy meets the performance and fairness requirements.
 
-### Production Readiness
+While scx_simple is minimalistic, it can be deployed in production settings under the right conditions. It is best suited for systems with single-socket CPUs and uniform cache architectures. Additionally, it is ideal for workloads that don't require intricate scheduling policies and can benefit from simple FIFO or weighted vtime scheduling.
 
-While scx_simple is minimalistic, it can be deployed in production settings under the right conditions:
-
-- **Hardware Constraints:** Best suited for systems with single-socket CPUs and uniform cache architectures.
-- **Workload Characteristics:** Ideal for workloads that don't require intricate scheduling policies and can benefit from simple FIFO or weighted vtime scheduling.
-
-## Diving into the Code: Kernel and User-Space Analysis
+## Into the Code: Kernel and User-Space Analysis
 
 Let's explore how scx_simple is implemented both in the kernel and user-space. We'll start by presenting the complete code snippets and then break down their functionalities.
 
@@ -280,6 +273,8 @@ restart:
 }
 ```
 
+The complete code can be found in <https://github.com/eunomia-bpf/bpf-developer-tutorial>
+
 #### User-Space Breakdown
 
 The user-space component is responsible for interacting with the BPF scheduler, managing its lifecycle, and monitoring its performance. Here's a snapshot of its responsibilities:
@@ -315,22 +310,43 @@ Virtual time is a mechanism to ensure fairness in scheduling by tracking how muc
 
 ### Scheduling Cycle
 
-Understanding the scheduling cycle is crucial for modifying or extending scx_simple:
+Understanding the scheduling cycle is crucial for modifying or extending scx_simple. The following steps detail how a waking task is scheduled and executed:
 
-1. **Task Wakeup:**
-   - `ops.select_cpu()` is invoked to select an optimal CPU for the waking task.
-   - If the selected CPU is idle, the task is dispatched immediately to the local DSQ.
+1. **Task Wakeup and CPU Selection:**
+   - When a task wakes up, the first operation invoked is `ops.select_cpu()`.This function serves two purposes:
+     - **CPU Selection Optimization Hint:** Provides a suggested CPU for the task to run on. While this is an optimization hint and not binding, matching the CPU the task eventually runs on can yield performance gains.
+     - **Waking Up Idle CPUs:** If the selected CPU is idle, `ops.select_cpu()` can wake it up, preparing it to execute tasks.
+   - Note: The scheduler core will ignore invalid CPU selections, such as CPUs outside the allowed CPU mask of the task.
 
-2. **Task Enqueueing:**
-   - `ops.enqueue()` decides whether to dispatch the task to the global DSQ, a local DSQ, or a custom DSQ based on the scheduling mode.
+2. **Immediate Dispatch from `ops.select_cpu()`:**
+   - A task can be immediately dispatched to a Dispatch Queue (DSQ) directly from `ops.select_cpu()` by calling `scx_bpf_dispatch()`.
+   - If dispatched to `SCX_DSQ_LOCAL`, the task will be placed in the local DSQ of the CPU returned by `ops.select_cpu()`.
+   - Dispatching directly from `ops.select_cpu()` causes the `ops.enqueue()` callback to be skipped, potentially reducing scheduling latency.
 
-3. **Task Dispatching:**
-   - When a CPU is ready to schedule, it first checks its local DSQ, then the global DSQ, and finally invokes `ops.dispatch()` if needed.
+3. **Task Enqueueing (`ops.enqueue()`):**
+   - If the task was not dispatched in the previous step, `ops.enqueue()` is invoked.
+   - `ops.enqueue()` can make several decisions:
+     - **Immediate Dispatch:** Dispatch the task to either the global DSQ (`SCX_DSQ_GLOBAL`), a local DSQ (`SCX_DSQ_LOCAL`), or a custom DSQ by calling `scx_bpf_dispatch()`.
+     - **Queue on BPF Side:** Queue the task within the BPF program for custom scheduling logic.
 
-4. **Task Execution:**
-   - The CPU executes the selected task, updating its virtual time and ensuring fair scheduling.
+4. **CPU Scheduling Readiness:**
+   - When a CPU is ready to schedule, it follows this order:
+     - **Local DSQ Check:** The CPU first checks its local DSQ for tasks.
+     - **Global DSQ Check:** If the local DSQ is empty, it checks the global DSQ.
+     - **Invoke `ops.dispatch()`:** If no tasks are found, `ops.dispatch()` is invoked to populate the local DSQ.
+       - Within `ops.dispatch()`, the following functions can be used:
+         - `scx_bpf_dispatch()`: Schedules tasks to any DSQ (local, global, or custom). Note that this function currently cannot be called with BPF locks held.
+         - `scx_bpf_consume()`: Transfers a task from a specified non-local DSQ to the dispatching DSQ. This function cannot be called with any BPF locks held and will flush pending dispatched tasks before attempting to consume the specified DSQ.
 
-This cycle ensures that tasks are scheduled efficiently while maintaining fairness and responsiveness.
+5. **Task Execution Decision:**
+   - After `ops.dispatch()` returns, if there are tasks in the local DSQ, the CPU runs the first one.
+   - If the local DSQ is still empty, the CPU performs the following steps:
+     - **Consume Global DSQ:** Attempts to consume a task from the global DSQ using `scx_bpf_consume()`. If successful, the task is executed.
+     - **Retry Dispatch:** If `ops.dispatch()` has dispatched any tasks, the CPU retries checking the local DSQ.
+     - **Execute Previous Task:** If the previous task is an SCX task and still runnable, the CPU continues executing it (see `SCX_OPS_ENQ_LAST`).
+     - **Idle State:** If no tasks are available, the CPU goes idle.
+
+This scheduling cycle ensures that tasks are scheduled efficiently while maintaining fairness and responsiveness. By understanding each step, developers can modify or extend scx_simple to implement custom scheduling behaviors that meet specific requirements.
 
 ## Compiling and Running scx_simple
 
@@ -412,7 +428,7 @@ In this tutorial, we've introduced the **sched_ext** scheduler class and walked 
 
 By mastering scx_simple, you're well-equipped to design and implement more sophisticated scheduling policies tailored to your specific requirements. Whether you're optimizing for performance, fairness, or specific workload characteristics, sched_ext and eBPF offer the flexibility and power to achieve your goals.
 
-> Ready to take your eBPF skills to the next level? Dive deeper into our tutorials and explore more examples by visiting our [tutorial repository](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our [website](https://eunomia.dev/tutorials/).
+> Ready to take your eBPF skills to the next level? Dive deeper into our tutorials and explore more examples by visiting our [tutorial repository https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or our [website https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
 
 ## References
 
@@ -423,3 +439,4 @@ By mastering scx_simple, you're well-equipped to design and implement more sophi
 - **libbpf Documentation:** [https://github.com/libbpf/libbpf](https://github.com/libbpf/libbpf)
 
 Feel free to explore these resources to expand your understanding and continue your journey into advanced eBPF programming!
+

@@ -212,8 +212,8 @@ def generate_toc_cn(base_dir, project_root):
 
 # Example usage
 base_directory = "/root/bpf-developer-tutorial/src/"  # Replace with the actual base directory
-project_root = "/root/bpf-developer-tutorial/src/"  # The root of the project
-# toc_output = generate_toc(base_directory, project_root)
-toc_output = generate_toc_cn(base_directory, project_root)
+project_root = "/root/bpf-developer-tutorial/"  # The root of the project
+toc_output = generate_toc(base_directory, project_root)
+# toc_output = generate_toc_cn(base_directory, project_root)
 # Output the TOC
 print(toc_output)
