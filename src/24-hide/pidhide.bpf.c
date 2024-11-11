@@ -58,7 +58,7 @@ const volatile int target_ppid = 0;
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
 const volatile int pid_to_hide_len = 0;
-const volatile char pid_to_hide[MAX_PID_LEN];
+const volatile char pid_to_hide[MAX_PID_LEN] = "";
 
 // struct linux_dirent64 {
 //     u64        d_ino;    /* 64-bit inode number */
