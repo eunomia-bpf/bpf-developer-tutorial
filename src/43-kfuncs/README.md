@@ -393,7 +393,7 @@ Assuming you have a user-space application or a tool to load and attach the eBPF
 **Sample Output:**
 
 ```bash
-# sudo ./load_kfunc
+# sudo ./kfunc
 BPF program loaded and attached successfully. Press Ctrl-C to exit.
 ```
 

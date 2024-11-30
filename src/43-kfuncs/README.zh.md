@@ -393,7 +393,7 @@ int handle_kprobe(struct pt_regs *ctx)
 **示例输出：**
 
 ```bash
-# sudo ./load_kfunc
+# sudo ./kfunc
 BPF 程序已加载并成功附加。按 Ctrl-C 退出。
 ```
 
