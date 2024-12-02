@@ -4,15 +4,32 @@
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
+// #include <linux/bpf_trace.h> // Add this include
 
 __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz);
-
+__bpf_kfunc int bpf_xdp_runner(struct xdp_md *ctx);
 /* Define a kfunc function */
 __bpf_kfunc_start_defs();
 
+// Remove or comment out this line:
+// extern u64 bpf_trace_printk(u64 fmt, u64 fmt_size, u64 arg1, u64 arg2, u64 arg3);
+// EXPORT_SYMBOL_GPL(bpf_trace_printk);
+
 __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz)
 {
-    // Edge case: if substr is empty, return 0 (assuming empty string is found at the start)
+    // const char *fmt = "strstr: str=%s, str__sz=%u, substr=%s\n";
+    // // bpf_trace_printk((u64)(void*)fmt, (u64)sizeof(fmt), (u64)(void*)str, (u64)str__sz, (u64)(void*)substr);
+    // // Edge case: if substr is empty, return 0 (assuming empty string is found at the start)
+    // const struct bpf_func_proto *proto = bpf_base_func_proto(BPF_FUNC_trace_printk, NULL);
+    // if (!proto) {
+    //     pr_err("bpf_trace_printk: Failed to get prototype\n");
+    //     return -1;
+    // }
+    // if (proto->func) {
+    //     proto->func((u64)(void*)fmt, (u64)sizeof(fmt), (u64)(void*)str, str__sz, (u64)(void*)substr);
+    // } else {
+    //     pr_err("bpf_trace_printk: Failed to get function pointer\n");
+    // }
     if (substr__sz == 0)
     {
         return 0;
@@ -42,10 +59,16 @@ __bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32
     return -1;
 }
 
+__bpf_kfunc int bpf_xdp_runner(struct xdp_md *ctx) {
+
+    return XDP_PASS;
+}
+
 __bpf_kfunc_end_defs();
 
 BTF_KFUNCS_START(bpf_kfunc_example_ids_set)
 BTF_ID_FLAGS(func, bpf_strstr)
+BTF_ID_FLAGS(func, bpf_xdp_runner)
 BTF_KFUNCS_END(bpf_kfunc_example_ids_set)
 
 // Register the kfunc ID set

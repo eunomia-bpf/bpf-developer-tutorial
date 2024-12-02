@@ -6,7 +6,7 @@
 char _license[] SEC("license") = "GPL";
 
 SEC("xdp")
-int xdp_redirect_notouch(struct xdp_md *ctx)
+int xdp_pass(struct xdp_md *ctx)
 {
-	return XDP_TX;
+	return XDP_PASS;
 }
