@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 OUTPUT := .output
 CLANG ?= clang
-LIBBPF_SRC := $(abspath ../third_party/libbpf/src)
-BPFTOOL_SRC := $(abspath ../third_party/bpftool/src)
+LIBBPF_SRC := $(abspath ../../../third_party/libbpf/src)
+BPFTOOL_SRC := $(abspath ../../../third_party/bpftool/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 BPFTOOL_OUTPUT ?= $(abspath $(OUTPUT)/bpftool)
 BPFTOOL ?= $(BPFTOOL_OUTPUT)/bootstrap/bpftool
@@ -13,15 +13,15 @@ ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 			 | sed 's/mips.*/mips/' \
 			 | sed 's/riscv64/riscv/' \
 			 | sed 's/loongarch64/loongarch/')
-VMLINUX := ../third_party/vmlinux/$(ARCH)/vmlinux.h
+VMLINUX := ../../../third_party/vmlinux/$(ARCH)/vmlinux.h
 # Use our own libbpf API headers and Linux UAPI headers distributed with
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
-INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/ -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
+INCLUDES := -I$(OUTPUT) -I../../../third_party/libbpf/include/ -I../../../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = uprobe # minimal minimal_legacy  kprobe fentry usdt sockfilter tc ksyscall
+APPS = uprobe uprobe_failed # minimal minimal_legacy  kprobe fentry usdt sockfilter tc ksyscall
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -66,14 +66,7 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(APPS) merge-btf all-btf
-
-.PHONY: all-btf
-all-btf: merge-btf
-	make -C examples
-	./merge-btf /sys/kernel/btf/vmlinux examples/base-new.btf target-base-new.btf
-	./merge-btf /sys/kernel/btf/vmlinux examples/base.btf target-base.btf
-	./merge-btf /sys/kernel/btf/vmlinux examples/base-complete.btf target-base-complete.btf
+all: $(APPS) merge-btf
 
 .PHONY: clean
 clean:

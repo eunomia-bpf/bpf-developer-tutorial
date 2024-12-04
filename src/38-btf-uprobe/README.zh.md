@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 我们可以使用pahole和clang来生成每个版本的btf。制作示例并生成btf:
 
 ```sh
-make -C example # it's like: pahole --btf_encode_detached base.btf btf-base.o
+make -C examples # it's like: pahole --btf_encode_detached base.btf btf-base.o
 ```
 
 然后我们执行eBPF程序和用户空间程序。 对于 `btf-base`：
@@ -196,6 +196,27 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
 `struct data`的记录在eBPF程序中被保留下来。然后，我们可以使用 `btf-base.btf`来编译eBPF程序。
+
+这时，如果未提供用户态的 BTF 信息，会导致验证失败：
+
+```console
+# ./uprobe examples/btf-base 
+.....
+; int BPF_UPROBE(add_test, struct data *d) @ uprobe.bpf.c:23
+0: (79) r6 = *(u64 *)(r1 +112)        ; R1=ctx() R6_w=scalar()
+1: (b7) r7 = 0                        ; R7_w=0
+; int a = 0, c = 0; @ uprobe.bpf.c:25
+2: (63) *(u32 *)(r10 -4) = r7         ; R7_w=0 R10=fp0 fp-8=0000????
+3: (63) *(u32 *)(r10 -8) = r7         ; R7_w=0 R10=fp0 fp-8=00000
+4: <invalid CO-RE relocation>
+failed to resolve CO-RE relocation <byte_off> [17] struct data.a (0:0 @ offset 0)
+processed 5 insns (limit 1000000) max_states_per_insn 0 total_states 0 peak_states 0 mark_read 0
+-- END PROG LOAD LOG --
+libbpf: prog 'add_test': failed to load: -22
+libbpf: failed to load object 'uprobe_bpf'
+libbpf: failed to load BPF skeleton 'uprobe_bpf': -22
+Failed to load and verify BPF skeleton
+```
 
 将用户btf与内核btf合并，这样我们就有了一个完整的内核和用户空间的btf:
 
