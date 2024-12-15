@@ -274,7 +274,7 @@ int BPF_KRETPROBE(malloc_exit)
 
 最后，函数调用 `update_statistics_add` 更新统计数据，如果启用了所有内存分配操作的跟踪，函数还会打印一些关于内存分配操作的信息。
 
-请注意，`gen_alloc_exit` 函数是 `gen_alloc_exit2` 的一个包装，它将 `PT_REGS_RC(ctx)` 作为 `address` 参数传递给 `gen_alloc_exit2`。`
+请注意，`gen_alloc_exit` 函数是 `gen_alloc_exit2` 的一个包装，它将 `PT_REGS_RC(ctx)` 作为 `address` 参数传递给 `gen_alloc_exit2`。
 在我们的讨论中，我们刚刚提到在 `gen_alloc_exit2` 函数中，调用了 `update_statistics_add` 函数以更新内存分配的统计数据。下面我们详细看一下这个函数的具体实现。
 
 ```c
