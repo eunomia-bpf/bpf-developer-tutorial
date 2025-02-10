@@ -22,7 +22,7 @@ The papers demonstrate eBPF's versatility in accelerating systems, enhancing sec
 
 If you have any suggestions or adding papers, please feel free to open an issue or PR. The list was created in 2023.10, New papers will be added in the future.
 
-> Check out our open-source projects at [eunomia-bpf](https://github.com/eunomia-bpf) and eBPF tutorials at [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial). I'm also looking for a PhD position in the area of systems and networking in 2024/2025. My [Github](https://github.com/yunwei37) and [email](yunwei356@gmail.com).
+> Check out our open-source projects at [eunomia-bpf](https://github.com/eunomia-bpf) and eBPF tutorials at [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial). I'm also looking for a PhD position in the area of systems and networking in 2024/2025. My [Github](https://github.com/yunwei37) and [email](mailto:yunwei356@gmail.com).
 
 ## XRP: In-Kernel Storage Functions with eBPF
 

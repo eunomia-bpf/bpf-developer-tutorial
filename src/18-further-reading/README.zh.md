@@ -20,7 +20,7 @@ eBPF（扩展的伯克利数据包过滤器）是一种新兴的技术，允许�
 
 如果您有任何建议或添加论文的意见，请随时开放一个问题或PR。此列表创建于 2023.10，未来将添加新的论文。
 
-> 如果您对 eBPF 有些进一步的兴趣的话，也可以查看我们在 [eunomia-bpf](https://github.com/eunomia-bpf) 的开源项目和 [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 的 eBPF 教程。我也在寻找 2024/2025 年系统和网络领域的 PhD 相关机会，这是我的 [Github](https://github.com/yunwei37) 和 [邮箱](yunwei356@gmail.com)。
+> 如果您对 eBPF 有些进一步的兴趣的话，也可以查看我们在 [eunomia-bpf](https://github.com/eunomia-bpf) 的开源项目和 [bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 的 eBPF 教程。我也在寻找 2024/2025 年系统和网络领域的 PhD 相关机会，这是我的 [Github](https://github.com/yunwei37) 和 [邮箱](mailto:yunwei356@gmail.com)。
 
 ## XRP: In-Kernel Storage Functions with eBPF
 
