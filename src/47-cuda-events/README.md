@@ -429,6 +429,48 @@ This output shows the typical flow of a CUDA application:
 4. Copy results back from device to host (kind=2)
 5. Free device memory
 
+## benchmark
+
+We also provide a benchmark tool to test the performance of the tracer and the latency of the CUDA API calls.
+
+```bash
+make
+sudo ./cuda_events -p ./bench
+./bench
+```
+
+When there is no tracing, the result is like this:
+
+```
+Data size: 1048576 bytes (1024 KB)
+Iterations: 10000
+
+Summary (average time per operation):
+-----------------------------------
+cudaMalloc:           113.14 µs
+cudaMemcpyH2D:        365.85 µs
+cudaLaunchKernel:       7.82 µs
+cudaMemcpyD2H:        393.55 µs
+cudaFree:               0.00 µs
+```
+
+When the tracer is attached, the result is like this:
+
+```
+Data size: 1048576 bytes (1024 KB)
+Iterations: 10000
+
+Summary (average time per operation):
+-----------------------------------
+cudaMalloc:           119.81 µs
+cudaMemcpyH2D:        367.16 µs
+cudaLaunchKernel:       8.77 µs
+cudaMemcpyD2H:        383.66 µs
+cudaFree:               0.00 µs
+```
+
+The tracer adds about 2us overhead to each CUDA API call, which is negligible for most cases.
+
 ## Command Line Options
 
 The `cuda_events` tool supports these options:
@@ -465,5 +507,84 @@ Once you're comfortable with this basic CUDA tracing tool, you could extend it t
 - NVIDIA CUDA Runtime API: https://docs.nvidia.com/cuda/cuda-runtime-api/
 - libbpf Documentation: https://libbpf.readthedocs.io/
 - Linux uprobes Documentation: https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
+
+## Benchmarking Tracing Overhead
+
+While tracing is an invaluable tool for debugging and understanding CUDA applications, it does introduce some overhead. We've included a benchmarking tool to help you measure this overhead.
+
+### The Benchmark Tool
+
+The `bench.cu` program performs several CUDA operations repeatedly and measures their execution time:
+
+1. Memory allocation (`cudaMalloc`)
+2. Memory transfers (host to device and device to host)
+3. Kernel launches
+4. Memory deallocation (`cudaFree`)
+5. Full operations (the complete sequence)
+
+Each operation is executed many times to get statistically significant results, and the average time per operation is reported in microseconds.
+
+### Running the Benchmark
+
+To build the benchmark tool:
+
+```bash
+make bench
+```
+
+To run a complete benchmark that compares performance with and without tracing:
+
+```bash
+make benchmark
+```
+
+This will run the benchmark twice:
+1. First without any tracing
+2. Then with the CUDA events tracer attached
+
+You can also run individual benchmarks:
+
+```bash
+# Without tracing
+make benchmark-no-trace
+
+# With tracing
+make benchmark-with-trace
+```
+
+### Interpreting the Results
+
+The benchmark output shows the average time for each CUDA operation in microseconds. Compare the times with and without tracing to understand the overhead.
+
+For example:
+
+```
+# Without tracing
+cudaMalloc         :      23.45 µs per operation
+cudaMemcpyH2D      :      42.67 µs per operation
+cudaLaunchKernel   :      15.89 µs per operation
+cudaMemcpyD2H      :      38.12 µs per operation
+cudaFree           :      10.34 µs per operation
+Full Operation     :     130.47 µs per operation
+
+# With tracing
+cudaMalloc         :      25.12 µs per operation
+cudaMemcpyH2D      :      45.89 µs per operation
+cudaLaunchKernel   :      17.23 µs per operation
+cudaMemcpyD2H      :      41.56 µs per operation
+cudaFree           :      11.78 µs per operation
+Full Operation     :     141.58 µs per operation
+```
+
+In this example, tracing adds about 7-10% overhead to CUDA operations. This is typically acceptable for debugging and profiling purposes, but it's important to be aware of this impact when interpreting the results.
+
+### Optimization Opportunities
+
+If you find the tracing overhead too high for your use case, there are several ways to reduce it:
+
+1. Trace only specific CUDA functions that are relevant to your investigation
+2. Filter by specific process IDs to minimize the number of events captured
+3. Disable return probes using the `-r` flag if you don't need return values
+4. Consider running eBPF in user-space with tools like [bpftime](https://github.com/eunomia-bpf/bpftime) to reduce context-switching overhead
 
 If you'd like to dive deeper into eBPF, check out our tutorial repository at https://github.com/eunomia-bpf/bpf-developer-tutorial or visit our website at https://eunomia.dev/tutorials/. 

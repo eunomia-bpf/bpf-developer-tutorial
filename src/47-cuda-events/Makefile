@@ -36,6 +36,7 @@ CUDA_ARCH_FLAGS ?= $(shell if [ -f $(CUDA_DETECT_SCRIPT) ]; then bash $(CUDA_DET
 NVCC_FLAGS = -O3 $(CUDA_ARCH_FLAGS)
 
 APPS = cuda_events # minimal minimal_legacy uprobe kprobe fentry usdt sockfilter tc ksyscall
+CUDA_APPS = basic02 bench
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -80,12 +81,12 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: cuda_events basic02
+all: cuda_events basic02 bench
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS)
+	$(Q)rm -rf $(OUTPUT) $(APPS) $(CUDA_APPS)
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -119,8 +120,8 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(call msg,BPFTOOL,$@)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
-# Build CUDA example
-basic02: basic02.cu $(CUDA_DETECT_SCRIPT)
+# Build CUDA examples
+$(CUDA_APPS): %: %.cu $(CUDA_DETECT_SCRIPT)
 	$(call msg,NVCC,$@)
 	$(Q)$(NVCC) $(NVCC_FLAGS) -o $@ $<
 	$(Q)@echo "Compiling for architecture: $(CUDA_ARCH_FLAGS)"
@@ -153,6 +154,40 @@ $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
+
+# Benchmarking targets
+.PHONY: benchmark benchmark-no-trace benchmark-with-trace
+
+# Run benchmark without tracing
+benchmark-no-trace:
+	$(call msg,BENCH,"without tracing")
+	$(Q)./bench
+
+# Run benchmark with tracing
+benchmark-with-trace:
+	$(call msg,BENCH,"with tracing")
+	$(Q)(sudo ./cuda_events -p ./bench > /dev/null 2>&1 &); \
+		sleep 1; \
+		./bench; \
+		sudo pkill -f "./cuda_events -p ./bench" || true
+
+# Run both benchmarks and compare
+benchmark: bench cuda_events
+	$(call msg,BENCH,"benchmark comparison")
+	$(Q)echo "============================================="
+	$(Q)echo "Running benchmark WITHOUT tracing..."
+	$(Q)echo "============================================="
+	$(Q)./bench
+	$(Q)echo ""
+	$(Q)echo "============================================="
+	$(Q)echo "Running benchmark WITH tracing..."
+	$(Q)echo "============================================="
+	$(Q)(sudo ./cuda_events -p ./bench > /dev/null 2>&1 &); \
+		sleep 1; \
+		./bench; \
+		sudo pkill -f "./cuda_events -p ./bench" || true
+	$(Q)echo ""
+	$(Q)echo "Benchmark complete. Compare the results to see the tracing overhead."
 
 # delete failed targets
 .DELETE_ON_ERROR:
