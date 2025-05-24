@@ -1,0 +1,197 @@
+#!/usr/bin/env bpftrace
+
+/*
+ * cuda_events.bt  Trace CUDA events using bpftrace and uprobes.
+ *
+ * This script traces key CUDA API functions to provide visibility into:
+ * - Memory operations (cudaMalloc, cudaFree, cudaMemcpy)
+ * - Kernel launches (cudaLaunchKernel)
+ * - Stream operations (cudaStreamCreate, cudaStreamSynchronize)
+ * - Device management (cudaGetDevice, cudaSetDevice)
+ * 
+ * USAGE: sudo ./cuda_events.bt
+ *
+ * This requires:
+ * - bpftrace
+ * - CUDA toolkit installed (with libcudart.so)
+ *
+ * Note: You need to modify the library path in each probe definition if the
+ * default "/usr/local/cuda/lib64/libcudart.so" doesn't exist on your system.
+ * Search and replace all occurrences with your system's CUDA library path.
+ */
+
+BEGIN
+{
+    printf("Tracing CUDA events... Hit Ctrl-C to end.\n");
+    printf("%-12s %-16s %-12s %-20s %s\n", "TIME(ms)", "PROCESS", "PID", "EVENT", "DETAILS");
+    printf("Using CUDA library: /usr/local/cuda-12.6/lib64/libcudart.so\n");
+    printf("If this path is incorrect, please edit the script and update all probe definitions.\n");
+}
+
+// Memory allocation tracking
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaMalloc
+{
+    $size = arg1;
+    printf("%-12u %-16s %-12d %-20s size=%ld bytes\n", 
+           elapsed/1000000, comm, pid, "cudaMalloc", $size);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaMalloc
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaMalloc", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Memory free
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaFree
+{
+    printf("%-12u %-16s %-12d %-20s ptr=0x%lx\n", 
+           elapsed/1000000, comm, pid, "cudaFree", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaFree
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaFree", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Memory copy
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaMemcpy
+{
+    $size = arg3;
+    printf("%-12u %-16s %-12d %-20s size=%ld bytes, kind=%d\n", 
+           elapsed/1000000, comm, pid, "cudaMemcpy", $size, arg4);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaMemcpy
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaMemcpy", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Kernel launches
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaLaunchKernel
+{
+    printf("%-12u %-16s %-12d %-20s function=0x%lx\n", 
+           elapsed/1000000, comm, pid, "cudaLaunchKernel", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaLaunchKernel
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaLaunchKernel", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Stream operations
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaStreamCreate
+{
+    printf("%-12u %-16s %-12d %-20s\n", 
+           elapsed/1000000, comm, pid, "cudaStreamCreate");
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaStreamCreate
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaStreamCreate", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaStreamSynchronize
+{
+    printf("%-12u %-16s %-12d %-20s stream=0x%lx\n", 
+           elapsed/1000000, comm, pid, "cudaStreamSynchronize", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaStreamSynchronize
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaStreamSynchronize", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Device management
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaGetDevice
+{
+    printf("%-12u %-16s %-12d %-20s\n", 
+           elapsed/1000000, comm, pid, "cudaGetDevice");
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaGetDevice
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaGetDevice", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaSetDevice
+{
+    printf("%-12u %-16s %-12d %-20s device=%d\n", 
+           elapsed/1000000, comm, pid, "cudaSetDevice", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaSetDevice
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaSetDevice", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+// Event operations
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventCreate
+{
+    printf("%-12u %-16s %-12d %-20s\n", 
+           elapsed/1000000, comm, pid, "cudaEventCreate");
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventCreate
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaEventCreate", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventRecord
+{
+    printf("%-12u %-16s %-12d %-20s event=0x%lx\n", 
+           elapsed/1000000, comm, pid, "cudaEventRecord", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventRecord
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaEventRecord", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+uprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventSynchronize
+{
+    printf("%-12u %-16s %-12d %-20s event=0x%lx\n", 
+           elapsed/1000000, comm, pid, "cudaEventSynchronize", arg0);
+}
+
+uretprobe:/usr/local/cuda-12.6/lib64/libcudart.so:cudaEventSynchronize
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaEventSynchronize", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+END
+{
+    printf("Tracing complete.\n");
+} 

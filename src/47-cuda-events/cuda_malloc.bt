@@ -1,0 +1,30 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    printf("Tracing CUDA events... Hit Ctrl-C to end.\n");
+    printf("%-12s %-16s %-12s %-20s %s\n", "TIME(ms)", "PROCESS", "PID", "EVENT", "DETAILS");
+    printf("Using CUDA library: /usr/local/cuda-12.6/lib64/libcudart.so\n");
+    printf("If this path is incorrect, please edit the script and update all probe definitions.\n");
+}
+
+// Memory allocation tracking
+uprobe:/root/yunwei37/cuda-exp/basic07:cudaMalloc
+{
+    $size = arg1;
+    printf("%-12u %-16s %-12d %-20s size=%ld bytes\n", 
+           elapsed/1000000, comm, pid, "cudaMalloc", $size);
+}
+
+uretprobe:/root/yunwei37/cuda-exp/basic07:cudaMalloc
+{
+    $ret = retval;
+    printf("%-12u %-16s %-12d %-20s returned=%d (%s)\n", 
+           elapsed/1000000, comm, pid, "cudaMalloc", $ret, 
+           $ret == 0 ? "success" : "error");
+}
+
+END
+{
+    printf("Tracing complete.\n");
+} 
