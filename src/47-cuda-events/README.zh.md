@@ -1,628 +1,501 @@
-# eBPF 入门开发实践教程十一：在 eBPF 中使用 libbpf 开发用户态程序并跟踪 exec() 和 exit() 系统调用
+# eBPF教程：追踪CUDA GPU操作
 
-eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网络和性能分析工具。它允许开发者在内核运行时动态加载、更新和运行用户定义的代码。
+你是否曾经想知道CUDA应用程序在运行时底层发生了什么？GPU操作由于发生在具有独立内存空间的设备上，因此调试和性能分析变得极为困难。在本教程中，我们将构建一个强大的基于eBPF的追踪工具，让你实时查看CUDA API调用。
 
-在本教程中，我们将了解内核态和用户态的 eBPF 程序是如何协同工作的。我们还将学习如何使用原生的 libbpf 开发用户态程序，将 eBPF 应用打包为可执行文件，实现跨内核版本分发。
+## CUDA和GPU追踪简介
 
-## libbpf 库，以及为什么需要使用它
+CUDA（Compute Unified Device Architecture，计算统一设备架构）是NVIDIA的并行计算平台和编程模型，使开发者能够利用NVIDIA GPU进行通用计算。当你运行CUDA应用程序时，后台会发生以下步骤：
 
-libbpf 是一个 C 语言库，伴随内核版本分发，用于辅助 eBPF 程序的加载和运行。它提供了用于与 eBPF 系统交互的一组 C API，使开发者能够更轻松地编写用户态程序来加载和管理 eBPF 程序。这些用户态程序通常用于分析、监控或优化系统性能。
+1. 主机（CPU）在设备（GPU）上分配内存
+2. 数据从主机内存传输到设备内存
+3. GPU内核（函数）被启动以处理数据
+4. 结果从设备传回主机
+5. 设备内存被释放
 
-使用 libbpf 库有以下优势：
+每个操作都涉及CUDA API调用，如`cudaMalloc`、`cudaMemcpy`和`cudaLaunchKernel`。追踪这些调用可以提供宝贵的调试和性能优化信息，但这并不简单。GPU操作是异步的，传统调试工具通常无法访问GPU内部。
 
-- 它简化了 eBPF 程序的加载、更新和运行过程。
-- 它提供了一组易于使用的 API，使开发者能够专注于编写核心逻辑，而不是处理底层细节。
-- 它能够确保与内核中的 eBPF 子系统的兼容性，降低了维护成本。
+这时eBPF就派上用场了！通过使用uprobes，我们可以在用户空间CUDA运行库（`libcudart.so`）中拦截CUDA API调用，在它们到达GPU之前。这使我们能够了解：
 
-同时，libbpf 和 BTF（BPF Type Format）都是 eBPF 生态系统的重要组成部分。它们各自在实现跨内核版本兼容方面发挥着关键作用。BTF（BPF Type Format）是一种元数据格式，用于描述 eBPF 程序中的类型信息。BTF 的主要目的是提供一种结构化的方式，以描述内核中的数据结构，以便 eBPF 程序可以更轻松地访问和操作它们。
+- 内存分配大小和模式
+- 数据传输方向和大小
+- 内核启动参数
+- 错误代码和失败原因
+- 操作的时间信息
 
-BTF 在实现跨内核版本兼容方面的关键作用如下：
+## 我们追踪的关键CUDA函数
 
-- BTF 允许 eBPF 程序访问内核数据结构的详细类型信息，而无需对特定内核版本进行硬编码。这使得 eBPF 程序可以适应不同版本的内核，从而实现跨内核版本兼容。
-- 通过使用 BPF CO-RE（Compile Once, Run Everywhere）技术，eBPF 程序可以利用 BTF 在编译时解析内核数据结构的类型信息，进而生成可以在不同内核版本上运行的 eBPF 程序。
+我们的追踪工具监控几个关键CUDA函数，这些函数代表GPU计算中的主要操作。了解这些函数有助于解释追踪结果并诊断CUDA应用程序中的问题：
 
-结合 libbpf 和 BTF，eBPF 程序可以在各种不同版本的内核上运行，而无需为每个内核版本单独编译。这极大地提高了 eBPF 生态系统的可移植性和兼容性，降低了开发和维护的难度。
+### 内存管理
 
-## 什么是 bootstrap
+- **`cudaMalloc`**：在GPU设备上分配内存。通过追踪这个函数，我们可以看到请求了多少内存、何时请求以及是否成功。内存分配失败是CUDA应用程序中常见的问题来源。
+  ```c
+  cudaError_t cudaMalloc(void** devPtr, size_t size);
+  ```
 
-Bootstrap 是一个使用 libbpf 的完整应用，它利用 eBPF 程序来跟踪内核中的 exec() 系统调用（通过 SEC("tp/sched/sched_process_exec") handle_exec BPF 程序），这主要对应于新进程的创建（不包括 fork() 部分）。此外，它还跟踪进程的 exit() 系统调用（通过 SEC("tp/sched/sched_process_exit") handle_exit BPF 程序），以了解每个进程何时退出。
+- **`cudaFree`**：释放先前在GPU上分配的内存。追踪这个函数有助于识别内存泄漏（分配的内存从未被释放）和双重释放错误。
+  ```c
+  cudaError_t cudaFree(void* devPtr);
+  ```
 
-这两个 BPF 程序共同工作，允许捕获关于新进程的有趣信息，例如二进制文件的文件名，以及测量进程的生命周期，并在进程结束时收集有趣的统计信息，例如退出代码或消耗的资源量等。这是深入了解内核内部并观察事物如何真正运作的良好起点。
+### 数据传输
 
-Bootstrap 还使用 argp API（libc 的一部分）进行命令行参数解析，使得用户可以通过命令行选项配置应用行为。这种方式提供了灵活性，让用户能够根据实际需求自定义程序行为。虽然这些功能使用 eunomia-bpf 工具也可以实现，但是这里我们使用 libbpf 可以在用户态提供更高的可扩展性，不过也带来了不少额外的复杂度。
+- **`cudaMemcpy`**：在主机（CPU）和设备（GPU）内存之间，或在设备内存的不同位置之间复制数据。方向参数（`kind`）告诉我们数据是流向GPU、来自GPU还是在GPU内部移动。
+  ```c
+  cudaError_t cudaMemcpy(void* dst, const void* src, size_t count, cudaMemcpyKind kind);
+  ```
+  
+  `kind`参数可以是：
+  - `cudaMemcpyHostToDevice` (1)：从CPU复制到GPU
+  - `cudaMemcpyDeviceToHost` (2)：从GPU复制到CPU
+  - `cudaMemcpyDeviceToDevice` (3)：在GPU内存内复制
 
-## Bootstrap
+### 内核执行
 
-Bootstrap 分为两个部分：内核态和用户态。内核态部分是一个 eBPF 程序，它跟踪 exec() 和 exit() 系统调用。用户态部分是一个 C 语言程序，它使用 libbpf 库来加载和运行内核态程序，并处理从内核态程序收集的数据。
+- **`cudaLaunchKernel`**：启动GPU内核（函数）在设备上运行。这是真正的并行计算发生的地方。追踪这个函数显示内核何时启动以及是否成功。
+  ```c
+  cudaError_t cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, 
+                              void** args, size_t sharedMem, cudaStream_t stream);
+  ```
 
-### 内核态 eBPF 程序 bootstrap.bpf.c
+### 流和同步
 
-```c
-// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
-/* Copyright (c) 2020 Facebook */
-#include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
-#include <bpf/bpf_core_read.h>
-#include "bootstrap.h"
+CUDA使用流来管理并发和异步操作：
 
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
+- **`cudaStreamCreate`**：创建一个新的流，用于按顺序执行操作，但可能与其他流并发。
+  ```c
+  cudaError_t cudaStreamCreate(cudaStream_t* pStream);
+  ```
 
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 8192);
-    __type(key, pid_t);
-    __type(value, u64);
-} exec_start SEC(".maps");
+- **`cudaStreamSynchronize`**：等待流中的所有操作完成。这是一个关键的同步点，可以揭示性能瓶颈。
+  ```c
+  cudaError_t cudaStreamSynchronize(cudaStream_t stream);
+  ```
 
-struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 256 * 1024);
-} rb SEC(".maps");
+### 事件
 
-const volatile unsigned long long min_duration_ns = 0;
+CUDA事件用于计时和同步：
 
-SEC("tp/sched/sched_process_exec")
-int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
-{
-    struct task_struct *task;
-    unsigned fname_off;
-    struct event *e;
-    pid_t pid;
-    u64 ts;
+- **`cudaEventCreate`**：创建一个事件对象，用于计时操作。
+  ```c
+  cudaError_t cudaEventCreate(cudaEvent_t* event);
+  ```
 
-    /* remember time exec() was executed for this PID */
-    pid = bpf_get_current_pid_tgid() >> 32;
-    ts = bpf_ktime_get_ns();
-    bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);
+- **`cudaEventRecord`**：在流中记录一个事件，可用于计时或同步。
+  ```c
+  cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream);
+  ```
 
-    /* don't emit exec events when minimum duration is specified */
-    if (min_duration_ns)
-        return 0;
+- **`cudaEventSynchronize`**：等待事件完成，这是另一个同步点。
+  ```c
+  cudaError_t cudaEventSynchronize(cudaEvent_t event);
+  ```
 
-    /* reserve sample from BPF ringbuf */
-    e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-    if (!e)
-        return 0;
+### 设备管理
 
-    /* fill out the sample with data */
-    task = (struct task_struct *)bpf_get_current_task();
+- **`cudaGetDevice`**：获取当前使用的设备。
+  ```c
+  cudaError_t cudaGetDevice(int* device);
+  ```
 
-    e->exit_event = false;
-    e->pid = pid;
-    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-    bpf_get_current_comm(&e->comm, sizeof(e->comm));
+- **`cudaSetDevice`**：设置用于GPU执行的设备。
+  ```c
+  cudaError_t cudaSetDevice(int device);
+  ```
 
-    fname_off = ctx->__data_loc_filename & 0xFFFF;
-    bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
+通过追踪这些函数，我们可以全面了解GPU操作的生命周期，从设备选择和内存分配到数据传输、内核执行和同步。这使我们能够识别瓶颈、诊断错误并了解CUDA应用程序的行为。
 
-    /* successfully submit it to user-space for post-processing */
-    bpf_ringbuf_submit(e, 0);
-    return 0;
-}
+## 架构概述
 
-SEC("tp/sched/sched_process_exit")
-int handle_exit(struct trace_event_raw_sched_process_template* ctx)
-{
-    struct task_struct *task;
-    struct event *e;
-    pid_t pid, tid;
-    u64 id, ts, *start_ts, duration_ns = 0;
-    
-    /* get PID and TID of exiting thread/process */
-    id = bpf_get_current_pid_tgid();
-    pid = id >> 32;
-    tid = (u32)id;
+我们的CUDA事件追踪器由三个主要组件组成：
 
-    /* ignore thread exits */
-    if (pid != tid)
-        return 0;
+1. **头文件（`cuda_events.h`）**：定义内核空间和用户空间之间通信的数据结构
+2. **eBPF程序（`cuda_events.bpf.c`）**：使用uprobes实现对CUDA函数的内核侧钩子
+3. **用户空间应用程序（`cuda_events.c`）**：加载eBPF程序，处理事件并向用户显示
 
-    /* if we recorded start of the process, calculate lifetime duration */
-    start_ts = bpf_map_lookup_elem(&exec_start, &pid);
-    if (start_ts)
-        duration_ns = bpf_ktime_get_ns() - *start_ts;
-    else if (min_duration_ns)
-        return 0;
-    bpf_map_delete_elem(&exec_start, &pid);
+该工具使用eBPF uprobes附加到CUDA运行库中的CUDA API函数。当调用CUDA函数时，eBPF程序捕获参数和结果，并通过环形缓冲区将它们发送到用户空间。
 
-    /* if process didn't live long enough, return early */
-    if (min_duration_ns && duration_ns < min_duration_ns)
-        return 0;
+## 关键数据结构
 
-    /* reserve sample from BPF ringbuf */
-    e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-    if (!e)
-        return 0;
-
-    /* fill out the sample with data */
-    task = (struct task_struct *)bpf_get_current_task();
-
-    e->exit_event = true;
-    e->duration_ns = duration_ns;
-    e->pid = pid;
-    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-    e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
-    bpf_get_current_comm(&e->comm, sizeof(e->comm));
-
-    /* send data to user-space for post-processing */
-    bpf_ringbuf_submit(e, 0);
-    return 0;
-}
-```
-
-这段代码是一个内核态 eBPF 程序（bootstrap.bpf.c），主要用于跟踪 exec() 和 exit() 系统调用。它通过 eBPF 程序捕获进程的创建和退出事件，并将相关信息发送到用户态程序进行处理。下面是对代码的详细解释。
-
-首先，我们引入所需的头文件，定义 eBPF 程序的许可证以及两个 eBPF maps：exec_start 和 rb。exec_start 是一个哈希类型的 eBPF map，用于存储进程开始执行时的时间戳。rb 是一个环形缓冲区类型的 eBPF map，用于存储捕获的事件数据，并将其发送到用户态程序。
+我们追踪器的核心数据结构是在`cuda_events.h`中定义的`struct event`：
 
 ```c
-#include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
-#include <bpf/bpf_core_read.h>
-#include "bootstrap.h"
-
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
-
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 8192);
-    __type(key, pid_t);
-    __type(value, u64);
-} exec_start SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 256 * 1024);
-} rb SEC(".maps");
-
-const volatile unsigned long long min_duration_ns = 0;
-```
-
-接下来，我们定义了一个名为 handle_exec 的 eBPF 程序，它会在进程执行 exec() 系统调用时触发。首先，我们从当前进程中获取 PID，记录进程开始执行的时间戳，然后将其存储在 exec_start map 中。
-
-```c
-SEC("tp/sched/sched_process_exec")
-int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
-{
-    // ...
-    pid = bpf_get_current_pid_tgid() >> 32;
-    ts = bpf_ktime_get_ns();
-    bpf_map_update_elem(&exec_start, &pid, &ts, BPF_ANY);
-
-    // ...
-}
-```
-
-然后，我们从环形缓冲区 map rb 中预留一个事件结构，并填充相关数据，如进程 ID、父进程 ID、进程名等。之后，我们将这些数据发送到用户态程序进行处理。
-
-```c
-    // reserve sample from BPF ringbuf
-    e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-    if (!e)
-        return 0;
-
-    // fill out the sample with data
-    task = (struct task_struct *)bpf_get_current_task();
-
-    e->exit_event = false;
-    e->pid = pid;
-    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-    bpf_get_current_comm(&e->comm, sizeof(e->comm));
-
-    fname_off = ctx->__data_loc_filename & 0xFFFF;
-    bpf_probe_read_str(&e->filename, sizeof(e->filename), (void *)ctx + fname_off);
-
-    // successfully submit it to user-space for post-processing
-    bpf_ringbuf_submit(e, 0);
-    return 0;
-```
-
-最后，我们定义了一个名为 handle_exit 的 eBPF 程序，它会在进程执行 exit() 系统调用时触发。首先，我们从当前进程中获取 PID 和 TID（线程 ID）。如果 PID 和 TID 不相等，说明这是一个线程退出，我们将忽略此事件。
-
-```c
-SEC("tp/sched/sched_process_exit")
-int handle_exit(struct trace_event_raw_sched_process_template* ctx)
-{
-    // ...
-    id = bpf_get_current_pid_tgid();
-    pid = id >> 32;
-    tid = (u32)id;
-
-    /* ignore thread exits */
-    if (pid != tid)
-        return 0;
-
-    // ...
-}
-```
-
-接着，我们查找之前存储在 exec_start map 中的进程开始执行的时间戳。如果找到了时间戳，我们将计算进程的生命周期（持续时间），然后从 exec_start map 中删除该记录。如果未找到时间戳且指定了最小持续时间，则直接返回。
-
-```c
-    // if we recorded start of the process, calculate lifetime duration
-    start_ts = bpf_map_lookup_elem(&exec_start, &pid);
-    if (start_ts)
-        duration_ns = bpf_ktime_get_ns() - *start_ts;
-    else if (min_duration_ns)
-        return 0;
-    bpf_map_delete_elem(&exec_start, &pid);
-
-    // if process didn't live long enough, return early
-    if (min_duration_ns && duration_ns < min_duration_ns)
-        return 0;
-```
-
-然后，我们从环形缓冲区 map rb 中预留一个事件结构，并填充相关数据，如进程 ID、父进程 ID、进程名、进程持续时间等。最后，我们将这些数据发送到用户态程序进行处理。
-
-```c
-    /* reserve sample from BPF ringbuf */
-    e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-    if (!e)
-        return 0;
-
-    /* fill out the sample with data */
-    task = (struct task_struct *)bpf_get_current_task();
-
-    e->exit_event = true;
-    e->duration_ns = duration_ns;
-    e->pid = pid;
-    e->ppid = BPF_CORE_READ(task, real_parent, tgid);
-    e->exit_code = (BPF_CORE_READ(task, exit_code) >> 8) & 0xff;
-    bpf_get_current_comm(&e->comm, sizeof(e->comm));
-
-    /* send data to user-space for post-processing */
-    bpf_ringbuf_submit(e, 0);
-    return 0;
-}
-```
-
-这样，当进程执行 exec() 或 exit() 系统调用时，我们的 eBPF 程序会捕获相应的事件，并将详细信息发送到用户态程序进行后续处理。这使得我们可以轻松地监控进程的创建和退出，并获取有关进程的详细信息。
-
-除此之外，在 bootstrap.h 中，我们还定义了和用户态交互的数据结构：
-
-```c
-/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
-/* Copyright (c) 2020 Facebook */
-#ifndef __BOOTSTRAP_H
-#define __BOOTSTRAP_H
-
-#define TASK_COMM_LEN 16
-#define MAX_FILENAME_LEN 127
-
 struct event {
-    int pid;
-    int ppid;
-    unsigned exit_code;
-    unsigned long long duration_ns;
-    char comm[TASK_COMM_LEN];
-    char filename[MAX_FILENAME_LEN];
-    bool exit_event;
+    /* Common fields */
+    int pid;                  /* Process ID */
+    char comm[TASK_COMM_LEN]; /* Process name */
+    enum cuda_event_type type;/* Type of CUDA event */
+    
+    /* Event-specific data (union to save space) */
+    union {
+        struct { size_t size; } mem;                 /* For malloc/memcpy */
+        struct { void *ptr; } free_data;             /* For free */
+        struct { size_t size; int kind; } memcpy_data; /* For memcpy */
+        struct { void *func; } launch;               /* For kernel launch */
+        struct { int device; } device;               /* For device operations */
+        struct { void *handle; } handle;             /* For stream/event operations */
+    };
+    
+    bool is_return;           /* True if this is from a return probe */
+    int ret_val;              /* Return value (for return probes) */
+    char details[MAX_DETAILS_LEN]; /* Additional details as string */
 };
-
-#endif /* __BOOTSTRAP_H */
 ```
 
-### 用户态，bootstrap.c
+这个结构设计用于高效捕获不同类型的CUDA操作信息。`union`是一种巧妙的节省空间技术，因为每个事件一次只需要一种类型的数据。例如，内存分配事件需要存储大小，而释放事件需要存储指针。
+
+`cuda_event_type`枚举帮助我们对不同的CUDA操作进行分类：
 
 ```c
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-/* Copyright (c) 2020 Facebook */
-#include <argp.h>
-#include <signal.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/resource.h>
-#include <bpf/libbpf.h>
-#include "bootstrap.h"
-#include "bootstrap.skel.h"
+enum cuda_event_type {
+    CUDA_EVENT_MALLOC = 0,
+    CUDA_EVENT_FREE,
+    CUDA_EVENT_MEMCPY,
+    CUDA_EVENT_LAUNCH_KERNEL,
+    CUDA_EVENT_STREAM_CREATE,
+    CUDA_EVENT_STREAM_SYNC,
+    CUDA_EVENT_GET_DEVICE,
+    CUDA_EVENT_SET_DEVICE,
+    CUDA_EVENT_EVENT_CREATE,
+    CUDA_EVENT_EVENT_RECORD,
+    CUDA_EVENT_EVENT_SYNC
+};
+```
 
+这个枚举涵盖了我们要追踪的主要CUDA操作，从内存管理到内核启动和同步。
+
+## eBPF程序实现
+
+让我们深入了解钩入CUDA函数的eBPF程序（`cuda_events.bpf.c`）。完整代码可在仓库中找到，以下是关键部分：
+
+首先，我们创建一个环形缓冲区与用户空间通信：
+
+```c
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} rb SEC(".maps");
+```
+
+环形缓冲区是我们追踪器的关键组件。它充当一个高性能队列，eBPF程序可以在其中提交事件，用户空间应用程序可以检索它们。我们设置了256KB的大小来处理事件突发而不丢失数据。
+
+对于每种CUDA操作，我们实现了一个辅助函数来收集相关数据。让我们看看`submit_malloc_event`函数为例：
+
+```c
+static inline int submit_malloc_event(size_t size, bool is_return, int ret_val) {
+    struct event *e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+    if (!e) return 0;
+    
+    /* Fill common fields */
+    e->pid = bpf_get_current_pid_tgid() >> 32;
+    bpf_get_current_comm(&e->comm, sizeof(e->comm));
+    e->type = CUDA_EVENT_MALLOC;
+    e->is_return = is_return;
+    
+    /* Fill event-specific data */
+    if (is_return) {
+        e->ret_val = ret_val;
+    } else {
+        e->mem.size = size;
+    }
+    
+    bpf_ringbuf_submit(e, 0);
+    return 0;
+}
+```
+
+这个函数首先在环形缓冲区中为我们的事件保留空间。然后它填充进程ID和名称等常见字段。对于malloc事件，我们存储请求的大小（在函数入口）或返回值（在函数退出时）。最后，我们将事件提交到环形缓冲区。
+
+实际的探针使用SEC注释附加到CUDA函数。对于cudaMalloc，我们有：
+
+```c
+SEC("uprobe")
+int BPF_KPROBE(cuda_malloc_enter, void **ptr, size_t size) {
+    return submit_malloc_event(size, false, 0);
+}
+
+SEC("uretprobe")
+int BPF_KRETPROBE(cuda_malloc_exit, int ret) {
+    return submit_malloc_event(0, true, ret);
+}
+```
+
+第一个函数在进入`cudaMalloc`时调用，捕获请求的大小。第二个在`cudaMalloc`返回时调用，捕获错误代码。这个模式对我们要追踪的每个CUDA函数都会重复。
+
+一个有趣的例子是`cudaMemcpy`，它在主机和设备之间传输数据：
+
+```c
+SEC("uprobe")
+int BPF_KPROBE(cuda_memcpy_enter, void *dst, const void *src, size_t size, int kind) {
+    return submit_memcpy_event(size, kind, false, 0);
+}
+```
+
+在这里，我们不仅捕获了大小，还捕获了"kind"参数，它指示传输的方向（主机到设备、设备到主机或设备到设备）。这为我们提供了关于数据移动模式的宝贵信息。
+
+## 用户空间应用程序详情
+
+用户空间应用程序（`cuda_events.c`）负责加载eBPF程序，处理来自环形缓冲区的事件，并以用户友好的格式显示它们。
+
+首先，程序解析命令行参数以配置其行为：
+
+```c
 static struct env {
     bool verbose;
-    long min_duration_ms;
-} env;
-
-const char *argp_program_version = "bootstrap 0.0";
-const char *argp_program_bug_address = "<bpf@vger.kernel.org>";
-const char argp_program_doc[] =
-"BPF bootstrap demo application.\n"
-"\n"
-"It traces process start and exits and shows associated \n"
-"information (filename, process duration, PID and PPID, etc).\n"
-"\n"
-"USAGE: ./bootstrap [-d <min-duration-ms>] [-v]\n";
-
-static const struct argp_option opts[] = {
-    { "verbose", 'v', NULL, 0, "Verbose debug output" },
-    { "duration", 'd', "DURATION-MS", 0, "Minimum process duration (ms) to report" },
-    {},
+    bool print_timestamp;
+    char *cuda_library_path;
+    bool include_returns;
+    int target_pid;
+} env = {
+    .print_timestamp = true,
+    .include_returns = true,
+    .cuda_library_path = NULL,
+    .target_pid = -1,
 };
+```
 
-static error_t parse_arg(int key, char *arg, struct argp_state *state)
-{
-    switch (key) {
-    case 'v':
-        env.verbose = true;
-        break;
-    case 'd':
-        errno = 0;
-        env.min_duration_ms = strtol(arg, NULL, 10);
-        if (errno || env.min_duration_ms <= 0) {
-            fprintf(stderr, "Invalid duration: %s\n", arg);
-            argp_usage(state);
-        }
-        break;
-    case ARGP_KEY_ARG:
-        argp_usage(state);
-        break;
-    default:
-        return ARGP_ERR_UNKNOWN;
+这个结构存储配置选项，如是否打印时间戳或包含返回探针。默认值提供了一个合理的起点。
+
+程序使用`libbpf`加载并附加eBPF程序到CUDA函数：
+
+```c
+int attach_cuda_func(struct cuda_events_bpf *skel, const char *lib_path, 
+                    const char *func_name, struct bpf_program *prog_entry,
+                    struct bpf_program *prog_exit) {
+    /* Attach entry uprobe */
+    if (prog_entry) {
+        uprobe_opts.func_name = func_name;
+        struct bpf_link *link = bpf_program__attach_uprobe_opts(prog_entry, 
+                                env.target_pid, lib_path, 0, &uprobe_opts);
+        /* Error handling... */
     }
-    return 0;
+    
+    /* Attach exit uprobe */
+    if (prog_exit) {
+        /* Similar for return probe... */
+    }
 }
+```
 
-static const struct argp argp = {
-    .options = opts,
-    .parser = parse_arg,
-    .doc = argp_program_doc,
-};
+这个函数接受一个函数名（如"cudaMalloc"）和相应的入口和退出eBPF程序。然后它将这些程序作为uprobes附加到指定的库。
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
-{
-    if (level == LIBBPF_DEBUG && !env.verbose)
-        return 0;
-    return vfprintf(stderr, format, args);
-}
+最重要的函数之一是`handle_event`，它处理来自环形缓冲区的事件：
 
-static volatile bool exiting = false;
-
-static void sig_handler(int sig)
-{
-    exiting = true;
-}
-
-static int handle_event(void *ctx, void *data, size_t data_sz)
-{
+```c
+static int handle_event(void *ctx, void *data, size_t data_sz) {
     const struct event *e = data;
     struct tm *tm;
     char ts[32];
+    char details[MAX_DETAILS_LEN];
     time_t t;
+
+    /* Skip return probes if requested */
+    if (e->is_return && !env.include_returns)
+        return 0;
 
     time(&t);
     tm = localtime(&t);
     strftime(ts, sizeof(ts), "%H:%M:%S", tm);
 
-    if (e->exit_event) {
-        printf("%-8s %-5s %-16s %-7d %-7d [%u]",
-               ts, "EXIT", e->comm, e->pid, e->ppid, e->exit_code);
-        if (e->duration_ns)
-            printf(" (%llums)", e->duration_ns / 1000000);
-        printf("\n");
-    } else {
-        printf("%-8s %-5s %-16s %-7d %-7d %s\n",
-               ts, "EXEC", e->comm, e->pid, e->ppid, e->filename);
+    get_event_details(e, details, sizeof(details));
+
+    if (env.print_timestamp) {
+        printf("%-8s ", ts);
     }
+
+    printf("%-16s %-7d %-20s %8s %s\n", 
+           e->comm, e->pid, 
+           event_type_str(e->type),
+           e->is_return ? "[EXIT]" : "[ENTER]",
+           details);
 
     return 0;
 }
-
-int main(int argc, char **argv)
-{
-    struct ring_buffer *rb = NULL;
-    struct bootstrap_bpf *skel;
-    int err;
-
-    /* Parse command line arguments */
-    err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
-    if (err)
-        return err;
-
-    /* Set up libbpf errors and debug info callback */
-    libbpf_set_print(libbpf_print_fn);
-
-    /* Cleaner handling of Ctrl-C */
-    signal(SIGINT, sig_handler);
-    signal(SIGTERM, sig_handler);
-
-    /* Load and verify BPF application */
-    skel = bootstrap_bpf__open();
-    if (!skel) {
-        fprintf(stderr, "Failed to open and load BPF skeleton\n");
-        return 1;
-    }
-
-    /* Parameterize BPF code with minimum duration parameter */
-    skel->rodata->min_duration_ns = env.min_duration_ms * 1000000ULL;
-
-    /* Load & verify BPF programs */
-    err = bootstrap_bpf__load(skel);
-    if (err) {
-        fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-        goto cleanup;
-    }
-
-    /* Attach tracepoints */
-    err = bootstrap_bpf__attach(skel);
-    if (err) {
-        fprintf(stderr, "Failed to attach BPF skeleton\n");
-        goto cleanup;
-    }
-
-    /* Set up ring buffer polling */
-    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
-    if (!rb) {
-        err = -1;
-        fprintf(stderr, "Failed to create ring buffer\n");
-        goto cleanup;
-    }
-
-    /* Process events */
-    printf("%-8s %-5s %-16s %-7s %-7s %s\n",
-           "TIME", "EVENT", "COMM", "PID", "PPID", "FILENAME/EXIT CODE");
-    while (!exiting) {
-        err = ring_buffer__poll(rb, 100 /* timeout, ms */);
-        /* Ctrl-C will cause -EINTR */
-        if (err == -EINTR) {
-            err = 0;
-            break;
-        }
-        if (err < 0) {
-            printf("Error polling perf buffer: %d\n", err);
-            break;
-        }
-    }
-
-cleanup:
-    /* Clean up */
-    ring_buffer__free(rb);
-    bootstrap_bpf__destroy(skel);
-
-    return err < 0 ? -err : 0;
-}
 ```
 
-这个用户态程序主要用于加载、验证、附加 eBPF 程序，以及接收 eBPF 程序收集的事件数据，并将其打印出来。我们将分析一些关键部分。
+此函数格式化并显示事件信息，包括时间戳、进程详情、事件类型以及特定参数或返回值。
 
-首先，我们定义了一个 env 结构，用于存储命令行参数：
+`get_event_details`函数将原始事件数据转换为人类可读的形式：
 
 ```c
-static struct env {
-    bool verbose;
-    long min_duration_ms;
-} env;
-```
-
-接下来，我们使用 argp 库来解析命令行参数：
-
-```c
-static const struct argp_option opts[] = {
-    { "verbose", 'v', NULL, 0, "Verbose debug output" },
-    { "duration", 'd', "DURATION-MS", 0, "Minimum process duration (ms) to report" },
-    {},
-};
-
-static error_t parse_arg(int key, char *arg, struct argp_state *state)
-{
-    // ...
-}
-
-static const struct argp argp = {
-    .options = opts,
-    .parser = parse_arg,
-    .doc = argp_program_doc,
-};
-```
-
-main() 函数中，首先解析命令行参数，然后设置 libbpf 的打印回调函数 libbpf_print_fn，以便在需要时输出调试信息：
-
-```c
-err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
-if (err)
-    return err;
-
-libbpf_set_print(libbpf_print_fn);
-```
-
-接下来，我们打开 eBPF 脚手架（skeleton）文件，将最小持续时间参数传递给 eBPF 程序，并加载和附加 eBPF 程序：
-
-```c
-skel = bootstrap_bpf__open();
-if (!skel) {
-    fprintf(stderr, "Failed to open and load BPF skeleton\n");
-    return 1;
-}
-
-skel->rodata->min_duration_ns = env.min_duration_ms * 1000000ULL;
-
-err = bootstrap_bpf__load(skel);
-if (err) {
-    fprintf(stderr, "Failed to load and verify BPF skeleton\n");
-    goto cleanup;
-}
-
-err = bootstrap_bpf__attach(skel);
-if (err) {
-    fprintf(stderr, "Failed to attach BPF skeleton\n");
-    goto cleanup;
+static void get_event_details(const struct event *e, char *details, size_t len) {
+    switch (e->type) {
+    case CUDA_EVENT_MALLOC:
+        if (!e->is_return)
+            snprintf(details, len, "size=%zu bytes", e->mem.size);
+        else
+            snprintf(details, len, "returned=%s", cuda_error_str(e->ret_val));
+        break;
+    
+    /* Similar cases for other event types... */
+    }
 }
 ```
 
-然后，我们创建一个环形缓冲区（ring buffer），用于接收 eBPF 程序发送的事件数据：
+这个函数对每种事件类型都有不同的处理方式。例如，malloc事件在入口显示请求的大小，在退出时显示错误代码。
 
-```c
-rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
-if (!rb) {
-    err = -1;
-    fprintf(stderr, "Failed to create ring buffer\n");
-    goto cleanup;
-}
-```
-
-handle_event() 函数会处理从 eBPF 程序收到的事件。根据事件类型（进程执行或退出），它会提取并打印事件信息，如时间戳、进程名、进程 ID、父进程 ID、文件名或退出代码等。
-
-最后，我们使用 ring_buffer__poll() 函数轮询环形缓冲区，处理收到的事件数据：
+主事件循环非常简单：
 
 ```c
 while (!exiting) {
     err = ring_buffer__poll(rb, 100 /* timeout, ms */);
-    // ...
+    /* Error handling... */
 }
 ```
 
-当程序收到 SIGINT 或 SIGTERM 信号时，它会最后完成清理、退出操作，关闭和卸载 eBPF 程序：
+这会轮询环形缓冲区的事件，对每个事件调用`handle_event`。100ms超时确保程序对信号（如Ctrl+C）保持响应。
+
+## CUDA错误处理和报告
+
+我们追踪器的一个重要方面是将CUDA错误代码转换为人类可读的消息。CUDA有100多种不同的错误代码，从简单的"内存不足"到复杂的"不支持的PTX版本"。
+
+我们的工具包括一个全面的`cuda_error_str`函数，将这些数字代码映射到字符串描述：
 
 ```c
-cleanup:
- /* Clean up */
- ring_buffer__free(rb);
- bootstrap_bpf__destroy(skel);
-
- return err < 0 ? -err : 0;
+static const char *cuda_error_str(int error) {
+    switch (error) {
+    case 0:  return "Success";
+    case 1:  return "InvalidValue";
+    case 2:  return "OutOfMemory";
+    /* Many more error codes... */
+    default: return "Unknown";
+    }
 }
 ```
 
-## 安装依赖
+这使输出对调试更有用。不是看到"错误2"，而是看到"OutOfMemory"，这立即告诉你出了什么问题。
 
-构建示例需要 clang、libelf 和 zlib。包名在不同的发行版中可能会有所不同。
+## 编译和执行
 
-在 Ubuntu/Debian 上，你需要执行以下命令：
+使用提供的Makefile构建追踪器非常简单：
 
-```shell
-sudo apt install clang libelf1 libelf-dev zlib1g-dev
+```bash
+# 构建追踪器和示例
+make
 ```
 
-在 CentOS/Fedora 上，你需要执行以下命令：
+这将创建两个二进制文件：
+- `cuda_events`：基于eBPF的CUDA追踪工具
+- `basic02`：一个简单的CUDA示例应用程序
 
-```shell
-sudo dnf install clang elfutils-libelf elfutils-libelf-devel zlib-devel
+构建系统足够智能，可以使用`nvidia-smi`检测你的GPU架构，并使用适当的标志编译CUDA代码。
+
+运行追踪器同样简单：
+
+```bash
+# 启动追踪工具
+sudo ./cuda_events -p ./basic02
+
+# 在另一个终端运行CUDA示例
+./basic02
 ```
 
-## 编译运行
+你还可以通过PID追踪特定进程：
 
-编译运行上述代码：
+```bash
+# 运行CUDA示例
+./basic02 &
+PID=$!
 
-```console
-$ git submodule update --init --recursive
-$ make
-  BPF      .output/bootstrap.bpf.o
-  GEN-SKEL .output/bootstrap.skel.h
-  CC       .output/bootstrap.o
-  BINARY   bootstrap
-$ sudo ./bootstrap 
-[sudo] password for yunwei: 
-TIME     EVENT COMM             PID     PPID    FILENAME/EXIT CODE
-03:16:41 EXEC  sh               110688  80168   /bin/sh
-03:16:41 EXEC  which            110689  110688  /usr/bin/which
-03:16:41 EXIT  which            110689  110688  [0] (0ms)
-03:16:41 EXIT  sh               110688  80168   [0] (0ms)
-03:16:41 EXEC  sh               110690  80168   /bin/sh
-03:16:41 EXEC  ps               110691  110690  /usr/bin/ps
-03:16:41 EXIT  ps               110691  110690  [0] (49ms)
-03:16:41 EXIT  sh               110690  80168   [0] (51ms)
+# 使用PID过滤启动追踪工具
+sudo ./cuda_events -p ./basic02 -d $PID
 ```
 
-## 总结
+示例输出显示了每个CUDA操作的详细信息：
 
-通过这个实例，我们了解了如何将 eBPF 程序与用户态程序结合使用。这种结合为开发者提供了一个强大的工具集，可以实现跨内核和用户空间的高效数据收集和处理。通过使用 eBPF 和 libbpf，您可以构建更高效、可扩展和安全的监控和性能分析工具。
+```
+Using CUDA library: ./basic02
+TIME     PROCESS          PID     EVENT                 TYPE    DETAILS
+17:35:41 basic02          12345   cudaMalloc          [ENTER]  size=4000 bytes
+17:35:41 basic02          12345   cudaMalloc           [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaMalloc          [ENTER]  size=4000 bytes
+17:35:41 basic02          12345   cudaMalloc           [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaMemcpy          [ENTER]  size=4000 bytes, kind=1
+17:35:41 basic02          12345   cudaMemcpy           [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaLaunchKernel    [ENTER]  func=0x7f1234567890
+17:35:41 basic02          12345   cudaLaunchKernel     [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaMemcpy          [ENTER]  size=4000 bytes, kind=2
+17:35:41 basic02          12345   cudaMemcpy           [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaFree            [ENTER]  ptr=0x7f1234568000
+17:35:41 basic02          12345   cudaFree             [EXIT]  returned=Success
+17:35:41 basic02          12345   cudaFree            [ENTER]  ptr=0x7f1234569000
+17:35:41 basic02          12345   cudaFree             [EXIT]  returned=Success
+```
 
-如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
+这个输出显示了CUDA应用程序的典型流程：
+1. 在设备上分配内存
+2. 从主机复制数据到设备（kind=1）
+3. 启动内核处理数据
+4. 从设备复制结果回主机（kind=2）
+5. 释放设备内存
+
+## 基准测试
+
+我们还提供了一个基准测试工具来测试追踪器的性能和CUDA API调用的延迟。
+
+```bash
+make
+sudo ./cuda_events -p ./bench
+./bench
+```
+
+当没有追踪时，结果如下：
+
+```
+Data size: 1048576 bytes (1024 KB)
+Iterations: 10000
+
+Summary (average time per operation):
+-----------------------------------
+cudaMalloc:           113.14 µs
+cudaMemcpyH2D:        365.85 µs
+cudaLaunchKernel:       7.82 µs
+cudaMemcpyD2H:        393.55 µs
+cudaFree:               0.00 µs
+```
+
+当附加追踪器时，结果如下：
+
+```
+Data size: 1048576 bytes (1024 KB)
+Iterations: 10000
+
+Summary (average time per operation):
+-----------------------------------
+cudaMalloc:           119.81 µs
+cudaMemcpyH2D:        367.16 µs
+cudaLaunchKernel:       8.77 µs
+cudaMemcpyD2H:        383.66 µs
+cudaFree:               0.00 µs
+```
+
+追踪器为每个CUDA API调用增加了约2微秒的开销，这对大多数情况来说是可以忽略不计的。
+
+## 命令行选项
+
+`cuda_events`工具支持以下选项：
+
+- `-v`：启用详细调试输出
+- `-t`：不打印时间戳
+- `-r`：不显示函数返回（只显示函数入口）
+- `-p PATH`：指定CUDA运行库或应用程序的路径
+- `-d PID`：仅追踪指定的进程ID
+
+## 下一步
+
+一旦你熟悉了这个基本的CUDA追踪工具，你可以扩展它来：
+
+1. 添加对更多CUDA API函数的支持
+2. 添加时间信息以分析性能瓶颈
+3. 实现相关操作之间的关联（例如，匹配malloc和free）
+4. 创建CUDA操作的可视化，便于分析
+5. 添加对其他GPU框架（如OpenCL或ROCm）的支持
+
+## 参考资料
+
+- CUDA编程指南：https://docs.nvidia.com/cuda/cuda-c-programming-guide/
+- NVIDIA CUDA运行时API：https://docs.nvidia.com/cuda/cuda-runtime-api/
+- libbpf文档：https://libbpf.readthedocs.io/
+- Linux uprobes文档：https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
+
+如果你想深入了解eBPF，请查看我们的教程仓库：https://github.com/eunomia-bpf/bpf-developer-tutorial 或访问我们的网站：https://eunomia.dev/tutorials/。

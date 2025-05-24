@@ -67,6 +67,10 @@ Scheduler:
 - [lesson 44-scx-simple](44-scx-simple/README.md) Introduction to the BPF Scheduler
 - [lesson 45-scx-nest](45-scx-nest/README.md) Implementing the `scx_nest` Scheduler
 
+GPU:
+
+- [lesson 47-cuda-events](47-cuda-events/README.md) Using eBPF to trace CUDA operations for GPU
+
 Other:
 
 - [lesson 35-user-ringbuf](35-user-ringbuf/README.md) Asynchronously Send to Kernel with User Ring Buffer

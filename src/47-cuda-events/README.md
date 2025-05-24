@@ -481,16 +481,6 @@ The `cuda_events` tool supports these options:
 - `-p PATH`: Specify the path to the CUDA runtime library or application
 - `-d PID`: Trace only the specified process ID
 
-## Learning Objectives
-
-Through this tutorial, you'll learn:
-
-1. How CUDA applications interact with GPUs through the CUDA runtime API
-2. How to use eBPF uprobes to trace user-space libraries
-3. How to design efficient data structures for kernel-to-user communication
-4. How to process and display traced events in a user-friendly format
-5. How to filter events by process ID for focused debugging
-
 ## Next Steps
 
 Once you're comfortable with this basic CUDA tracing tool, you could extend it to:
@@ -501,90 +491,14 @@ Once you're comfortable with this basic CUDA tracing tool, you could extend it t
 4. Create visualizations of CUDA operations for easier analysis
 5. Add support for other GPU frameworks like OpenCL or ROCm
 
+For more detail about the cuda example and tutorial, you can checkout out repo and the code in <https://github.com/eunomia-bpf/basic-cuda-tutorial>
+
+
 ## References
 
 - CUDA Programming Guide: https://docs.nvidia.com/cuda/cuda-c-programming-guide/
 - NVIDIA CUDA Runtime API: https://docs.nvidia.com/cuda/cuda-runtime-api/
 - libbpf Documentation: https://libbpf.readthedocs.io/
 - Linux uprobes Documentation: https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
-
-## Benchmarking Tracing Overhead
-
-While tracing is an invaluable tool for debugging and understanding CUDA applications, it does introduce some overhead. We've included a benchmarking tool to help you measure this overhead.
-
-### The Benchmark Tool
-
-The `bench.cu` program performs several CUDA operations repeatedly and measures their execution time:
-
-1. Memory allocation (`cudaMalloc`)
-2. Memory transfers (host to device and device to host)
-3. Kernel launches
-4. Memory deallocation (`cudaFree`)
-5. Full operations (the complete sequence)
-
-Each operation is executed many times to get statistically significant results, and the average time per operation is reported in microseconds.
-
-### Running the Benchmark
-
-To build the benchmark tool:
-
-```bash
-make bench
-```
-
-To run a complete benchmark that compares performance with and without tracing:
-
-```bash
-make benchmark
-```
-
-This will run the benchmark twice:
-1. First without any tracing
-2. Then with the CUDA events tracer attached
-
-You can also run individual benchmarks:
-
-```bash
-# Without tracing
-make benchmark-no-trace
-
-# With tracing
-make benchmark-with-trace
-```
-
-### Interpreting the Results
-
-The benchmark output shows the average time for each CUDA operation in microseconds. Compare the times with and without tracing to understand the overhead.
-
-For example:
-
-```
-# Without tracing
-cudaMalloc         :      23.45 µs per operation
-cudaMemcpyH2D      :      42.67 µs per operation
-cudaLaunchKernel   :      15.89 µs per operation
-cudaMemcpyD2H      :      38.12 µs per operation
-cudaFree           :      10.34 µs per operation
-Full Operation     :     130.47 µs per operation
-
-# With tracing
-cudaMalloc         :      25.12 µs per operation
-cudaMemcpyH2D      :      45.89 µs per operation
-cudaLaunchKernel   :      17.23 µs per operation
-cudaMemcpyD2H      :      41.56 µs per operation
-cudaFree           :      11.78 µs per operation
-Full Operation     :     141.58 µs per operation
-```
-
-In this example, tracing adds about 7-10% overhead to CUDA operations. This is typically acceptable for debugging and profiling purposes, but it's important to be aware of this impact when interpreting the results.
-
-### Optimization Opportunities
-
-If you find the tracing overhead too high for your use case, there are several ways to reduce it:
-
-1. Trace only specific CUDA functions that are relevant to your investigation
-2. Filter by specific process IDs to minimize the number of events captured
-3. Disable return probes using the `-r` flag if you don't need return values
-4. Consider running eBPF in user-space with tools like [bpftime](https://github.com/eunomia-bpf/bpftime) to reduce context-switching overhead
 
 If you'd like to dive deeper into eBPF, check out our tutorial repository at https://github.com/eunomia-bpf/bpf-developer-tutorial or visit our website at https://eunomia.dev/tutorials/. 

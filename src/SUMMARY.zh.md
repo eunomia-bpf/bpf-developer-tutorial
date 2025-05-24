@@ -64,6 +64,10 @@ Android:
 - [lesson 44-scx-simple](44-scx-simple/README.zh.md) eBPF 教程：BPF 调度器入门
 - [lesson 45-scx-nest](45-scx-nest/README.zh.md) eBPF 示例教程：实现 `scx_nest` 调度器
 
+GPU:
+
+- [lesson 47-cuda-events](47-cuda-events/README.zh.md) 使用 eBPF 追踪 CUDA 操作
+
 其他:
 
 - [lesson 35-user-ringbuf](35-user-ringbuf/README.zh.md) eBPF开发实践：使用 user ring buffer 向内核异步发送信息

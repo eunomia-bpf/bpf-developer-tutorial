@@ -72,6 +72,11 @@ Android:
 调度器:
 
 - [lesson 44-scx-simple](src/44-scx-simple/README.zh.md) None
+
+GPU:
+
+- [lesson 47-cuda-events](src/47-cuda-events/README.zh.md) 使用 eBPF 追踪 CUDA 操作
+
 其他:
 
 - [lesson 35-user-ringbuf](src/35-user-ringbuf/README.zh.md) eBPF开发实践：使用 user ring buffer 向内核异步发送信息
