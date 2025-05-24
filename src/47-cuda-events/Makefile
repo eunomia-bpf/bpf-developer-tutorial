@@ -21,8 +21,19 @@ VMLINUX := ../third_party/vmlinux/$(ARCH)/vmlinux.h
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -g -Wall
+CFLAGS := -g -Wall -D_GNU_SOURCE
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
+
+# Default CUDA library path
+CUDA_LIB_PATH ?= /usr/local/cuda/lib64/libcudart.so
+
+# NVIDIA CUDA Compiler
+NVCC ?= nvcc
+
+# Auto-detect CUDA architecture if possible
+CUDA_DETECT_SCRIPT := $(OUTPUT)/detect_cuda_arch.sh
+CUDA_ARCH_FLAGS ?= $(shell if [ -f $(CUDA_DETECT_SCRIPT) ]; then bash $(CUDA_DETECT_SCRIPT); else echo "-arch=sm_61"; fi)
+NVCC_FLAGS = -O3 $(CUDA_ARCH_FLAGS)
 
 APPS = cuda_events # minimal minimal_legacy uprobe kprobe fentry usdt sockfilter tc ksyscall
 
@@ -69,7 +80,7 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(APPS)
+all: cuda_events basic02
 
 .PHONY: clean
 clean:
@@ -79,6 +90,21 @@ clean:
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
+
+# Create a script to detect CUDA architecture
+$(CUDA_DETECT_SCRIPT): | $(OUTPUT)
+	$(call msg,SCRIPT,$@)
+	$(Q)echo '#!/bin/bash' > $@
+	$(Q)echo 'CUDA_VERSION=$$($(NVCC) --version | grep "release" | sed "s/.*release //" | sed "s/,.*//")' >> $@
+	$(Q)echo 'if [ -x "$$(command -v nvidia-smi)" ]; then' >> $@
+	$(Q)echo '  CUDA_ARCH=$$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | sed -e "s/\.//")' >> $@
+	$(Q)echo '  if [ -n "$$CUDA_ARCH" ]; then' >> $@
+	$(Q)echo '    echo "-arch=sm_$$CUDA_ARCH"' >> $@
+	$(Q)echo '    exit 0' >> $@
+	$(Q)echo '  fi' >> $@
+	$(Q)echo 'fi' >> $@
+	$(Q)echo 'echo "-arch=sm_61"' >> $@
+	$(Q)chmod +x $@
 
 # Build libbpf
 $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPUT)/libbpf
@@ -93,17 +119,11 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(call msg,BPFTOOL,$@)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
-
-$(LIBBLAZESYM_SRC)/target/release/libblazesym.a::
-	$(Q)cd $(LIBBLAZESYM_SRC) && $(CARGO) build --features=cheader,dont-generate-test-files --release
-
-$(LIBBLAZESYM_OBJ): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
-	$(call msg,LIB, $@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/libblazesym.a $@
-
-$(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
-	$(call msg,LIB,$@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/blazesym.h $@
+# Build CUDA example
+basic02: basic02.cu $(CUDA_DETECT_SCRIPT)
+	$(call msg,NVCC,$@)
+	$(Q)$(NVCC) $(NVCC_FLAGS) -o $@ $<
+	$(Q)@echo "Compiling for architecture: $(CUDA_ARCH_FLAGS)"
 
 # Build BPF code
 $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)

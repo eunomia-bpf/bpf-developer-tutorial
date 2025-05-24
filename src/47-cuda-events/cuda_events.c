@@ -3,6 +3,7 @@
 #include <argp.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>  /* For atoi() */
 #include <time.h>
 #include <sys/resource.h>
 #include <stdbool.h>
@@ -16,10 +17,12 @@ static struct env {
     bool print_timestamp;
     char *cuda_library_path;
     bool include_returns;
+    int target_pid;  /* New field for target PID */
 } env = {
     .print_timestamp = true,
     .include_returns = true,
     .cuda_library_path = NULL,
+    .target_pid = -1,  /* Default to -1 (all PIDs) */
 };
 
 const char *argp_program_version = "cuda_events 0.1";
@@ -30,13 +33,14 @@ const char argp_program_doc[] =
 "It traces CUDA API calls and shows associated information\n"
 "such as memory allocations, kernel launches, data transfers, etc.\n"
 "\n"
-"USAGE: ./cuda_events [-v] [--no-timestamp] [--cuda-path PATH]\n";
+"USAGE: ./cuda_events [-v] [--no-timestamp] [--cuda-path PATH] [--pid PID]\n";
 
 static const struct argp_option opts[] = {
     { "verbose", 'v', NULL, 0, "Verbose debug output" },
     { "no-timestamp", 't', NULL, 0, "Don't print timestamps" },
     { "no-returns", 'r', NULL, 0, "Don't show function returns" },
     { "cuda-path", 'p', "CUDA_PATH", 0, "Path to CUDA runtime library" },
+    { "pid", 'd', "PID", 0, "Trace only the specified PID" },
     {},
 };
 
@@ -54,6 +58,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
         break;
     case 'p':
         env.cuda_library_path = arg;
+        break;
+    case 'd':
+        env.target_pid = atoi(arg);
         break;
     case ARGP_KEY_ARG:
         argp_usage(state);
@@ -310,10 +317,10 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
         printf("%-8s ", ts);
     }
 
-    printf("%-16s %-7d %-20s %s%s\n", 
+    printf("%-16s %-7d %-20s %8s %s\n", 
            e->comm, e->pid, 
            event_type_str(e->type),
-           e->is_return ? "ret: " : "",
+           e->is_return ? "[EXIT]" : "[ENTER]",
            details);
 
     return 0;
@@ -341,20 +348,21 @@ static int attach_cuda_func(struct cuda_events_bpf *skel, const char *lib_path,
     /* Attach entry uprobe */
     if (prog_entry) {
         uprobe_opts.func_name = func_name;
-        struct bpf_link *link = bpf_program__attach_uprobe_opts(prog_entry, -1, lib_path, 0, &uprobe_opts);
+        struct bpf_link *link = bpf_program__attach_uprobe_opts(prog_entry, env.target_pid  , lib_path, 0, &uprobe_opts);
         if (!link) {
-            fprintf(stderr, "Failed to attach entry uprobe for %s: %d\n", func_name, err);
-            return err;
+            fprintf(stderr, "Failed to attach entry uprobe for %s\n", func_name);
+            return -1;
         }
     }
 
     /* Attach exit uprobe */
     if (prog_exit) {
         uprobe_opts.func_name = func_name;
-        struct bpf_link *link = bpf_program__attach_uprobe_opts(prog_exit, -1, lib_path, 0, &uprobe_opts);
+        uprobe_opts.retprobe = true;  /* This is a return probe */
+        struct bpf_link *link = bpf_program__attach_uprobe_opts(prog_exit, env.target_pid, lib_path, 0, &uprobe_opts);
         if (!link) {
-            fprintf(stderr, "Failed to attach exit uprobe for %s: %d\n", func_name, err);
-            return err;
+            fprintf(stderr, "Failed to attach exit uprobe for %s\n", func_name);
+            return -1;
         }
     }
 
@@ -417,13 +425,8 @@ int main(int argc, char **argv)
 
     /* Print CUDA library path being used */
     printf("Using CUDA library: %s\n", cuda_lib_path);
-
-     /* Attach tracepoints */
-    err = cuda_events_bpf__attach(skel);
-    if (err) {
-        fprintf(stderr, "Failed to attach BPF skeleton\n");
-        goto cleanup;
-    }
+    if (env.target_pid)
+        printf("Filtering for PID: %d\n", env.target_pid);
 
     /* Attach to CUDA functions */
     for (size_t i = 0; i < sizeof(cuda_funcs) / sizeof(cuda_funcs[0]); i++) {
@@ -447,8 +450,8 @@ int main(int argc, char **argv)
     if (env.print_timestamp) {
         printf("%-8s ", "TIME");
     }
-    printf("%-16s %-7s %-20s %s\n",
-           "PROCESS", "PID", "EVENT", "DETAILS");
+    printf("%-16s %-7s %-20s %8s %s\n",
+           "PROCESS", "PID", "EVENT", "TYPE", "DETAILS");
 
     while (!exiting) {
         err = ring_buffer__poll(rb, 100 /* timeout, ms */);
