@@ -491,14 +491,16 @@ Once you're comfortable with this basic CUDA tracing tool, you could extend it t
 4. Create visualizations of CUDA operations for easier analysis
 5. Add support for other GPU frameworks like OpenCL or ROCm
 
-For more detail about the cuda example and tutorial, you can checkout out repo and the code in <https://github.com/eunomia-bpf/basic-cuda-tutorial>
+For more detail about the cuda example and tutorial, you can checkout out repo and the code in [https://github.com/eunomia-bpf/basic-cuda-tutorial](https://github.com/eunomia-bpf/basic-cuda-tutorial)
+
+The code of this tutorial is in [https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events)
 
 
 ## References
 
-- CUDA Programming Guide: https://docs.nvidia.com/cuda/cuda-c-programming-guide/
-- NVIDIA CUDA Runtime API: https://docs.nvidia.com/cuda/cuda-runtime-api/
-- libbpf Documentation: https://libbpf.readthedocs.io/
-- Linux uprobes Documentation: https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
+- CUDA Programming Guide: [https://docs.nvidia.com/cuda/cuda-c-programming-guide/](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
+- NVIDIA CUDA Runtime API: [https://docs.nvidia.com/cuda/cuda-runtime-api/](https://docs.nvidia.com/cuda/cuda-runtime-api/)
+- libbpf Documentation: [https://libbpf.readthedocs.io/](https://libbpf.readthedocs.io/)
+- Linux uprobes Documentation: [https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt](https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt)
 
-If you'd like to dive deeper into eBPF, check out our tutorial repository at https://github.com/eunomia-bpf/bpf-developer-tutorial or visit our website at https://eunomia.dev/tutorials/. 
+If you'd like to dive deeper into eBPF, check out our tutorial repository at [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or visit our website at [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). 

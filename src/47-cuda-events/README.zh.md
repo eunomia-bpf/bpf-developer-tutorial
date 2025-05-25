@@ -491,11 +491,15 @@ cudaFree:               0.00 µs
 4. 创建CUDA操作的可视化，便于分析
 5. 添加对其他GPU框架（如OpenCL或ROCm）的支持
 
+更多关于CUDA追踪工具的细节，请查看我们的教程仓库：[https://github.com/eunomia-bpf/basic-cuda-tutorial](https://github.com/eunomia-bpf/basic-cuda-tutorial)
+
+这个教程的代码在[https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events)
+
 ## 参考资料
 
-- CUDA编程指南：https://docs.nvidia.com/cuda/cuda-c-programming-guide/
-- NVIDIA CUDA运行时API：https://docs.nvidia.com/cuda/cuda-runtime-api/
-- libbpf文档：https://libbpf.readthedocs.io/
-- Linux uprobes文档：https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt
+- CUDA编程指南：[https://docs.nvidia.com/cuda/cuda-c-programming-guide/](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
+- NVIDIA CUDA运行时API：[https://docs.nvidia.com/cuda/cuda-runtime-api/](https://docs.nvidia.com/cuda/cuda-runtime-api/)
+- libbpf文档：[https://libbpf.readthedocs.io/](https://libbpf.readthedocs.io/)
+- Linux uprobes文档：[https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt](https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt)
 
-如果你想深入了解eBPF，请查看我们的教程仓库：https://github.com/eunomia-bpf/bpf-developer-tutorial 或访问我们的网站：https://eunomia.dev/tutorials/。
+如果你想深入了解eBPF，请查看我们的教程仓库：[https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 或访问我们的网站：[https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/)。
