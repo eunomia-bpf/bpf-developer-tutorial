@@ -469,7 +469,7 @@ cudaMemcpyD2H:        383.66 µs
 cudaFree:               0.00 µs
 ```
 
-追踪器为每个CUDA API调用增加了约2微秒的开销，这对大多数情况来说是可以忽略不计的。
+追踪器为每个CUDA API调用增加了约2微秒的开销，这对大多数情况来说是可以忽略不计的。为了进一步减少开销，你可以尝试使用[bpftime](https://github.com/eunomia-bpf/bpftime)用户空间运行时来优化eBPF程序。
 
 ## 命令行选项
 

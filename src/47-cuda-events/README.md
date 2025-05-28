@@ -469,7 +469,7 @@ cudaMemcpyD2H:        383.66 µs
 cudaFree:               0.00 µs
 ```
 
-The tracer adds about 2us overhead to each CUDA API call, which is negligible for most cases.
+The tracer adds about 2us overhead to each CUDA API call, which is negligible for most cases. To further reduce the overhead, you can try using the [bpftime](https://github.com/eunomia-bpf/bpftime) userspace runtime to optimize the eBPF program.
 
 ## Command Line Options
 
