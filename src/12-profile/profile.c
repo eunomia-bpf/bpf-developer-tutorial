@@ -118,7 +118,10 @@ static int event_handler(void *_ctx, void *data, size_t size)
 
 static void show_help(const char *progname)
 {
-	printf("Usage: %s [-f <frequency>] [-h]\n", progname);
+	printf("Usage: %s [-f <frequency>] [-p <pid>] [-h]\n", progname);
+	printf("  -f <frequency>  sampling frequency (default: 1)\n");
+	printf("  -p <pid>        target PID to profile (default: all processes)\n");
+	printf("  -h              show this help\n");
 }
 
 int main(int argc, char * const argv[])
@@ -133,13 +136,19 @@ int main(int argc, char * const argv[])
 	int *pefds = NULL, pefd;
 	int argp, i, err = 0;
 	bool *online_mask = NULL;
+	__u32 target_pid = 0; /* 0 means profile all processes */
+	__u32 key = 0;
 
-	while ((argp = getopt(argc, argv, "hf:")) != -1) {
+	while ((argp = getopt(argc, argv, "hf:p:")) != -1) {
 		switch (argp) {
 		case 'f':
 			freq = atoi(optarg);
 			if (freq < 1)
 				freq = 1;
+			break;
+
+		case 'p':
+			target_pid = atoi(optarg);
 			break;
 
 		case 'h':
@@ -167,6 +176,14 @@ int main(int argc, char * const argv[])
 		fprintf(stderr, "Fail to open and load BPF skeleton\n");
 		err = -1;
 		goto cleanup;
+	}
+
+	/* Set the target PID in the BPF map */
+	if (target_pid) {
+		skel->bss->target_pid = target_pid;
+		printf("Profiling process with PID %u only\n", target_pid);
+	} else {
+		printf("Profiling all processes\n");
 	}
 
 	symbolizer = blazesym_new();
