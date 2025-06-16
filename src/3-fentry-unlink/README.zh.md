@@ -10,6 +10,22 @@ fentry（function entry）和 fexit（function exit）是 eBPF（扩展的伯克
 
 与 kprobes 相比，fentry 和 fexit 程序有更高的性能和可用性。在这个例子中，我们可以直接访问函数的指针参数，就像在普通的 C 代码中一样，而不需要使用各种读取帮助程序。fexit 和 kretprobe 程序最大的区别在于，fexit 程序可以访问函数的输入参数和返回值，而 kretprobe 只能访问返回值。从 5.5 内核开始，fentry 和 fexit 对 eBPF 程序可用。
 
+> arm64 内核版本需要 6.0
+>
+> 参考 learning eBPF 文档：
+>
+> A more efficient mechanism for tracing the entry to and exit from kernel functions
+> was introduced along with the idea of BPF trampoline in kernel version 5.5 (on x86
+> processors; BPF trampoline support doesn’t arrive for ARM processors until Linux
+> 6.0). If you’re using a recent enough kernel, fentry/fexit is now the preferred method
+> for tracing the entry to or exit from a kern
+>
+> 参考：https://kernelnewbies.org/Linux_6.0#ARM
+
+
+
+
+
 ```c
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
