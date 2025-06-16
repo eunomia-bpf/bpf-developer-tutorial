@@ -14,12 +14,8 @@ fentry（function entry）和 fexit（function exit）是 eBPF（扩展的伯克
 >
 > 参考 learning eBPF 文档：
 >
-> A more efficient mechanism for tracing the entry to and exit from kernel functions
-> was introduced along with the idea of BPF trampoline in kernel version 5.5 (on x86
-> processors; BPF trampoline support doesn’t arrive for ARM processors until Linux
-> 6.0). If you’re using a recent enough kernel, fentry/fexit is now the preferred method
-> for tracing the entry to or exit from a kern
->
+> 从内核版本 5.5 开始（适用于 x86 处理器；*BPF trampoline* 支持在 Linux 6.0 之前不适用于 ARM 处理器），引入了一种更高效的机制来跟踪进入和退出内核函数的方式以及 *BPF trampoline* 的概念。如果您正在使用足够新的内核，fentry/fexit 现在是首选的跟踪进入或退出内核函数的方法。
+> 
 > 参考：https://kernelnewbies.org/Linux_6.0#ARM
 
 
