@@ -18,7 +18,7 @@ Compared to kprobes, fentry and fexit programs have higher performance and avail
 > was introduced along with the idea of BPF trampoline in kernel version 5.5 (on x86
 > processors; BPF trampoline support doesn’t arrive for ARM processors until Linux
 > 6.0). If you’re using a recent enough kernel, fentry/fexit is now the preferred method
-> for tracing the entry to or exit from a kern
+> for tracing the entry to or exit from a kernel function
 >
 > Reference: https://kernelnewbies.org/Linux_6.0#ARM
 
