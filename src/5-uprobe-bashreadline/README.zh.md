@@ -70,7 +70,7 @@ char LICENSE[] SEC("license") = "GPL";
 在 SEC 宏中，我们需要指定 uprobe 的类型、要捕获的二进制文件的路径和要捕获的函数名称。例如，上面的代码中的 SEC 宏的定义如下：
 
 ```c
-SEC("uprobe//bin/bash:readline")
+SEC("uretprobe//bin/bash:readline")
 ```
 
 这表示我们要捕获的是 /bin/bash 二进制文件中的 readline 函数。
