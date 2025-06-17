@@ -58,7 +58,7 @@ In the printret function, we first obtain the process name and process ID of the
 In addition, we also need to define the uprobe probe using the SEC macro and define the probe function using the BPF_KRETPROBE macro.In the `SEC` macro in the code above, we need to specify the type of the uprobe, the path of the binary file to capture, and the name of the function to capture. For example, the definition of the `SEC` macro in the code above is as follows:
 
 ```c
-SEC("uprobe//bin/bash:readline")
+SEC("uretprobe//bin/bash:readline")
 ```
 
 This indicates that we want to capture the `readline` function in the `/bin/bash` binary file.

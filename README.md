@@ -103,8 +103,8 @@ This project is mainly based on [libbpf](https://github.com/libbpf/libbpf) frame
 
 ## Install deps and Compile
 
-- For libbpf based: see [src/11-bootstrap](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/11-bootstrap/README_en.md)
-- For eunomia-bpf based: see [src/1-helloworld](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/1-helloworld/README_en.md)
+- For libbpf based: see [src/11-bootstrap](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/11-bootstrap/README.md)
+- For eunomia-bpf based: see [src/1-helloworld](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/1-helloworld/README.md)
 
 ## GitHub Templates: Easily build eBPF projects and development environments, compile and run eBPF programs online with one click
 
