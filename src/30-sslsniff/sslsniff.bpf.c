@@ -293,7 +293,7 @@ int BPF_URETPROBE(probe_SSL_read_ex_exit)
     int ret = PT_REGS_RC(ctx);
     int len = (ret == 1) ? written : 0;
 
-    return ex_SSL_exit(ctx, 1, len);
+    return ex_SSL_exit(ctx, 0, len);
 }
 
 SEC("uprobe/do_handshake")
