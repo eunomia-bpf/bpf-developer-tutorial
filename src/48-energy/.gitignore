@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Energy monitoring data
+*.csv
+*.json
+energy_log_*
+.vscode
+package.json
+*.o
+*.skel.json
+*.skel.yaml
+package.yaml
+ecli
+bootstrap
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
