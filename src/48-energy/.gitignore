@@ -20,6 +20,9 @@ package.json
 package.yaml
 ecli
 bootstrap
+energy_monitor
+.output/
+*.skel.h
 
 # IDE
 .vscode/
