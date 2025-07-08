@@ -218,7 +218,9 @@ int BPF_PROG(handle_sched_switch, bool preempt, struct task_struct *prev, struct
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这其中定义了一些常量和全局变量，用于过滤对应的追踪目标：
+#### 常量与全局变量
+
+代码中定义了一些常量和 volatile 全局变量，用于过滤对应的追踪目标。这些变量包括：
 
 ```c
 #define MAX_ENTRIES 10240
@@ -232,7 +234,11 @@ const volatile bool targ_ms = false;
 const volatile pid_t targ_tgid = 0;
 ```
 
-这些变量包括最大映射项数量、任务状态、过滤选项和目标选项。这些选项可以通过用户空间程序设置，以定制 eBPF 程序的行为。
+- `MAX_ENTRIES`:  map 条目最大数量
+- `TASK_RUNNING`: 任务状态值
+- `filter_cg`, `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: 用于过滤选项和目标选项的布尔变量。这些选项可以通过用户空间程序设置来自定义eBPF程序的行为。
+
+#### eBPF Maps 映射
 
 接下来，定义了一些 eBPF 映射：
 
@@ -263,13 +269,15 @@ struct {
 
 这些映射包括：
 
-- cgroup_map 用于过滤 cgroup；
-- start 用于存储进程入队时的时间戳；
-- hists 用于存储直方图数据，记录进程调度延迟。
+- `cgroup_map` 用于过滤 cgroup；
+- `start` 用于存储进程入队时的时间戳；
+- `hists` 用于存储直方图数据，记录进程调度延迟。
+
+#### 辅助函数
 
 接下来是一些辅助函数：
 
-trace_enqueue 函数用于在进程入队时记录其时间戳：
+- `trace_enqueue`: 此功能用于记录进程入队时的时间戳。它将 `tgid` 和 `pid` 值作为参数。如果`pid`值是0或者`targ_tgid`值不是0且不等于`tgid`，函数返回0。否则，它使用 `bpf_ktime_get_ns` 获取当前时间戳，并使用 `pid` 键和时间戳值更新 `start` 映射。
 
 ```c
 static int trace_enqueue(u32 tgid, u32 pid)
@@ -287,7 +295,7 @@ static int trace_enqueue(u32 tgid, u32 pid)
 }
 ```
 
-pid_namespace 函数用于获取进程所属的 PID namespace：
+- `pid_namespace` : 此函数用于获取进程的PID命名空间。它接受一个`task_struct`指针作为参数，并返回进程的PID命名空间。该函数通过`task_active_pid_ns()`和`pid->numbers[pid->level].ns`来检索PID命名空间。
 
 ```c
 static unsigned int pid_namespace(struct task_struct *task)
@@ -309,7 +317,7 @@ static unsigned int pid_namespace(struct task_struct *task)
 }
 ```
 
-handle_switch 函数是核心部分，用于处理调度切换事件，计算进程调度延迟并更新直方图数据：
+`handle_switch` 函数是核心部分，用于处理调度切换事件，计算进程调度延迟并更新直方图数据：
 
 ```c
 static int handle_switch(bool preempt, struct task_struct *prev, struct task_struct *next)
@@ -318,13 +326,13 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 }
 ```
 
-首先，函数根据 filter_cg 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 TASK_RUNNING，则调用 trace_enqueue 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
+首先，函数根据 `filter_cg` 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 `TASK_RUNNING`，则调用 `trace_enqueue` 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
 
 接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：
 
-- handle_sched_wakeup：用于处理 sched_wakeup 事件，当一个进程从睡眠状态被唤醒时触发。
-- handle_sched_wakeup_new：用于处理 sched_wakeup_new 事件，当一个新创建的进程被唤醒时触发。
-- handle_sched_switch：用于处理 sched_switch 事件，当调度器选择一个新的进程运行时触发。
+- `handle_sched_wakeup`：用于处理 `sched_wakeup` 事件，当一个进程从睡眠状态被唤醒时触发。
+- `handle_sched_wakeup_new`：用于处理 `sched_wakeup_new` 事件，当一个新创建的进程被唤醒时触发。
+- `handle_sched_switch`：用于处理 `sched_switch` 事件，当调度器选择一个新的进程运行时触发。
 
 这些入口点分别处理不同的调度事件，但都会调用 handle_switch 函数来计算进程的调度延迟并更新直方图数据。
 
