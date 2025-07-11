@@ -22,6 +22,8 @@ CUDA（Compute Unified Device Architecture，计算统一设备架构）是NVIDI
 - 错误代码和失败原因
 - 操作的时间信息
 
+本教程主要关注CPU侧的CUDA API调用，对于细粒度的GPU操作追踪，你可以参考[eGPU](https://dl.acm.org/doi/10.1145/3723851.3726984)论文和[bpftime](https://github.com/eunomia-bpf/bpftime)项目。
+
 ## eBPF技术背景与GPU追踪的挑战
 
 eBPF（Extended Berkeley Packet Filter）最初是为网络数据包过滤而设计的，但现在已经发展成为一个强大的内核编程框架，使开发人员能够在内核空间运行用户定义的程序，而无需修改内核源代码或加载内核模块。eBPF的安全性通过静态分析和运行时验证器来保证，这使得它能够在生产环境中安全地运行。
