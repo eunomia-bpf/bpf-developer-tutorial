@@ -8,6 +8,8 @@
 #include <linux/tcp.h>
 #include "xx_hash.h"
 
+#define MAX_TCP_CHECK_WORDS 750 // max 1500 bytes to check in TCP checksum. This is MTU dependent
+
 struct backend_config {
     __u32 ip;
     unsigned char mac[ETH_ALEN];
@@ -36,6 +38,35 @@ csum_fold_helper(__u64 csum)
             csum = (csum & 0xffff) + (csum >> 16);
     }
     return ~csum;
+}
+
+static __always_inline __u16
+tcph_csum(struct tcphdr *tcph, struct iphdr *iph, void *data_end)
+{
+    // Clear checksum
+    tcph->check = 0;
+
+    // Pseudo header checksum calculation
+    __u32 sum = 0;
+    sum += (__u16)(iph->saddr >> 16) + (__u16)(iph->saddr & 0xFFFF);
+    sum += (__u16)(iph->daddr >> 16) + (__u16)(iph->daddr & 0xFFFF);
+    sum += __constant_htons(IPPROTO_TCP);
+    sum += __constant_htons((__u16)(data_end - (void *)tcph));
+
+    // TCP header and payload checksum
+    #pragma clang loop unroll_count(MAX_TCP_CHECK_WORDS)
+    for (int i = 0; i <= MAX_TCP_CHECK_WORDS; i++) {
+        __u16 *ptr = (__u16 *)tcph + i;
+        if ((void *)ptr + 2 > data_end)
+            break;
+        sum += *(__u16 *)ptr;
+    }
+
+    // fold into 16 bit
+    while (sum >> 16)
+        sum = (sum & 0xFFFF) + (sum >> 16);
+
+    return ~sum;
 }
 
 static __always_inline __u16
@@ -102,7 +133,10 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     __builtin_memcpy(eth->h_source, load_balancer_mac, ETH_ALEN);
 
     // Recalculate IP checksum
-	iph->check = iph_csum(iph);
+    iph->check = iph_csum(iph);
+
+    // Recalculate TCP checksum
+    tcph->check = tcph_csum(tcph, iph, data_end);
 
     bpf_printk("Redirecting packet to new IP 0x%x from IP 0x%x", 
                 bpf_ntohl(iph->daddr), 
