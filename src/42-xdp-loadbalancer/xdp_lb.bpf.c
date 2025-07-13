@@ -101,6 +101,11 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     // Check if the protocol is TCP or UDP
     if (iph->protocol != IPPROTO_TCP)
         return XDP_PASS;
+
+    // TCP header
+    struct tcphdr *tcph = (void *)iph + iph->ihl * 4;
+    if ((void *)tcph + sizeof(*tcph) > data_end)
+        return XDP_PASS;
     
     bpf_printk("Received Source IP: 0x%x", bpf_ntohl(iph->saddr));
     bpf_printk("Received Destination IP: 0x%x", bpf_ntohl(iph->daddr));
@@ -111,7 +116,19 @@ int xdp_load_balancer(struct xdp_md *ctx) {
     {
         bpf_printk("Packet from client");
 
-        __u32 key = xxhash32((const char*)iph, sizeof(struct iphdr), 0) % 2;
+        struct {
+            __u32 src_ip;
+            __u32 dst_ip;
+            __u16 src_port;
+            __u16 dst_port;
+        } four_tuple = {iph->saddr,
+                        iph->daddr,
+                        bpf_ntohs(tcph->source),
+                        bpf_ntohs(tcph->dest)
+                    };
+
+        // Hash the 4-tuple for flow based backend decision
+        __u32 key = xxhash32((const char *)&four_tuple, sizeof(four_tuple), 0) % 2;
 
         struct backend_config *backend = bpf_map_lookup_elem(&backends, &key);
         if (!backend)
