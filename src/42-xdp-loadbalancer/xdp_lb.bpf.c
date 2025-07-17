@@ -55,7 +55,7 @@ tcph_csum(struct tcphdr *tcph, struct iphdr *iph, void *data_end)
 
     // TCP header and payload checksum
     #pragma clang loop unroll_count(MAX_TCP_CHECK_WORDS)
-    for (int i = 0;i <=MAX_TCP_CHECK_WORDS ; i++) {
+    for (int i = 0; i <= MAX_TCP_CHECK_WORDS; i++) {
     void *ptr = (__u16 *)tcph + i;
     if ((void *)ptr + 2 > data_end)
         break;
