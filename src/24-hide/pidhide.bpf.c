@@ -174,7 +174,7 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
     return 0;
 }
 
-SEC("tp/syscalls/sys_exit_getdents64")
+SEC("tp/unused")
 int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
 {
     // Only patch if we've already checked and found our pid's folder to hide

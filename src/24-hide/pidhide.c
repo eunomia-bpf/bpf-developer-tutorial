@@ -180,6 +180,9 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+	// 禁用 patch 程序的自动 attach，因为它只能通过尾调用执行
+    bpf_program__set_autoattach(skel->progs.handle_getdents_patch, false);
+
     // Setup Maps for tail calls
     int index = PROG_01;
     int prog_fd = bpf_program__fd(skel->progs.handle_getdents_exit);
