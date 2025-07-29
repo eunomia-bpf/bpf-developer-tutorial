@@ -66,7 +66,7 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(APPS) merge-btf all-btf
+all: $(APPS)
 
 .PHONY: all-btf
 all-btf: merge-btf

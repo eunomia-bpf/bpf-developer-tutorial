@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <net/if.h>
+#include <arpa/inet.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>

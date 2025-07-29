@@ -4,6 +4,8 @@
 #include <signal.h>
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
+#include <string.h>
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include "user_ringbuf.h"
