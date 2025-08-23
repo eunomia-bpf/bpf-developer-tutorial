@@ -168,6 +168,12 @@ cd src/24-hide
 make
 ```
 
+## Known Issues
+
+### ARM64 Build Issue with Blazesym
+
+If you encounter build errors on ARM64 (aarch64) platforms related to blazesym, see [BLAZESYM_BUILD_WORKAROUND.md](BLAZESYM_BUILD_WORKAROUND.md) for solutions. The tutorial examples are already configured with appropriate workarounds.
+
 ## LICENSE
 
 MIT

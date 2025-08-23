@@ -13,50 +13,65 @@ collect2: error: ld returned 1 exit status
 
 This error occurs because the linker script used for generating test files is too aggressive in discarding sections, including the `.got.plt` section which is essential on ARM64 platforms.
 
-## Workarounds
+## Solution
 
-### Option 1: Skip Test File Generation (Recommended)
+**The tutorial repository already includes a workaround for this issue.** The examples that use blazesym (like `src/12-profile` and `src/16-memleak`) are configured to use the `dont-generate-test-files` feature flag when building blazesym.
 
-The easiest workaround is to build blazesym with the `dont-generate-test-files` feature flag:
+You can see this in their Makefiles:
+```makefile
+$(LIBBLAZESYM_SRC)/target/release/libblazesym.a::
+	$(Q)cd $(LIBBLAZESYM_SRC) && $(CARGO) build --features=cheader,dont-generate-test-files --release
+```
+
+## If You Encounter This Issue
+
+### For Tutorial Examples
+Simply use the provided Makefiles:
+```bash
+cd src/12-profile  # or src/16-memleak
+make
+```
+
+### For Manual Blazesym Building
+If you need to build blazesym manually, use the `dont-generate-test-files` feature:
 
 ```bash
 cd src/third_party/blazesym
 cargo build --features=cheader,dont-generate-test-files
 ```
 
-This flag skips the generation of test files that cause the linker issue.
+### Alternative Workarounds
 
-### Option 2: Install LLVM Tools
+1. **Skip C Header Generation** (if you don't need C headers):
+   ```bash
+   cd src/third_party/blazesym
+   cargo build
+   ```
 
-If you want to build with test files, ensure you have `llvm-gsymutil` installed:
+2. **Install LLVM Tools** (if you want full test support):
+   ```bash
+   # On Ubuntu/Debian:
+   sudo apt install llvm
+   
+   # Then build normally:
+   cargo build --features=cheader
+   ```
 
-```bash
-# On Ubuntu/Debian:
-sudo apt install llvm
+## Technical Details
 
-# On other systems, install LLVM development tools
-```
+The issue is caused by the linker script in `data/test-gsym.ld` being too aggressive in discarding sections. On ARM64 platforms, the `.got.plt` section is essential and cannot be discarded.
 
-### Option 3: Use Fixed Linker Script
+The `dont-generate-test-files` feature flag bypasses the generation of test files that require this problematic linker script, allowing blazesym to build successfully while maintaining all core functionality.
 
-The linker script has been improved to be less aggressive about discarding sections. The fixed script avoids discarding essential sections like `.got.plt` that are needed on ARM64.
+## Impact
 
-## For Developers
-
-If you're working on examples that don't require blazesym's C header generation, you can simply build without the `cheader` feature:
-
-```bash
-cd src/third_party/blazesym
-cargo build
-```
-
-## Additional Notes
-
-- This issue is specific to ARM64 platforms and certain linker versions
-- The workaround does not affect the core functionality of blazesym
-- Test file generation is only needed for blazesym's internal testing, not for normal usage
+- **Core blazesym functionality**: ✅ Not affected
+- **C header generation**: ✅ Works with the workaround
+- **Test file generation**: ⚠️ Skipped on problematic platforms
+- **Symbol resolution**: ✅ Works normally
 
 ## References
 
 - [Issue #148](https://github.com/eunomia-bpf/bpf-developer-tutorial/issues/148)
 - [Blazesym Repository](https://github.com/libbpf/blazesym)
+- [ARM64 GOT/PLT Documentation](https://developer.arm.com/documentation/dui0803/j/ELF-features/Global-Offset-Table--GOT-)
