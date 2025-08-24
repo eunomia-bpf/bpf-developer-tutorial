@@ -10,7 +10,7 @@
 
 ### 0. 使用bcc之前
 
-在使用bcc之前，你应该从Linux基础知识开始。可以参考[Linux Performance Analysis in 60,000 Milliseconds](https://netflixtechblog.com/linux-performance-analysis-in-60-000-milliseconds-accc10403c55)文章，其中介绍了以下命令：
+在使用bcc之前，你应该从Linux基础知识开始。可以参考[Linux Performance Analysis in 60,000 Milliseconds](https://www.brendangregg.com/Articles/Netflix_Linux_Perf_Analysis_60s.pdf)文章，其中介绍了以下命令：
 
 1. uptime
 1. dmesg | tail

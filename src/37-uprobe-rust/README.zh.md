@@ -48,7 +48,7 @@ $ nm helloworld/target/release/helloworld | grep hello
 
 我们会发现，对应的符号被转换为了 `_ZN10helloworld4main17h2dce92cb81426b91E`，这是因为 rustc 使用 [Symbol name mangling](https://en.wikipedia.org/wiki/Name_mangling) 来为代码生成过程中使用的符号编码一个唯一的名称。编码后的名称会被链接器用于将名称与所指向的内容关联起来。可以使用 -C symbol-mangling-version 选项来控制符号名称的处理方法。
 
-我们可以使用 [`rustfilt`](https://crates.io/crates/rustfilt) 工具来解析和获取对应的符号：
+我们可以使用 [`rustfilt`](https://github.com/luser/rustfilt) 工具来解析和获取对应的符号。这个工具可以通过 `cargo install rustfilt` 安装：
 
 ```console
 $ cargo install rustfilt

@@ -190,7 +190,7 @@ reference
 - BPF token concept: <https://lore.kernel.org/bpf/20230629051832.897119-1-andrii@kernel.org/>
 - BPF signing using fsverity and LSM gatekeeper: <https://www.youtube.com/watch?v=9p4qviq60z8>
 - Sign the BPF bytecode: <https://lpc.events/event/16/contributions/1357/attachments/1045/1999/BPF%20Signatures.pdf>
-- bpfd: <https://bpfd.dev/>
+- bpfd: <https://bpfman.io/>
 
 ## Other possible solutions
 

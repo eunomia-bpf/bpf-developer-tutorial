@@ -504,6 +504,6 @@ Captured TCP Header:
 
 这种方法为传统的数据包捕获方法提供了一种高性能的替代方案，对系统资源的影响最小。它是网络监控、安全分析和调试的强大技术。
 
-如果您想了解更多关于 eBPF 的内容，请访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或我们的网站 <https://eunomia.dev/tutorials/>。
+如果您想了解更多关于 eBPF 的内容，请访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或我们的网站 <https://eunomia.dev/tutorials/>
 
 编程愉快！

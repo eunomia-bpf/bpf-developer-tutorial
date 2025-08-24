@@ -277,29 +277,29 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 我们的 eBPF 追踪程序也几乎不需要进行任何修改，只需要把包含 kernel 和用户态结构体偏移量的 BTF 加载进来即可。这和旧版本内核上没有 btf 信息的使用方式是一样的:
 
 ```c
-	LIBBPF_OPTS(bpf_object_open_opts , opts,
-	);
-	LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
-	if (argc != 3 && argc != 2) {
-		fprintf(stderr, "Usage: %s <example-name> [<external-btf>]\n", argv[0]);
-		return 1;
-	}
-	if (argc == 3)
-		opts.btf_custom_path = argv[2];
+ LIBBPF_OPTS(bpf_object_open_opts , opts,
+ );
+ LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts);
+ if (argc != 3 && argc != 2) {
+  fprintf(stderr, "Usage: %s <example-name> [<external-btf>]\n", argv[0]);
+  return 1;
+ }
+ if (argc == 3)
+  opts.btf_custom_path = argv[2];
 
-	/* Set up libbpf errors and debug info callback */
-	libbpf_set_print(libbpf_print_fn);
+ /* Set up libbpf errors and debug info callback */
+ libbpf_set_print(libbpf_print_fn);
 
-	/* Cleaner handling of Ctrl-C */
-	signal(SIGINT, sig_handler);
-	signal(SIGTERM, sig_handler);
+ /* Cleaner handling of Ctrl-C */
+ signal(SIGINT, sig_handler);
+ signal(SIGTERM, sig_handler);
 
-	/* Load and verify BPF application */
-	skel = uprobe_bpf__open_opts(&opts);
-	if (!skel) {
-		fprintf(stderr, "Failed to open and load BPF skeleton\n");
-		return 1;
-	}
+ /* Load and verify BPF application */
+ skel = uprobe_bpf__open_opts(&opts);
+ if (!skel) {
+  fprintf(stderr, "Failed to open and load BPF skeleton\n");
+  return 1;
+ }
 ```
 
 实际上，btf 实现重定向需要两个部分，一个是 bpf 程序带的编译时的 btf 信息，一个是内核的 btf 信息。在实际加载 ebpf 程序的时候，libbpf 会根据当前内核上准确的 btf 信息，来修改可能存在错误的 ebpf 指令，确保在不同内核版本上能够兼容。
@@ -312,8 +312,8 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 - **灵活性和兼容性**：在用户空间eBPF程序中使用 BTF 大大增强了它们在不同版本的用户空间应用程序和库之间的灵活性和兼容性。
 - **简化了复杂性**：这种方法显著减少了维护不同版本的用户空间应用程序的eBPF程序的复杂性，因为它消除了需要多个程序版本的需要。
-- **更广泛的应用**：这种方法在性能监控、安全和用户空间应用程序的调试等方面也可能能有更广泛的应用。bpftime（https://github.com/eunomia-bpf/bpftime） 是一个开源的基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容。它在支持 uprobe、syscall trace 和一般的插件扩展的同时，避免了内核态和用户态之间的上下文切换，从而提高了 uprobe 程序的执行效率。借助 libbpf 和 btf 的支持，bpftime 也可以更加动态的扩展用户态应用程序，实现在不同用户态程序版本之间的兼容性。
+- **更广泛的应用**：这种方法在性能监控、安全和用户空间应用程序的调试等方面也可能能有更广泛的应用。bpftime（<https://github.com/eunomia-bpf/bpftime> ） 是一个开源的基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容。它在支持 uprobe、syscall trace 和一般的插件扩展的同时，避免了内核态和用户态之间的上下文切换，从而提高了 uprobe 程序的执行效率。借助 libbpf 和 btf 的支持，bpftime 也可以更加动态的扩展用户态应用程序，实现在不同用户态程序版本之间的兼容性。
 
 这个示例展示了 eBPF 在实践中可以将其强大的 CO-RE 功能扩展到更动态地处理用户空间应用的不同版本变化。
 
-如果你想了解更多关于eBPF知识和实践，你可以访问我们的教程代码库<https://github.com/eunomia-bpf/bpf-developer-tutorial>或者网站<https://eunomia.dev/tutorials/>获得更多示例和完整教程。
+如果你想了解更多关于eBPF知识和实践，你可以访问我们的教程代码库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或者网站 <https://eunomia.dev/tutorials/> 获得更多示例和完整教程。

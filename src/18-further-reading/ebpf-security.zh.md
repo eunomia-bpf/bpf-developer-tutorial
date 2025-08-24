@@ -189,7 +189,7 @@ BPF命名空间在概念上与PID命名空间相似，设计上直观易用。�
 - BPF令牌概念：<https://lore.kernel.org/bpf/20230629051832.897119-1-andrii@kernel.org/>
 - 使用fsverity和LSM守门员进行BPF签名：<https://www.youtube.com/watch?v=9p4qviq60z8>
 - 签名BPF字节码：<https://lpc.events/event/16/contributions/1357/attachments/1045/1999/BPF%20Signatures.pdf>
-- bpfd：<https://bpfd.dev/>
+- bpfd：<https://bpfman.io/>
 
 ## 一些其他的解决方案
 
@@ -248,4 +248,4 @@ Wasm-bpf是一种WebAssembly eBPF库、工具链和运行时，能够使eBPF程�
 
 > 我们是 [github.com/eunomia-bpf](https://github.com/eunomia-bpf) 开源社区，希望能使eBPF更易使用，并探索与 eBPF 相关的工具链和运行时等技术。
 >
-> 对eBPF技术感兴趣的朋友，欢迎查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和我们的网站 <https://eunomia.dev/tutorials/>，以获取更多关于 eBPF 的相关资料和实践经验。原文地址：<https://eunomia.dev/zh/blogs/ebpf-security>
+> 对eBPF技术感兴趣的朋友，欢迎查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和我们的网站 <https://eunomia.dev/tutorials/> 以获取更多关于 eBPF 的相关资料和实践经验。原文地址：<https://eunomia.dev/zh/blogs/ebpf-security>

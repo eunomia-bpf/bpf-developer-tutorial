@@ -124,8 +124,8 @@ eBPF 能够动态调整系统行为并扩展到用户空间，使其成为现代
 
 推荐：
 
-- 阅读 eBPF 介绍：<https://ebpf.io/>（30 分钟）
-- 简要了解 eBPF 内核相关文档：<https://docs.ebpf.io/>（了解技术细节的查询来源，30 分钟）
+- 阅读 eBPF 介绍：<https://ebpf.io/> （30 分钟）
+- 简要了解 eBPF 内核相关文档：<https://docs.ebpf.io/> （了解技术细节的查询来源，30 分钟）
 
 回答三个问题：
 
@@ -137,10 +137,10 @@ eBPF 能够动态调整系统行为并扩展到用户空间，使其成为现代
 
 了解并尝试 eBPF 开发框架：
 
-- bpftrace 教程：<https://eunomia.dev/tutorials/bpftrace-tutorial/>（尝试，1 小时）
-- 使用 BCC 开发各种工具的示例：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md>（运行，3-4 小时）
-- libbpf 的一些示例：<https://github.com/libbpf/libbpf-bootstrap>（运行任何有趣的示例并阅读源代码，2 小时）
-- 教程：<https://github.com/eunomia-bpf/bpf-developer-tutorial>（阅读第 1-10 部分，3-4 小时）
+- bpftrace 教程：<https://eunomia.dev/tutorials/bpftrace-tutorial/> （尝试，1 小时）
+- 使用 BCC 开发各种工具的示例：<https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md> （运行，3-4 小时）
+- libbpf 的一些示例：<https://github.com/libbpf/libbpf-bootstrap> （运行任何有趣的示例并阅读源代码，2 小时）
+- 教程：<https://github.com/eunomia-bpf/bpf-developer-tutorial> （阅读第 1-10 部分，3-4 小时）
 
 其他开发框架：Go 或 Rust 语言，请自行搜索和尝试（0-2 小时）
 

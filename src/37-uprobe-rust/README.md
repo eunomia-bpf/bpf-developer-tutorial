@@ -48,7 +48,7 @@ $ nm helloworld/target/release/helloworld | grep hello
 
 We find that the corresponding symbol has been converted to `_ZN10helloworld4main17h2dce92cb81426b91E`. This is because rustc uses [Symbol name mangling](https://en.wikipedia.org/wiki/Name_mangling) to encode a unique name for the symbols used in the code generation process. The encoded name will be used by the linker to associate the name with the content it points to. The -C symbol-mangling-version option can be used to control the handling of symbol names.
 
-We can use the [`rustfilt`](https://crates.io/crates/rustfilt) tool to parse and obtain the corresponding symbol:
+We can use the [`rustfilt`](https://github.com/luser/rustfilt) tool to parse and obtain the corresponding symbol. This tool can be installed with `cargo install rustfilt`:
 
 ```console
 $ cargo install rustfilt
