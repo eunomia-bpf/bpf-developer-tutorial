@@ -897,7 +897,7 @@ IDLE     (16): | ********-------------------------------------------------------
 
 - **Linux 内核文档:** [Scheduler Ext 文档](https://www.kernel.org/doc/html/next/scheduler/sched-ext.html)
 - **内核源树:** [Linux 内核 `sched_ext` 工具](https://github.com/torvalds/linux/tree/master/tools/sched_ext)
-- **eBPF 官方文档:** [https://ebpf.io/docs/](https://ebpf.io/docs/)
+- **eBPF 官方文档:** [https://docs.ebpf.io/](https://docs.ebpf.io/)
 - **libbpf 文档:** [https://github.com/libbpf/libbpf](https://github.com/libbpf/libbpf)
 
 欢迎探索这些资源，扩展您的知识，继续深入学习高级 eBPF 编程的旅程。

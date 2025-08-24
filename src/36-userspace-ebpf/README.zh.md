@@ -73,7 +73,7 @@ eBPF，原本因其在内核空间的强大性能而被广泛认知，但近年�
 
    Oko 是 Open vSwitch-DPDK 的扩展，提供了与 BPF 程序的运行时扩展。它允许使用 BPF 程序在用户空间处理数据包，提供灵活的数据包处理，并促进 Open vSwitch 与其他系统的集成。
 
-1. [**DPDK eBPF 支持:**](https://www.dpdk.org/wp-content/uploads/sites/35/2018/10/pm-07-DPDK-BPFu6.pdf)
+1. [**DPDK eBPF 支持:**](https://doc.dpdk.org/guides/prog_guide/bpf_lib.html)
 
    DPDK (数据平面开发套件) eBPF 支持通过允许在用户空间使用 eBPF 程序来促进快速的数据包处理，这些程序可以加载并运行以分析网络数据包。这增强了网络应用的灵活性和可编程性，无需修改内核。
 
@@ -213,7 +213,7 @@ Wasm 的主要焦点在于可移植性、轻量级虚拟化、安全性、多语
 3. rbpf: <https://github.com/qmonnet/rbpf>
 4. Oko: <https://github.com/Orange-OpenSource/Oko>
 5. RapidPatch: Firmware Hotpatching for Real-Time Embedded Devices: <https://www.usenix.org/conference/usenixsecurity22/presentation/he-yi>
-6. DPDK eBPF Support: <https://www.dpdk.org/wp-content/uploads/sites/35/2018/10/pm-07-DPDK-BPFu6.pdf>
+6. DPDK eBPF Support: <https://doc.dpdk.org/guides/prog_guide/bpf_lib.html>
 7. Solana: <https://solana.com/>
 8. eBPF for Windows (Work-In-Progress): <https://github.com/microsoft/ebpf-for-windows>
 9. Femto-Containers: Lightweight Virtualization and Fault Isolation For Small Software Functions on Low-Power IoT Microcontrollers: <https://arxiv.org/abs/2210.03432>

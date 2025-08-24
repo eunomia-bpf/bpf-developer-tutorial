@@ -2,7 +2,7 @@
 
 This tutorial covers how to use [bcc](https://github.com/iovisor/bcc) tools to quickly solve performance, troubleshooting, and networking issues. If you want to develop new bcc tools, see [tutorial_bcc_python_developer.md](tutorial_bcc_python_developer.md) for that tutorial.
 
-It is assumed for this tutorial that bcc is already installed, and you can run tools like execsnoop successfully. See [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md). This uses enhancements added to the Linux 4.x series.
+It is assumed for this tutorial that bcc is already installed, and you can run tools like execsnoop successfully. See [INSTALL.md](https://github.com/iovisor/bcc/blob/master/INSTALL.md). This uses enhancements added to the Linux 4.x series.
 
 ## Observability
 

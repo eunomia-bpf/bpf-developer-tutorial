@@ -10,7 +10,7 @@ This observability tutorial contains 17 lessons, and 46 enumerated things to lea
 
 ### Lesson 1. Hello World
 
-Start by running [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py), while running some commands (eg, "ls") in another session. It should print "Hello, World!" for new processes. If not, start by fixing bcc: see [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md).
+Start by running [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py), while running some commands (eg, "ls") in another session. It should print "Hello, World!" for new processes. If not, start by fixing bcc: see [INSTALL.md](https://github.com/iovisor/bcc/blob/master/INSTALL.md).
 
 ```sh
 # ./examples/hello_world.py

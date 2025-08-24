@@ -50,7 +50,7 @@ At this point, the Linux environment required for testing eBPF has been set up. 
 
 ## Build Tools
 
-Clone the eunomia-bpf repository into the local debian environment. For the specific build process, refer to the repository's [build.md](https://github.com/eunomia-bpf/eunomia-bpf/blob/master/documents/build.md). In this test, I used the `ecc` compilation method to generate the `package.json`. Please refer to the [repository page](https://github.com/eunomia-bpf/eunomia-bpf/tree/master/compiler) for the build and usage instructions for this tool.
+Clone the eunomia-bpf repository into the local debian environment. For the specific build process, refer to the repository's [build.md](https://eunomia.dev/eunomia-bpf/setup/build). In this test, I used the `ecc` compilation method to generate the `package.json`. Please refer to the [repository page](https://github.com/eunomia-bpf/eunomia-bpf/tree/master/compiler) for the build and usage instructions for this tool.
 
 >During the build process, you may need to manually install tools such as `curl`, `pkg-config`, `libssl-dev`, etc.
 

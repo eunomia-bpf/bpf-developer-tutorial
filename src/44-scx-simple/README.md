@@ -374,7 +374,7 @@ By mastering scx_simple, you're well-equipped to design and implement more sophi
 - **sched_ext Repository:** [https://github.com/sched-ext/scx](https://github.com/sched-ext/scx)
 - **Linux Kernel Documentation:** [Scheduler Ext Documentation](https://www.kernel.org/doc/html/next/scheduler/sched-ext.html)
 - **Kernel Source Tree:** [Linux Kernel sched_ext Tools](https://github.com/torvalds/linux/tree/master/tools/sched_ext)
-- **eBPF Official Documentation:** [https://ebpf.io/docs/](https://ebpf.io/docs/)
+- **eBPF Official Documentation:** [https://docs.ebpf.io/](https://docs.ebpf.io/)
 - **libbpf Documentation:** [https://github.com/libbpf/libbpf](https://github.com/libbpf/libbpf)
 
 Feel free to explore these resources to expand your understanding and continue your journey into advanced eBPF programming!

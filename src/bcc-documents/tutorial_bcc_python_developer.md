@@ -10,7 +10,7 @@
 
 ### 第1课. 你好，世界
 
-首先运行 [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py)，同时在另一个会话中运行一些命令（例如，“ls”）。它应该会为新进程打印“Hello, World!”。如果没有打印，请先修复bcc：请参阅 [INSTALL.md](https://github.com/iovisor/bcc/tree/master/INSTALL.md)。
+首先运行 [examples/hello_world.py](https://github.com/iovisor/bcc/tree/master/examples/hello_world.py)，同时在另一个会话中运行一些命令（例如，“ls”）。它应该会为新进程打印“Hello, World!”。如果没有打印，请先修复bcc：请参阅 [INSTALL.md](https://github.com/iovisor/bcc/blob/master/INSTALL.md)。
 
 ```sh
 # ./examples/hello_world.py

@@ -51,7 +51,7 @@
 
 ## 工具构建
 
-在 debian 环境中将 eunomia-bpf 仓库 clone 到本地，具体的构建过程，可以参考仓库的 [build.md](https://github.com/eunomia-bpf/eunomia-bpf/blob/master/documents/build.md)。在本次测试中，笔者选用了 `ecc` 编译生成 `package.json` 的方式，该工具的构建和使用方式请参考[仓库页面](https://github.com/eunomia-bpf/eunomia-bpf/tree/master/compiler)。
+在 debian 环境中将 eunomia-bpf 仓库 clone 到本地，具体的构建过程，可以参考仓库的 [build.md](https://eunomia.dev/eunomia-bpf/setup/build)。在本次测试中，笔者选用了 `ecc` 编译生成 `package.json` 的方式，该工具的构建和使用方式请参考[仓库页面](https://github.com/eunomia-bpf/eunomia-bpf/tree/master/compiler)。
 
 >在构建过程中，可能需要自行安装包括但不限于 `curl`，`pkg-config`，`libssl-dev` 等工具。
 

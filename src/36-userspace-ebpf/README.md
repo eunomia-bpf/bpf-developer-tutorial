@@ -72,7 +72,7 @@ Userspace eBPF is being utilized in a number of notable projects, each harnessin
   
    Oko is an extension of Open vSwitch-DPDK that provides runtime extension with BPF programs. It enables the use of BPF programs to process packets in userspace, providing flexible packet processing and facilitating the integration of Open vSwitch with other systems.
 
-1. [**DPDK eBPF Support:**](https://www.dpdk.org/wp-content/uploads/sites/35/2018/10/pm-07-DPDK-BPFu6.pdf)
+1. [**DPDK eBPF Support:**](https://doc.dpdk.org/guides/prog_guide/bpf_lib.html)
 
    The DPDK (Data Plane Development Kit) eBPF support facilitates fast packet processing by enabling the use of eBPF programs in userspace, which can be loaded and run to analyze network packets. This enhances the flexibility and programmability of network applications without requiring kernel modifications.
 
@@ -212,7 +212,7 @@ While alternatives like Wasm certainly have their place with a strong emphasis o
 3. rbpf: <https://github.com/qmonnet/rbpf>
 4. Oko: <https://github.com/Orange-OpenSource/Oko>
 5. RapidPatch: Firmware Hotpatching for Real-Time Embedded Devices: <https://www.usenix.org/conference/usenixsecurity22/presentation/he-yi>
-6. DPDK eBPF Support: <https://www.dpdk.org/wp-content/uploads/sites/35/2018/10/pm-07-DPDK-BPFu6.pdf>
+6. DPDK eBPF Support: <https://doc.dpdk.org/guides/prog_guide/bpf_lib.html>
 7. Solana: <https://solana.com/>
 8. eBPF for Windows (Work-In-Progress): <https://github.com/microsoft/ebpf-for-windows>
 9. Femto-Containers: Lightweight Virtualization and Fault Isolation For Small Software Functions on Low-Power IoT Microcontrollers: <https://arxiv.org/abs/2210.03432>

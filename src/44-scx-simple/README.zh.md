@@ -426,6 +426,6 @@ sched_ext 与默认的完全公平调度器（CFS）并行运行。你可以通�
 - **sched_ext 仓库：** [https://github.com/sched-ext/scx](https://github.com/sched-ext/scx)
 - **Linux 内核文档：** [Scheduler Ext Documentation](https://www.kernel.org/doc/html/next/scheduler/sched-ext.html)
 - **内核源代码树：** [Linux Kernel sched_ext Tools](https://github.com/torvalds/linux/tree/master/tools/sched_ext)
-- **eBPF 官方文档：** [https://ebpf.io/docs/](https://ebpf.io/docs/)
+- **eBPF 官方文档：** [https://docs.ebpf.io/](https://docs.ebpf.io/)
 - **libbpf 文档：** [https://github.com/libbpf/libbpf](https://github.com/libbpf/libbpf)
 
