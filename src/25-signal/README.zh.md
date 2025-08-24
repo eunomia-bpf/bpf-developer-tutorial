@@ -185,7 +185,7 @@ TIME     PID    COMM   SUCCESS
 
 通过这个实例，我们深入了解了如何将 eBPF 程序与用户态程序相结合，实现对系统调用的监控和干预。eBPF 提供了一种在内核空间执行程序的机制，这种技术不仅限于监控，还可用于性能优化、安全防御、系统诊断等多种场景。对于开发者来说，这为Linux系统的性能调优和故障排查提供了一种强大且灵活的工具。
 
-最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/。>
+最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/>
 
 ## 参考资料
 

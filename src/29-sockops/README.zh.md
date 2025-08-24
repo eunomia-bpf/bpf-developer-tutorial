@@ -249,7 +249,7 @@ sudo ./unload.sh
 
 ## 参考资料
 
-最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/。>
+最后，如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/>
 
 - <https://github.com/zachidan/ebpf-sockops>
 - <https://github.com/merbridge/merbridge>

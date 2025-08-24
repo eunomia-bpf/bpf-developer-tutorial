@@ -523,7 +523,7 @@ WRITE/SEND   0.000000000        curl             16104   24
 
 ## 总结
 
-eBPF 是一个非常强大的技术，它可以帮助我们深入了解系统的工作原理。本教程是一个简单的示例，展示了如何使用 eBPF 来监控 SSL/TLS 通信。如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/。>
+eBPF 是一个非常强大的技术，它可以帮助我们深入了解系统的工作原理。本教程是一个简单的示例，展示了如何使用 eBPF 来监控 SSL/TLS 通信。如果您对 eBPF 技术感兴趣，并希望进一步了解和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 和教程网站 <https://eunomia.dev/zh/tutorials/>
 
 参考资料：
 
