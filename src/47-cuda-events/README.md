@@ -22,7 +22,7 @@ This is where eBPF comes to the rescue! By using uprobes, we can intercept CUDA 
 - Error codes and failures
 - Timing of operations
 
-This blog is mainly focus on the CPU side of the CUDA API calls, for fined-grained tracing of GPU operations, you can see [eGPU](https://dl.acm.org/doi/10.1145/3723851.3726984) paper and [bpftime](https://github.com/eunomia-bpf/bpftime) project.
+This blog mainly focuses on the CPU side of the CUDA API calls, for fined-grained tracing of GPU operations, you can see [eGPU](https://dl.acm.org/doi/10.1145/3723851.3726984) paper and [bpftime](https://github.com/eunomia-bpf/bpftime) project.
 
 ## Key CUDA Functions We Trace
 

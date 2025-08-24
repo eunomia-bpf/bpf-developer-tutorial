@@ -277,7 +277,7 @@ static void print_stats(struct energy_monitor_bpf *skel)
 使用提供的 Makefile 构建所有组件：
 
 ```bash
-cd /yunwei37/bpf-developer-tutorial/src/48-energy
+cd /home/yunwei37/bpf-developer-tutorial/src/48-energy
 make clean && make
 ```
 
