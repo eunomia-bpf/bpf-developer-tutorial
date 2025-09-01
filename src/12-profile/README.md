@@ -404,19 +404,15 @@ impl EventHandler {
 
 **Key Features of the Rust Implementation:**
 
-1. **Type Safety**: The Rust implementation provides strong type safety through the type system, preventing memory safety issues common in C.
+The Rust implementation provides strong type safety through its type system, effectively preventing memory safety issues that are common in C, such as buffer overflows and null pointer dereferences. This safety guarantee allows developers to focus on business logic without worrying about low-level memory management issues.
 
-2. **Blazesym Integration**: Uses blazesym-rs for efficient symbol resolution with support for DWARF debug information, providing detailed source file and line number information.
+Symbol resolution is a core feature of performance analysis tools. This implementation integrates the blazesym library, which efficiently converts memory addresses into readable function names and source code locations. Blazesym supports DWARF debug information parsing, meaning that even optimized binaries can provide accurate source file paths and line number information. This capability is crucial for pinpointing the exact code locations of performance bottlenecks.
 
-3. **Error Handling**: Comprehensive error handling using Rust's `Result` type, ensuring robust operation.
+For error handling, Rust's `Result` type provides an explicit error handling mechanism. Every operation that might fail returns a Result type, forcing developers to handle potential error conditions. This design prevents unhandled errors from causing program crashes, improving the tool's stability and reliability.
 
-4. **Structured Logging**: Integration with the `tracing` crate for structured logging with configurable verbosity levels.
+The logging system uses the `tracing` crate, which provides structured logging capabilities. Through environment variables or command-line arguments, users can dynamically adjust the log level from WARN, INFO, DEBUG to TRACE, making it convenient to obtain appropriate levels of diagnostic information in different scenarios. This flexibility is very useful for debugging and troubleshooting.
 
-5. **Command-line Interface**: Uses `clap` for a user-friendly CLI with options for:
-   - Adjustable sampling frequency (`-f`)
-   - Software vs hardware perf events (`--sw-event`)
-   - PID filtering (`-p`)
-   - Extended output format (`-E`)
+The command-line interface is implemented through the `clap` library, providing intuitive argument parsing and help message generation. Users can adjust the sampling frequency with the `-f` parameter, switch to software events using `--sw-event` in environments like virtual machines that don't support hardware performance counters, filter specific processes with the `-p` parameter, and output in an extended format suitable for flame graph generation using the `-E` parameter.
 
 This integrated approach combines the performance of eBPF with the safety and expressiveness of Rust, providing a robust profiling tool for system performance analysis.
 
