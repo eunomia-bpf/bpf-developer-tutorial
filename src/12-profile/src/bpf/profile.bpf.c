@@ -14,8 +14,6 @@ struct {
 	__uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
-__u32 target_pid = 0;
-
 SEC("perf_event")
 int profile(void *ctx)
 {
@@ -24,22 +22,21 @@ int profile(void *ctx)
 	struct stacktrace_event *event;
 	int cp;
 
-	/* Check if we need to filter by PID */
-	if (target_pid != 0 && target_pid != pid)
-		return 0;
-
 	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
 	if (!event)
 		return 1;
 
 	event->pid = pid;
 	event->cpu_id = cpu_id;
+	event->timestamp = bpf_ktime_get_ns();
 
 	if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
 		event->comm[0] = 0;
 
 	event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
-	event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+
+	event->ustack_sz =
+		bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
 	bpf_ringbuf_submit(event, 0);
 

@@ -1,49 +1,54 @@
 # eBPF Tutorial by Example 12: Using eBPF Program Profile for Performance Analysis
 
-This tutorial will guide you on using libbpf and eBPF programs for performance analysis. We will leverage the perf mechanism in the kernel to learn how to capture the execution time of functions and view performance data.
+This tutorial will guide you on using eBPF programs for performance analysis with a Rust implementation. We will leverage the perf mechanism in the kernel to learn how to capture the execution time of functions and view performance data.
 
-libbpf is a C library for interacting with eBPF. It provides the basic functionality for creating, loading, and using eBPF programs. In this tutorial, we will mainly use libbpf for development. Perf is a performance analysis tool in the Linux kernel that allows users to measure and analyze the performance of kernel and user space programs, as well as obtain corresponding call stacks. It collects performance data using hardware counters and software events in the kernel.
+This implementation uses libbpf-rs, a Rust wrapper around libbpf, along with blazesym for symbol resolution. Perf is a performance analysis tool in the Linux kernel that allows users to measure and analyze the performance of kernel and user space programs, as well as obtain corresponding call stacks. It collects performance data using hardware counters and software events in the kernel.
 
 ## eBPF Tool: profile Performance Analysis Example
 
-The `profile` tool is implemented based on eBPF and utilizes the perf events in the Linux kernel for performance analysis. The `profile` tool periodically samples each processor to capture the execution of kernel and user space functions. It provides the following information for stack traces:
+The `profile` tool is implemented based on eBPF and utilizes the perf events in the Linux kernel for performance analysis. The `profile` tool periodically samples each processor to capture the execution of kernel and user space functions.
 
-- Address: memory address of the function call
-- Symbol: function name
-- File Name: name of the source code file
-- Line Number: line number in the source code
+In the stack trace information, the tool displays the memory addresses of function calls, which represent the most primitive location information. Through symbol resolution, these addresses are converted to corresponding function names, allowing developers to directly identify which functions are being executed. Furthermore, when debug information is available, the tool can provide source code file names and specific line numbers, pinpointing the exact location in the code. This complete information chain from addresses to symbols to source code locations provides developers with a comprehensive perspective for performance analysis.
 
-This information helps developers locate performance bottlenecks and optimize code. Furthermore, flame graphs can be generated based on this information for a more intuitive view of performance data.
+This detailed information helps developers quickly locate performance bottlenecks and optimize code. By analyzing which functions are frequently called and which code paths consume the most CPU time, developers can perform targeted optimizations. Additionally, this stack trace information can be converted into flame graph format, providing a visual representation of program execution hotspots that makes performance issues immediately apparent.
 
-In this example, you can compile and run it with the libbpf library (using Ubuntu/Debian as an example):
+In this example, you can compile and run it with Rust and Cargo:
 
-**NOTE:** To compile the `profile`, you first need to install `Cargo`, as shown in ["The Cargo Book"](https://rustwiki.org/en/cargo/getting-started/installation.html)
+**Prerequisites:**
+- Rust and Cargo installed (see ["The Cargo Book"](https://rustwiki.org/en/cargo/getting-started/installation.html))
+- Clang and development libraries
 
 ```console
 $ git submodule update --init --recursive
 $ sudo apt install clang libelf1 libelf-dev zlib1g-dev
 $ make
-$ sudo ./profile 
-COMM: chronyd (pid=156) @ CPU 1
-Kernel:
-  0 [<ffffffff81ee9f56>] _raw_spin_lock_irqsave+0x16
-  1 [<ffffffff811527b4>] remove_wait_queue+0x14
-  2 [<ffffffff8132611d>] poll_freewait+0x3d
-  3 [<ffffffff81326d3f>] do_select+0x7bf
-  4 [<ffffffff81327af2>] core_sys_select+0x182
-  5 [<ffffffff81327f3a>] __x64_sys_pselect6+0xea
-  6 [<ffffffff81ed9e38>] do_syscall_64+0x38
-  7 [<ffffffff82000099>] entry_SYSCALL_64_after_hwframe+0x61
-Userspace:
-  0 [<00007fab187bfe09>]
-  1 [<000000000ee6ae98>]
+$ sudo ./profile
+```
 
-COMM: profile (pid=9843) @ CPU 6
+**Sample Output:**
+```console
+[1756723652.366364804] COMM: node (pid=285503) @ CPU 64
 No Kernel Stack
 Userspace:
-  0 [<0000556deb068ac8>]
-  1 [<0000556dec34cad0>]
+0x0072e2a97f4be0: v8::internal::Scanner::Next() @ 0x15f47c0+0x420
+0x0072e2a97d9051: v8::internal::ParserBase<v8::internal::PreParser>::ParseBlock(...) @ 0x15d8fc0+0x91
+0x0072e2a97d6df0: v8::internal::ParserBase<v8::internal::PreParser>::ParseStatement(...) @ 0x15d6ce0+0x110
+...
+
+[1756723657.337170411] COMM: qemu-system-x86 (pid=4166437) @ CPU 70
+Kernel:
+0xffffffff95f403d5: _raw_spin_lock_irq @ 0xffffffff95f403b0+0x25
+0xffffffff94e2b6d8: __flush_work @ 0xffffffff94e2b630+0xa8
+0xffffffff94e2ba5c: flush_work @ 0xffffffff94e2ba40+0x1c
+0xffffffff95852672: tty_buffer_flush_work @ 0xffffffff95852660+0x12
+...
+Userspace:
+0x005849a7fbbd33: qemu_poll_ns @ 0xc63c4c+0xe7 /home/victoryang00/CXLMemSim/lib/qemu/build/../util/qemu-timer.c:347:1
+0x005849a7fb64d7: os_host_main_loop_wait @ 0xc5e473+0x64 /home/victoryang00/CXLMemSim/lib/qemu/build/../util/main-loop.c:305:11
+...
 ```
+
+The tool provides detailed stack traces with symbol resolution, including function names, offsets, and source file locations when available.
 
 ## Implementation Principle
 
@@ -84,18 +89,51 @@ int profile(void *ctx)
 
     event->pid = pid;
     event->cpu_id = cpu_id;
+    event->timestamp = bpf_ktime_get_ns();  // Capture timestamp
 
     if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
         event->comm[0] = 0;
 
     event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
 
-    event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+    event->ustack_sz = 
+        bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
     bpf_ringbuf_submit(event, 0);
 
     return 0;
 }
+```
+
+The header file `profile.h` defines the event structure:
+
+```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+#ifndef __PROFILE_H_
+#define __PROFILE_H_
+
+#ifndef TASK_COMM_LEN
+#define TASK_COMM_LEN 16
+#endif
+
+#ifndef MAX_STACK_DEPTH
+#define MAX_STACK_DEPTH 128
+#endif
+
+typedef __u64 stack_trace_t[MAX_STACK_DEPTH];
+
+struct stacktrace_event {
+    __u32 pid;
+    __u32 cpu_id;
+    __u64 timestamp;  // Kernel timestamp in nanoseconds
+    char comm[TASK_COMM_LEN];
+    __s32 kstack_sz;
+    __s32 ustack_sz;
+    stack_trace_t kstack;
+    stack_trace_t ustack;
+};
+
+#endif /* __PROFILE_H_ */
 ```
 
 Next, we will focus on the key part of the kernel code.
@@ -176,44 +214,88 @@ Finally, use the `bpf_ringbuf_submit()` function to submit the event to the Ring
 
 This kernel mode eBPF program captures the program's execution flow by sampling the kernel stack and user space stack of the program periodically. These data are stored in the Ring Buffer for the user mode `profile` program to read.
 
-### User Mode Section
+### User Mode Section (Rust Implementation)
 
-This code is mainly responsible for setting up perf events for each online CPU and attaching eBPF programs:
+The user-space portion is implemented in Rust using libbpf-rs and blazesym. The main components include:
 
-```c
-static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
-                int cpu, int group_fd, unsigned long flags)
-{
-    int ret;
+**Main Entry Point (src/main.rs):**
+```rust
+use std::mem::MaybeUninit;
+use std::time::Duration;
+use clap::{ArgAction, Parser};
+use libbpf_rs::skel::{OpenSkel, SkelBuilder};
 
-    ret = syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-    return ret;
+mod profile {
+    include!(concat!(env!("OUT_DIR"), "/profile.skel.rs"));
+}
+mod syscall;
+mod event;
+mod perf;
+
+use profile::*;
+
+#[derive(Parser, Debug)]
+struct Args {
+    /// Sampling frequency
+    #[arg(short, default_value_t = 50)]
+    freq: u64,
+    
+    /// Increase verbosity (can be supplied multiple times)
+    #[arg(short = 'v', long = "verbose", global = true, action = ArgAction::Count)]
+    verbosity: u8,
+    
+    /// Use software event for triggering stack trace capture
+    #[arg(long = "sw-event")]
+    sw_event: bool,
+    
+    /// Filter by PID (optional)
+    #[arg(short = 'p', long = "pid")]
+    pid: Option<i32>,
+    
+    /// Output in extended folded format
+    #[arg(short = 'E', long = "fold-extend")]
+    fold_extend: bool,
 }
 
-int main(){
-    ...
-    for (cpu = 0; cpu < num_cpus; cpu++) {
-        /* skip offline/not present CPUs */
-        if (cpu >= num_online_cpus || !online_mask[cpu])
-            continue;
-
-        /* Set up performance monitoring on a CPU/Core */
-        pefd = perf_event_open(&attr, pid, cpu, -1, PERF_FLAG_FD_CLOEXEC);
-        if (pefd < 0) {
-            fprintf(stderr, "Fail to set up performance monitor on a CPU/Core\n");
-            err = -1;
-            goto cleanup;
-        }
-        pefds[cpu] = pefd;
-
-        /* Attach a BPF program on a CPU */
-        links[cpu] = bpf_program__attach_perf_event(skel->progs.profile, pefd);
-        if (!links[cpu]) {
-            err = -1;
-            goto cleanup;
-        }
-    }
-    ...
+fn main() -> Result<(), libbpf_rs::Error> {
+    let args = Args::parse();
+    
+    // Set up logging based on verbosity
+    let level = match args.verbosity {
+        0 => LevelFilter::WARN,
+        1 => LevelFilter::INFO,
+        2 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
+    };
+    
+    // Initialize BPF skeleton
+    let skel_builder = ProfileSkelBuilder::default();
+    let mut open_object = MaybeUninit::uninit();
+    let open_skel = skel_builder.open(&mut open_object)?;
+    let skel = open_skel.load()?;
+    
+    // Set up perf events and attach BPF program
+    let pefds = perf::init_perf_monitor(args.freq, args.sw_event, args.pid)?;
+    let _links = perf::attach_perf_event(&pefds, &skel.progs.profile);
+    
+    // Set up ring buffer with event handler
+    let mut builder = libbpf_rs::RingBufferBuilder::new();
+    let output_format = if args.fold_extend {
+        event::OutputFormat::FoldedExtended
+    } else {
+        event::OutputFormat::Standard
+    };
+    
+    let event_handler = event::EventHandler::new(output_format);
+    builder.add(&skel.maps.events, move |data| {
+        event_handler.handle(data)
+    })?;
+    
+    let ringbuf = builder.build()?;
+    while ringbuf.poll(Duration::MAX).is_ok() {}
+    
+    perf::close_perf_events(pefds)?;
+    Ok(())
 }
 ```
 
@@ -229,99 +311,114 @@ for (cpu = 0; cpu < num_cpus; cpu++) {
 
 This loop sets up perf events and attaches eBPF programs for each online CPU. Firstly, it checks if the current CPU is online and skips if it's not. Then, it uses the perf_event_open() function to set up perf events for the current CPU and stores the returned file descriptor in the pefds array. Finally, it attaches the eBPF program to the perf event using the bpf_program__attach_perf_event() function. The links array is used to store the BPF links for each CPU so that they can be destroyed when the program ends.By doing so, user-mode programs set perf events for each online CPU and attach eBPF programs to these perf events to monitor all online CPUs in the system.
 
-The following two functions are used to display stack traces and handle events received from the ring buffer:
+**Event Processing and Symbol Resolution (src/event.rs):**
+```rust
+use std::mem;
+use std::time::{SystemTime, UNIX_EPOCH};
+use blazesym::symbolize;
+use nix::sys::sysinfo;
 
-```c
-static void show_stack_trace(__u64 *stack, int stack_sz, pid_t pid)
-{
-    const struct blazesym_result *result;
-    const struct blazesym_csym *sym;
-    sym_src_cfg src;
-    int i, j;
+pub const MAX_STACK_DEPTH: usize = 128;
+pub const TASK_COMM_LEN: usize = 16;
 
-    if (pid) {
-        src.src_type = SRC_T_PROCESS;
-        src.params.process.pid = pid;
-    } else {
-        src.src_type = SRC_T_KERNEL;
-        src.params.kernel.kallsyms = NULL;
-        src.params.kernel.kernel_image = NULL;
-    }
-
-    result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
-
-    for (i = 0; i < stack_sz; i++) {
-        if (!result || result->size <= i || !result->entries[i].size) {
-            printf("  %d [<%016llx>]\n", i, stack[i]);
-            continue;
-        }
-
-        if (result->entries[i].size == 1) {
-            sym = &result->entries[i].syms[0];
-            if (sym->path && sym->path[0]) {
-                printf("  %d [<%016llx>] %s+0x%llx %s:%ld\n",
-                       i, stack[i], sym->symbol,
-                       stack[i] - sym->start_address,
-                       sym->path, sym->line_no);
-            } else {
-                printf("  %d [<%016llx>] %s+0x%llx\n",
-                       i, stack[i], sym->symbol,
-                       stack[i] - sym->start_address);
-            }
-            continue;
-        }
-
-        printf("  %d [<%016llx>]\n", i, stack[i]);
-        for (j = 0; j < result->entries[i].size; j++) {
-            sym = &result->entries[i].syms[j];
-            if (sym->path && sym->path[0]) {
-                printf("        %s+0x%llx %s:%ld\n",
-                       sym->symbol, stack[i] - sym->start_address,
-                       sym->path, sym->line_no);
-            } else {
-                printf("        %s+0x%llx\n", sym->symbol,
-                       stack[i] - sym->start_address);
-            }
-        }
-    }
-
-    blazesym_result_free(result);
+// A Rust version of stacktrace_event in profile.h
+#[repr(C)]
+pub struct StacktraceEvent {
+    pub pid: u32,
+    pub cpu_id: u32,
+    pub timestamp: u64,  // Kernel timestamp in nanoseconds
+    pub comm: [u8; TASK_COMM_LEN],
+    pub kstack_size: i32,
+    pub ustack_size: i32,
+    pub kstack: [u64; MAX_STACK_DEPTH],
+    pub ustack: [u64; MAX_STACK_DEPTH],
 }
 
-/* Receive events from the ring buffer. */
-static int event_handler(void *_ctx, void *data, size_t size)
-{
-    struct stacktrace_event *event = data;
+pub enum OutputFormat {
+    Standard,
+    FoldedExtended,  // For flame graph generation
+}
 
-    if (event->kstack_sz <= 0 && event->ustack_sz <= 0)
-        return 1;
+pub struct EventHandler {
+    symbolizer: symbolize::Symbolizer,
+    format: OutputFormat,
+    boot_time_ns: u64,  // System boot time for timestamp conversion
+}
 
-    printf("COMM: %s (pid=%d) @ CPU %d\n", event->comm, event->pid, event->cpu_id);
-
-    if (event->kstack_sz > 0) {
-        printf("Kernel:\n");
-        show_stack_trace(event->kstack, event->kstack_sz / sizeof(__u64), 0);
-    } else {
-        printf("No Kernel Stack\n");
+impl EventHandler {
+    pub fn new(format: OutputFormat) -> Self {
+        let boot_time_ns = Self::get_boot_time_ns();
+        Self {
+            symbolizer: symbolize::Symbolizer::new(),
+            format,
+            boot_time_ns,
+        }
     }
-
-    if (event->ustack_sz > 0) {
-        printf("Userspace:\n");
-        show_stack_trace(event->ustack, event->ustack_sz / sizeof(__u64), event->pid);
-    } else {
-        printf("No Userspace Stack\n");
+    
+    fn get_boot_time_ns() -> u64 {
+        // Calculate boot time from current time minus uptime
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before Unix epoch");
+        let now_ns = now.as_nanos() as u64;
+        
+        let info = sysinfo::sysinfo().expect("Failed to get sysinfo");
+        let uptime_ns = (info.uptime().as_secs_f64() * 1_000_000_000.0) as u64;
+        
+        now_ns - uptime_ns
     }
-
-    printf("\n");
-    return 0;
+    
+    pub fn handle(&self, data: &[u8]) -> ::std::os::raw::c_int {
+        let event = unsafe { &*(data.as_ptr() as *const StacktraceEvent) };
+        
+        if event.kstack_size <= 0 && event.ustack_size <= 0 {
+            return 1;
+        }
+        
+        match self.format {
+            OutputFormat::Standard => self.handle_standard(event),
+            OutputFormat::FoldedExtended => self.handle_folded_extended(event),
+        }
+        
+        0
+    }
+    
+    fn handle_standard(&self, event: &StacktraceEvent) {
+        let comm = std::str::from_utf8(&event.comm)
+            .unwrap_or("<unknown>")
+            .trim_end_matches('\0');
+        
+        // Convert kernel timestamp to Unix timestamp
+        let unix_timestamp_ns = event.timestamp + self.boot_time_ns;
+        let timestamp_sec = unix_timestamp_ns / 1_000_000_000;
+        let timestamp_nsec = unix_timestamp_ns % 1_000_000_000;
+        
+        println!("[{}.{:09}] COMM: {} (pid={}) @ CPU {}", 
+                 timestamp_sec, timestamp_nsec, comm, event.pid, event.cpu_id);
+        
+        // Process and symbolize stacks...
+        // (implementation continues with symbolization logic)
+    }
 }
 ```
 
-The `show_stack_trace()` function is used to display the stack trace of the kernel or userspace. It takes a `stack` parameter, which is a pointer to the kernel or userspace stack, and a `stack_sz` parameter, which represents the size of the stack. The `pid` parameter represents the ID of the process to be displayed (set to 0 when displaying the kernel stack). In the function, the source of the stack (kernel or userspace) is determined based on the `pid` parameter, and then the `blazesym_symbolize()` function is called to resolve the addresses in the stack to symbol names and source code locations. Finally, the resolved results are traversed and the symbol names and source code location information are outputted.
+**Key Features of the Rust Implementation:**
 
-The `event_handler()` function is used to handle events received from the ring buffer. It takes a `data` parameter, which points to the data in the ring buffer, and a `size` parameter, which represents the size of the data. The function first converts the `data` pointer to a pointer of type `stacktrace_event`, and then checks the sizes of the kernel and userspace stacks. If the stacks are empty, it returns directly. Next, the function outputs the process name, process ID, and CPU ID information. Then it displays the stack traces of the kernel and userspace respectively. When calling the `show_stack_trace()` function, the addresses, sizes, and process ID of the kernel and userspace stacks are passed in separately.
+1. **Type Safety**: The Rust implementation provides strong type safety through the type system, preventing memory safety issues common in C.
 
-These two functions are part of the eBPF profiling tool, used to display and process stack trace information collected by eBPF programs, helping users understand program performance and bottlenecks.
+2. **Blazesym Integration**: Uses blazesym-rs for efficient symbol resolution with support for DWARF debug information, providing detailed source file and line number information.
+
+3. **Error Handling**: Comprehensive error handling using Rust's `Result` type, ensuring robust operation.
+
+4. **Structured Logging**: Integration with the `tracing` crate for structured logging with configurable verbosity levels.
+
+5. **Command-line Interface**: Uses `clap` for a user-friendly CLI with options for:
+   - Adjustable sampling frequency (`-f`)
+   - Software vs hardware perf events (`--sw-event`)
+   - PID filtering (`-p`)
+   - Extended output format (`-E`)
+
+This integrated approach combines the performance of eBPF with the safety and expressiveness of Rust, providing a robust profiling tool for system performance analysis.
 
 ### Summary
 

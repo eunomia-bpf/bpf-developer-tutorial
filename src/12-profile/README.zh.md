@@ -1,49 +1,54 @@
 # eBPF 入门实践教程十二：使用 eBPF 程序 profile 进行性能分析
 
-本教程将指导您使用 libbpf 和 eBPF 程序进行性能分析。我们将利用内核中的 perf 机制，学习如何捕获函数的执行时间以及如何查看性能数据。
+本教程将指导您使用 eBPF 程序和 Rust 实现进行性能分析。我们将利用内核中的 perf 机制，学习如何捕获函数的执行时间以及如何查看性能数据。
 
-libbpf 是一个用于与 eBPF 交互的 C 库。它提供了创建、加载和使用 eBPF 程序所需的基本功能。本教程中，我们将主要使用 libbpf 完成开发工作。perf 是 Linux 内核中的性能分析工具，允许用户测量和分析内核及用户空间程序的性能，以及获取对应的调用堆栈。它利用内核中的硬件计数器和软件事件来收集性能数据。
+本实现使用 libbpf-rs（libbpf 的 Rust 封装）以及 blazesym 进行符号解析。perf 是 Linux 内核中的性能分析工具，允许用户测量和分析内核及用户空间程序的性能，以及获取对应的调用堆栈。它利用内核中的硬件计数器和软件事件来收集性能数据。
 
 ## eBPF 工具：profile 性能分析示例
 
-`profile` 工具基于 eBPF 实现，利用 Linux 内核中的 perf 事件进行性能分析。`profile` 工具会定期对每个处理器进行采样，以便捕获内核函数和用户空间函数的执行。它可以显示栈回溯的以下信息：
+`profile` 工具基于 eBPF 实现，利用 Linux 内核中的 perf 事件进行性能分析。`profile` 工具会定期对每个处理器进行采样，以便捕获内核函数和用户空间函数的执行。
 
-- 地址：函数调用的内存地址
-- 符号：函数名称
-- 文件名：源代码文件名称
-- 行号：源代码中的行号
+在栈回溯信息中，工具会显示函数调用的内存地址，这是最原始的位置信息。通过符号解析，这些地址会被转换为对应的函数名称，让开发者能够直接识别是哪个函数在执行。更进一步，如果调试信息可用，工具还能提供源代码文件名称和具体的行号，精确定位到代码的具体位置。这种从地址到符号，再到源代码位置的完整信息链，为开发人员提供了全方位的性能分析视角。
 
-这些信息有助于开发人员定位性能瓶颈和优化代码。更进一步，可以通过这些对应的信息生成火焰图，以便更直观的查看性能数据。
+这些详细的信息有助于开发人员快速定位性能瓶颈和优化代码。通过分析哪些函数被频繁调用，哪些代码路径消耗了最多的 CPU 时间，开发者可以有针对性地进行优化。更进一步，这些栈回溯信息可以被转换成火焰图格式，通过可视化的方式直观展示程序的执行热点，让性能问题一目了然。
 
-在本示例中，可以通过 libbpf 库编译运行它（以 Ubuntu/Debian 为例）：
+在本示例中，可以通过 Rust 和 Cargo 编译运行：
 
-**NOTE:** 首先需要安装 `cargo` 才能编译得到 `profile`, 安装方法可以参考[Cargo 手册](https://rustwiki.org/en/cargo/getting-started/installation.html)  
+**前提条件：**
+- 安装 Rust 和 Cargo（参考 [Cargo 手册](https://rustwiki.org/en/cargo/getting-started/installation.html)）
+- 安装 Clang 和开发库
 
 ```console
 $ git submodule update --init --recursive
 $ sudo apt install clang libelf1 libelf-dev zlib1g-dev
 $ make
-$ sudo ./profile 
-COMM: chronyd (pid=156) @ CPU 1
-Kernel:
-  0 [<ffffffff81ee9f56>] _raw_spin_lock_irqsave+0x16
-  1 [<ffffffff811527b4>] remove_wait_queue+0x14
-  2 [<ffffffff8132611d>] poll_freewait+0x3d
-  3 [<ffffffff81326d3f>] do_select+0x7bf
-  4 [<ffffffff81327af2>] core_sys_select+0x182
-  5 [<ffffffff81327f3a>] __x64_sys_pselect6+0xea
-  6 [<ffffffff81ed9e38>] do_syscall_64+0x38
-  7 [<ffffffff82000099>] entry_SYSCALL_64_after_hwframe+0x61
-Userspace:
-  0 [<00007fab187bfe09>]
-  1 [<000000000ee6ae98>]
+$ sudo ./profile
+```
 
-COMM: profile (pid=9843) @ CPU 6
+**示例输出：**
+```console
+[1756723652.366364804] COMM: node (pid=285503) @ CPU 64
 No Kernel Stack
 Userspace:
-  0 [<0000556deb068ac8>]
-  1 [<0000556dec34cad0>]
+0x0072e2a97f4be0: v8::internal::Scanner::Next() @ 0x15f47c0+0x420
+0x0072e2a97d9051: v8::internal::ParserBase<v8::internal::PreParser>::ParseBlock(...) @ 0x15d8fc0+0x91
+0x0072e2a97d6df0: v8::internal::ParserBase<v8::internal::PreParser>::ParseStatement(...) @ 0x15d6ce0+0x110
+...
+
+[1756723657.337170411] COMM: qemu-system-x86 (pid=4166437) @ CPU 70
+Kernel:
+0xffffffff95f403d5: _raw_spin_lock_irq @ 0xffffffff95f403b0+0x25
+0xffffffff94e2b6d8: __flush_work @ 0xffffffff94e2b630+0xa8
+0xffffffff94e2ba5c: flush_work @ 0xffffffff94e2ba40+0x1c
+0xffffffff95852672: tty_buffer_flush_work @ 0xffffffff95852660+0x12
+...
+Userspace:
+0x005849a7fbbd33: qemu_poll_ns @ 0xc63c4c+0xe7 /home/victoryang00/CXLMemSim/lib/qemu/build/../util/qemu-timer.c:347:1
+0x005849a7fb64d7: os_host_main_loop_wait @ 0xc5e473+0x64 /home/victoryang00/CXLMemSim/lib/qemu/build/../util/main-loop.c:305:11
+...
 ```
+
+该工具提供详细的堆栈跟踪和符号解析，包括函数名、偏移量以及可用时的源文件位置。
 
 ## 实现原理
 
@@ -84,13 +89,15 @@ int profile(void *ctx)
 
     event->pid = pid;
     event->cpu_id = cpu_id;
+    event->timestamp = bpf_ktime_get_ns();  // 捕获时间戳
 
     if (bpf_get_current_comm(event->comm, sizeof(event->comm)))
         event->comm[0] = 0;
 
     event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
 
-    event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
+    event->ustack_sz = 
+        bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
 
     bpf_ringbuf_submit(event, 0);
 
@@ -150,16 +157,23 @@ int profile(void *ctx)
 
     使用 `bpf_get_current_comm()` 函数获取当前进程名并将其存储到 `event->comm`。
 
-6. 获取内核栈信息：
+6. 获取时间戳：
 
     ```c
+    event->timestamp = bpf_ktime_get_ns();
+    ```
 
+    使用 `bpf_ktime_get_ns()` 函数获取内核时间戳（以纳秒为单位）。
+
+7. 获取内核栈信息：
+
+    ```c
     event->kstack_sz = bpf_get_stack(ctx, event->kstack, sizeof(event->kstack), 0);
     ```
 
     使用 `bpf_get_stack()` 函数获取内核栈信息。将结果存储在 `event->kstack`，并将其大小存储在 `event->kstack_sz`。
 
-7. 获取用户空间栈信息：
+8. 获取用户空间栈信息：
 
     ```c
     event->ustack_sz = bpf_get_stack(ctx, event->ustack, sizeof(event->ustack), BPF_F_USER_STACK);
@@ -167,7 +181,7 @@ int profile(void *ctx)
 
     同样使用 `bpf_get_stack()` 函数，但传递 `BPF_F_USER_STACK` 标志以获取用户空间栈信息。将结果存储在 `event->ustack`，并将其大小存储在 `event->ustack_sz`。
 
-8. 将事件提交到 Ring Buffer：
+9. 将事件提交到 Ring Buffer：
 
     ```c
     bpf_ringbuf_submit(event, 0);
@@ -177,44 +191,60 @@ int profile(void *ctx)
 
     这个内核态 eBPF 程序通过定期采样程序的内核栈和用户空间栈来捕获程序的执行流程。这些数据将存储在 Ring Buffer 中，以便用户态的 `profile` 程序能读取。
 
-### 用户态部分
+### 用户态部分（Rust 实现）
 
-这段代码主要负责为每个在线 CPU 设置 perf event 并附加 eBPF 程序：
+用户空间部分使用 Rust 实现，利用 libbpf-rs 和 blazesym 库来处理 eBPF 程序的加载、管理和数据处理。整个用户态程序的架构分为几个核心模块：主程序入口负责参数解析和整体流程控制，perf 模块处理性能事件的设置和管理，event 模块负责事件数据的处理和符号解析，syscall 模块封装了底层的系统调用接口。这种模块化的设计使得代码结构清晰，易于维护和扩展。
 
-```c
-static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
-                int cpu, int group_fd, unsigned long flags)
-{
-    int ret;
+**主入口点（src/main.rs）：**
 
-    ret = syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-    return ret;
+主程序是整个工具的入口点，负责协调各个模块的工作。它首先解析命令行参数，根据用户指定的选项配置采样频率、事件类型等参数。然后初始化 BPF 程序，设置性能监控事件，并启动事件循环来持续处理来自内核的性能数据。程序使用了 Rust 的所有权系统来确保资源的正确管理，在程序退出时自动清理所有分配的资源。
+```rust
+use clap::Parser;
+use libbpf_rs::PerfBufferBuilder;
+use tracing::{info, warn};
+use tracing_subscriber::{fmt, EnvFilter};
+
+#[derive(Debug, Parser)]
+struct Args {
+    #[arg(short = 'f', default_value = "50")]
+    /// 采样频率
+    freq: u64,
+    
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    /// 使用软件事件触发
+    sw_event: bool,
+    
+    #[arg(short, long)]
+    /// 按 PID 过滤（可选）
+    pid: Option<i32>,
 }
 
-int main(){
-    ...
-    for (cpu = 0; cpu < num_cpus; cpu++) {
-        /* skip offline/not present CPUs */
-        if (cpu >= num_online_cpus || !online_mask[cpu])
-            continue;
-
-        /* Set up performance monitoring on a CPU/Core */
-        pefd = perf_event_open(&attr, pid, cpu, -1, PERF_FLAG_FD_CLOEXEC);
-        if (pefd < 0) {
-            fprintf(stderr, "Fail to set up performance monitor on a CPU/Core\n");
-            err = -1;
-            goto cleanup;
-        }
-        pefds[cpu] = pefd;
-
-        /* Attach a BPF program on a CPU */
-        links[cpu] = bpf_program__attach_perf_event(skel->progs.profile, pefd);
-        if (!links[cpu]) {
-            err = -1;
-            goto cleanup;
-        }
+fn main() -> Result<()> {
+    let args = Args::parse();
+    
+    // 初始化日志系统
+    let filter = EnvFilter::from_default_env();
+    fmt().with_env_filter(filter).init();
+    
+    // 设置 perf 事件并附加 BPF 程序
+    let mut skel_builder = ProfileSkelBuilder::default();
+    let mut open_skel = skel_builder.open()?;
+    let mut skel = open_skel.load()?;
+    
+    // 在所有 CPU 上附加 perf 事件
+    for cpu in online_cpus()? {
+        let perf_fd = perf_event_open(cpu, args.pid, args.freq, args.sw_event)?;
+        skel.progs().profile().attach_perf_event(perf_fd)?;
     }
-    ...
+    
+    // 处理来自 ring buffer 的事件
+    let mut builder = PerfBufferBuilder::new(skel.maps().events());
+    builder.add_callback(handle_event);
+    let perf_buffer = builder.build()?;
+    
+    loop {
+        perf_buffer.poll(Duration::from_millis(100))?;
+    }
 }
 ```
 
@@ -232,103 +262,92 @@ for (cpu = 0; cpu < num_cpus; cpu++) {
 
 通过这种方式，用户态程序为每个在线 CPU 设置 perf event，并将 eBPF 程序附加到这些 perf event 上，从而实现对系统中所有在线 CPU 的监控。
 
-以下这两个函数分别用于显示栈回溯和处理从 ring buffer 接收到的事件：
+**事件处理和符号解析（src/event.rs）：**
 
-```c
-static void show_stack_trace(__u64 *stack, int stack_sz, pid_t pid)
-{
-    const struct blazesym_result *result;
-    const struct blazesym_csym *sym;
-    sym_src_cfg src;
-    int i, j;
+事件处理模块是整个性能分析工具的核心组件之一。它负责接收来自内核的原始事件数据，进行必要的转换和解析，最终输出人类可读的性能信息。这个模块的设计考虑了多种输出格式的需求，既支持标准的详细输出，也支持适合生成火焰图的折叠格式输出。模块中的时间戳转换逻辑将内核的单调时间戳转换为 Unix 时间戳，使得输出更容易理解和分析。符号解析功能则将原始的内存地址转换为函数名和源代码位置，大大提高了性能数据的可读性和实用性。
+```rust
+use blazesym::{Addr, Pid, Source, Symbolizer};
+use std::time::{Duration, SystemTime};
 
-    if (pid) {
-        src.src_type = SRC_T_PROCESS;
-        src.params.process.pid = pid;
-    } else {
-        src.src_type = SRC_T_KERNEL;
-        src.params.kernel.kallsyms = NULL;
-        src.params.kernel.kernel_image = NULL;
-    }
-
-    result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
-
-    for (i = 0; i < stack_sz; i++) {
-        if (!result || result->size <= i || !result->entries[i].size) {
-            printf("  %d [<%016llx>]\n", i, stack[i]);
-            continue;
-        }
-
-        if (result->entries[i].size == 1) {
-            sym = &result->entries[i].syms[0];
-            if (sym->path && sym->path[0]) {
-                printf("  %d [<%016llx>] %s+0x%llx %s:%ld\n",
-                       i, stack[i], sym->symbol,
-                       stack[i] - sym->start_address,
-                       sym->path, sym->line_no);
-            } else {
-                printf("  %d [<%016llx>] %s+0x%llx\n",
-                       i, stack[i], sym->symbol,
-                       stack[i] - sym->start_address);
-            }
-            continue;
-        }
-
-        printf("  %d [<%016llx>]\n", i, stack[i]);
-        for (j = 0; j < result->entries[i].size; j++) {
-            sym = &result->entries[i].syms[j];
-            if (sym->path && sym->path[0]) {
-                printf("        %s+0x%llx %s:%ld\n",
-                       sym->symbol, stack[i] - sym->start_address,
-                       sym->path, sym->line_no);
-            } else {
-                printf("        %s+0x%llx\n", sym->symbol,
-                       stack[i] - sym->start_address);
-            }
-        }
-    }
-
-    blazesym_result_free(result);
+pub struct Event {
+    pub timestamp: SystemTime,
+    pub pid: i32,
+    pub cpu_id: u32,
+    pub comm: String,
+    pub kstack: Vec<u64>,
+    pub ustack: Vec<u64>,
 }
 
-/* Receive events from the ring buffer. */
-static int event_handler(void *_ctx, void *data, size_t size)
-{
-    struct stacktrace_event *event = data;
-
-    if (event->kstack_sz <= 0 && event->ustack_sz <= 0)
-        return 1;
-
-    printf("COMM: %s (pid=%d) @ CPU %d\n", event->comm, event->pid, event->cpu_id);
-
-    if (event->kstack_sz > 0) {
-        printf("Kernel:\n");
-        show_stack_trace(event->kstack, event->kstack_sz / sizeof(__u64), 0);
-    } else {
-        printf("No Kernel Stack\n");
+impl Event {
+    pub fn symbolize_and_print(&self, symbolizer: &Symbolizer) {
+        println!("[{:?}] COMM: {} (pid={}) @ CPU {}",
+                 self.timestamp, self.comm, self.pid, self.cpu_id);
+        
+        // 符号化内核栈
+        if !self.kstack.is_empty() {
+            println!("Kernel:");
+            let src = Source::Kernel(Default::default());
+            let syms = symbolizer.symbolize(&src, &self.kstack).unwrap();
+            print_stack_trace(&self.kstack, &syms);
+        } else {
+            println!("No Kernel Stack");
+        }
+        
+        // 符号化用户栈
+        if !self.ustack.is_empty() {
+            println!("Userspace:");
+            let src = Source::Process(Pid::from(self.pid as u32));
+            let syms = symbolizer.symbolize(&src, &self.ustack).unwrap();
+            print_stack_trace(&self.ustack, &syms);
+        } else {
+            println!("No Userspace Stack");
+        }
     }
+}
 
-    if (event->ustack_sz > 0) {
-        printf("Userspace:\n");
-        show_stack_trace(event->ustack, event->ustack_sz / sizeof(__u64), event->pid);
-    } else {
-        printf("No Userspace Stack\n");
+fn print_stack_trace(addrs: &[u64], symbols: &[Vec<blazesym::SymbolInfo>]) {
+    for (addr, syms) in addrs.iter().zip(symbols.iter()) {
+        if syms.is_empty() {
+            println!("0x{:016x}: <no-symbol>", addr);
+        } else {
+            for sym in syms {
+                if let Some(name) = &sym.name {
+                    if let Some(file) = &sym.file_name {
+                        println!("0x{:016x}: {} @ 0x{:x}+0x{:x} {}:{}",
+                                addr, name, sym.addr, addr - sym.addr,
+                                file, sym.line_no.unwrap_or(0));
+                    } else {
+                        println!("0x{:016x}: {} @ 0x{:x}+0x{:x}",
+                                addr, name, sym.addr, addr - sym.addr);
+                    }
+                } else {
+                    println!("0x{:016x}: <unknown>", addr);
+                }
+            }
+        }
     }
-
-    printf("\n");
-    return 0;
 }
 ```
 
-`show_stack_trace()` 函数用于显示内核或用户空间的栈回溯。它接收一个 stack 参数，是一个指向内核或用户空间栈的指针，stack_sz 参数表示栈的大小，pid 参数表示要显示的进程的 ID（当显示内核栈时，设置为 0）。函数中首先根据 pid 参数确定栈的来源（内核或用户空间），然后调用 blazesym_symbolize() 函数将栈中的地址解析为符号名和源代码位置。最后，遍历解析结果，输出符号名和源代码位置信息。
+**Rust 实现的主要特性：**
 
-`event_handler()` 函数用于处理从 ring buffer 接收到的事件。它接收一个 data 参数，指向 ring buffer 中的数据，size 参数表示数据的大小。函数首先将 data 指针转换为 stacktrace_event 结构体指针，然后检查内核和用户空间栈的大小。如果栈为空，则直接返回。接下来，函数输出进程名称、进程 ID 和 CPU ID 信息。然后分别显示内核栈和用户空间栈的回溯。调用 show_stack_trace() 函数时，分别传入内核栈和用户空间栈的地址、大小和进程 ID。
+Rust 实现通过类型系统提供强类型安全，有效防止了 C 语言中常见的内存安全问题，如缓冲区溢出、空指针解引用等。这种安全性保证让开发者能够专注于业务逻辑而不必担心底层的内存管理问题。
 
-这两个函数作为 eBPF profile 工具的一部分，用于显示和处理 eBPF 程序收集到的栈回溯信息，帮助用户了解程序的运行情况和性能瓶颈。
+符号解析是性能分析工具的核心功能之一。本实现集成了 blazesym 库，它能够高效地将内存地址转换为可读的函数名和源代码位置。blazesym 支持 DWARF 调试信息的解析，这意味着即使是经过优化的二进制文件，也能获得准确的源文件路径和行号信息。这对于定位性能瓶颈的具体代码位置至关重要。
+
+错误处理方面，Rust 的 `Result` 类型提供了显式的错误处理机制。每个可能失败的操作都返回 Result 类型，强制开发者处理潜在的错误情况。这种设计避免了未处理错误导致的程序崩溃，提高了工具的稳定性和可靠性。
+
+日志系统使用了 `tracing` crate，它提供了结构化的日志记录能力。通过环境变量或命令行参数，用户可以动态调整日志级别，从 WARN、INFO、DEBUG 到 TRACE，方便在不同场景下获取适当详细程度的诊断信息。这种灵活性对于调试和问题排查非常有用。
+
+命令行界面通过 `clap` 库实现，提供了直观的参数解析和帮助信息生成。用户可以通过 `-f` 参数调整采样频率，使用 `--sw-event` 在虚拟机等不支持硬件性能计数器的环境中切换到软件事件，通过 `-p` 参数过滤特定进程，以及使用 `-E` 参数输出适合生成火焰图的扩展格式。
+
+
+这种集成方法结合了 eBPF 的性能与 Rust 的安全性和表达力，提供了一个强大的系统性能分析工具。
+
 
 ### 总结
 
-通过本篇 eBPF 入门实践教程，我们学习了如何使用 eBPF 程序进行性能分析。在这个过程中，我们详细讲解了如何创建 eBPF 程序，监控进程的性能，并从 ring buffer 中获取数据以分析栈回溯。我们还学习了如何使用 perf_event_open() 函数设置性能监控，并将 BPF 程序附加到性能事件上。在本教程中，我们还展示了如何编写 eBPF 程序来捕获进程的内核和用户空间栈信息，进而分析程序性能瓶颈。通过这个例子，您可以了解到 eBPF 在性能分析方面的强大功能。
+本实现展示了如何将 eBPF 的高性能监控能力与 Rust 的安全性和表达力相结合，创建一个强大而可靠的性能分析工具。通过这个例子，您可以了解到 eBPF 在性能分析方面的强大功能，以及如何使用现代系统编程语言来构建 eBPF 工具。
 
 如果您希望学习更多关于 eBPF 的知识和实践，请查阅 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
 
