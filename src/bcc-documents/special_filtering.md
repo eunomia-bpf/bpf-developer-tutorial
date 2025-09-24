@@ -1,12 +1,15 @@
-# 特殊过滤
+# Special Filtering
 
-某些工具具有特殊的过滤能力，主要用例是跟踪运行在容器中的进程，但这些机制是通用的，也可以在其他情况下使用。
+Some tools have special filtering capabilities, the main use case is to trace
+processes running in containers, but those mechanisms are generic and could
+be used in other cases as well.
 
-## 按 cgroups过滤
+## Filtering by cgroups
 
-某些工具有一个通过引用外部管理的固定的BPF哈希映射来按cgroup过滤的选项。
+Some tools have an option to filter by cgroup by referencing a pinned BPF hash
+map managed externally.
 
-命令示例：
+Examples of commands:
 
 ```sh
 # ./opensnoop --cgroupmap /sys/fs/bpf/test01
@@ -16,24 +19,29 @@
 # ./tcptracer --cgroupmap /sys/fs/bpf/test01
 ```
 
-上述命令将仅显示属于一个或多个cgroup的进程的结果，这些cgroup的ID由`bpf_get_current_cgroup_id()`返回，并存在固定的BPF哈希映射中。
+The commands above will only display results from processes that belong to one
+of the cgroups whose id, returned by `bpf_get_current_cgroup_id()`, is in the
+pinned BPF hash map.
 
-通过以下方式创建BPF哈希映射：
+The BPF hash map can be created by:
 
 ```sh
 # bpftool map create /sys/fs/bpf/test01 type hash key 8 value 8 entries 128 \
         name cgroupset flags 0
 ```
 
-要在新cgroup中获取一个shell，可以使用：
+To get a shell in a new cgroup, you can use:
 
 ```sh
 # systemd-run --pty --unit test bash
 ```
 
-该shell将在cgroup`/sys/fs/cgroup/unified/system.slice/test.service`中运行。
+The shell will be running in the cgroup
+`/sys/fs/cgroup/unified/system.slice/test.service`.
 
-可以使用`name_to_handle_at()`系统调用来发现cgroup ID。在examples/cgroupid中，您可以找到一个获取cgroup ID的程序示例。
+The cgroup id can be discovered using the `name_to_handle_at()` system call. In
+the examples/cgroupid, you will find an example of program to get the cgroup
+id.
 
 ```sh
 # cd examples/cgroupid
@@ -41,16 +49,17 @@
 # ./cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
 ```
 
-或者，使用Docker：
+or, using Docker:
 
 ```sh
 # cd examples/cgroupid
 # docker build -t cgroupid .
 # docker run --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup \
- cgroupid cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
+	cgroupid cgroupid hex /sys/fs/cgroup/unified/system.slice/test.service
 ```
 
-这将以主机的字节序(hexadecimal string)打印出cgroup ID，例如`77 16 00 00 01 00 00 00`。
+This prints the cgroup id as a hexadecimal string in the host endianness such
+as `77 16 00 00 01 00 00 00`.
 
 ```sh
 # FILE=/sys/fs/bpf/test01
@@ -58,32 +67,35 @@
 # bpftool map update pinned $FILE key hex $CGROUPID_HEX value hex 00 00 00 00 00 00 00 00 any
 ```
 
-现在，通过systemd-run启动的shell的cgroup ID已经存在于BPF哈希映射中，bcc工具将显示来自该shell的结果。可以添加和。从BPF哈希映射中删除而不重新启动bcc工具。
+Now that the shell started by systemd-run has its cgroup id in the BPF hash
+map, bcc tools will display results from this shell. Cgroups can be added and
+removed from the BPF hash map without restarting the bcc tool.
 
-这个功能对于将bcc工具集成到外部项目中非常有用。
+This feature is useful for integrating bcc tools in external projects.
 
-## 按命名空间选择挂载点进行过滤
+## Filtering by mount by namespace
 
-BPF哈希映射可以通过以下方式创建：
+The BPF hash map can be created by:
 
 ```sh
 # bpftool map create /sys/fs/bpf/mnt_ns_set type hash key 8 value 4 entries 128 \
         name mnt_ns_set flags 0
 ```
 
-仅执行`execsnoop`工具，过滤挂载命名空间在`/sys/fs/bpf/mnt_ns_set`中：
+Execute the `execsnoop` tool filtering only the mount namespaces
+in `/sys/fs/bpf/mnt_ns_set`:
 
 ```sh
 # tools/execsnoop.py --mntnsmap /sys/fs/bpf/mnt_ns_set
 ```
 
-在新的挂载命名空间中启动一个终端：
+Start a terminal in a new mount namespace:
 
 ```sh
 # unshare -m bash
 ```
 
-使用上述终端的挂载命名空间ID更新哈希映射：
+Update the hash map with the mount namespace ID of the terminal above:
 
 ```sh
 FILE=/sys/fs/bpf/mnt_ns_set
@@ -97,17 +109,17 @@ NS_ID_HEX="$(printf '%016x' $(stat -Lc '%i' /proc/self/ns/mnt) | sed 's/.\{2\}/&
 bpftool map update pinned $FILE key hex $NS_ID_HEX value hex 00 00 00 00 any
 ```
 
-在这个终端中执行命令：
+Execute a command in this terminal:
 
 ```sh
 # ping kinvolk.io
 ```
 
-你会看到在上述你启动的`execsnoop`终端中，这个调用被记录下来：
+You'll see how on the `execsnoop` terminal you started above the call is logged:
 
 ```sh
 # tools/execsnoop.py --mntnsmap /sys/fs/bpf/mnt_ns_set
 [sudo] password for mvb:
 PCOMM            PID    PPID   RET ARGS
 ping             8096   7970     0 /bin/ping kinvolk.io
-```。
+```
