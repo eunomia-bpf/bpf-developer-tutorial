@@ -100,7 +100,7 @@ int handle_tp(void *ctx)
 
 This program defines a handle_tp function and attaches it to the sys_enter_write tracepoint using the SEC macro (i.e., it is executed when the write system call is entered). The function retrieves the process ID of the write system call invocation using the bpf_get_current_pid_tgid and bpf_printk functions, and prints it in the kernel log.
 
-- `bpf_trace_printk()`: A simple mechanism to output information to the trace_pipe (/sys/kernel/debug/tracing/trace_pipe). This is fine for simple use cases, but it has limitations: a maximum of 3 parameters; the first parameter must be %s (i.e., a string); and the trace_pipe is globally shared in the kernel, so other programs using the trace_pipe concurrently might disrupt its output. A better approach is to use BPF_PERF_OUTPUT(), which will be discussed later.
+- `bpf_printk()`: A simple mechanism to output information to the trace_pipe (/sys/kernel/debug/tracing/trace_pipe). This is fine for simple use cases, but it has limitations: a maximum of 3 parameters; the first parameter must be %s (i.e., a string); and the trace_pipe is globally shared in the kernel, so other programs using the trace_pipe concurrently might disrupt its output. A better approach is to use BPF_PERF_OUTPUT(), which will be discussed later.
 - `void *ctx`: ctx is originally a parameter of a specific type, but since it is not used here, it is written as void *.
 - `return 0;`: This is necessary, returning 0 (to know why, refer to #139 <https://github.com/iovisor/bcc/issues/139>).
 
