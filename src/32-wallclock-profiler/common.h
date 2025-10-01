@@ -76,47 +76,52 @@ static inline int str_to_int(const char *src, void *dest)
  * @stack_sz: Size of the stack array
  * @pid: Process ID (0 for kernel)
  */
-static void show_stack_trace(struct blazesym *symbolizer, __u64 *stack, int stack_sz, pid_t pid)
+static void show_stack_trace(blaze_symbolizer *symbolizer, __u64 *stack, int stack_sz, pid_t pid)
 {
-    const struct blazesym_result *result;
-    const struct blazesym_csym *sym;
-    struct sym_src_cfg src;
-    int i, j;
+    const struct blaze_syms *syms;
+    int i;
 
-    memset(&src, 0, sizeof(src));
+    // Choose symbolization source based on pid
     if (pid) {
-        src.src_type = SRC_T_PROCESS;
-        src.params.process.pid = pid;
+        const struct blaze_symbolize_src_process src = {
+            .type_size = sizeof(src),
+            .pid = pid,
+        };
+        syms = blaze_symbolize_process_abs_addrs(symbolizer, &src, (const uint64_t *)stack, stack_sz);
     } else {
-        src.src_type = SRC_T_KERNEL;
-        src.params.kernel.kallsyms = NULL;
-        src.params.kernel.kernel_image = NULL;
+        const struct blaze_symbolize_src_kernel src = {
+            .type_size = sizeof(src),
+            .kallsyms = NULL,
+            .vmlinux = NULL,
+            .debug_syms = false,
+            .reserved = {0},
+        };
+        syms = blaze_symbolize_kernel_abs_addrs(symbolizer, &src, (const uint64_t *)stack, stack_sz);
     }
 
-    result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
+    if (!syms) {
+        fprintf(stderr, "Failed to symbolize stack trace\n");
+        return;
+    }
 
     for (i = 0; i < stack_sz; i++) {
         if (!stack[i])
             continue;
 
-        if (!result || result->size <= i || !result->entries[i].size) {
+        if (i >= syms->cnt) {
             printf("    [unknown]\n");
             continue;
         }
 
-        if (result->entries[i].size == 1) {
-            sym = &result->entries[i].syms[0];
-            printf("    %s\n", sym->symbol);
-            continue;
-        }
-
-        for (j = 0; j < result->entries[i].size; j++) {
-            sym = &result->entries[i].syms[j];
-            printf("    %s\n", sym->symbol);
+        const struct blaze_sym *sym = &syms->syms[i];
+        if (sym->name) {
+            printf("    %s\n", sym->name);
+        } else {
+            printf("    [unknown]\n");
         }
     }
 
-    blazesym_result_free(result);
+    blaze_syms_free(syms);
 }
 
 /**
@@ -128,26 +133,35 @@ static void show_stack_trace(struct blazesym *symbolizer, __u64 *stack, int stac
  * @separator: Character to use as separator between frames (typically ';')
  * @reverse: Whether to print the stack in reverse order (true for flamegraphs)
  */
-static void show_stack_trace_folded(struct blazesym *symbolizer, __u64 *stack, int stack_sz, 
+static void show_stack_trace_folded(blaze_symbolizer *symbolizer, __u64 *stack, int stack_sz,
                                     pid_t pid, char separator, bool reverse)
 {
-    const struct blazesym_result *result;
-    const struct blazesym_csym *sym;
-    struct sym_src_cfg src;
+    const struct blaze_syms *syms;
     int i;
     bool first = true;
 
-    memset(&src, 0, sizeof(src));
+    // Choose symbolization source based on pid
     if (pid) {
-        src.src_type = SRC_T_PROCESS;
-        src.params.process.pid = pid;
+        const struct blaze_symbolize_src_process src = {
+            .type_size = sizeof(src),
+            .pid = pid,
+        };
+        syms = blaze_symbolize_process_abs_addrs(symbolizer, &src, (const uint64_t *)stack, stack_sz);
     } else {
-        src.src_type = SRC_T_KERNEL;
-        src.params.kernel.kallsyms = NULL;
-        src.params.kernel.kernel_image = NULL;
+        const struct blaze_symbolize_src_kernel src = {
+            .type_size = sizeof(src),
+            .kallsyms = NULL,
+            .vmlinux = NULL,
+            .debug_syms = false,
+            .reserved = {0},
+        };
+        syms = blaze_symbolize_kernel_abs_addrs(symbolizer, &src, (const uint64_t *)stack, stack_sz);
     }
 
-    result = blazesym_symbolize(symbolizer, &src, 1, (const uint64_t *)stack, stack_sz);
+    if (!syms) {
+        fprintf(stderr, "Failed to symbolize stack trace\n");
+        return;
+    }
 
     /* For flamegraphs, we need to print the stack in reverse order */
     if (reverse) {
@@ -155,7 +169,7 @@ static void show_stack_trace_folded(struct blazesym *symbolizer, __u64 *stack, i
             if (!stack[i])
                 continue;
 
-            if (!result || result->size <= i || !result->entries[i].size) {
+            if (i >= syms->cnt || !syms->syms[i].name) {
                 if (!first) {
                     printf("%c", separator);
                 }
@@ -164,14 +178,12 @@ static void show_stack_trace_folded(struct blazesym *symbolizer, __u64 *stack, i
                 continue;
             }
 
-            if (result->entries[i].size >= 1) {
-                sym = &result->entries[i].syms[0];
-                if (!first) {
-                    printf("%c", separator);
-                }
-                printf("%s", sym->symbol);
-                first = false;
+            const struct blaze_sym *sym = &syms->syms[i];
+            if (!first) {
+                printf("%c", separator);
             }
+            printf("%s", sym->name);
+            first = false;
         }
     } else {
         /* Print stack in normal order */
@@ -179,7 +191,7 @@ static void show_stack_trace_folded(struct blazesym *symbolizer, __u64 *stack, i
             if (!stack[i])
                 continue;
 
-            if (!result || result->size <= i || !result->entries[i].size) {
+            if (i >= syms->cnt || !syms->syms[i].name) {
                 if (!first) {
                     printf("%c", separator);
                 }
@@ -188,18 +200,16 @@ static void show_stack_trace_folded(struct blazesym *symbolizer, __u64 *stack, i
                 continue;
             }
 
-            if (result->entries[i].size >= 1) {
-                sym = &result->entries[i].syms[0];
-                if (!first) {
-                    printf("%c", separator);
-                }
-                printf("%s", sym->symbol);
-                first = false;
+            const struct blaze_sym *sym = &syms->syms[i];
+            if (!first) {
+                printf("%c", separator);
             }
+            printf("%s", sym->name);
+            first = false;
         }
     }
 
-    blazesym_result_free(result);
+    blaze_syms_free(syms);
 }
 
 /* Safe string duplication */

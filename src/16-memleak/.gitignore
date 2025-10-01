@@ -6,3 +6,5 @@ package.json
 package.yaml
 ecli
 memleak
+test_memleak
+.output/

@@ -28,7 +28,7 @@ static void sig_handler(int sig)
 {
 }
 
-static struct blazesym *symbolizer;
+static blaze_symbolizer *symbolizer;
 
 static void print_map(struct offcputime_bpf *obj)
 {
@@ -256,7 +256,7 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	symbolizer = blazesym_new();
+	symbolizer = blaze_symbolizer_new();
 	if (!symbolizer) {
 		fprintf(stderr, "Failed to create a symbolizer\n");
 		err = 1;
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 	print_map(obj);
 
 cleanup:
-	blazesym_free(symbolizer);
+	blaze_symbolizer_free(symbolizer);
 	offcputime_bpf__destroy(obj);
 
 	return err != 0;

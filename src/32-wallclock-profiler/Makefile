@@ -29,16 +29,15 @@ APPS = offcputime oncputime
 # Test programs
 TEST_PROGS = tests/test_combined tests/test_multithread tests/double_bandwidth
 
-# Disable blazesym for now due to compilation issues
+# Enable blazesym with new capi
 CARGO ?= $(shell which cargo)
+ifeq ($(strip $(CARGO)),)
 BZS_APPS :=
-# ifeq ($(strip $(CARGO)),)
-# BZS_APPS :=
-# else
-# BZS_APPS := offcputime oncputime
-# # Required by libblazesym
-# ALL_LDFLAGS += -lrt -ldl -lpthread -lm
-# endif
+else
+BZS_APPS := offcputime oncputime
+# Required by libblazesym
+ALL_LDFLAGS += -lrt -ldl -lpthread -lm
+endif
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -104,16 +103,16 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
 
-$(LIBBLAZESYM_SRC)/target/release/libblazesym.a::
-	$(Q)cd $(LIBBLAZESYM_SRC) && $(CARGO) build --features=cheader,dont-generate-test-files --release
+$(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a::
+	$(Q)cd $(LIBBLAZESYM_SRC)/capi && $(CARGO) build --release
 
-$(LIBBLAZESYM_OBJ): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
+$(LIBBLAZESYM_OBJ): $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a | $(OUTPUT)
 	$(call msg,LIB, $@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/libblazesym.a $@
+	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a $@
 
-$(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
+$(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a | $(OUTPUT)
 	$(call msg,LIB,$@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/blazesym.h $@
+	$(Q)cp $(LIBBLAZESYM_SRC)/capi/include/blazesym.h $@
 
 # Build BPF code
 $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)

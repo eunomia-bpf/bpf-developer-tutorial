@@ -25,6 +25,7 @@ CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 APPS = # minimal minimal_legacy bootstrap uprobe kprobe fentry usdt sockfilter tc ksyscall
+TEST_APPS = test_memleak
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -69,12 +70,12 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(APPS)
+all: $(APPS) $(TEST_APPS)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS)
+	$(Q)rm -rf $(OUTPUT) $(APPS) $(TEST_APPS)
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -94,16 +95,16 @@ $(BPFTOOL): | $(BPFTOOL_OUTPUT)
 	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
 
 
-$(LIBBLAZESYM_SRC)/target/release/libblazesym.a::
-	$(Q)cd $(LIBBLAZESYM_SRC) && RUSTFLAGS="-A dangerous_implicit_autorefs" $(CARGO) build --features=cheader,dont-generate-test-files --release
+$(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a::
+	$(Q)cd $(LIBBLAZESYM_SRC)/capi && $(CARGO) build --release
 
-$(LIBBLAZESYM_OBJ): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
+$(LIBBLAZESYM_OBJ): $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a | $(OUTPUT)
 	$(call msg,LIB, $@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/libblazesym.a $@
+	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a $@
 
-$(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPUT)
+$(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym_c.a | $(OUTPUT)
 	$(call msg,LIB,$@)
-	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/blazesym.h $@
+	$(Q)cp $(LIBBLAZESYM_SRC)/capi/include/blazesym.h $@
 
 # Build BPF code
 $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)
@@ -136,6 +137,11 @@ $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 
 # delete failed targets
 .DELETE_ON_ERROR:
+
+# Test program (no BPF, just plain C)
+test_memleak: test_memleak.c
+	$(call msg,TEST,$@)
+	$(Q)$(CC) $(CFLAGS) $< -o $@
 
 # keep intermediate (.skel.h, .bpf.o, etc) targets
 .SECONDARY:

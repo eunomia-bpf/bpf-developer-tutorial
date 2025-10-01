@@ -47,7 +47,7 @@ struct key_ext_t {
 	__u64 v;
 };
 
-static struct blazesym *symbolizer;
+static blaze_symbolizer *symbolizer;
 
 static int nr_cpus;
 
@@ -330,16 +330,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	symbolizer = blazesym_new();
+	symbolizer = blaze_symbolizer_new();
 	if (!symbolizer) {
-		fprintf(stderr, "Failed to create a symbolizer\n");
+		fprintf(stderr, "Failed to create a blazesym symbolizer\n");
 		return 1;
 	}
 
 	obj = oncputime_bpf__open();
 	if (!obj) {
 		fprintf(stderr, "failed to open BPF object\n");
-		blazesym_free(symbolizer);
+		blaze_symbolizer_free(symbolizer);
 		return 1;
 	}
 
@@ -407,7 +407,7 @@ cleanup:
 			bpf_link__destroy(links[i]);
 	}
 	
-	blazesym_free(symbolizer);
+	blaze_symbolizer_free(symbolizer);
 	oncputime_bpf__destroy(obj);
 
 	return err != 0;
