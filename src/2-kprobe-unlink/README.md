@@ -143,7 +143,7 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 ## Summary
 
-In this article's example, we learned how to use eBPF's kprobe and kretprobe to capture the unlink system call. For more examples and detailed development guides, please refer to the official documentation of eunomia-bpf: <https://github.com/eunomia-bpf/eunomia-bpf>
+In this article's example, we learned how to use eBPF's kprobe and kretprobe to capture the unlink system call.
 
 This article is the second part of the introductory eBPF development tutorial. The next article will explain how to use fentry to monitor and capture the unlink system call in eBPF.
 

@@ -120,6 +120,4 @@ struct {
 
 This allows sending information directly to the user space.
 
-For more examples and detailed development guide, please refer to the official documentation of eunomia-bpf: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
-
 If you want to learn more about eBPF knowledge and practice, you can visit our tutorial code repository [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) to get more examples and complete tutorials."
