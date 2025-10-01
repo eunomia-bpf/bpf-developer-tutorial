@@ -14,7 +14,7 @@ echo "✅ Test program built successfully"
 echo
 
 # Make the profiler script executable
-chmod +x combined_profiler.py
+chmod +x wallclock_profiler.py
 
 echo "🚀 Starting test program in background..."
 ./test_program &
@@ -38,7 +38,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Run the combined profiler
-python3 combined_profiler.py $TEST_PID -d 15 -f 99 -m 500 -o demo_results
+python3 wallclock_profiler.py $TEST_PID -d 15 -f 99 -m 500 -o demo_results
 
 echo
 echo "🧹 Cleaning up test program..."

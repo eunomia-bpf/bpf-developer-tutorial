@@ -7,7 +7,7 @@ both on-CPU and off-CPU activity for a given process, then combines the results
 into a unified flamegraph.
 
 Usage:
-    python3 combined_profiler.py <PID> [OPTIONS]
+    python3 wallclock_profiler.py <PID> [OPTIONS]
 """
 
 import argparse
@@ -368,8 +368,8 @@ class CombinedProfiler:
                 return None
                 
             if flamegraph_script.exists():
-                # Make it executable
-                os.chmod(flamegraph_script, 0o755)
+                # Make it executable (owner only for security)
+                os.chmod(flamegraph_script, 0o700)  # rwx------
                 print("FlameGraph tools cloned successfully")
                 # Create custom script
                 custom_script = self.script_dir / "combined_flamegraph.pl"
@@ -414,9 +414,9 @@ class CombinedProfiler:
             
             with open(custom_script, 'w') as f:
                 f.write(content)
-            
-            # Make it executable
-            os.chmod(custom_script, 0o755)
+
+            # Make it executable (owner only for security)
+            os.chmod(custom_script, 0o700)  # rwx------
             print("Custom flamegraph script created with combined color palette")
             
         except Exception as e:
@@ -838,18 +838,18 @@ def main():
         epilog="""
 Examples:
   # Profile PID 1234 for 30 seconds (default)
-  python3 combined_profiler.py 1234
-  
+  python3 wallclock_profiler.py 1234
+
   # Profile for 60 seconds with custom sampling frequency
-  python3 combined_profiler.py 1234 -d 60 -f 99
-  
+  python3 wallclock_profiler.py 1234 -d 60 -f 99
+
   # Use custom output prefix for generated files
-  python3 combined_profiler.py 1234 -o myapp_profile -m 5000
-  
+  python3 wallclock_profiler.py 1234 -o myapp_profile -m 5000
+
   # Build and run test program first:
   gcc -o test_program test_program.c
   ./test_program &
-  python3 combined_profiler.py $!
+  python3 wallclock_profiler.py $!
         """
     )
     
