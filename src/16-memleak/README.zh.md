@@ -459,6 +459,8 @@ int attach_uprobes(struct memleak_bpf *skel)
 
 ## 编译运行
 
+本实现使用最新的 **blazesym v0.2.0** 库进行符号解析，该库通过 `capi` 包提供了改进的性能和现代化的 C API。
+
 ```console
 $ make
 $ sudo ./memleak 
@@ -477,6 +479,35 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
         6 [<ffffffff82000b62>] <null sym>
 ...
 ```
+
+## 测试 memleak
+
+本仓库包含一个测试程序（`test_memleak.c`），该程序会故意泄漏内存以供测试使用。您可以编译并运行它来验证 memleak 是否能正确检测内存泄漏：
+
+```console
+$ make test_memleak
+$ ./test_memleak &
+$ sudo ./memleak -p $(pidof test_memleak)
+using default object: libc.so.6
+using page size: 4096
+tracing kernel: false
+Tracing outstanding memory allocs...  Hit Ctrl-C to end
+[19:31:49] Top 1 stacks with outstanding allocations:
+10240 bytes in 5 allocations from stack
+	0 [<00005a7ea0a34212>] leak_with_loop+0x1f
+	1 [<00005a7ea0a3428e>] main+0x6e
+	2 [<00007b4ea482a1ca>] <null sym>
+	3 [<00007b4ea482a28b>] __libc_start_main+0x8b
+	4 [<00005a7ea0a34105>] _start+0x25
+```
+
+如上所示，memleak 成功地：
+- 检测到 **10240 字节的 5 次分配**（5 × 2048 字节）发生了泄漏
+- 识别出泄漏函数 **leak_with_loop+0x1f** 及其正确的偏移量
+- 提供了完整的调用栈，显示泄漏源自 `main` 函数
+- 使用新的 **blazesym v0.2.0** C API 进行快速准确的符号解析
+
+该测试演示了更新 blazesym 库后的 memleak 可以有效地跟踪内存分配，并精确定位导致内存泄漏的函数。
 
 ## 总结
 

@@ -419,6 +419,8 @@ Reference: <https://github.com/iovisor/bcc/blob/master/libbpf-tools/memleak.c>
 
 ## Compile and Run
 
+This implementation uses the latest **blazesym v0.2.0** library for symbol resolution, which provides improved performance and a modern C API through the `capi` package.
+
 ```console
 $ make
 $ sudo ./memleak
@@ -437,6 +439,35 @@ Tracing outstanding memory allocs...  Hit Ctrl-C to end
         6 [<ffffffff82000b62>] <null sym>
 ...
 ```
+
+## Testing memleak
+
+This repository includes a test program (`test_memleak.c`) that intentionally leaks memory for testing purposes. You can build and run it to verify that memleak correctly detects memory leaks:
+
+```console
+$ make test_memleak
+$ ./test_memleak &
+$ sudo ./memleak -p $(pidof test_memleak)
+using default object: libc.so.6
+using page size: 4096
+tracing kernel: false
+Tracing outstanding memory allocs...  Hit Ctrl-C to end
+[19:31:49] Top 1 stacks with outstanding allocations:
+10240 bytes in 5 allocations from stack
+	0 [<00005a7ea0a34212>] leak_with_loop+0x1f
+	1 [<00005a7ea0a3428e>] main+0x6e
+	2 [<00007b4ea482a1ca>] <null sym>
+	3 [<00007b4ea482a28b>] __libc_start_main+0x8b
+	4 [<00005a7ea0a34105>] _start+0x25
+```
+
+As shown above, memleak successfully:
+- Detected **10240 bytes in 5 allocations** (5 × 2048 bytes) that were leaked
+- Identified the leaking function **leak_with_loop+0x1f** with the correct offset
+- Provided the complete call stack showing the leak originated from `main` function
+- Used the new **blazesym v0.2.0** C API for fast and accurate symbol resolution
+
+The test demonstrates that memleak with the updated blazesym library can effectively trace memory allocations and pinpoint the exact functions responsible for memory leaks.
 
 ## Summary
 

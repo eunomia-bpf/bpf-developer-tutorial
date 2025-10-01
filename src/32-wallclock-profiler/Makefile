@@ -21,18 +21,20 @@ VMLINUX := ../third_party/vmlinux/$(ARCH)/vmlinux.h
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -g -Wall
+CFLAGS := -g -Wall -fno-omit-frame-pointer
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = # minimal minimal_legacy bootstrap uprobe kprobe fentry usdt sockfilter tc ksyscall
-TEST_APPS = test_memleak
+APPS = offcputime oncputime
 
+# Test programs
+TEST_PROGS = tests/test_combined tests/test_multithread tests/double_bandwidth
+
+# Enable blazesym with new capi
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
 BZS_APPS :=
 else
-BZS_APPS := memleak
-APPS += $(BZS_APPS)
+BZS_APPS := offcputime oncputime
 # Required by libblazesym
 ALL_LDFLAGS += -lrt -ldl -lpthread -lm
 endif
@@ -70,12 +72,18 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 .PHONY: all
-all: $(APPS) $(TEST_APPS)
+all: $(APPS) $(TEST_PROGS)
+
+.PHONY: tests
+tests: $(TEST_PROGS)
+
+.PHONY: all-with-tests
+all-with-tests: all tests
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS) $(TEST_APPS)
+	$(Q)rm -rf $(OUTPUT) $(APPS) $(TEST_PROGS)
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -135,13 +143,21 @@ $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
+# Build test programs
+tests/test_combined: tests/test_combined.c
+	$(call msg,TEST,$@)
+	$(Q)$(CC) $(CFLAGS) $< -o $@ -lpthread
+
+tests/test_multithread: tests/test_multithread.c
+	$(call msg,TEST,$@)
+	$(Q)$(CC) $(CFLAGS) $< -o $@ -lpthread -lm
+
+tests/double_bandwidth: tests/double_bandwidth.c
+	$(call msg,TEST,$@)
+	$(Q)$(CC) $(CFLAGS) -D_GNU_SOURCE -std=c11 -O3 $< -o $@ -lpthread -lm
+
 # delete failed targets
 .DELETE_ON_ERROR:
-
-# Test program (no BPF, just plain C)
-test_memleak: test_memleak.c
-	$(call msg,TEST,$@)
-	$(Q)$(CC) $(CFLAGS) $< -o $@
 
 # keep intermediate (.skel.h, .bpf.o, etc) targets
 .SECONDARY:
