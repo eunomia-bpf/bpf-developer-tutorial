@@ -410,6 +410,46 @@ Performance Analysis:
 - Traditional samples at fixed intervals (100ms)
 ```
 
+### Hardware RAPL Energy Measurements
+
+The energy monitor now includes **native support for Intel RAPL (Running Average Power Limit) hardware counters**, providing real-time energy measurements directly from CPU hardware instead of relying on software estimation. RAPL is available on Intel processors since Sandy Bridge (2011) and AMD processors since Zen+ (2019).
+
+When RAPL is available, the tool automatically detects and uses hardware energy counters through the Linux `perf_event` interface. This provides several significant advantages over software estimation: it captures actual power consumption including dynamic frequency scaling (DVFS), CPU idle states (C-states), and voltage changes that simple time-based estimation cannot account for. RAPL measures multiple energy domains including the entire CPU package, individual cores, integrated graphics (uncore), and DRAM, giving you a complete picture of system energy consumption.
+
+To use RAPL hardware measurements:
+
+```bash
+# Automatic RAPL detection (default behavior)
+sudo ./energy_monitor -d 10
+
+# Disable RAPL and use software estimation
+sudo ./energy_monitor -d 10 --no-rapl -p 15.0
+
+# Check RAPL availability on your system
+ls /sys/bus/event_source/devices/power/events/
+```
+
+Example output with RAPL enabled:
+
+```
+RAPL initialized with 2 domains
+Using hardware RAPL energy counters
+Energy monitor started... Hit Ctrl-C to end.
+
+=== Energy Usage Summary ===
+PID        COMM             Runtime (ms)    Energy (mJ)
+...
+
+=== RAPL Hardware Energy Measurements ===
+pkg       : 231.716422 J (231716.42 mJ)
+cores     : 159.937200 J (159937.20 mJ)
+
+Total RAPL energy: 391.653622 J (391653.62 mJ)
+Measurement method: Hardware RAPL counters
+```
+
+The RAPL measurements show total system energy consumption across all processes, while the per-process CPU time breakdown helps identify which applications consumed the most CPU cycles. For more information about RAPL and power capping, see the [Linux Powercap Framework documentation](https://docs.kernel.org/power/powercap/powercap.html).
+
 ## Understanding Energy Monitoring Trade-offs
 
 While our energy monitor provides valuable insights, it's important to understand its limitations and trade-offs:
@@ -470,25 +510,17 @@ As a **teaching tool**, energy monitoring makes abstract concepts tangible by sh
 
 ## Extending the Energy Monitor
 
-The current implementation provides a solid foundation for building more sophisticated energy monitoring capabilities. Several enhancement directions offer significant value for different deployment scenarios.
+The current implementation includes **native RAPL hardware counter support** for real-time energy measurements and provides a solid foundation for building more sophisticated energy monitoring capabilities. Several enhancement directions offer significant value for different deployment scenarios.
 
-| Extension Area | Implementation Approach | Value Proposition |
-|---------------|------------------------|-------------------|
-| **Hardware Counter Integration** | Integrate RAPL counters via `PERF_TYPE_POWER` events | Replace estimation with actual hardware measurements |
-| **Per-Core Power Modeling** | Track core assignment and model P-core vs E-core differences | Accurate attribution on heterogeneous processors |
-| **Workload Classification** | Classify CPU-intensive, memory-bound, I/O-bound, and idle patterns | Enable workload-specific power optimization |
-| **Container Runtime Integration** | Aggregate energy by container/pod for Kubernetes environments | Cloud-native energy attribution and billing |
-| **Real-time Visualization** | Web dashboard with live energy consumption graphs | Immediate feedback for energy optimization |
+| Extension Area | Implementation Status | Value Proposition |
+|---------------|----------------------|-------------------|
+| **Hardware Counter Integration** | ✅ **Implemented** - RAPL counters via `perf_event_open()` | Actual hardware measurements with automatic fallback |
+| **Per-Core Power Modeling** | Future enhancement | Accurate attribution on heterogeneous processors (P-cores vs E-cores) |
+| **Workload Classification** | Future enhancement | Enable workload-specific power optimization |
+| **Container Runtime Integration** | Future enhancement | Cloud-native energy attribution and billing |
+| **Real-time Visualization** | Future enhancement | Immediate feedback for energy optimization |
 
-**Hardware counter integration** represents the most impactful enhancement, replacing our simplified estimation model with actual hardware measurements through RAPL (Running Average Power Limit) interfaces. Modern processors provide detailed energy counters that can be read via performance events, offering precise energy measurements down to individual CPU packages.
-
-```c
-// Read RAPL counters for actual energy measurements
-struct perf_event_attr attr = {
-    .type = PERF_TYPE_POWER,
-    .config = PERF_COUNT_HW_POWER_PKG,
-};
-```
+**Hardware counter integration (✅ Implemented)**: The energy monitor now includes full RAPL support, reading actual hardware energy counters through the Linux `perf_event` interface. This provides precise energy measurements across multiple domains (package, cores, DRAM) and automatically falls back to software estimation when RAPL is unavailable. See the [Hardware RAPL Energy Measurements](#hardware-rapl-energy-measurements) section above for usage details.
 
 **Per-core power modeling** becomes essential on heterogeneous processors where performance cores and efficiency cores have dramatically different power characteristics. Tracking which core each process runs on enables accurate energy attribution:
 
