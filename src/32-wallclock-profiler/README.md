@@ -18,7 +18,7 @@ The tools in this tutorial solve both problems by running two eBPF programs simu
 
 Here's an example flame graph showing combined on-CPU and off-CPU profiling results:
 
-![Combined Wall Clock Flame Graph Example](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/32-wallclock-profiler/tests/example.svg)
+![Combined Wall Clock Flame Graph Example](https://raw.githubusercontent.com/eunomia-bpf/bpf-developer-tutorial/c9d3d65c15fb6528ee378657a05ec0b062eff5b7/src/32-wallclock-profiler/tests/example.svg)
 
 In this visualization, you can clearly see the distinction between CPU-intensive work (shown in red/warm colors marked with `_[c]`) and blocking operations (shown in blue/cool colors marked with `_[o]`). The relative widths immediately reveal where your application spends its wall clock time.
 

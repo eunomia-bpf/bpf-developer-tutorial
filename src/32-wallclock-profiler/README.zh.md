@@ -18,7 +18,7 @@ Off-CPU 分析器则反其道而行之。它们跟踪线程何时休眠和唤醒
 
 下面是一个结合 on-CPU 和 off-CPU 分析结果的示例火焰图:
 
-![结合挂钟时间火焰图示例](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/32-wallclock-profiler/tests/example.svg)
+![结合挂钟时间火焰图示例](https://raw.githubusercontent.com/eunomia-bpf/bpf-developer-tutorial/c9d3d65c15fb6528ee378657a05ec0b062eff5b7/src/32-wallclock-profiler/tests/example.svg)
 
 在这个可视化中,你可以清楚地看到 CPU 密集型工作(以红色/暖色显示,标记为 `_[c]`)和阻塞操作(以蓝色/冷色显示,标记为 `_[o]`)之间的区别。相对宽度立即揭示了应用程序在哪里花费了挂钟时间。
 
