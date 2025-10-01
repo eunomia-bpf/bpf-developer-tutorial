@@ -4,25 +4,15 @@ Have you ever wondered what's happening under the hood when your CUDA applicatio
 
 ## Introduction to CUDA and GPU Tracing
 
-CUDA (Compute Unified Device Architecture) is NVIDIA's parallel computing platform and programming model that enables developers to use NVIDIA GPUs for general-purpose processing. When you run a CUDA application, several things happen behind the scenes:
+CUDA (Compute Unified Device Architecture) is NVIDIA's parallel computing platform and programming model that enables developers to use NVIDIA GPUs for general-purpose processing. When you run a CUDA application, a typical workflow begins with the host (CPU) allocating memory on the device (GPU), followed by data transfer from host memory to device memory, then GPU kernels (functions) are launched to process the data, after which results are transferred back from device to host, and finally device memory is freed.
 
-1. The host (CPU) allocates memory on the device (GPU)
-2. Data is transferred from host to device memory
-3. GPU kernels (functions) are launched to process the data
-4. Results are transferred back from device to host
-5. Device memory is freed
+Each operation in this process involves CUDA API calls, such as `cudaMalloc` for memory allocation, `cudaMemcpy` for data transfer, and `cudaLaunchKernel` for kernel execution. Tracing these calls can provide valuable insights for debugging and performance optimization, but this isn't straightforward. GPU operations are asynchronous, meaning the CPU can continue executing after submitting work to the GPU without waiting, and traditional debugging tools often can't penetrate this asynchronous boundary to access GPU internal state.
 
-Each of these operations involves CUDA API calls like `cudaMalloc`, `cudaMemcpy`, and `cudaLaunchKernel`. Tracing these calls can provide valuable insights for debugging and performance optimization, but this isn't straightforward. GPU operations happen asynchronously, and traditional debugging tools often can't access GPU internals.
+This is where eBPF comes to the rescue! By using uprobes, we can intercept CUDA API calls in the user-space CUDA runtime library (`libcudart.so`) before they reach the GPU driver, capturing critical information. This approach allows us to gain deep insights into memory allocation sizes and patterns, data transfer directions and volumes, kernel launch parameters, error codes and failure reasons returned by the API, and precise timing information for each operation. By intercepting these calls on the CPU side, we can build a complete view of an application's GPU usage behavior without modifying application code or relying on proprietary profiling tools.
 
-This is where eBPF comes to the rescue! By using uprobes, we can intercept CUDA API calls in the user-space CUDA runtime library (`libcudart.so`) before they reach the GPU. This gives us visibility into:
+This tutorial primarily focuses on CPU-side CUDA API tracing, which provides a macro view of how applications interact with the GPU. However, CPU-side tracing alone has clear limitations. When a CUDA API function like `cudaLaunchKernel` is called, it merely submits a work request to the GPU. We can see when the kernel was launched, but we cannot observe what actually happens inside the GPU. Critical details such as how thousands of threads access memory, their execution patterns, branching behavior, and synchronization operations remain invisible. These details are crucial for understanding performance bottlenecks, such as whether memory access patterns cause coalesced access failures or whether severe thread divergence reduces execution efficiency.
 
-- Memory allocation sizes and patterns
-- Data transfer directions and sizes
-- Kernel launch parameters
-- Error codes and failures
-- Timing of operations
-
-This blog mainly focuses on the CPU side of the CUDA API calls, for fined-grained tracing of GPU operations, you can see [eGPU](https://dl.acm.org/doi/10.1145/3723851.3726984) paper and [bpftime](https://github.com/eunomia-bpf/bpftime) project.
+To achieve fine-grained tracing of GPU operations, eBPF programs need to run directly on the GPU. This is exactly what the eGPU paper and [bpftime GPU examples](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu) explore. bpftime converts eBPF programs into PTX instructions that GPUs can execute, then dynamically modifies CUDA binaries at runtime to inject these eBPF programs at kernel entry and exit points, enabling observation of GPU internal behavior. This approach allows developers to access GPU-specific information such as block indices, thread indices, global timers, and perform measurements and tracing on critical paths during kernel execution. This GPU-internal observability is essential for diagnosing complex performance issues, understanding kernel execution behavior, and optimizing GPU computation—capabilities that CPU-side tracing simply cannot provide.
 
 ## Key CUDA Functions We Trace
 
@@ -504,5 +494,7 @@ The code of this tutorial is in [https://github.com/eunomia-bpf/bpf-developer-tu
 - NVIDIA CUDA Runtime API: [https://docs.nvidia.com/cuda/cuda-runtime-api/](https://docs.nvidia.com/cuda/cuda-runtime-api/)
 - libbpf Documentation: [https://libbpf.readthedocs.io/](https://libbpf.readthedocs.io/)
 - Linux uprobes Documentation: [https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt](https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt)
+- eGPU: eBPF on GPUs: <https://dl.acm.org/doi/10.1145/3723851.3726984>
+- bpftime GPU Examples: <https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu>
 
 If you'd like to dive deeper into eBPF, check out our tutorial repository at [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) or visit our website at [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). 

@@ -1,28 +1,14 @@
-# eBPF 与机器学习可观测：追踪 CUDA GPU 操作
+# eBPF 教程：追踪 CUDA GPU 操作
 
 你是否曾经想知道CUDA应用程序在运行时底层发生了什么？GPU操作由于发生在具有独立内存空间的设备上，因此调试和性能分析变得极为困难。在本教程中，我们将构建一个强大的基于eBPF的追踪工具，让你实时查看CUDA API调用。
 
 ## CUDA和GPU追踪简介
 
-CUDA（Compute Unified Device Architecture，计算统一设备架构）是NVIDIA的并行计算平台和编程模型，使开发者能够利用NVIDIA GPU进行通用计算。当你运行CUDA应用程序时，后台会发生以下步骤：
+CUDA（Compute Unified Device Architecture，计算统一设备架构）是NVIDIA的并行计算平台和编程模型，使开发者能够利用NVIDIA GPU进行通用计算。当你运行CUDA应用程序时，一个典型的工作流程从主机（CPU）在设备（GPU）上分配内存开始，随后数据从主机内存传输到设备内存，接着GPU内核（函数）被启动以处理数据，处理完成后结果从设备传回主机，最后设备内存被释放。
 
-1. 主机（CPU）在设备（GPU）上分配内存
-2. 数据从主机内存传输到设备内存
-3. GPU内核（函数）被启动以处理数据
-4. 结果从设备传回主机
-5. 设备内存被释放
+这个过程中的每个操作都涉及CUDA API调用，例如用于内存分配的`cudaMalloc`、用于数据传输的`cudaMemcpy`以及用于启动内核的`cudaLaunchKernel`。追踪这些调用可以提供宝贵的调试和性能优化信息，但这并不简单。GPU操作是异步的，这意味着CPU在提交工作给GPU后可以继续执行而无需等待，而传统调试工具通常无法穿透这层异步边界来访问GPU内部状态。
 
-每个操作都涉及CUDA API调用，如`cudaMalloc`、`cudaMemcpy`和`cudaLaunchKernel`。追踪这些调用可以提供宝贵的调试和性能优化信息，但这并不简单。GPU操作是异步的，传统调试工具通常无法访问GPU内部。
-
-这时eBPF就派上用场了！通过使用uprobes，我们可以在用户空间CUDA运行库（`libcudart.so`）中拦截CUDA API调用，在它们到达GPU之前。这使我们能够了解：
-
-- 内存分配大小和模式
-- 数据传输方向和大小
-- 内核启动参数
-- 错误代码和失败原因
-- 操作的时间信息
-
-本教程主要关注CPU侧的CUDA API调用，对于细粒度的GPU操作追踪，你可以参考[eGPU](https://dl.acm.org/doi/10.1145/3723851.3726984)论文和[bpftime](https://github.com/eunomia-bpf/bpftime)项目。
+这时eBPF就派上用场了！通过使用uprobes，我们可以在用户空间CUDA运行库（`libcudart.so`）中拦截CUDA API调用，在它们到达GPU驱动之前捕获关键信息。这种方法使我们能够深入了解内存分配的大小和模式、数据传输的方向和大小、内核启动时使用的参数、API返回的错误代码和失败原因，以及各个操作的精确时间信息。通过在CPU侧拦截这些调用，我们可以构建应用程序GPU使用行为的完整视图，而无需修改应用程序代码或依赖专有的性能分析工具。
 
 ## eBPF技术背景与GPU追踪的挑战
 
@@ -31,6 +17,10 @@ eBPF（Extended Berkeley Packet Filter）最初是为网络数据包过滤而设
 传统的系统追踪方法往往存在显著的性能开销和功能限制。例如，使用strace等工具追踪系统调用会导致每个被追踪的系统调用产生数倍的性能损失，因为它需要在内核空间和用户空间之间频繁切换。相比之下，eBPF程序直接在内核空间执行，可以就地处理事件，只在必要时才将汇总或过滤后的数据传递给用户空间，从而大大减少了上下文切换的开销。
 
 GPU追踪面临着独特的挑战。现代GPU是高度并行的处理器，包含数千个小型计算核心，这些核心可以同时执行数万个线程。GPU具有自己的内存层次结构，包括全局内存、共享内存、常数内存和纹理内存，这些内存的访问模式对性能有着巨大影响。更复杂的是，GPU操作通常是异步的，这意味着当CPU启动一个GPU操作后，它可以继续执行其他任务，而无需等待GPU操作完成。另外，CUDA编程模型的异步特性使得调试变得特别困难。当一个内核函数在GPU上执行时，CPU无法直接观察到GPU的内部状态。错误可能在GPU上发生，但直到后续的同步操作（如cudaDeviceSynchronize或cudaStreamSynchronize）时才被检测到，这使得错误源的定位变得困难。此外，GPU内存错误（如数组越界访问）可能导致静默的数据损坏，而不是立即的程序崩溃，这进一步增加了调试的复杂性。
+
+本教程主要关注CPU侧的CUDA API调用，这为我们提供了应用程序与GPU交互的宏观视图。然而，仅在CPU侧进行追踪存在明显的局限性。当CUDA API函数如`cudaLaunchKernel`被调用时，它只是向GPU提交了一个工作请求，我们可以看到内核何时被启动，但无法观察到GPU内部实际发生了什么。GPU上运行的成千上万个线程如何访问内存、它们的执行模式、分支行为和同步操作等关键细节都是不可见的。这些细节对于理解性能瓶颈至关重要，比如内存访问模式是否导致了合并访问失败，或者是否存在严重的线程分化导致执行效率降低。
+
+要实现对GPU操作的细粒度追踪，需要直接在GPU上运行eBPF程序。这正是eGPU论文和[bpftime GPU示例](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu)所探索的方向。bpftime通过将eBPF程序转换为GPU可以执行的PTX指令，然后在运行时动态修改CUDA二进制文件，将这些eBPF程序注入到GPU内核的入口和出口点，从而实现对GPU内部行为的观测。这种方法使得开发者可以访问GPU特有的信息，如块索引、线程索引、全局计时器等，并且可以在GPU内核执行的关键路径上进行测量和追踪。这种GPU内部的可观测性对于诊断复杂的性能问题、理解内核执行行为以及优化GPU计算至关重要，是CPU侧追踪无法企及的。
 
 ## 我们追踪的关键CUDA函数
 
@@ -511,5 +501,7 @@ cudaFree:               0.00 µs
 - NVIDIA CUDA运行时API：[https://docs.nvidia.com/cuda/cuda-runtime-api/](https://docs.nvidia.com/cuda/cuda-runtime-api/)
 - libbpf文档：[https://libbpf.readthedocs.io/](https://libbpf.readthedocs.io/)
 - Linux uprobes文档：[https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt](https://www.kernel.org/doc/Documentation/trace/uprobetracer.txt)
+- eGPU: eBPF on GPUs: <https://dl.acm.org/doi/10.1145/3723851.3726984>
+- bpftime GPU示例: <https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu>
 
 如果你想深入了解eBPF，请查看我们的教程仓库：[https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial) 或访问我们的网站：[https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/)。
