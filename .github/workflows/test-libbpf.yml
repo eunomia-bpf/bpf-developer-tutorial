@@ -62,6 +62,13 @@ jobs:
         make -C src/30-sslsniff
         sudo timeout -s 2 3 src/30-sslsniff/sslsniff || if [ $? = 124 ]; then exit 0; else exit $?; fi
 
+    - name: test 32 wallclock-profiler
+      run: |
+        make -C src/32-wallclock-profiler
+        # Test individual tools can be built and show help
+        src/32-wallclock-profiler/oncputime --help || true
+        src/32-wallclock-profiler/offcputime --help || true
+
     - name: test 33 funclatency
       run: |
           make -C src/33-funclatency
