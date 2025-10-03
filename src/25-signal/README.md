@@ -154,7 +154,7 @@ In summary, this eBPF program provides a method that allows system administrator
 
 ## Compilation and Execution
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the `ecc` compiler toolchain and `ecli` runtime. We use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 Compilation:
 

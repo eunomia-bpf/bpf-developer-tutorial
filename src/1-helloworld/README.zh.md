@@ -33,9 +33,9 @@ eBPF 程序主要由两部分构成：内核态部分和用户态部分。内核
 7. 卸载eBPF程序：当不再需要eBPF程序时，用户态程序应使用BCC API将其从内核空间卸载。
 8. 调试与优化：使用 bpftool 等工具进行eBPF程序的调试和优化，提高程序性能和稳定性。
 
-通过以上流程，您可以使用BCC工具开发、编译、运行和调试eBPF程序。请注意，其他框架（如libbpf、cilium/ebpf和eunomia-bpf）的开发流程大致相似但略有不同，因此在选择框架时，请参考相应的官方文档和示例。
+通过以上流程，您可以使用开发、编译、运行和调试eBPF程序。请注意，其他框架（如libbpf、cilium/ebpf和eunomia-bpf）的开发流程大致相似但略有不同，因此在选择框架时，请参考相应的官方文档和示例。
 
-通过这个过程，你可以开发出一个能够在内核中运行的 eBPF 程序。eunomia-bpf 是一个开源的 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。它基于 libbpf 的 CO-RE 轻量级开发框架，支持通过用户态 WASM 虚拟机控制 eBPF 程序的加载和执行，并将预编译的 eBPF 程序打包为通用的 JSON 或 WASM 模块进行分发。我们会使用 eunomia-bpf 进行演示。
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 ## 下载安装 eunomia-bpf 开发工具
 
@@ -97,11 +97,15 @@ int handle_tp(void *ctx)
 }
 ```
 
-这段程序通过定义一个 handle_tp 函数并使用 SEC 宏把它附加到 sys_enter_write tracepoint（即在进入 write 系统调用时执行）。该函数通过使用 bpf_get_current_pid_tgid 和 bpf_printk 函数获取调用 write 系统调用的进程 ID，并在内核日志中打印出来。
+这个程序定义了一个 handle_tp 函数，通过 SEC 宏将其附加到 sys_enter_write 追踪点。每当进入 write 系统调用时，这个函数就会被执行。它获取当前进程的 ID 并使用 `bpf_printk` 打印到内核日志。
 
-- `bpf_printk()`： 一种将信息输出到trace_pipe(/sys/kernel/debug/tracing/trace_pipe)简单机制。 在一些简单用例中这样使用没有问题， but它也有一些限制：最多3 参数； 第一个参数必须是%s(即字符串)；同时trace_pipe在内核中全局共享，其他并行使用trace_pipe的程序有可能会将 trace_pipe 的输出扰乱。 一个更好的方式是通过 BPF_PERF_OUTPUT(), 稍后将会讲到。
-- `void *ctx`：ctx本来是具体类型的参数， 但是由于我们这里没有使用这个参数，因此就将其写成void *类型。
-- `return 0`;：必须这样，返回0 (如果要知道why, 参考 #139  <https://github.com/iovisor/bcc/issues/139>)。
+`SEC("tp/syscalls/sys_enter_write")` 宏告诉 eBPF 加载器将函数附加到哪里。格式是 `tp` 表示追踪点，`syscalls` 是子系统，`sys_enter_write` 是具体的事件名称。你可以通过运行 `sudo ls /sys/kernel/debug/tracing/events/syscalls/` 来查看系统中可用的追踪点。
+
+代码开头的 `BPF_NO_GLOBAL_DATA` 宏是为了兼容旧版内核（5.2 之前）。如果你使用的是现代内核（5.15+），这个定义并非必需，但为了可移植性保留它也无妨。
+
+`bpf_printk()` 函数是你调试的好帮手。它将输出发送到 `/sys/kernel/debug/tracing/trace_pipe`，这是查看 eBPF 程序运行情况的简单方式。但它有一些限制：最多 3 个参数，trace_pipe 在内核中全局共享，并且对高频事件可能影响性能。在生产环境中，你应该使用环形缓冲区或性能事件数组，这些我们会在后续教程中介绍。
+
+`ctx` 参数包含追踪点特定的数据，但在这个简单示例中我们不需要它，所以声明为 `void *`。在更高级的程序中，你可以将其转换为适当的类型来访问参数。eBPF 程序必须返回一个整数——对于追踪点来说返回 0 是标准做法。
 
 要编译和运行这段程序，可以使用 ecc 工具和 ecli 命令。首先在 Ubuntu/Debian 上，执行以下命令：
 
@@ -140,12 +144,13 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_
 
 按 Ctrl+C 停止 ecli 进程之后，可以看到对应的输出也停止。
 
-注意：如果正在使用的 Linux 发行版（例如 Ubuntu ）默认情况下没有启用跟踪子系统可能看不到任何输出，使用以下指令打开这个功能：
+如果看不到任何输出，可能是追踪子系统没有启用，在某些 Linux 发行版上很常见。你可以通过以下命令启用它：
 
 ```console
-$ sudo su
-# echo 1 > /sys/kernel/debug/tracing/tracing_on
+$ sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 ```
+
+如果仍然看不到输出，确保程序已加载并运行（ecli 终端应该显示 "Running eBPF program..."）。尝试在另一个终端中手动触发一些 write 系统调用，例如运行 `echo "test" > /tmp/test.txt`。你也可以通过运行 `sudo bpftool prog list` 来检查你的 eBPF 程序是否已加载。
 
 ## eBPF 程序的基本框架
 
@@ -190,7 +195,7 @@ eBPF 程序的开发和使用流程可以概括为如下几个步骤：
 - 使用 eBPF 程序：这包括监测 eBPF 程序的运行情况，并使用 eBPF 内核映射和共享内存进行数据交换和共享。
 - 在实际开发中，还可能需要进行其他的步骤，例如配置编译和加载参数，管理 eBPF 内核模块和内核映射，以及使用其他高级功能等。
 
-需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。eunomia-bpf 是一个开源的 BPF 编译器和工具包，它可以帮助开发者快速和简单地编写和运行 BPF 程序。
+需要注意的是，BPF 程序的执行是在内核空间进行的，因此需要使用特殊的工具和技术来编写、编译和调试 BPF 程序。
 
 您还可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 以获取更多示例和完整的教程，全部内容均已开源。我们会继续分享更多有关 eBPF 开发实践的内容，帮助您更好地理解和掌握 eBPF 技术。
 

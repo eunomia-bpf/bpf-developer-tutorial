@@ -75,7 +75,7 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
-接下来，我们定义一个名为`BPF_KPROBE(do_unlinkat)`的 kprobe，当进入`do_unlinkat`函数时，它会被触发。该函数接受两个参数：`dfd`（文件描述符）和`name`（文件名结构体指针）。在这个 kprobe 中，我们获取当前进程的 PID（进程标识符），然后读取文件名。最后，我们使用`bpf_printk`函数在内核日志中打印 PID 和文件名。
+第一个 kprobe 挂钩到 `do_unlinkat` 的入口点。`BPF_KPROBE` 宏让我们可以轻松访问函数的参数——在这个例子中是 `dfd`（文件描述符）和 `name`（指向文件名结构的指针）。我们获取当前进程 ID，然后使用 `BPF_CORE_READ` 从内核内存中安全地读取文件名。
 
 ```c
 SEC("kprobe/do_unlinkat")
@@ -91,7 +91,9 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 }
 ```
 
-接下来，我们定义一个名为`BPF_KRETPROBE(do_unlinkat_exit)`的 kretprobe，当从`do_unlinkat`函数退出时，它会被触发。这个 kretprobe 的目的是捕获函数的返回值（ret）。我们再次获取当前进程的 PID，并使用`bpf_printk`函数在内核日志中打印 PID 和返回值。
+你可能想知道为什么不能直接访问 `name->name`。原因是 eBPF 程序运行在受限环境中，需要特殊的辅助函数来安全地读取内核内存。`BPF_CORE_READ` 不仅安全地处理这个问题，还提供了 CO-RE（一次编译 - 到处运行）支持，这意味着你的程序可以在不同的内核版本上工作，即使结构体布局发生了变化。
+
+kretprobe 是对应的部分，在函数返回时触发。这里我们可以捕获返回值来查看 unlink 操作是否成功。返回值为 0 表示成功，负值表示错误。
 
 ```c
 SEC("kretprobe/do_unlinkat")
@@ -105,7 +107,9 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 }
 ```
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。
+通过结合 kprobe 和 kretprobe，你可以获得完整的画面：可以看到正在删除什么文件以及操作是否成功。这种模式对于调试、安全监控或构建可观测性工具非常有用。
+
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 要编译这个程序，请使用 ecc 工具：
 

@@ -52,7 +52,7 @@ The fexit probe is even more interesting. It gets triggered when the function re
 
 The `BPF_PROG` macro is similar to `BPF_KPROBE` from the previous tutorial, but it's designed for fentry/fexit. It handles the parameter unwrapping automatically so you can focus on your logic.
 
-Through this example, you can learn how to use fentry and fexit probes in eBPF to monitor and capture kernel function calls, such as the unlink system call in this tutorial. "eunomia-bpf is an open source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its goal is to simplify the development, building, distribution, and running of eBPF programs. You can refer to [here](https://github.com/eunomia-bpf/eunomia-bpf) to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 To compile and run the above code:
 
