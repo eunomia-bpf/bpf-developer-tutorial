@@ -37,20 +37,17 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-This eBPF program implements the following:
+Let's look at the key parts of this program. The global variable `pid_target` is declared with `const volatile`. The `const` means the eBPF program can't modify it (it's read-only from the kernel's perspective), while `volatile` tells the compiler that user-space can modify it before loading the program. This combination lets you pass runtime configuration from user-space to your eBPF program.
 
-1. Include header files: <vmlinux.h> contains the definition of kernel data structures, and <bpf/bpf_helpers.h> contains the helper functions required by eBPF programs.
-2. Define the global variable `pid_target` for filtering a specified process ID. Setting it to 0 captures sys_openat calls from all processes.
-3. Use the `SEC` macro to define an eBPF program associated with the tracepoint "tracepoint/syscalls/sys_enter_openat". This tracepoint is triggered when a process initiates the `sys_openat` system call.
-4. Implement the eBPF program `tracepoint__syscalls__sys_enter_openat`, which takes a parameter `ctx` of type `struct trace_event_raw_sys_enter`. This structure contains information about the system call.
-5. Use the `bpf_get_current_pid_tgid()` function to retrieve the PID and TID (Thread  ID) of the current process. Since we only care about the PID, we shift its value 32 bits to the right and assign it to the variable `pid` of Type `u32`.
-6. Check if the `pid_target` variable is equal to the current process's PID. If `pid_target` is not 0 and is not equal to the current process's PID, return `false` to skip capturing the `sys_openat` call of that process.
-7. Use the `bpf_printk()` function to print the captured process ID and relevant information about the `sys_openat` call. These information can be viewed in user space using BPF tools.
-8. Set the program license to "GPL", which is a necessary condition for running eBPF programs.
+When `pid_target` is 0, the program captures openat calls from all processes. If you set it to a specific PID, it only monitors that process. This filtering happens in the kernel, which is much more efficient than filtering in user-space - you're not wasting resources sending events you don't care about.
+
+The filtering logic is straightforward. We get the current process ID using `bpf_get_current_pid_tgid()` and shift it right by 32 bits to extract just the PID (the function returns both PID and TID packed into a 64-bit value). Then we check if it matches our target. If not, we return early and skip the event.
+
+The annotation `/// @description "Process ID to trace"` above the global variable is special - eunomia-bpf uses it to automatically generate command-line help text. This makes your tool more user-friendly without extra code.
 
 This eBPF program can be loaded into the kernel and executed using tools like libbpf or eunomia-bpf. It captures the sys_openat system call of the specified process (or all processes) and outputs relevant information in user-space.
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We will use eunomia-bpf to compile and run this example. The complete code of this example can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/4-opensnoop> .
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>. The complete code is at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/4-opensnoop>.
 
 Compile and run the above code:
 
@@ -72,9 +69,9 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 At this point, we are able to capture the sys_openat system call for opening files by processes.
 
-## Filtering Process PID in eBPF using Global Variables
+## How Global Variables Work in eBPF
 
-Global variables act as a data sharing mechanism in eBPF programs, allowing data interaction between user space programs and eBPF programs. This is very useful when filtering specific conditions or modifying the behavior of eBPF programs. This design allows user space programs to dynamically control the behavior of eBPF programs at runtime.
+Global variables in eBPF are stored in the data section of your compiled program. When you load the eBPF program into the kernel, these variables get their initial values. The neat part is that user-space can modify these values before the program starts running, effectively passing configuration parameters into your kernel code.
 
 In our example, the global variable `pid_target` is used to filter process PIDs. User space programs can set the value of this variable to capture only the `sys_openat` system calls related to the specified PID in the eBPF program.
 

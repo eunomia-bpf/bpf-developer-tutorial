@@ -35,7 +35,7 @@ Once you have chosen a suitable development framework, such as BCC (BPF Compiler
 
 Through the above process, you can develop, compile, run, and debug eBPF programs using the BCC tool. Note that the development process of other frameworks, such as libbpf, cilium/ebpf, and eunomia-bpf, is similar but slightly different. Therefore, when choosing a framework, please refer to the respective official documentation and examples.
 
-By following this process, you can develop an eBPF program that runs in the kernel. eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain. It aims to simplify the development, building, distribution, and running of eBPF programs. It is based on the libbpf CO-RE lightweight development framework, supports loading and executing eBPF programs through a user space WebAssembly (WASM) virtual machine, and packages precompiled eBPF programs into universal JSON or WASM modules for distribution. We will use eunomia-bpf for demonstration purposes.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 ## Download and Install eunomia-bpf Development Tools
 
@@ -98,11 +98,15 @@ int handle_tp(void *ctx)
 }
 ```
 
-This program defines a handle_tp function and attaches it to the sys_enter_write tracepoint using the SEC macro (i.e., it is executed when the write system call is entered). The function retrieves the process ID of the write system call invocation using the bpf_get_current_pid_tgid and bpf_printk functions, and prints it in the kernel log.
+This program defines a handle_tp function and attaches it to the sys_enter_write tracepoint using the SEC macro. This means it gets executed every time the write system call is entered. The function retrieves the process ID of the current process and prints it to the kernel log using `bpf_printk`.
 
-- `bpf_printk()`: A simple mechanism to output information to the trace_pipe (/sys/kernel/debug/tracing/trace_pipe). This is fine for simple use cases, but it has limitations: a maximum of 3 parameters; the first parameter must be %s (i.e., a string); and the trace_pipe is globally shared in the kernel, so other programs using the trace_pipe concurrently might disrupt its output. A better approach is to use BPF_PERF_OUTPUT(), which will be discussed later.
-- `void *ctx`: ctx is originally a parameter of a specific type, but since it is not used here, it is written as void *.
-- `return 0;`: This is necessary, returning 0 (to know why, refer to #139 <https://github.com/iovisor/bcc/issues/139>).
+The `SEC("tp/syscalls/sys_enter_write")` macro tells the eBPF loader where to attach this function. The format is `tp` for tracepoint, followed by the subsystem (`syscalls`), and the specific event name (`sys_enter_write`). You can find available tracepoints by running `sudo ls /sys/kernel/debug/tracing/events/syscalls/` on your system.
+
+The `BPF_NO_GLOBAL_DATA` macro at the top is for compatibility with older kernels (before 5.2) that don't support global variables in eBPF. If you're running a modern kernel (5.15+), this isn't strictly necessary but doesn't hurt to include for portability.
+
+The `bpf_printk()` function is your friend for debugging. It outputs to `/sys/kernel/debug/tracing/trace_pipe`, which is a simple way to see what your eBPF program is doing. However, it has some limitations you should know about. It only accepts up to 3 parameters, the trace_pipe is shared globally across all eBPF programs, and it can impact performance on high-frequency events. For production use, you'll want to use ring buffers or perf event arrays, which we'll cover in later tutorials.
+
+The `ctx` parameter contains tracepoint-specific data, but since we don't need it for this simple example, we just declare it as `void *`. In more advanced programs, you would cast this to access the tracepoint's arguments. Finally, eBPF programs must return an integer - returning 0 is standard practice for tracepoints.
 
 To compile and run this program, you can use the ecc tool and ecli command. First, on Ubuntu/Debian, execute the following command:
 
@@ -141,12 +145,13 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe | grep "BPF triggered sys_enter_
 
 Once you stop the ecli process by pressing Ctrl+C, the corresponding output will also stop.
 
-Note: If your Linux distribution (e.g. Ubuntu) does not have the tracing subsystem enabled by default, you may not see any output. Use the following command to enable this feature:
+If you don't see any output, the tracing subsystem might not be enabled on your system. This is common on some Linux distributions. You can enable it by running:
 
 ```console
-$ sudo su
-# echo 1 > /sys/kernel/debug/tracing/tracing_on
+$ sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 ```
+
+If you're still not seeing output, make sure the program is actually loaded and running (you should see "Running eBPF program..." in the ecli terminal). Try triggering some write syscalls manually by running `echo "test" > /tmp/test.txt` in another terminal. You can also check if your eBPF program is loaded by running `sudo bpftool prog list`.
 
 ## Basic Framework of eBPF Program
 
@@ -190,6 +195,6 @@ The development and usage process of eBPF programs can be summarized in the foll
 - Use the eBPF program: This includes monitoring the execution of the eBPF program and exchanging and sharing data using eBPF kernel maps and shared memory.
 - In practical development, there may be additional steps such as configuring compilation and loading parameters, managing eBPF kernel modules and kernel maps, and using other advanced features.
 
-It should be noted that the execution of BPF programs occurs in the kernel space, so special tools and techniques are needed to write, compile, and debug BPF programs. eunomia-bpf is an open-source BPF compiler and toolkit that can help developers write and run BPF programs quickly and easily.
+The execution of BPF programs occurs in the kernel space, so special tools and techniques are needed to write, compile, and debug them.
 
 You can also visit our tutorial code repository <https://github.com/eunomia-bpf/bpf-developer-tutorial> or website <https://eunomia.dev/tutorials/> for more examples and complete tutorials, all of which are open-source. We will continue to share more about eBPF development practices to help you better understand and master eBPF technology.

@@ -4,7 +4,9 @@ eBPF (Extended Berkeley Packet Filter) is a powerful network and performance ana
 
 This article is the fifth part of the eBPF Tutorial by Example, which mainly introduces how to capture readline function calls in bash using uprobe.
 
-## What is uprobe
+## What is uprobe and When Do You Need It?
+
+While kprobes let you trace kernel functions, uprobes bring the same power to user-space programs. You can attach to any function in any binary: libraries, executables, even JIT-compiled code. This is incredibly useful for monitoring applications without modifying their code.
 
 uprobe is a user-space probe that allows dynamic instrumentation in user-space programs. The probe locations include function entry, specific offsets, and function returns. When we define an uprobe, the kernel creates fast breakpoint instructions (int3 instructions on x86 machines) on the attached instructions. When the program executes this instruction, the kernel triggers an event, causing the program to enter kernel mode and call the probe function through a callback function. After executing the probe function, the program returns to user mode to continue executing subsequent instructions.
 
@@ -95,7 +97,7 @@ Finally, we use the `bpf_printk` function to output the PID, task name, and user
 bpf_printk("PID %d (%s) read: %s ", pid, comm, str);
 ```
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, build, distribution, and running of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compiler toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 Compile and run the above code:
 

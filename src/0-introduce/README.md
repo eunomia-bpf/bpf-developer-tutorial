@@ -62,15 +62,15 @@ This tutorial provides practical eBPF development practices, covering topics fro
 
 ### Who Is This Tutorial For?
 
-- **Developers** looking to implement custom kernel solutions.
-- **System Administrators** aiming to enhance performance and security.
-- **Tech Enthusiasts** exploring cutting-edge kernel technologies.
+This tutorial is designed for developers who want to build custom kernel solutions, system administrators looking to enhance performance and security, and tech enthusiasts exploring cutting-edge kernel technologies. Whether you're debugging production issues or building the next generation of observability tools, this guide will help you get started with eBPF.
 
 ### What Will You Learn?
 
-- **Core Concepts:** eBPF fundamentals and integration with the Linux kernel.
-- **Practical Skills:** Writing and deploying eBPF programs.
-- **Advanced Topics:** Exploring security, tracing, and future innovations in eBPF.
+You'll learn eBPF fundamentals and how they integrate with the Linux kernel. We'll cover practical skills for writing and deploying eBPF programs, from simple "Hello World" examples to advanced topics like security monitoring, tracing, and performance profiling. By the end, you'll be able to write your own eBPF tools and understand how to apply them to real-world problems.
+
+### Prerequisites
+
+Before starting, make sure you have a Linux system with kernel version 4.8 or higher (we recommend 5.15+ or 6.2+ for full feature support). You'll need basic C programming knowledge and familiarity with system concepts like processes and system calls. Most examples require root or sudo privileges to run. You should also install development tools like clang, llvm, and libelf-dev on your system.
 
 ---
 

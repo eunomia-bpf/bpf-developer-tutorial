@@ -76,7 +76,7 @@ First, we import necessary header files such as vmlinux.h, bpf_helpers.h, bpf_tr
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
-Next, we define a kprobe named `BPF_KPROBE(do_unlinkat)` which gets triggered when the `do_unlinkat` function is entered. It takes two parameters: `dfd` (file descriptor) and `name` (filename structure pointer). In this kprobe, we retrieve the PID (process identifier) of the current process and then read the filename. Finally, we use the `bpf_printk` function to print the PID and filename in the kernel log.
+The first kprobe hooks into the entry point of `do_unlinkat`. The `BPF_KPROBE` macro makes it easy to access the function's parameters - in this case `dfd` (file descriptor) and `name` (a pointer to the filename structure). We grab the current process ID and then use `BPF_CORE_READ` to safely read the filename from kernel memory.
 
 ```c
 SEC("kprobe/do_unlinkat")
@@ -92,7 +92,9 @@ int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
 }
 ```
 
-Next, we define a kretprobe named `BPF_KRETPROBE(do_unlinkat_exit)` that will be triggered when exiting the `do_unlinkat` function. The purpose of this kretprobe is to capture the return value (`ret`) of the function. We again obtain the PID of the current process and use the `bpf_printk` function to print the PID and return value in the kernel log.
+You might wonder why we can't just access `name->name` directly. The answer is that eBPF programs run in a restricted environment and need special helpers to safely read kernel memory. `BPF_CORE_READ` handles this safely and also provides CO-RE (Compile Once - Run Everywhere) support, meaning your program will work across different kernel versions even if the structure layout changes.
+
+The kretprobe is the counterpart that triggers when the function returns. Here we can capture the return value to see if the unlink operation succeeded or failed. A return value of 0 means success, while negative values indicate errors.
 
 ```c
 SEC("kretprobe/do_unlinkat")
@@ -106,7 +108,9 @@ int BPF_KRETPROBE(do_unlinkat_exit, long ret)
 }
 ```
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its goal is to simplify the development, build, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compiler toolchain and ecli runtime.
+By combining kprobe and kretprobe, you get the complete picture - you can see what file is being deleted and whether the operation succeeded. This pattern is useful for debugging, security monitoring, or building observability tools.
+
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 To compile this program, use the ecc tool:
 

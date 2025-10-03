@@ -106,23 +106,17 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 }
 ```
 
-This code demonstrates how to monitor process exit events using exitsnoop and print output to user space using a ring buffer:
+The ring buffer uses a reserve/submit pattern. First, you call `bpf_ringbuf_reserve` to allocate space in the buffer. This gives you a pointer where you can write your data. Once you've filled in all the fields, you call `bpf_ringbuf_submit` to make it available to user-space. If anything goes wrong before submit, you can call `bpf_ringbuf_discard` instead.
 
-1. First, we include the required headers and exitsnoop.h.
-2. We define a global variable named "LICENSE" with the content "Dual BSD/GPL", which is the license requirement for eBPF programs.
-3. We define a mapping named rb of type BPF_MAP_TYPE_RINGBUF, which will be used to transfer data from kernel space to user space. We specify max_entries as 256 * 1024, representing the maximum capacity of the ring buffer.
-4. We define an eBPF program named handle_exit, which will be executed when a process exit event is triggered. It takes a trace_event_raw_sched_process_template struct pointer named ctx as the parameter.
-5. We use the bpf_get_current_pid_tgid() function to obtain the PID and TID of the current task. For the main thread, the PID and TID are the same; for child threads, they are different. Since we only care about the exit of the process (main thread), we return 0 if the PID and TID are different, ignoring the exit events of child threads.
-6. We use the bpf_ringbuf_reserve function to reserve space for the event struct e in the ring buffer. If the reservation fails, we return 0.
-7. We use the bpf_get_current_task() function to obtain a task_struct structure pointer for the current task.
-8. We fill in the process-related information into the reserved event struct e, including the duration of the process, PID, PPID, exit code, and process name.
-9. Finally, we use the bpf_ringbuf_submit function to submit the filled event struct e to the ring buffer, for further processing and output in user space.
+This is different from perf buffers where you pass a complete struct to `bpf_perf_event_output`. The reserve/submit pattern is more flexible and can be more efficient since you're writing directly into the buffer without extra copies.
+
+The program filters out thread exits by checking `if (pid != tid)`. When a thread exits, its TID differs from the main process PID. We only want to track full process exits, not individual thread exits, so we skip those events.
 
 This example demonstrates how to capture process exit events using exitsnoop and a ring buffer in an eBPF program, and transfer relevant information to user space. This is useful for analyzing process exit reasons and monitoring system behavior.
 
 ## Compile and Run
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its purpose is to simplify the development, build, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compiler toolchain and ecli runtime. We will use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 Compile:
 

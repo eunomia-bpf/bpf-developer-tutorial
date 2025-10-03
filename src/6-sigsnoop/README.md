@@ -87,13 +87,15 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
-The above code defines an eBPF program for capturing system calls that send signals to processes, including kill, tkill, and tgkill. It captures the enter and exit events of system calls by using tracepoints, and executes specified probe functions such as `probe_entry` and `probe_exit` when these events occur.
+This program tracks signal sending across entry and exit events. The challenge is that we need to correlate data from two separate events; when the syscall starts and when it finishes. That's where hash maps come in.
 
-In the probe function, we use the bpf_map to store the captured event information, including the process ID of the sending signal, the process ID of the receiving signal, the signal value, and the name of the executable for the current task. When the system call exits, we retrieve the event information stored in the bpf_map and use bpf_printk to print the process ID, process name, sent signal, and return value of the system call.
+When `probe_entry` runs, we save the signal information in a hash map using the thread ID (TID) as the key. When `probe_exit` runs for the same thread, we look up the saved data, add the return value, and print everything together. This gives us complete information about each signal - who sent it, who received it, what signal it was, and whether it succeeded.
+
+The hash map is keyed by TID rather than PID because threads make syscalls independently. Using TID ensures we don't accidentally mix up events from different threads in the same process.
 
 Finally, we also need to use the SEC macro to define the probe and specify the name of the system call to be captured and the probe function to be executed.
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines with Wasm. Its purpose is to simplify the development, building, distribution, and running of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> for downloading and installing the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 Compile and run the above code:
 

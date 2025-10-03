@@ -6,7 +6,9 @@ This article is the seventh part of the eBPF Tutorial by Example and mainly intr
 
 ## perf buffer
 
-eBPF provides two circular buffers for transferring information from eBPF programs to user space controllers. The first one is the perf circular buffer, which has existed since at least kernel v4.15. The second one is the BPF circular buffer introduced later. This article only considers the perf circular buffer.
+When you need to send structured data from your eBPF program to user-space, `bpf_printk` isn't enough. That's where perf event arrays come in. They let you send custom data structures efficiently from kernel to user-space.
+
+eBPF offers two types of ring buffers for this: the perf event array (available since kernel 4.15+) and the newer BPF ring buffer (kernel 5.8+). This tutorial uses the perf event array since it's more widely supported. The newer ring buffer is more efficient and easier to use, which we'll cover in the next tutorial.
 
 ## execsnoop
 

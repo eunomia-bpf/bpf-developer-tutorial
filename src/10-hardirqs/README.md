@@ -235,7 +235,7 @@ The code for Softirq is similar, and I won't elaborate on it here.
 
 ## Run code.Translated content
 
-eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain that combines Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We use eunomia-bpf to compile and run this example.
+We use eunomia-bpf to compile and run this example. You can install it from <https://github.com/eunomia-bpf/eunomia-bpf>.
 
 To compile this program, use the ecc tool:
 
