@@ -46,10 +46,9 @@ This eBPF program implements the following:
 5. Use the `bpf_get_current_pid_tgid()` function to retrieve the PID and TID (Thread  ID) of the current process. Since we only care about the PID, we shift its value 32 bits to the right and assign it to the variable `pid` of Type `u32`.
 6. Check if the `pid_target` variable is equal to the current process's PID. If `pid_target` is not 0 and is not equal to the current process's PID, return `false` to skip capturing the `sys_openat` call of that process.
 7. Use the `bpf_printk()` function to print the captured process ID and relevant information about the `sys_openat` call. These information can be viewed in user space using BPF tools.
-8. Set the program license to "GPL", which is a necessary condition for running eBPF programs.### Instructions
-Translate the following Chinese text to English while maintaining the original formatting:
+8. Set the program license to "GPL", which is a necessary condition for running eBPF programs.
 
-"This eBPF program can be loaded into the kernel and executed using tools like libbpf or eunomia-bpf. It captures the sys_openat system call of the specified process (or all processes) and outputs relevant information in user-space.
+This eBPF program can be loaded into the kernel and executed using tools like libbpf or eunomia-bpf. It captures the sys_openat system call of the specified process (or all processes) and outputs relevant information in user-space.
 
 eunomia-bpf is an open-source eBPF dynamic loading runtime and development toolchain combined with Wasm. Its purpose is to simplify the development, building, distribution, and execution of eBPF programs. You can refer to <https://github.com/eunomia-bpf/eunomia-bpf> to download and install the ecc compilation toolchain and ecli runtime. We will use eunomia-bpf to compile and run this example. The complete code of this example can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/4-opensnoop> .
 

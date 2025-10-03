@@ -76,7 +76,7 @@ This code defines an eBPF program for capturing the entry of the `execve` system
 
 In the entry program, we first obtain the process ID and user ID of the current process, then use the `bpf_get_current_task` function to obtain the `task_struct` structure of the current process, and use the `bpf_probe_read_str` function to read the process name. Finally, we use the `bpf_perf_event_output` function to output the process execution event to the perf buffer.
 
-With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.Instructions: Translate the following Chinese text to English while maintaining the original formatting:
+With this code, we can capture process execution events in the Linux kernel and analyze the process execution conditions.
 
 We use eunomia-bpf to compile and execute this example. You can refer to the following link to download and install the ecc compilation toolchain and ecli runtime: [https://github.com/eunomia-bpf/eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf).
 
