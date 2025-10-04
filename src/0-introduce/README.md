@@ -48,7 +48,7 @@ Organizations across industries have adopted eBPF at scale:
 
 eBPF's ability to dynamically adjust system behavior and extend into user space makes it an essential technology for modern computing. Whether it's optimizing network traffic, improving security, or enhancing system performance, eBPF enables developers to address real-time requirements efficiently and safely.
 
-In addition to its kernel-mode runtime, eBPF can also be extended to user space. For example, [bpftime](https://github.com/eunomia-bpf/bpftime), a user-space eBPF runtime, allows for higher-performance tracing, performance analysis, and plugin support in user-space applications. This extension of eBPF into user space helps improve flexibility and performance in various use cases that go beyond kernel-level tasks.
+In addition to its kernel-mode runtime, eBPF can also be extended beyond the kernel. For example, [bpftime](https://github.com/eunomia-bpf/bpftime) is a user-space eBPF runtime that allows for higher-performance tracing (10x faster than kernel uprobes), performance analysis, and plugin support in user-space applications without requiring manual recompilation or process restarts. eBPF programs can now even be offloaded to GPUs through bpftime integration, enabling dynamic instrumentation of GPU kernels with low overhead. This extension of eBPF beyond kernel space helps improve flexibility and performance across CPU, user-space, and GPU workloads.
 
 ### Future: The Expanding Potential of eBPF
 
@@ -70,7 +70,7 @@ You'll learn eBPF fundamentals and how they integrate with the Linux kernel. We'
 
 ### Prerequisites
 
-Before starting, make sure you have a Linux system with kernel version 4.8 or higher (we recommend 5.15+ or 6.2+ for full feature support). You'll need basic C programming knowledge and familiarity with system concepts like processes and system calls. Most examples require root or sudo privileges to run. You should also install development tools like clang, llvm, and libelf-dev on your system.
+Before starting, make sure you have a Linux system with kernel version 4.8 or higher (we recommend 5.15+ or 6.9+ for full feature support, including BPF arena and tokens). You'll need basic C programming knowledge and familiarity with system concepts like processes and system calls. Most examples require root or sudo privileges to run. You should also install development tools like clang, llvm, and libelf-dev on your system.
 
 ---
 
