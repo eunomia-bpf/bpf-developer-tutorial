@@ -33,15 +33,16 @@ Here are some key areas where eBPF is widely used today:
 
 - **Security:** eBPF plays a vital role in real-time security monitoring. It enables deep inspection of system calls, network traffic, and other kernel activities, helping to enforce dynamic security policies and detect anomalous behavior, providing an efficient way to safeguard infrastructure.
 
-- **Scheduler Optimization:** eBPF is increasingly used to enhance CPU scheduling, offering the ability to monitor CPU load and optimize how tasks are distributed across cores. This can lead to more efficient use of CPU resources and improved system responsiveness.
+- **Scheduler Optimization:** Since Linux kernel 6.12, eBPF-powered CPU schedulers (sched_ext) are now mainline, allowing custom scheduling policies to be implemented as BPF programs. This enables runtime-customizable scheduling that can optimize for different workloads without kernel modifications, and is already deployed on over 1 million machines in production.
 
 - **HID (Human Interface Device) Driver Enhancements:** Developers use eBPF to optimize HID drivers for devices like keyboards, mice, and touchscreens. By adding custom logic for handling input events, eBPF improves responsiveness in latency-sensitive applications.
 
 Organizations across industries have adopted eBPF at scale:
 
-- **Google:** Uses eBPF for security auditing, packet processing, real-time performance monitoring, and optimizing CPU scheduling across its vast infrastructure.
+- **Google:** Uses eBPF for security auditing, packet processing, real-time performance monitoring, and is actively testing eBPF-based CPU schedulers across its vast infrastructure.
 - **Netflix:** Leverages eBPF for network traffic analysis, ensuring high availability and performance for streaming services.
-- **Android:** Applies eBPF to optimize network usage, power consumption, and resource allocation, improving performance and battery life on millions of devices.
+- **Android:** Every Android phone uses eBPF to optimize network usage, power consumption, and resource allocation, improving performance and battery life across billions of devices worldwide.
+- **Meta:** Runs eBPF-based schedulers in production (over 1 million machines with scx_layered) alongside its network load balancing (Katran).
 - **S&P Global:** Utilizes eBPF through **Cilium** for managing networking across multiple clouds and on-premises systems, ensuring scalability and security.
 - **Shopify:** Implements eBPF with **Falco** for intrusion detection, bolstering security on its e-commerce platform.
 - **Cloudflare:** Uses eBPF for network observability, security monitoring, and performance optimization, protecting millions of websites globally.
@@ -148,7 +149,7 @@ Have questions or things you want to know, whether or not they are related to th
 Answer some questions and try some experiments (2-5h):
 
 1. How to develop the simplest eBPF program?
-2. How to trace a kernel feature or function with eBPF? There are many ways, provide corresponding code examples;
+2. How to trace a kernel feature or function with eBPF? There are many ways, provide corresponding code examples; How to write a XDP network function or write a scheduler?
 3. What are the solutions for communication between user mode and kernel mode? How to send information from user mode to kernel mode? How to pass information from kernel mode to user mode? Provide code examples;
 4. Write your own eBPF program to implement a feature;
 5. In the entire lifecycle of an eBPF program, what does it do in user mode and kernel mode?
