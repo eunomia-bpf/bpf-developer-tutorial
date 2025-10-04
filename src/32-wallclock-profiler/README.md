@@ -343,6 +343,10 @@ Pay attention to the relative proportions. An application that's 90% blue is I/O
 
 For multi-threaded profiles, compare the per-thread flame graphs. Ideally, worker threads should show similar patterns if the workload is balanced. If one thread is mostly red while others are mostly blue, you might have load imbalance. If all threads show lots of blue time in futex waits with similar stacks, that's lock contention.
 
+## Related Work and Further Reading
+
+Wall-clock profiling builds on decades of research in performance analysis that distinguishes on-CPU computation from off-CPU waiting. Curtsinger and Berger's Coz (ASPLOS'15) introduced causal profiling, which experimentally determines which code regions, if optimized, actually reduce end-to-end latency—addressing the fundamental question of where optimization effort pays off. Zhou et al.'s wPerf (OSDI'18) presented a generic off-CPU analysis framework that identifies critical waiting events (locks, I/O) bounding throughput with low overhead, while the more recent work by Ahn et al. (OSDI'24) unified on- and off-CPU analysis through blocked-sample profiling that captures both running and blocked thread states. The visualization techniques we employ draw from Gregg's flame graph methodology (CACM'16, USENIX ATC'17), which transforms stack-trace aggregations into intuitive hierarchical diagrams; his off-CPU flame graphs specifically highlight blocking patterns by rendering sleep stacks in contrasting colors. Timing accuracy itself poses challenges, as Najafi et al. (HotOS'21) argue that modern systems research increasingly depends on precise wall-clock measurements, and earlier work on time-sensitive Linux (Goel et al., OSDI'02) explored kernel techniques for low-latency timing under load. Practical eBPF-based profiling has been demonstrated in production contexts, including Java profiling with off-CPU "offwaketime" analysis (ICPE'19) and comprehensive workflows outlined in recent eBPF performance tutorials (Gregg, SIGCOMM'24). Together, these techniques and tools provide the foundation for understanding where applications spend time and how to optimize holistically across both compute and blocking dimensions.
+
 ## Summary
 
 Wall clock profiling with eBPF gives you complete visibility into application performance by combining on-CPU and off-CPU analysis. The on-CPU profiler samples execution to find hot code paths that consume CPU cycles. The off-CPU profiler hooks into the scheduler to measure blocking time and identify I/O bottlenecks or lock contention. Together, they account for every microsecond of wall clock time, showing where your application actually spends its life.
@@ -360,5 +364,13 @@ By visualizing both types of time in a single flame graph with color coding, you
 - Blazesym symbol resolution: <https://github.com/libbpf/blazesym>
 - FlameGraph visualization: <https://github.com/brendangregg/FlameGraph>
 - "Off-CPU Analysis" by Brendan Gregg: <http://www.brendangregg.com/offcpuanalysis.html>
+- Coz: Finding Code that Counts with Causal Profiling (ASPLOS'15): <https://dl.acm.org/doi/10.1145/2815400.2815409>
+- wPerf: Generic Off-CPU Analysis (OSDI'18): <https://www.usenix.org/system/files/osdi18-zhou.pdf>
+- Identifying On-/Off-CPU Bottlenecks with Blocked Samples (OSDI'24): <https://www.usenix.org/system/files/osdi24-ahn.pdf>
+- The Flame Graph (CACM'16): <https://queue.acm.org/detail.cfm?id=2927301>
+- Systems Research is Running out of Time (HotOS'21): <https://sigops.org/s/conferences/hotos/2021/papers/hotos21-s04-najafi.pdf>
+- Time-Sensitive Linux (OSDI'02): <https://www.usenix.org/legacy/event/osdi02/tech/full_papers/goel/goel.pdf>
+- Profiling and Tracing Support for Java Applications (ICPE'19): <https://research.spec.org/icpe_proceedings/2019/proceedings/p119.pdf>
+- eBPF Performance Analysis (SIGCOMM'24): <https://www.brendangregg.com/Slides/SIGCOMM2024_eBPF_Performance.pdf>
 
 > The original link of this article: <https://eunomia.dev/tutorials/32-wallclock-profiler>

@@ -343,6 +343,10 @@ sudo python3 wallclock_profiler.py <PID> -d 30
 
 对于多线程配置文件,比较每个线程的火焰图。理想情况下,如果工作负载平衡,工作线程应该显示相似的模式。如果一个线程大多是红色而其他线程大多是蓝色,你可能有负载不平衡。如果所有线程在 futex 等待中显示大量蓝色时间,具有相似的栈,那就是锁竞争。
 
+## 相关工作与延伸阅读
+
+挂钟时间分析建立在数十年来区分 CPU 计算与 off-CPU 等待的性能分析研究基础之上。Curtsinger 和 Berger 的 Coz(ASPLOS'15)引入了因果分析(causal profiling),通过实验确定哪些代码区域在优化后能真正减少端到端延迟,从而解决了优化工作应投入何处的根本问题。Zhou 等人的 wPerf(OSDI'18)提出了一个通用的 off-CPU 分析框架,以低开销识别限制吞吐量的关键等待事件(锁、I/O),而 Ahn 等人最近的工作(OSDI'24)通过阻塞采样分析统一了 on-CPU 和 off-CPU 分析,同时捕获运行和阻塞线程状态。我们使用的可视化技术源自 Gregg 的火焰图方法论(CACM'16,USENIX ATC'17),它将调用栈聚合转换为直观的层次图;他的 off-CPU 火焰图专门通过用对比色渲染睡眠栈来突出阻塞模式。时间精度本身也带来挑战,正如 Najafi 等人(HotOS'21)所论述的,现代系统研究越来越依赖精确的挂钟测量,而早期关于时间敏感型 Linux 的工作(Goel 等,OSDI'02)探索了负载下低延迟计时的内核技术。基于 eBPF 的实用分析已在生产环境中得到验证,包括使用 off-CPU "offwaketime" 分析的 Java 性能分析(ICPE'19)以及近期 eBPF 性能教程中概述的综合工作流程(Gregg,SIGCOMM'24)。这些技术和工具共同为理解应用程序如何分配时间以及如何在计算和阻塞两个维度上进行整体优化提供了基础。
+
 ## 总结
 
 使用 eBPF 进行挂钟时间分析通过结合 on-CPU 和 off-CPU 分析,为你提供应用程序性能的完整可见性。On-CPU 分析器采样执行以查找消耗 CPU 周期的热代码路径。Off-CPU 分析器挂钩到调度器以测量阻塞时间并识别 I/O 瓶颈或锁竞争。它们一起统计挂钟时间的每一微秒,显示应用程序实际花费生命的地方。
@@ -360,5 +364,13 @@ sudo python3 wallclock_profiler.py <PID> -d 30
 - Blazesym 符号解析: <https://github.com/libbpf/blazesym>
 - FlameGraph 可视化: <https://github.com/brendangregg/FlameGraph>
 - Brendan Gregg 的 "Off-CPU Analysis": <http://www.brendangregg.com/offcpuanalysis.html>
+- Coz: Finding Code that Counts with Causal Profiling (ASPLOS'15): <https://dl.acm.org/doi/10.1145/2815400.2815409>
+- wPerf: Generic Off-CPU Analysis (OSDI'18): <https://www.usenix.org/system/files/osdi18-zhou.pdf>
+- Identifying On-/Off-CPU Bottlenecks with Blocked Samples (OSDI'24): <https://www.usenix.org/system/files/osdi24-ahn.pdf>
+- The Flame Graph (CACM'16): <https://queue.acm.org/detail.cfm?id=2927301>
+- Systems Research is Running out of Time (HotOS'21): <https://sigops.org/s/conferences/hotos/2021/papers/hotos21-s04-najafi.pdf>
+- Time-Sensitive Linux (OSDI'02): <https://www.usenix.org/legacy/event/osdi02/tech/full_papers/goel/goel.pdf>
+- Profiling and Tracing Support for Java Applications (ICPE'19): <https://research.spec.org/icpe_proceedings/2019/proceedings/p119.pdf>
+- eBPF Performance Analysis (SIGCOMM'24): <https://www.brendangregg.com/Slides/SIGCOMM2024_eBPF_Performance.pdf>
 
 > 本文原文链接: <https://eunomia.dev/zh/tutorials/32-wallclock-profiler>
