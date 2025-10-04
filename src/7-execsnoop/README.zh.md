@@ -72,13 +72,15 @@ int tracepoint__syscalls__sys_enter_execve(struct trace_event_raw_sys_enter* ctx
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这段代码定义了个 eBPF 程序，用于捕获进程执行 execve 系统调用的入口。
+这个程序展示了如何使用 perf event array 将数据从内核空间传输到用户空间。
 
-在入口程序中，我们首先获取了当前进程的进程 ID 和用户 ID，然后通过 bpf_get_current_task 函数获取了当前进程的 task_struct 结构体，并通过 bpf_probe_read_str 函数读取了进程名称。最后，我们通过 bpf_perf_event_output 函数将进程执行事件输出到 perf buffer。
+为什么需要 perf buffer？之前的例子我们使用 `bpf_printk` 打印到 trace_pipe，这种方式调试很方便，但对生产环境不够灵活，perf buffer 让我们能够高效地将结构化数据从内核传输到用户空间程序，在那里可以进行复杂的处理、过滤和格式化输出。
 
-使用这段代码，我们就可以捕获 Linux 内核中进程执行的事件, 并分析进程的执行情况。
+看看代码如何工作：我们首先定义了一个 `BPF_MAP_TYPE_PERF_EVENT_ARRAY` 类型的 map。在 tracepoint 中，我们收集进程信息：PID、PPID、UID 和命令名。使用 `BPF_CORE_READ` 从内核结构体中安全地读取父进程 ID，使用 `bpf_probe_read_str` 读取命令行参数。最后，`bpf_perf_event_output` 将整个 event 结构体发送到用户空间。
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+用户空间程序（这里是 ecli）会接收这些事件并格式化输出。这种模式让我们可以在用户空间做更复杂的处理，比如过滤、聚合或者写入数据库。
+
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 使用容器编译：
 

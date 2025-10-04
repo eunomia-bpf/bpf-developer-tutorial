@@ -8,7 +8,9 @@ eBPF (Extended Berkeley Packet Filter) 是 Linux 内核上的一个强大的网�
 
 fentry（function entry）和 fexit（function exit）是 eBPF（扩展的伯克利包过滤器）中的两种探针类型，用于在 Linux 内核函数的入口和退出处进行跟踪。它们允许开发者在内核函数执行的特定阶段收集信息、修改参数或观察返回值。这种跟踪和监控功能在性能分析、故障排查和安全分析等场景中非常有用。
 
-与 kprobes 相比，fentry 和 fexit 程序有更高的性能和可用性。在这个例子中，我们可以直接访问函数的指针参数，就像在普通的 C 代码中一样，而不需要使用各种读取帮助程序。fexit 和 kretprobe 程序最大的区别在于，fexit 程序可以访问函数的输入参数和返回值，而 kretprobe 只能访问返回值。从 5.5 内核开始，fentry 和 fexit 对 eBPF 程序可用。
+与 kprobes 相比，fentry 和 fexit 程序有更高的性能和可用性。它们的运行速度大约是 kprobes 的 10 倍，因为使用了 BPF trampoline 机制而不是基于断点的旧方法。在这个例子中，我们可以直接访问函数的指针参数，就像在普通的 C 代码中一样，而不需要使用 `BPF_CORE_READ` 这样的读取帮助程序。
+
+fexit 和 kretprobe 程序最大的区别在于，fexit 程序可以同时访问函数的输入参数和返回值，而 kretprobe 只能访问返回值。这让你可以在一个地方看到完整的函数执行情况。从 5.5 内核开始（x86），fentry 和 fexit 对 eBPF 程序可用。
 
 > arm64 内核版本需要 6.0
 >
@@ -50,18 +52,15 @@ int BPF_PROG(do_unlinkat_exit, int dfd, struct filename *name, long ret)
 }
 ```
 
-这段程序是用 C 语言编写的 eBPF（扩展的伯克利包过滤器）程序，它使用 BPF 的 fentry 和 fexit 探针来跟踪 Linux 内核函数 `do_unlinkat`。在这个教程中，我们将以这段程序作为示例，让您学会如何在 eBPF 中使用 fentry 监测捕获 unlink 系统调用。
+这段程序是用 C 语言编写的 eBPF 程序，它使用 BPF 的 fentry 和 fexit 探针来跟踪 Linux 内核函数 `do_unlinkat`。
 
-程序包含以下部分：
+让我们看看代码的工作原理。首先我们包含了必要的头文件：vmlinux.h 用于访问内核数据结构，bpf_helpers.h 包含 eBPF 帮助函数，bpf_tracing.h 用于跟踪相关功能。然后定义了许可证信息 "Dual BSD/GPL"，这是内核加载 eBPF 程序所必需的。
 
-1. 包含头文件：包括 vmlinux.h（用于访问内核数据结构）、bpf/bpf_helpers.h（包含eBPF帮助函数）、bpf/bpf_tracing.h（用于eBPF跟踪相关功能）。
-2. 定义许可证：这里定义了一个名为 `LICENSE` 的字符数组，包含许可证信息“Dual BSD/GPL”。
-3. 定义 fentry 探针：我们定义了一个名为 `BPF_PROG(do_unlinkat)` 的 fentry 探针，该探针在 `do_unlinkat` 函数的入口处被触发。这个探针获取当前进程的 PID（进程ID）并将其与文件名一起打印到内核日志。
-4. 定义 fexit 探针：我们还定义了一个名为 `BPF_PROG(do_unlinkat_exit)` 的 fexit 探针，该探针在 `do_unlinkat` 函数的退出处被触发。与 fentry 探针类似，这个探针也会获取当前进程的 PID 并将其与文件名和返回值一起打印到内核日志。
+fentry 探针附加到 `do_unlinkat` 函数的入口点。注意我们可以直接访问 `name->name` 而不需要任何特殊的帮助函数——这是使用 fentry 而不是 kprobes 的好处之一。我们获取当前进程 PID，然后将其与文件名一起打印到内核日志。
 
-通过这个示例，您可以学习如何在 eBPF 中使用 fentry 和 fexit 探针来监控和捕获内核函数调用，例如在本教程中的 unlink 系统调用。
+fexit 探针在函数返回时触发，可以同时访问原始参数（dfd 和 name）和返回值（ret）。这让你可以完整地看到函数做了什么。如果 ret 是 0，文件删除成功；如果是负数，说明出错了，你可以看到错误代码。
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 编译运行上述代码：
 

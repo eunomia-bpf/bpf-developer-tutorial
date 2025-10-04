@@ -87,13 +87,15 @@ int kill_exit(struct trace_event_raw_sys_exit *ctx)
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 ```
 
-上面的代码定义了一个 eBPF 程序，用于捕获进程发送信号的系统调用，包括 kill、tkill 和 tgkill。它通过使用 tracepoint 来捕获系统调用的进入和退出事件，并在这些事件发生时执行指定的探针函数，例如 probe_entry 和 probe_exit。
+这个程序展示了一个重要的 eBPF 模式：如何在系统调用的入口和出口之间保存和关联信息。
 
-在探针函数中，我们使用 bpf_map 存储捕获的事件信息，包括发送信号的进程 ID、接收信号的进程 ID、信号值和进程的可执行文件名称。在系统调用退出时，我们将获取存储在 bpf_map 中的事件信息，并使用 bpf_printk 打印进程 ID、进程名称、发送的信号和系统调用的返回值。
+为什么需要 hash map？因为我们需要在两个不同的探针函数之间共享数据，当系统调用进入时（`sys_enter_kill`），我们知道目标进程 ID 和信号值，但还不知道操作是否成功。当系统调用退出时（`sys_exit_kill`），我们得到了返回值，但已经失去了对参数的访问。hash map 让我们能够在入口处保存信息，然后在出口处检索它。
 
-最后，我们还需要使用 SEC 宏来定义探针，并指定要捕获的系统调用的名称，以及要执行的探针函数。
+看看代码如何工作：`probe_entry` 在系统调用进入时触发，我们使用线程 ID 作为键，将事件信息存储到 hash map 中。`probe_exit` 在系统调用返回时触发，使用相同的线程 ID 查找之前保存的信息，添加返回值，然后打印完整的事件。最后删除 map 条目以避免内存泄漏。
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+这种模式非常常见——任何时候你需要关联系统调用的参数和返回值，都可以使用这个技术。
+
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 编译运行上述代码：
 

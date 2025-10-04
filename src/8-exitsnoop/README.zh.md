@@ -106,23 +106,17 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 }
 ```
 
-这段代码展示了如何使用 exitsnoop 监控进程退出事件并使用 ring buffer 向用户态打印输出：
+这段代码展示了 ring buffer 的 reserve/submit 模式，这是一种高效的数据传输方式。
 
-1. 首先，我们引入所需的头文件和 exitsnoop.h。
-2. 定义一个名为 "LICENSE" 的全局变量，内容为 "Dual BSD/GPL"，这是 eBPF 程序的许可证要求。
-3. 定义一个名为 rb 的 BPF_MAP_TYPE_RINGBUF 类型的映射，它将用于将内核空间的数据传输到用户空间。指定 max_entries 为 256 * 1024，代表 ring buffer 的最大容量。
-4. 定义一个名为 handle_exit 的 eBPF 程序，它将在进程退出事件触发时执行。传入一个名为 ctx 的 trace_event_raw_sched_process_template 结构体指针作为参数。
-5. 使用 bpf_get_current_pid_tgid() 函数获取当前任务的 PID 和 TID。对于主线程，PID 和 TID 相同；对于子线程，它们是不同的。我们只关心进程（主线程）的退出，因此在 PID 和 TID 不同时返回 0，忽略子线程退出事件。
-6. 使用 bpf_ringbuf_reserve 函数为事件结构体 e 在 ring buffer 中预留空间。如果预留失败，返回 0。
-7. 使用 bpf_get_current_task() 函数获取当前任务的 task_struct 结构指针。
-8. 将进程相关信息填充到预留的事件结构体 e 中，包括进程持续时间、PID、PPID、退出代码以及进程名称。
-9. 最后，使用 bpf_ringbuf_submit 函数将填充好的事件结构体 e 提交到 ring buffer，之后在用户空间进行处理和输出。
+让我们看看它如何工作。我们首先定义了一个 `BPF_MAP_TYPE_RINGBUF` 类型的 map，大小为 256KB。这个环形缓冲区是所有 CPU 共享的，解决了 perf buffer 每个 CPU 单独缓冲区导致的内存浪费问题。
 
-这个示例展示了如何使用 exitsnoop 和 ring buffer 在 eBPF 程序中捕获进程退出事件并将相关信息传输到用户空间。这对于分析进程退出原因和监控系统行为非常有用。
+在 `handle_exit` 函数中，我们使用了 reserve/submit 模式。首先用 `bpf_ringbuf_reserve` 在 ring buffer 中预留空间——这会返回一个指向预留内存的指针。然后我们直接在这块内存中填充数据：计算进程运行时长（当前时间减去启动时间）、读取 PID、PPID、退出代码和进程名。最后用 `bpf_ringbuf_submit` 提交数据到用户空间。
+
+这种模式的优势是避免了额外的内存拷贝，我们直接在 ring buffer 中写入数据，而不是先在栈上构建然后再拷贝。注意我们只关心进程退出（PID == TID），忽略了线程退出事件。
 
 ## Compile and Run
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 Compile:
 
@@ -157,6 +151,6 @@ TIME     PID     PPID    EXIT_CODE  DURATION_NS  COMM
 
 ## 总结
 
-本文介绍了如何使用 eunomia-bpf 开发一个简单的 BPF 程序，该程序可以监控 Linux 系统中的进程退出事件, 并将捕获的事件通过 ring buffer 发送给用户空间程序。在本文中，我们使用 eunomia-bpf 编译运行了这个例子。
+本文介绍了如何使用 ring buffer 监控 Linux 系统中的进程退出事件。ring buffer 相比 perf buffer 有更好的内存效率和性能，应该作为从内核向用户空间发送数据的首选。
 
-为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。此外，我们还为您提供了完整的教程和源代码，您可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。

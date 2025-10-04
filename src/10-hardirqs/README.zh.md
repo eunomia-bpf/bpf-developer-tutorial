@@ -20,14 +20,7 @@ softirqs 是软件中断处理程序。它们是内核中的一种底层异步�
 
 当内核处理 hardirqs 或 softirqs 时，这些 eBPF 程序会被执行，从而收集相关信息，如中断向量、中断处理程序的执行时间等。收集到的信息可以用于分析内核中的性能问题和其他与中断处理相关的问题。
 
-为了捕获 hardirqs 和 softirqs，可以遵循以下步骤：
-
-1. 在 eBPF 程序中定义用于存储中断信息的数据结构和映射。
-2. 编写 eBPF 程序，将其挂载到相应的内核函数上，以捕获 hardirqs 或 softirqs。
-3. 在 eBPF 程序中，收集中断处理程序的相关信息，并将这些信息存储在映射中。
-4. 在用户空间应用程序中，读取映射中的数据以分析和展示中断处理信息。
-
-通过上述方法，我们可以在 eBPF 中使用 hardirqs 和 softirqs 捕获和分析内核中的中断事件，以识别潜在的性能问题和与中断处理相关的问题。
+为了捕获 hardirqs 和 softirqs，我们需要在 eBPF 程序中定义用于存储中断信息的数据结构和映射，编写 eBPF 程序并将其挂载到相应的内核函数上，收集中断处理程序的相关信息并存储在映射中，最后在用户空间应用程序中读取映射中的数据以分析和展示中断处理信息。通过这种方法，我们可以在 eBPF 中捕获和分析内核中的中断事件，以识别潜在的性能问题。
 
 ## hardirqs 代码实现
 
@@ -166,78 +159,17 @@ int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
 char LICENSE[] SEC("license") = "GPL";
 ```
 
-这段代码是一个 eBPF 程序，用于捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。程序的主要目的是获取中断处理程序的名称、执行次数和执行时间，并以直方图的形式展示执行时间的分布。让我们一步步分析这段代码。
+这段代码展示了如何使用 eBPF 捕获和分析硬件中断的执行信息。
 
-1. 包含必要的头文件和定义数据结构：
+让我们看看代码的工作原理。程序定义了一些 `const volatile` 全局变量用于配置行为：`filter_cg` 控制是否过滤 cgroup，`targ_dist` 控制是否显示执行时间分布，`do_count` 控制是否只统计计数。程序使用三个映射：cgroup 过滤映射、per-CPU 的开始时间戳映射，以及存储中断处理信息的 hash 映射。
 
-    ```c
-    #include <vmlinux.h>
-    #include <bpf/bpf_core_read.h>
-    #include <bpf/bpf_helpers.h>
-    #include <bpf/bpf_tracing.h>
-    #include "hardirqs.h"
-    #include "bits.bpf.h"
-    #include "maps.bpf.h"
-    ```
+核心逻辑在 `handle_entry` 和 `handle_exit` 两个函数中。在中断入口处，如果启用了计数模式，程序会直接增加中断计数；否则记录当前时间戳。在中断出口处，程序计算执行时间（当前时间减去开始时间），然后根据配置决定是累加总时间还是更新直方图槽位。
 
-    该程序包含了 eBPF 开发所需的标准头文件，以及用于定义数据结构和映射的自定义头文件。
-
-2. 定义全局变量和映射：
-
-    ```c
-
-    #define MAX_ENTRIES 256
-
-    const volatile bool filter_cg = false;
-    const volatile bool targ_dist = false;
-    const volatile bool targ_ns = false;
-    const volatile bool do_count = false;
-
-    ...
-    ```
-
-    该程序定义了一些全局变量，用于配置程序的行为。例如，`filter_cg` 控制是否过滤 cgroup，`targ_dist` 控制是否显示执行时间的分布等。此外，程序还定义了三个映射，分别用于存储 cgroup 信息、开始时间戳和中断处理程序的信息。
-
-3. 定义两个辅助函数 `handle_entry` 和 `handle_exit`：
-
-    这两个函数分别在中断处理程序的入口和出口处被调用。`handle_entry` 记录开始时间戳或更新中断计数，`handle_exit` 计算中断处理程序的执行时间，并将结果存储到相应的信息映射中。
-
-4. 定义 eBPF 程序的入口点：
-
-    ```c
-
-    SEC("tp_btf/irq_handler_entry")
-    int BPF_PROG(irq_handler_entry_btf, int irq, struct irqaction *action)
-    {
-    return handle_entry(irq, action);
-    }
-
-    SEC("tp_btf/irq_handler_exit")
-    int BPF_PROG(irq_handler_exit_btf, int irq, struct irqaction *action)
-    {
-    return handle_exit(irq, action);
-    }
-
-    SEC("raw_tp/irq_handler_entry")
-    int BPF_PROG(irq_handler_entry, int irq, struct irqaction *action)
-    {
-    return handle_entry(irq, action);
-    }
-
-    SEC("raw_tp/irq_handler_exit")
-    int BPF_PROG(irq_handler_exit, int irq, struct irqaction *action)
-    {
-    return handle_exit(irq, action);
-    }
-    ```
-
-    这里定义了四个 eBPF 程序入口点，分别用于捕获中断处理程序的入口和出口事件。`tp_btf` 和 `raw_tp` 分别代表使用 BPF Type Format（BTF）和原始 tracepoints 捕获事件。这样可以确保程序在不同内核版本上可以移植和运行。
-
-Softirq 代码也类似，这里就不再赘述了。
+程序定义了四个 eBPF 入口点，使用 `tp_btf` 和 `raw_tp` 两种 tracepoint 类型。这种双重实现确保了程序在不同内核版本上的兼容性——较新的内核支持 BTF，较老的内核则使用原始 tracepoint。Softirq 代码也采用类似的模式。
 
 ## 运行代码
 
-eunomia-bpf 是一个结合 Wasm 的开源 eBPF 动态加载运行时和开发工具链，它的目的是简化 eBPF 程序的开发、构建、分发、运行。可以参考 <https://github.com/eunomia-bpf/eunomia-bpf> 下载和安装 ecc 编译工具链和 ecli 运行时。我们使用 eunomia-bpf 编译运行这个例子。
+我们使用 eunomia-bpf 来编译和运行这个示例。你可以从 <https://github.com/eunomia-bpf/eunomia-bpf> 安装它。
 
 要编译这个程序，请使用 ecc 工具：
 
@@ -255,8 +187,6 @@ sudo ecli run ./package.json
 
 ## 总结
 
-在本章节（eBPF 入门开发实践教程十：在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件）中，我们学习了如何使用 eBPF 程序捕获和分析内核中硬件中断处理程序（hardirqs）的执行信息。我们详细讲解了示例代码，包括如何定义数据结构、映射以及 eBPF 程序入口点，以及如何在中断处理程序的入口和出口处调用辅助函数来记录执行信息。
+在本章节中，我们学习了如何使用 eBPF 程序捕获和分析内核中硬件中断处理程序的执行信息。通过在中断处理程序的入口和出口处记录时间戳，我们可以测量中断处理时间，识别内核中的性能问题。
 
-通过学习本章节内容，您应该已经掌握了如何在 eBPF 中使用 hardirqs 或 softirqs 捕获中断事件的方法，以及如何分析这些事件以识别内核中的性能问题和其他与中断处理相关的问题。这些技能对于分析和优化 Linux 内核的性能至关重要。
-
-为了更好地理解和实践 eBPF 编程，我们建议您阅读 eunomia-bpf 的官方文档：<https://github.com/eunomia-bpf/eunomia-bpf> 。此外，我们还为您提供了完整的教程和源代码，您可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 中查看和学习。希望本教程能够帮助您顺利入门 eBPF 开发，并为您的进一步学习和实践提供有益的参考。
+如果您希望学习更多关于 eBPF 的知识和实践，可以访问我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或网站 <https://eunomia.dev/zh/tutorials/> 以获取更多示例和完整的教程。
