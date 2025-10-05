@@ -1,0 +1,84 @@
+#!/usr/bin/env bpftrace
+/*
+ * drm_scheduler.bt - Monitor DRM GPU scheduler activity
+ *
+ * This script tracks GPU job scheduling using stable DRM scheduler tracepoints.
+ * Works across ALL modern GPU drivers (Intel i915, AMD AMDGPU, Nouveau, etc.)
+ *
+ * The gpu_scheduler tracepoints are stable uAPI - guaranteed not to change.
+ *
+ * Usage: sudo bpftrace drm_scheduler.bt
+ */
+
+BEGIN
+{
+    printf("Tracing DRM GPU scheduler... Hit Ctrl-C to end.\n");
+    printf("%-18s %-12s %-16s %-12s %-8s %s\n",
+           "TIME(ms)", "EVENT", "JOB_ID", "RING", "QUEUED", "DETAILS");
+}
+
+/* GPU job starts executing */
+tracepoint:gpu_scheduler:drm_run_job
+{
+    $job_id = args->id;
+    $ring = str(args->name);
+    $queue = args->job_count;
+    $hw_queue = args->hw_job_count;
+
+    /* Record start time for latency calculation */
+    @start[$job_id] = nsecs;
+
+    printf("%-18llu %-12s %-16llu %-12s %-8u hw=%d\n",
+           nsecs / 1000000,
+           "RUN",
+           $job_id,
+           $ring,
+           $queue,
+           $hw_queue);
+
+    /* Track per-ring statistics */
+    @jobs_per_ring[$ring] = count();
+}
+
+/* GPU job completes (fence signaled) */
+tracepoint:gpu_scheduler:drm_sched_process_job
+{
+    $fence = args->fence;
+
+    printf("%-18llu %-12s %-16p\n",
+           nsecs / 1000000,
+           "COMPLETE",
+           $fence);
+
+    @completion_count = count();
+}
+
+/* Job waiting for dependencies */
+tracepoint:gpu_scheduler:drm_sched_job_wait_dep
+{
+    $job_id = args->id;
+    $ring = str(args->name);
+    $dep_ctx = args->ctx;
+    $dep_seq = args->seqno;
+
+    printf("%-18llu %-12s %-16llu %-12s %-8s ctx=%llu seq=%u\n",
+           nsecs / 1000000,
+           "WAIT_DEP",
+           $job_id,
+           $ring,
+           "-",
+           $dep_ctx,
+           $dep_seq);
+
+    @wait_count = count();
+    @waits_per_ring[$ring] = count();
+}
+
+END
+{
+    printf("\n=== DRM Scheduler Statistics ===\n");
+    printf("\nJobs per ring:\n");
+    print(@jobs_per_ring);
+    printf("\nWaits per ring:\n");
+    print(@waits_per_ring);
+}

@@ -1,0 +1,123 @@
+#!/usr/bin/env bpftrace
+/*
+ * drm_vblank.bt - Monitor display vertical blanking events
+ *
+ * Tracks display synchronization using generic DRM vblank tracepoints.
+ * Works across all DRM drivers.
+ *
+ * Use cases:
+ * - Frame timing analysis
+ * - V-sync debugging
+ * - Compositor performance monitoring
+ * - Event delivery latency measurement
+ *
+ * Usage: sudo bpftrace drm_vblank.bt
+ */
+
+BEGIN
+{
+    printf("Tracing DRM vblank events... Hit Ctrl-C to end.\n");
+    printf("%-18s %-14s %-6s %-10s %s\n",
+           "TIME(ms)", "EVENT", "CRTC", "SEQUENCE", "DETAILS");
+}
+
+/* Vblank event occurs */
+tracepoint:drm:drm_vblank_event
+{
+    $crtc = args->crtc;
+    $seq = args->seq;
+    $time = args->time;
+    $high_prec = args->high_prec;
+
+    printf("%-18llu %-14s %-6d %-10u %s\n",
+           nsecs / 1000000,
+           "VBLANK",
+           $crtc,
+           $seq,
+           $high_prec ? "high-prec" : "");
+
+    /* Track vblanks per CRTC */
+    @vblanks = count();
+    @vblanks_per_crtc[$crtc] = count();
+
+    /* Record sequence for latency tracking */
+    @vblank_time[$crtc, $seq] = nsecs;
+}
+
+/* Vblank event queued for delivery */
+tracepoint:drm:drm_vblank_event_queued
+{
+    $crtc = args->crtc;
+    $seq = args->seq;
+
+    printf("%-18llu %-14s %-6d %-10u\n",
+           nsecs / 1000000,
+           "QUEUED",
+           $crtc,
+           $seq);
+
+    @queued = count();
+    @queue_time[$crtc, $seq] = nsecs;
+}
+
+/* Vblank event delivered to userspace */
+tracepoint:drm:drm_vblank_event_delivered
+{
+    $crtc = args->crtc;
+    $seq = args->seq;
+
+    /* Calculate delivery latency */
+    if (@queue_time[$crtc, $seq]) {
+        $latency_us = (nsecs - @queue_time[$crtc, $seq]) / 1000;
+        delete(@queue_time[$crtc, $seq]);
+
+        printf("%-18llu %-14s %-6d %-10u latency=%lluus\n",
+               nsecs / 1000000,
+               "DELIVERED",
+               $crtc,
+               $seq,
+               $latency_us);
+
+        @delivery_latency = hist($latency_us);
+        @latency_sum += $latency_us;
+        @latency_count += 1;
+    } else {
+        printf("%-18llu %-14s %-6d %-10u\n",
+               nsecs / 1000000,
+               "DELIVERED",
+               $crtc,
+               $seq);
+    }
+
+    @delivered = count();
+
+    /* Calculate total event latency (vblank to delivery) */
+    if (@vblank_time[$crtc, $seq]) {
+        $total_latency_us = (nsecs - @vblank_time[$crtc, $seq]) / 1000;
+        delete(@vblank_time[$crtc, $seq]);
+
+        @total_latency = hist($total_latency_us);
+    }
+}
+
+END
+{
+    printf("\n=== DRM Vblank Statistics ===\n");
+
+    if (@latency_count > 0) {
+        printf("\nEvent Delivery Latency:\n");
+        printf("  Average: %llu us\n", @latency_sum / @latency_count);
+        printf("\n  Distribution (queue → delivery, microseconds):\n");
+        print(@delivery_latency);
+        printf("\nTotal Event Latency (vblank → delivery, microseconds):\n");
+        print(@total_latency);
+    }
+
+    printf("\nEvent counts:\n");
+    print(@vblanks);
+    print(@queued);
+    print(@delivered);
+
+    printf("\nVblanks per CRTC:\n");
+    print(@vblanks_per_crtc);
+}

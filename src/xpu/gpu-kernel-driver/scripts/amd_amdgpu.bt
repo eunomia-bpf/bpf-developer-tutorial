@@ -1,0 +1,263 @@
+#!/usr/bin/env bpftrace
+/*
+ * amd_amdgpu.bt - Monitor AMD GPU activity
+ *
+ * Tracks AMD GPU operations:
+ * - Buffer object creation and movement
+ * - Command submission (ioctl → scheduler)
+ * - GPU interrupts
+ * - Virtual memory operations
+ * - Register access (optional, very verbose)
+ *
+ * Usage: sudo bpftrace amd_amdgpu.bt
+ * Usage (with register tracing): sudo bpftrace amd_amdgpu.bt --unsafe -c 'TRACE_REGS=1'
+ */
+
+BEGIN
+{
+    printf("Tracing AMD GPU... Hit Ctrl-C to end.\n");
+    printf("%-18s %-14s %-16s %-12s %s\n",
+           "TIME(ms)", "EVENT", "ID/OBJECT", "RING/SIZE", "DETAILS");
+
+    @total_alloc = 0;
+    @trace_regs = 0;  /* Set to 1 to enable register tracing */
+}
+
+/* Buffer object creation */
+tracepoint:amdgpu:amdgpu_bo_create
+{
+    $bo = args->bo;
+    $pages = args->pages;
+    $type = args->type;
+    $size = $pages * 4096;
+
+    @total_alloc += $size;
+    @allocs[$bo] = $size;
+
+    printf("%-18llu %-14s 0x%-14llx %-12llu pages=%u type=%u\n",
+           nsecs / 1000000,
+           "BO_CREATE",
+           $bo,
+           $size,
+           $pages,
+           $type);
+
+    @bo_creates = count();
+}
+
+/* Buffer object move (VRAM ↔ GTT migration) */
+tracepoint:amdgpu:amdgpu_bo_move
+{
+    $bo = args->bo;
+    $size = @allocs[$bo];
+
+    printf("%-18llu %-14s 0x%-14llx %-12llu (migration)\n",
+           nsecs / 1000000,
+           "BO_MOVE",
+           $bo,
+           $size);
+
+    @bo_moves = count();
+}
+
+/* Command submission ioctl from userspace */
+tracepoint:amdgpu:amdgpu_cs_ioctl
+{
+    $job_id = args->sched_job_id;
+    $ring = str(args->ring_name);
+    $seqno = args->seqno;
+    $num_ibs = args->num_ibs;
+
+    /* Record submission time for latency calculation */
+    @submit_time[$job_id] = nsecs;
+
+    printf("%-18llu %-14s %-16llu %-12s seq=%u ibs=%u\n",
+           nsecs / 1000000,
+           "CS_IOCTL",
+           $job_id,
+           $ring,
+           $seqno,
+           $num_ibs);
+
+    @cs_ioctls = count();
+    @cs_per_ring[$ring] = count();
+}
+
+/* Scheduler starts job execution */
+tracepoint:amdgpu:amdgpu_sched_run_job
+{
+    $job_id = args->sched_job_id;
+    $ring = str(args->ring_name);
+    $seqno = args->seqno;
+
+    /* Calculate submission-to-execution latency */
+    if (@submit_time[$job_id]) {
+        $latency_us = (nsecs - @submit_time[$job_id]) / 1000;
+        delete(@submit_time[$job_id]);
+
+        printf("%-18llu %-14s %-16llu %-12s seq=%u latency=%lluus\n",
+               nsecs / 1000000,
+               "SCHED_RUN",
+               $job_id,
+               $ring,
+               $seqno,
+               $latency_us);
+
+        /* Track latency statistics */
+        @latency_hist = hist($latency_us);
+        @latency_sum += $latency_us;
+        @latency_count += 1;
+    } else {
+        printf("%-18llu %-14s %-16llu %-12s seq=%u\n",
+               nsecs / 1000000,
+               "SCHED_RUN",
+               $job_id,
+               $ring,
+               $seqno);
+    }
+
+    @sched_runs = count();
+}
+
+/* Command submission processing */
+tracepoint:amdgpu:amdgpu_cs
+{
+    $ring = args->ring;
+    $dw = args->dw;
+    $fences = args->fences;
+
+    printf("%-18llu %-14s ring=%-11u %-12s dw=%u fences=%u\n",
+           nsecs / 1000000,
+           "CS_PROCESS",
+           $ring,
+           "-",
+           $dw,
+           $fences);
+
+    @cs_process = count();
+}
+
+/* GPU interrupt */
+tracepoint:amdgpu:amdgpu_iv
+{
+    $ih = args->ih;
+    $client = args->client_id;
+    $src = args->src_id;
+    $ring = args->ring_id;
+    $vmid = args->vmid;
+    $pasid = args->pasid;
+
+    printf("%-18llu %-14s ih=%u          %-12s client=%u src=%u vmid=%u pasid=%u\n",
+           nsecs / 1000000,
+           "INTERRUPT",
+           $ih,
+           "-",
+           $client,
+           $src,
+           $vmid,
+           $pasid);
+
+    @interrupts = count();
+    @interrupts_by_src[$src] = count();
+}
+
+/* Virtual memory TLB flush */
+tracepoint:amdgpu:amdgpu_vm_flush
+{
+    printf("%-18llu %-14s %-16s %-12s\n",
+           nsecs / 1000000,
+           "VM_FLUSH",
+           "-",
+           "-");
+
+    @vm_flushes = count();
+}
+
+/* Virtual memory BO map */
+tracepoint:amdgpu:amdgpu_vm_bo_map
+{
+    printf("%-18llu %-14s %-16s %-12s\n",
+           nsecs / 1000000,
+           "VM_BO_MAP",
+           "-",
+           "-");
+
+    @vm_maps = count();
+}
+
+/* Virtual memory BO unmap */
+tracepoint:amdgpu:amdgpu_vm_bo_unmap
+{
+    printf("%-18llu %-14s %-16s %-12s\n",
+           nsecs / 1000000,
+           "VM_BO_UNMAP",
+           "-",
+           "-");
+
+    @vm_unmaps = count();
+}
+
+/* Register read (optional - very verbose!) */
+tracepoint:amdgpu:amdgpu_device_rreg
+/@trace_regs/
+{
+    $did = args->did;
+    $reg = args->reg;
+    $value = args->value;
+
+    printf("%-18llu %-14s dev=0x%-11x %-12s reg=0x%x val=0x%x\n",
+           nsecs / 1000000,
+           "REG_READ",
+           $did,
+           "-",
+           $reg,
+           $value);
+}
+
+/* Register write (optional - very verbose!) */
+tracepoint:amdgpu:amdgpu_device_wreg
+/@trace_regs/
+{
+    $did = args->did;
+    $reg = args->reg;
+    $value = args->value;
+
+    printf("%-18llu %-14s dev=0x%-11x %-12s reg=0x%x val=0x%x\n",
+           nsecs / 1000000,
+           "REG_WRITE",
+           $did,
+           "-",
+           $reg,
+           $value);
+}
+
+END
+{
+    printf("\n=== AMD GPU Statistics ===\n");
+    printf("\nMemory:\n");
+    printf("  Total allocated: %llu MB\n", @total_alloc / 1048576);
+
+    if (@latency_count > 0) {
+        printf("\nSubmission Latency:\n");
+        printf("  Average: %llu us\n", @latency_sum / @latency_count);
+        printf("\n  Distribution (microseconds):\n");
+        print(@latency_hist);
+    }
+
+    printf("\nEvent counts:\n");
+    print(@bo_creates);
+    print(@bo_moves);
+    print(@cs_ioctls);
+    print(@sched_runs);
+    print(@cs_process);
+    print(@interrupts);
+    print(@vm_flushes);
+    print(@vm_maps);
+    print(@vm_unmaps);
+
+    printf("\nCommands per ring:\n");
+    print(@cs_per_ring);
+
+    printf("\nInterrupts by source:\n");
+    print(@interrupts_by_src);
+}

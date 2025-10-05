@@ -95,3 +95,19 @@ jobs:
     - name: test 45
       run: |
           make -C src/45-scx-nest
+
+    - name: test 46 xdp-pktgen
+      run: |
+          make -C src/46-xdp-test
+
+    - name: test features bpf_arena
+      run: |
+          make -C src/features/bpf_arena
+
+    - name: test features bpf_iters
+      run: |
+          make -C src/features/bpf_iters
+
+    - name: test features bpf_wq
+      run: |
+          make -C src/features/bpf_wq

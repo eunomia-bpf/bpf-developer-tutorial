@@ -1,0 +1,195 @@
+#!/usr/bin/env bpftrace
+/*
+ * intel_i915.bt - Monitor Intel i915 GPU activity
+ *
+ * Tracks Intel GPU operations:
+ * - GEM object creation and memory allocations
+ * - VMA binding/unbinding (GPU address space)
+ * - I/O operations (pread/pwrite)
+ * - Page faults
+ * - Memory pressure (shrink/evict)
+ *
+ * Requires: CONFIG_DRM_I915_LOW_LEVEL_TRACEPOINTS=y
+ *
+ * Usage: sudo bpftrace intel_i915.bt
+ */
+
+BEGIN
+{
+    printf("Tracing Intel i915 GPU... Hit Ctrl-C to end.\n");
+    printf("%-18s %-12s %-18s %-12s %s\n",
+           "TIME(ms)", "EVENT", "OBJECT", "SIZE/OFFSET", "DETAILS");
+
+    @total_alloc = 0;
+}
+
+/* GEM object creation */
+tracepoint:i915:i915_gem_object_create
+{
+    $obj = args->obj;
+    $size = args->size;
+
+    @total_alloc += $size;
+    @allocs[$obj] = $size;
+
+    printf("%-18llu %-12s 0x%-16llx %-12llu total=%llu MB\n",
+           nsecs / 1000000,
+           "GEM_CREATE",
+           $obj,
+           $size,
+           @total_alloc / 1048576);
+
+    @gem_creates = count();
+}
+
+/* VMA bind to GPU address space */
+tracepoint:i915:i915_vma_bind
+{
+    $obj = args->obj;
+    $offset = args->offset;
+    $size = args->size;
+    $flags = args->flags;
+
+    printf("%-18llu %-12s 0x%-16llx 0x%-10llx size=%llu flags=0x%x\n",
+           nsecs / 1000000,
+           "VMA_BIND",
+           $obj,
+           $offset,
+           $size,
+           $flags);
+
+    @vma_binds = count();
+}
+
+/* VMA unbind from GPU address space */
+tracepoint:i915:i915_vma_unbind
+{
+    $obj = args->obj;
+    $offset = args->offset;
+    $size = args->size;
+
+    printf("%-18llu %-12s 0x%-16llx 0x%-10llx size=%llu\n",
+           nsecs / 1000000,
+           "VMA_UNBIND",
+           $obj,
+           $offset,
+           $size);
+
+    @vma_unbinds = count();
+}
+
+/* Memory shrink (reclaim under pressure) */
+tracepoint:i915:i915_gem_shrink
+{
+    $target = args->target;
+    $flags = args->flags;
+
+    printf("%-18llu %-12s %-18s %-12llu flags=0x%x\n",
+           nsecs / 1000000,
+           "SHRINK",
+           "-",
+           $target,
+           $flags);
+
+    @shrinks = count();
+    @shrink_bytes += $target;
+}
+
+/* GPU object eviction */
+tracepoint:i915:i915_gem_evict
+{
+    $size = args->size;
+    $align = args->align;
+    $flags = args->flags;
+
+    printf("%-18llu %-12s %-18s %-12llu align=%llu flags=0x%x\n",
+           nsecs / 1000000,
+           "EVICT",
+           "-",
+           $size,
+           $align,
+           $flags);
+
+    @evictions = count();
+}
+
+/* Userspace writes to GEM object */
+tracepoint:i915:i915_gem_object_pwrite
+{
+    $obj = args->obj;
+    $offset = args->offset;
+    $len = args->len;
+
+    printf("%-18llu %-12s 0x%-16llx 0x%-10llx len=%llu\n",
+           nsecs / 1000000,
+           "PWRITE",
+           $obj,
+           $offset,
+           $len);
+
+    @pwrites = count();
+    @pwrite_bytes += $len;
+}
+
+/* Userspace reads from GEM object */
+tracepoint:i915:i915_gem_object_pread
+{
+    $obj = args->obj;
+    $offset = args->offset;
+    $len = args->len;
+
+    printf("%-18llu %-12s 0x%-16llx 0x%-10llx len=%llu\n",
+           nsecs / 1000000,
+           "PREAD",
+           $obj,
+           $offset,
+           $len);
+
+    @preads = count();
+    @pread_bytes += $len;
+}
+
+/* GPU page fault */
+tracepoint:i915:i915_gem_object_fault
+{
+    $obj = args->obj;
+    $index = args->index;
+    $gtt = args->gtt;
+    $write = args->write;
+
+    printf("%-18llu %-12s 0x%-16llx %-12llu %s %s\n",
+           nsecs / 1000000,
+           "FAULT",
+           $obj,
+           $index,
+           $gtt ? "GTT" : "CPU",
+           $write ? "WRITE" : "READ");
+
+    @faults = count();
+    if ($write) {
+        @write_faults = count();
+    } else {
+        @read_faults = count();
+    }
+}
+
+END
+{
+    printf("\n=== Intel i915 GPU Statistics ===\n");
+    printf("\nMemory:\n");
+    printf("  Total allocated: %llu MB\n", @total_alloc / 1048576);
+    printf("  Bytes shrunk: %llu MB\n", @shrink_bytes / 1048576);
+    printf("  Bytes written: %llu MB\n", @pwrite_bytes / 1048576);
+    printf("  Bytes read: %llu MB\n", @pread_bytes / 1048576);
+    printf("\nEvent counts:\n");
+    print(@gem_creates);
+    print(@vma_binds);
+    print(@vma_unbinds);
+    print(@shrinks);
+    print(@evictions);
+    print(@pwrites);
+    print(@preads);
+    print(@faults);
+    print(@write_faults);
+    print(@read_faults);
+}
