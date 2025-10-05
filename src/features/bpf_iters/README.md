@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example: BPF Iterators for Kernel Data Export
+# eBPF Tutorial: BPF Iterators for Kernel Data Export
 
 Ever tried monitoring hundreds of processes and ended up parsing thousands of `/proc` files just to find the few you care about? Or needed custom formatted kernel data but didn't want to modify the kernel itself? Traditional `/proc` filesystem access is slow, inflexible, and forces you to process tons of data in userspace even when you only need a small filtered subset.
 
@@ -294,7 +294,7 @@ After loading, we select which iterator to run based on the `--files` flag. Both
 Navigate to the bpf_iters directory and build:
 
 ```bash
-cd /home/yunwei37/workspace/bpf-developer-tutorial/src/features/bpf_iters
+cd bpf-developer-tutorial/src/features/bpf_iters
 make
 ```
 

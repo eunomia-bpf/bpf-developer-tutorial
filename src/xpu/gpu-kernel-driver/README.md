@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example: Monitoring GPU Activity with Kernel Tracepoints
+# eBPF Tutorial: Monitoring GPU Driver Activity with Kernel Tracepoints
 
 Ever wondered what your GPU is really doing under the hood? When games stutter, ML training slows down, or video encoding freezes, the answers lie deep inside the kernel's GPU driver. Traditional debugging relies on guesswork and vendor-specific tools, but there's a better way. Linux kernel GPU tracepoints expose real-time insights into job scheduling, memory allocation, and command submission - and eBPF lets you analyze this data with minimal overhead.
 

@@ -178,7 +178,7 @@ static int probe_kernel_support(int run_prog_fd)
 导航到教程目录并构建项目：
 
 ```bash
-cd /home/yunwei37/workspace/bpf-developer-tutorial/src/46-xdp-test
+cd bpf-developer-tutorial/src/46-xdp-test
 make build
 ```
 

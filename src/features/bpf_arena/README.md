@@ -241,8 +241,6 @@ static void test_arena_list_add_del(int cnt)
 	}
 	sum = list_sum(skel->bss->list_head);
 	printf("Sum of elements: %d (expected: %d)\n", sum, expected_sum);
-	printf("Arena sum: %ld (expected: %d)\n", skel->bss->arena_sum, expected_sum);
-	printf("Number of elements: %d (expected: %d)\n", skel->data->test_val, cnt + 1);
 
 	ret = bpf_prog_test_run_opts(bpf_program__fd(skel->progs.arena_list_del), &opts);
 	if (ret != 0) {
@@ -252,7 +250,6 @@ static void test_arena_list_add_del(int cnt)
 	sum = list_sum(skel->bss->list_head);
 	printf("Sum after deletion: %d (expected: 0)\n", sum);
 	printf("Sum computed by BPF: %d (expected: %d)\n", skel->bss->list_sum, expected_sum);
-	printf("Arena sum after deletion: %ld (expected: %d)\n", skel->bss->arena_sum, expected_sum);
 
 	printf("\nTest passed!\n");
 out:
@@ -303,7 +300,7 @@ This allocator design avoids locks by using per-CPU state. Since BPF programs ru
 Navigate to the bpf_arena directory and build the example:
 
 ```bash
-cd /home/yunwei37/workspace/bpf-developer-tutorial/src/features/bpf_arena
+cd bpf-developer-tutorial/src/features/bpf_arena
 make
 ```
 
@@ -320,11 +317,8 @@ Expected output:
 ```
 Testing arena list with 10 elements
 Sum of elements: 45 (expected: 45)
-Arena sum: 45 (expected: 45)
-Number of elements: 11 (expected: 11)
 Sum after deletion: 0 (expected: 0)
 Sum computed by BPF: 45 (expected: 45)
-Arena sum after deletion: 45 (expected: 45)
 
 Test passed!
 ```

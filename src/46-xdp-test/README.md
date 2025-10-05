@@ -178,7 +178,7 @@ This attempts a single packet injection. If the kernel lacks support (Linux <5.1
 Navigate to the tutorial directory and build the project:
 
 ```bash
-cd /home/yunwei37/workspace/bpf-developer-tutorial/src/46-xdp-test
+cd bpf-developer-tutorial/src/46-xdp-test
 make build
 ```
 

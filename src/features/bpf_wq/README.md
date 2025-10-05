@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example: BPF Workqueues for Asynchronous Sleepable Tasks
+# eBPF Tutorial: BPF Workqueues for Asynchronous Sleepable Tasks
 
 Ever needed your eBPF program to sleep, allocate memory, or wait for device I/O? Traditional eBPF programs run in restricted contexts where blocking operations crash the system. But what if your HID device needs timing delays between injected key events, or your cleanup routine needs to sleep while freeing resources?
 
@@ -236,7 +236,7 @@ The fundamental trade-off is latency vs capability. Timers have lower latency bu
 Navigate to the bpf_wq directory and build:
 
 ```bash
-cd /home/yunwei37/workspace/bpf-developer-tutorial/src/features/bpf_wq
+cd bpf-developer-tutorial/src/features/bpf_wq
 make
 ```
 

@@ -55,8 +55,6 @@ static void test_arena_list_add_del(int cnt)
 	}
 	sum = list_sum(skel->bss->list_head);
 	printf("Sum of elements: %d (expected: %d)\n", sum, expected_sum);
-	printf("Arena sum: %ld (expected: %d)\n", skel->bss->arena_sum, expected_sum);
-	printf("Number of elements: %d (expected: %d)\n", skel->data->test_val, cnt + 1);
 
 	ret = bpf_prog_test_run_opts(bpf_program__fd(skel->progs.arena_list_del), &opts);
 	if (ret != 0) {
@@ -66,7 +64,6 @@ static void test_arena_list_add_del(int cnt)
 	sum = list_sum(skel->bss->list_head);
 	printf("Sum after deletion: %d (expected: 0)\n", sum);
 	printf("Sum computed by BPF: %d (expected: %d)\n", skel->bss->list_sum, expected_sum);
-	printf("Arena sum after deletion: %ld (expected: %d)\n", skel->bss->arena_sum, expected_sum);
 
 	printf("\nTest passed!\n");
 out:
