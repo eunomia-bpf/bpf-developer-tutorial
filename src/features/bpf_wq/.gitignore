@@ -1,0 +1,12 @@
+# Build artifacts
+.output/
+*.o
+*.skel.h
+
+# Generated binaries
+wq_simple
+
+# Editor files
+*.swp
+*~
+.vscode/
