@@ -191,9 +191,15 @@ Verify tracepoints exist on your system before running scripts:
 sudo cat /sys/kernel/debug/tracing/available_events | grep -E '(gpu_scheduler|i915|amdgpu|^drm:)'
 ```
 
+## Limitations: Kernel Tracing vs GPU-Side Observability
+
+This tutorial focuses on kernel-side GPU driver tracing, which provides visibility into job scheduling, memory management, and driver-firmware communication. However, kernel tracepoints have fundamental limitations. When `drm_run_job` fires, we know a job started executing on GPU hardware, but we cannot observe what happens inside the GPU itself. The execution of thousands of parallel threads, their memory access patterns, branch divergence, warp occupancy, and instruction-level behavior remain invisible. These details are critical for understanding performance bottlenecks - whether memory coalescing is failing, whether thread divergence is killing efficiency, or whether shared memory bank conflicts are stalling execution.
+
+To achieve fine-grained GPU observability, eBPF programs must run directly on the GPU. This is the direction explored by the eGPU paper and [bpftime GPU examples](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu). bpftime converts eBPF bytecode to PTX instructions that GPUs can execute, then dynamically patches CUDA binaries at runtime to inject these eBPF programs at kernel entry/exit points. This enables observing GPU-specific information like block indices, thread indices, global timers, and warp-level metrics. Developers can instrument critical paths inside GPU kernels to measure execution behavior and diagnose complex performance issues that kernel-side tracing cannot reach. This GPU-internal observability complements kernel tracepoints - together they provide end-to-end visibility from API calls through kernel drivers to GPU execution.
+
 ## Summary
 
-GPU kernel tracepoints provide zero-overhead visibility into driver internals. DRM scheduler's stable uAPI tracepoints work across all vendors for production monitoring. Vendor-specific tracepoints expose detailed memory management and command submission pipelines. The bpftrace script demonstrates tracking job scheduling, measuring latency, and identifying dependency stalls - all critical for diagnosing performance issues in games, ML training, and cloud GPU workloads.
+GPU kernel tracepoints provide zero-overhead visibility into driver internals. DRM scheduler's stable uAPI tracepoints work across all vendors for production monitoring. Vendor-specific tracepoints expose detailed memory management and command submission pipelines. The bpftrace script demonstrates tracking job scheduling, measuring latency, and identifying dependency stalls - all critical for diagnosing performance issues in games, ML training, and cloud GPU workloads. For GPU-internal observability beyond kernel tracing, explore bpftime's GPU eBPF capabilities.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 

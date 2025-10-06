@@ -191,9 +191,15 @@ Waits per ring:
 sudo cat /sys/kernel/debug/tracing/available_events | grep -E '(gpu_scheduler|i915|amdgpu|^drm:)'
 ```
 
+## 局限性：内核追踪 vs GPU 侧可观测性
+
+本教程主要关注内核侧的 GPU 驱动追踪，这为我们提供了作业调度、内存管理和驱动-固件通信的可见性。然而，内核跟踪点存在根本性的局限。当 `drm_run_job` 触发时，我们知道作业开始在 GPU 硬件上执行，但无法观察到 GPU 内部实际发生了什么。成千上万个并行线程的执行、它们的内存访问模式、分支分化、warp 占用率和指令级行为都是不可见的。这些细节对于理解性能瓶颈至关重要 - 内存合并是否失败、线程分化是否降低了效率，或者共享内存 bank 冲突是否导致执行停顿。
+
+要实现细粒度的 GPU 可观测性，eBPF 程序必须直接在 GPU 上运行。这正是 eGPU 论文和 [bpftime GPU 示例](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu)所探索的方向。bpftime 将 eBPF 字节码转换为 GPU 可以执行的 PTX 指令，然后在运行时动态修补 CUDA 二进制文件，将这些 eBPF 程序注入到内核入口/出口点。这使得开发者可以观察 GPU 特有的信息，如块索引、线程索引、全局计时器和 warp 级指标。开发者可以在 GPU 内核的关键路径上进行插桩，测量执行行为并诊断内核侧追踪无法触及的复杂性能问题。这种 GPU 内部的可观测性与内核跟踪点互补 - 它们一起提供了从 API 调用通过内核驱动到 GPU 执行的端到端可见性。
+
 ## 总结
 
-GPU 内核跟踪点提供零开销的驱动内部可见性。DRM 调度器的稳定 uAPI 跟踪点跨所有供应商工作，适合生产监控。供应商特定跟踪点暴露详细的内存管理和命令提交管道。bpftrace 脚本演示了跟踪作业调度、测量延迟和识别依赖停顿 - 所有这些对于诊断游戏、ML 训练和云 GPU 工作负载中的性能问题都至关重要。
+GPU 内核跟踪点提供零开销的驱动内部可见性。DRM 调度器的稳定 uAPI 跟踪点跨所有供应商工作，适合生产监控。供应商特定跟踪点暴露详细的内存管理和命令提交管道。bpftrace 脚本演示了跟踪作业调度、测量延迟和识别依赖停顿 - 所有这些对于诊断游戏、ML 训练和云 GPU 工作负载中的性能问题都至关重要。对于超越内核追踪的 GPU 内部可观测性，请探索 bpftime 的 GPU eBPF 能力。
 
 > 如果你想深入了解 eBPF，请查看我们的教程仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
