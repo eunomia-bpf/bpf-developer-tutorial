@@ -4,6 +4,8 @@ In modern software systems, understanding the performance characteristics of fun
 
 This blog post will dive into how to measure function latency using eBPF, an incredibly powerful tool for tracing and monitoring both kernel and user-space programs.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/33-funclatency>
+
 ## What is eBPF?
 
 eBPF (Extended Berkeley Packet Filter) is a revolutionary technology that allows developers to write small programs that run in the Linux kernel. Originally designed for packet filtering, eBPF has evolved into a versatile tool for tracing, monitoring, and profiling system behavior. With eBPF, you can instrument almost any part of the Linux kernel or user-space programs to collect performance data, enforce security policies, or even debug systems in real time—all without the need to modify the kernel source code or restart the system.

@@ -6,7 +6,9 @@ This tutorial will focus on the application of eBPF in the networking domain, sp
 
 In many workloads, such as inter-service communication in a microservices architecture, the performance overhead of network requests made through the loopback interface can significantly impact the overall application performance. Since these requests have to go through the local network stack, their processing performance can become a bottleneck, especially in high-concurrency scenarios. To address this issue, sockops-type eBPF programs can be used to accelerate local request forwarding, providing functionality similar to direct memory access (DMA). Sockops programs can manage sockets in the kernel space and directly forward packets between sockets on the local machine, reducing the CPU time required for packet forwarding in the TCP/IP stack.
 
-This tutorial will demonstrate how to use sockops-type eBPF programs to accelerate network request forwarding through a specific example. To help you understand how to use sockops programs, we will step by step introduce the code of the example program and discuss the working principle of each part. The complete source code and project can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops>.
+This tutorial will demonstrate how to use sockops-type eBPF programs to accelerate network request forwarding through a specific example. To help you understand how to use sockops programs, we will step by step introduce the code of the example program and discuss the working principle of each part. 
+
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/29-sockops>
 
 ## Leveraging eBPF Sockops for Performance Optimization
 

@@ -4,6 +4,8 @@ Go, the popular programming language created by Google, is known for its powerfu
 
 Enter eBPF (Extended Berkeley Packet Filter), a technology originally designed for network packet filtering, but which has since evolved into a powerful tool for tracing and monitoring system behavior. By leveraging eBPF, we can tap into the kernel and gather insights about the runtime behavior of Go programs, including the states of goroutines. This blog post explores how to use eBPF to trace the state transitions of goroutines in a Go program.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/31-goroutine>
+
 ## Background: Goroutines and eBPF
 
 ### Goroutines

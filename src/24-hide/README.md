@@ -4,6 +4,8 @@ eBPF (Extended Berkeley Packet Filter) is a powerful feature in the Linux kernel
 
 In this tutorial, we will show how eBPF can be used to hide process or file information, a common technique in the field of network security and defence.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/24-hide>
+
 ## Background Knowledge and Implementation Mechanism
 
 "Process hiding" enables a specific process to become invisible to the operating system's regular detection mechanisms. This technique can be used in both hacking and system defence scenarios. Specifically, each process on a Linux system has a subfolder named after its process ID in the /proc/ directory, which contains various information about the process. `ps` displays process information by looking in these folders. Therefore, if we can hide the /proc/ folder of a process, we can make that process invisible to `ps` commands and other detection methods.

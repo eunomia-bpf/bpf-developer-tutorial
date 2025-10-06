@@ -3,6 +3,8 @@
 > This article mainly documents the author's exploration process, results, and issues encountered while testing the level of support for CO-RE technology based on the libbpf library on high version Android kernels in the Android Studio Emulator.
 > The test was conducted by building a Debian environment in the Android Shell environment and attempting to build the eunomia-bpf toolchain and run its test cases based on this.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/22-android>
+
 ## Background
 
 As of now (2023-04), Android has not provided good support for dynamic loading of eBPF programs. Both the compiler distribution scheme represented by bcc and the CO-RE scheme based on btf and libbpf rely heavily on Linux environment support and cannot run well on the Android system.[^WeiShu]

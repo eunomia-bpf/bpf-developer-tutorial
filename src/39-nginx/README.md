@@ -4,6 +4,8 @@ Nginx is one of the most popular web servers and reverse proxies in the world, k
 
 eBPF is a revolutionary technology that allows developers to run custom programs in the Linux kernel. Originally designed for network packet filtering, eBPF has evolved into a versatile tool for tracing, monitoring, and profiling system behavior in both kernel and user space. By leveraging eBPF, you can trace Nginx's critical functions, measure latency, and identify bottlenecks without modifying the source code or restarting the service.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/39-nginx>
+
 ## Background: Nginx and eBPF
 
 ### Nginx

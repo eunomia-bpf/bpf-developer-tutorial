@@ -4,6 +4,8 @@ Yusheng Zheng
 
 In this blog post, we'll dive into the world of eBPF in userspace. While many are familiar with kernel-based eBPF, userspace eBPF runtimes have been making significant strides and offer compelling use cases. We will also compare userspace eBPF runtimes with Wasm runtimes, another popular technology in the cloud-native and edge computing landscape. Among these, we're excited to introduce [bpftime](https://github.com/eunomia-bpf/bpftime). Powered by an LLVM `JIT/AOT` backend, our benchmarks suggest that bpftime stands out as one of the fastest userspace eBPF runtimes available.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/36-userspace-ebpf>
+
 ## Introduction to eBPF
 
 ### What is eBPF?

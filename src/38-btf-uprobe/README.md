@@ -12,7 +12,9 @@ This approach may be particularly beneficial for tracing applications like OpenS
 
 To implement the Co-RE feature of eBPF in user-space applications, we also need to utilize the BPF Type Format (BTF) to overcome some of the limitations of traditional eBPF programs. The key to this approach lies in providing user-space programs with similar type information and compatibility support as the kernel, thereby enabling eBPF programs to more flexibly handle different versions of user-space applications and libraries.
 
-This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/). The source code is available on the [https://github.com/eunomia-bpf/bpf-developer-tutorial](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe).
+This article is part of the eBPF Developer Tutorial, and for more detailed content, you can visit [https://eunomia.dev/tutorials/](https://eunomia.dev/tutorials/).
+
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe>
 
 ## Why we need CO-RE?
 

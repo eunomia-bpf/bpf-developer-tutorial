@@ -4,6 +4,8 @@ eBPF (Extended Berkeley Packet Filter) is a revolutionary technology in the Linu
 
 This article introduces the Lifecycle of eBPF Programs, how to run eBPF programs after user-space application exits, and how to use pin to share eBPF objects between processes. This article is part of the eBPF Developer Tutorial, more details can be found in <https://github.com/eunomia-bpf/bpf-developer-tutorial> and <https://eunomia.dev/tutorials>
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/28-detach>
+
 By using the detach method to run eBPF programs, the user space loader can exit without stopping the eBPF program. Another common use case for pinning is sharing eBPF objects between processes. For example, one could create a Map from Go, pin it, and inspect it using `bpftool map dump pinned /sys/fs/bpf/my_map`.
 
 ## The Lifecycle of eBPF Programs

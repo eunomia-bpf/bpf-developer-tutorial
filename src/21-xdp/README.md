@@ -2,6 +2,8 @@
 
 In this tutorial, we will introduce XDP (eXpress Data Path) and walk through a small example to help you get started. Later on, we will explore more advanced XDP applications, such as load balancers, firewalls, and other real-world use cases. Please give us a start on [Github](https://github.com/eunomia-bpf/bpf-developer-tutorial) if you are interested in eBPF or XDP!
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/21-xdp>
+
 ## What is XDP?
 
 XDP is a high-performance, programmable data path in the Linux kernel, designed for packet processing at the network interface level. By attaching eBPF programs directly to network device drivers, XDP can intercept and handle packets before they reach the kernel’s networking stack. This allows for extremely low-latency and efficient packet processing, making it ideal for tasks like DDoS defense, load balancing, and traffic filtering. In fact, XDP can achieve throughput as high as **24 million packets per second (Mpps) per core**.

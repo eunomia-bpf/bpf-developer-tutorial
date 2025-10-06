@@ -2,7 +2,9 @@
 
 eBPF, or Extended Berkeley Packet Filter, is a revolutionary technology in the Linux kernel that allows developers to run custom "micro-programs" in kernel mode, thus changing system behavior or collecting granular performance data without modifying the kernel code.
 
-This article discusses how to trace user space Rust applications with Uprobe and eBPF, including how to obtain symbol names and attach them, get function parameters, get return values, etc. This article is part of the eBPF developer tutorial, more detailed content can be found here: <https://eunomia.dev/tutorials/> The source code is open source in the [GitHub repository](https://github.com/eunomia-bpf/bpf-developer-tutorial).
+This article discusses how to trace user space Rust applications with Uprobe and eBPF, including how to obtain symbol names and attach them, get function parameters, get return values, etc. This article is part of the eBPF developer tutorial, more detailed content can be found here: <https://eunomia.dev/tutorials/>
+
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/37-uprobe-rust>
 
 ## Uprobe
 
