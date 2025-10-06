@@ -81,8 +81,8 @@ Security:
 
 - [lesson 24-hide](src/24-hide/README.md) Hiding Process or File Information
 - [lesson 25-signal](src/25-signal/README.md) Using bpf_send_signal to Terminate Malicious Processes in eBPF
-- [lesson 26-sudo](src/26-sudo/README.md) Using eBPF to add sudo user
-- [lesson 27-replace](src/27-replace/README.md) Replace Text Read or Written by Any Program with eBPF
+- [lesson 26-sudo](src/26-sudo/README.md) Privilege Escalation via File Content Manipulation
+- [lesson 27-replace](src/27-replace/README.md) Transparent Text Replacement in File Reads
 - [lesson 28-detach](src/28-detach/README.md) Running eBPF After Application Exits: The Lifecycle of eBPF Programs
 - [lesson 34-syscall](src/34-syscall/README.md) Modifying System Call Arguments with eBPF
 
