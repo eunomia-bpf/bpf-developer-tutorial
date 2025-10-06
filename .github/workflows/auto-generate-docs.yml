@@ -1,0 +1,45 @@
+name: Auto Generate Documentation
+
+on:
+  push:
+    paths:
+      - 'src/**/README.md'
+      - 'src/**/README.zh.md'
+      - 'src/**/.config'
+      - 'scripts/generate_toc.py'
+      - 'scripts/*.template'
+  workflow_dispatch:
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Generate documentation
+        run: |
+          python3 scripts/generate_toc.py
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --quiet || echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md
+          git commit -m "docs: auto-generate documentation"
+          git push
