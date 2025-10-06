@@ -3,6 +3,8 @@
 
 In this tutorial, we will guide you through the process of implementing a simple XDP (eXpress Data Path) load balancer using eBPF (Extended Berkeley Packet Filter). With just C, libbpf, and no external dependencies, this hands-on guide is perfect for developers interested in harnessing the full power of the Linux kernel to build highly efficient network applications.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/42-xdp-loadbalancer>
+
 ## Why XDP?
 
 `XDP` (eXpress Data Path) is a fast, in-kernel networking framework in Linux that allows packet processing at the earliest point in the network stack, right in the network interface card (NIC). This enables ultra-low-latency and high-throughput packet handling, making XDP ideal for tasks like load balancing, DDoS protection, and traffic filtering.

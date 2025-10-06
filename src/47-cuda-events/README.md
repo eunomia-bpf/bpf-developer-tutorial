@@ -2,6 +2,8 @@
 
 Have you ever wondered what's happening under the hood when your CUDA application is running? GPU operations can be challenging to debug and profile because they happen in a separate device with its own memory space. In this tutorial, we'll build a powerful eBPF-based tracing tool that lets you peek into CUDA API calls in real time.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events>
+
 ## Introduction to CUDA and GPU Tracing
 
 CUDA (Compute Unified Device Architecture) is NVIDIA's parallel computing platform and programming model that enables developers to use NVIDIA GPUs for general-purpose processing. When you run a CUDA application, a typical workflow begins with the host (CPU) allocating memory on the device (GPU), followed by data transfer from host memory to device memory, then GPU kernels (functions) are launched to process the data, after which results are transferred back from device to host, and finally device memory is freed.

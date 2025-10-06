@@ -1,8 +1,10 @@
 # eBPF Tutorial: Introduction to the BPF Scheduler
 
-Welcome to our deep dive into the world of eBPF with a focus on the BPF scheduler! If you're looking to extend your eBPF knowledge beyond the basics, you're in the right place. 
+Welcome to our deep dive into the world of eBPF with a focus on the BPF scheduler! If you're looking to extend your eBPF knowledge beyond the basics, you're in the right place.
 
 In this tutorial, we'll explore the **scx_simple scheduler**, a minimal example of the sched_ext scheduler class introduced in Linux kernel version `6.12`. We'll walk you through its architecture, how it leverages BPF programs to define scheduling behavior, and guide you through compiling and running the example. By the end, you'll have a solid understanding of how to create and manage advanced scheduling policies using eBPF.
+
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/44-scx-simple>
 
 ## Understanding the Extensible BPF Scheduler
 

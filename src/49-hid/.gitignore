@@ -1,0 +1,16 @@
+# Build outputs
+.output/
+*.o
+*.skel.h
+hid-input-modifier
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.log

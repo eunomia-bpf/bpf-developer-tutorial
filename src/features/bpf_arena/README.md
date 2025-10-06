@@ -4,6 +4,8 @@ Ever tried building a linked list in eBPF and got stuck using awkward integer in
 
 This is what **BPF Arena** solves. Created by Alexei Starovoitov in 2024, arena provides a sparse shared memory region where BPF programs can use real pointers to build complex data structures like linked lists, trees, and graphs, while userspace gets zero-copy direct access to the same memory. In this tutorial, we'll build a linked list in arena memory and show you how both kernel and userspace can manipulate it using standard pointer operations.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/bpf_arena>
+
 ## Introduction to BPF Arena: Breaking Free from Map Limitations
 
 ### The Problem: When BPF Maps Aren't Enough

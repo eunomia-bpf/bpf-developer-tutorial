@@ -2,6 +2,8 @@
 
 In the ever-evolving landscape of system performance optimization, the ability to customize and extend kernel behavior is invaluable. One of the most powerful tools for achieving this is eBPF (extended Berkeley Packet Filter). In this tutorial, we'll explore the implementation of the `scx_nest` scheduler, an advanced eBPF program that leverages the `sched_ext` scheduler class introduced in Linux kernel version `6.12`. By the end of this guide, you'll understand how to build a sophisticated scheduler that dynamically adjusts task placement based on CPU core frequencies and utilization.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/45-scx-nest>
+
 ## Introduction to `sched_ext`
 
 The `sched_ext` scheduler class marks a significant advancement in Linux kernel scheduling capabilities. Unlike traditional schedulers, `sched_ext` allows its behavior to be defined dynamically through a set of BPF (Berkeley Packet Filter) programs. This flexibility enables developers to implement custom scheduling algorithms tailored to specific workloads and system requirements.

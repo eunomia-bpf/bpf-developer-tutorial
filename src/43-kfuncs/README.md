@@ -2,6 +2,8 @@
 
 Have you ever felt constrained by eBPF's capabilities? Maybe you've run into situations where the existing eBPF features just aren't enough to accomplish your goals. Perhaps you need deeper interactions with the kernel, or you're facing performance issues that the standard eBPF runtime can't solve. If you've ever wished for more flexibility and power in your eBPF programs, this tutorial is for you.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/43-kfuncs>
+
 ## Introduction: Adding a `strstr` kfunc to Break Free from eBPF Runtime Limitations
 
 **eBPF (extended Berkeley Packet Filter)** has revolutionized Linux system programming by allowing developers to run sandboxed programs inside the kernel. It's a game-changer for networking, security, and observability, enabling powerful functionalities without the need to modify kernel source code or load traditional kernel modules.

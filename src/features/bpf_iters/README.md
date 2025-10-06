@@ -4,6 +4,8 @@ Ever tried monitoring hundreds of processes and ended up parsing thousands of `/
 
 This is what **BPF Iterators** solve. Introduced in Linux kernel 5.8, iterators let you traverse kernel data structures directly from BPF programs, apply filters in-kernel, and output exactly the data you need in any format you want. In this tutorial, we'll build a dual-mode iterator that shows kernel stack traces and open file descriptors for processes, with in-kernel filtering by process name - dramatically faster than parsing `/proc`.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/bpf_iters>
+
 ## Introduction to BPF Iterators: The /proc Replacement
 
 ### The Problem: /proc is Slow and Rigid

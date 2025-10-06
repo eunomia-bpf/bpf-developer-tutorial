@@ -4,6 +4,8 @@ Ever needed your eBPF program to sleep, allocate memory, or wait for device I/O?
 
 This is what **BPF Workqueues** enable. Created by Benjamin Tissoires at Red Hat in 2024 for HID-BPF device handling, workqueues let you schedule asynchronous work that runs in process context where sleeping and blocking operations are allowed. In this tutorial, we'll explore why workqueues were created, how they differ from timers, and build a complete example demonstrating async callback execution.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/bpf_wq>
+
 ## Introduction to BPF Workqueues: Solving the Sleep Problem
 
 ### The Problem: When eBPF Can't Sleep

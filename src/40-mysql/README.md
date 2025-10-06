@@ -4,6 +4,8 @@ MySQL is one of the most widely used relational database management systems in t
 
 This is where eBPF (Extended Berkeley Packet Filter) comes into play. eBPF is a powerful technology that allows you to write programs that can run in the Linux kernel, enabling you to trace, monitor, and analyze various aspects of system behavior, including the performance of applications like MySQL. In this blog, we'll explore how to use eBPF to trace MySQL queries, measure their execution time, and gain valuable insights into your database's performance.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/40-mysql>
+
 ## Background: MySQL and eBPF
 
 ### MySQL

@@ -4,6 +4,8 @@ Neural Processing Units (NPUs) are the next frontier in AI acceleration - built 
 
 This tutorial shows you how to trace Intel NPU kernel driver operations using eBPF and bpftrace. We'll monitor the complete workflow from Level Zero API calls down to kernel functions, track IPC communication with NPU firmware, measure memory allocation patterns, and diagnose performance bottlenecks. By the end, you'll understand how NPU drivers work internally and have practical tools for debugging AI workload issues.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/xpu/npu-kernel-driver>
+
 ## Intel NPU Driver Architecture
 
 Intel's NPU driver follows a two-layer architecture similar to GPU drivers. The kernel module (`intel_vpu`) lives in mainline Linux at `drivers/accel/ivpu/` and exposes `/dev/accel/accel0` as the device interface. This handles hardware communication, memory management through an MMU, and IPC (Inter-Processor Communication) with NPU firmware running on the accelerator itself.

@@ -2,6 +2,8 @@
 
 Have you ever wondered how much energy your applications are consuming? As energy efficiency becomes increasingly critical in both data centers and edge devices, understanding power consumption at the process level is essential for optimization. In this tutorial, we'll build an eBPF-based energy monitoring tool that provides real-time insights into process-level power consumption with minimal overhead.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/48-energy>
+
 ## Introduction to Energy Monitoring and Power Analysis
 
 Energy monitoring in computing systems has traditionally been challenging due to the lack of fine-grained measurement capabilities. While hardware counters like Intel RAPL (Running Average Power Limit) can measure total system or CPU package power, they don't tell you which processes are consuming that power. This is where software-based energy attribution comes into play.

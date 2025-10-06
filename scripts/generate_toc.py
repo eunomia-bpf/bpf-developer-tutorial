@@ -15,13 +15,13 @@ def generate_toc(base_dir, project_root):
         "GPU": "\n\nGPU:\n\n",
         "Scheduler": "\n\nScheduler:\n\n",
         "Networking": "\n\nNetworking:\n\n",
-        "tracing": "\n\nTracing:\n\n",
+        "Tracing": "\n\nTracing:\n\n",
         "Security": "\n\nSecurity:\n\n",
         "Features": "\n\nFeatures:\n\n",
-        "Other": "\n\nFeatures:\n\n"
+        "Other": "\nOther:\n\n"
     }
 
-    subsection_order = ['GPU', 'Scheduler', 'Networking', 'tracing', 'Security', 'Features', 'Other', 'Android']
+    subsection_order = ['GPU', 'Scheduler', 'Networking', 'Tracing', 'Security', 'Features', 'Other', 'Android']
 
     # To ensure numeric sorting of directories
     def sort_key(directory_name):

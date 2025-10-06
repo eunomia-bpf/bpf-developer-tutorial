@@ -2,6 +2,8 @@
 
 eBPF (Extended Berkeley Packet Filter) is a powerful network and performance analysis tool widely used in the Linux kernel. eBPF allows developers to dynamically load, update, and run user-defined code without restarting the kernel or modifying the kernel source code. This feature enables eBPF to provide high flexibility and performance, making it widely applicable in network and system performance analysis. The same applies to eBPF applications in security, and this article will introduce how to use the eBPF LSM (Linux Security Modules) mechanism to implement a simple security check program.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/19-lsm-connect>
+
 ## Background
 
 LSM has been an official security framework in the Linux kernel since Linux 2.6, and security implementations based on it include SELinux and AppArmor. With the introduction of BPF LSM in Linux 5.7, system developers have been able to freely implement function-level security checks. This article provides an example of limiting access to a specific IPv4 address through the socket connect function using a BPF LSM program. (This demonstrates its high control precision.)

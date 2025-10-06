@@ -4,6 +4,8 @@ When games stutter or ML training slows down, the answers lie inside the GPU ker
 
 This tutorial shows how to monitor GPU activity using eBPF and bpftrace. We'll track DRM scheduler jobs, measure latency, and diagnose bottlenecks using stable kernel tracepoints that work across Intel, AMD, and Nouveau drivers.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/xpu/gpu-kernel-driver>
+
 ## GPU Kernel Tracepoints: Zero-Overhead Observability
 
 GPU tracepoints are instrumentation points built into the kernel's Direct Rendering Manager (DRM) subsystem. When your GPU schedules a job, allocates memory, or signals a fence, these tracepoints fire with precise timing and driver state.

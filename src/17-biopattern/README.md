@@ -4,6 +4,8 @@ eBPF (Extended Berkeley Packet Filter) is a new technology in the Linux kernel t
 
 In this tutorial, we will explore how to use eBPF to write programs to count random and sequential disk I/O. Disk I/O is one of the key metrics of computer performance, especially in data-intensive applications.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/17-biopattern>
+
 ## Random/Sequential Disk I/O
 
 As technology advances and data volumes explode, disk I/O becomes a critical bottleneck in system performance. The performance of an application depends heavily on how it interacts with the storage tier. Therefore, it becomes especially important to deeply understand and optimise disk I/O, especially random and sequential I/O.

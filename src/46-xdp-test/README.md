@@ -4,6 +4,8 @@ Need to stress-test your network stack or measure XDP program performance? Tradi
 
 In this tutorial, we'll build an XDP-based packet generator that leverages the kernel's BPF_PROG_RUN test infrastructure. We'll explore how XDP's `XDP_TX` action creates a packet reflection loop, understand the live frames mode that enables real packet injection, and measure the performance characteristics of XDP programs under load. By the end, you'll have a production-ready tool for network testing and XDP benchmarking.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/46-xdp-test>
+
 ## Understanding XDP Packet Generation
 
 XDP (eXpress Data Path) provides the fastest programmable packet processing in Linux by hooking into network drivers before the kernel's networking stack allocates socket buffers. Normally, XDP programs process packets arriving from network interfaces. But what if you want to test an XDP program's performance without real network traffic? Or inject synthetic packets to stress-test your network infrastructure?

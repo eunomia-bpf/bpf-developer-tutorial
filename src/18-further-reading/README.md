@@ -5,6 +5,8 @@ You may find more about eBPF in these places:
 - A curated list of awesome projects related to eBPF: <https://github.com/zoidbergwill/awesome-ebpf>
 - A website of eBPF projects and tutorials: <https://ebpf.io/>
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/18-further-reading>
+
 This is also list of eBPF related papers I read in recent years, might be helpful for people who are interested in eBPF related research.
 
 eBPF (extended Berkeley Packet Filter) is an emerging technology that allows safe execution of user-provided programs in the Linux kernel. It has gained widespread adoption in recent years for accelerating network processing, enhancing observability, and enabling programmable packet processing.

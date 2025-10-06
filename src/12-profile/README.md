@@ -4,6 +4,8 @@ This tutorial will guide you on using eBPF programs for performance analysis wit
 
 This implementation uses libbpf-rs, a Rust wrapper around libbpf, along with blazesym for symbol resolution. Perf is a performance analysis tool in the Linux kernel that allows users to measure and analyze the performance of kernel and user space programs, as well as obtain corresponding call stacks. It collects performance data using hardware counters and software events in the kernel.
 
+> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/12-profile>
+
 ## eBPF Tool: profile Performance Analysis Example
 
 The `profile` tool is implemented based on eBPF and utilizes the perf events in the Linux kernel for performance analysis. The `profile` tool periodically samples each processor to capture the execution of kernel and user space functions.
