@@ -70,8 +70,8 @@ GPU:
 
 - [lesson 24-hide](src/24-hide/README.zh.md) eBPF 开发实践：使用 eBPF 隐藏进程或文件信息
 - [lesson 25-signal](src/25-signal/README.zh.md) eBPF 入门实践教程：用 bpf_send_signal 发送信号终止恶意进程
-- [lesson 26-sudo](src/26-sudo/README.zh.md) 使用 eBPF 添加 sudo 用户
-- [lesson 27-replace](src/27-replace/README.zh.md) 使用 eBPF 替换任意程序读取或写入的文本
+- [lesson 26-sudo](src/26-sudo/README.zh.md) 文件操纵实现 sudo 权限提升
+- [lesson 27-replace](src/27-replace/README.zh.md) 替换任意程序读取或者写入的文本
 - [lesson 28-detach](src/28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](src/34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
 特性:
@@ -83,6 +83,9 @@ GPU:
 - [features bpf_wq](src/features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
 - [features bpf_iters](src/features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features bpf_arena](src/features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
+特性:
+
+- [lesson 49-hid](src/49-hid/README.zh.md) eBPF 教程：无需内核补丁修复故障的 HID 设备
 Android:
 
 - [lesson 22-android](src/22-android/README.zh.md) 在 Android 上使用 eBPF 程序
