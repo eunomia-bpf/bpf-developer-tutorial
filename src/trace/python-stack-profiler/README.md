@@ -28,11 +28,51 @@ This tutorial shows how to use eBPF to capture both native C stacks AND Python i
 - Root access (for loading eBPF programs)
 - Understanding of stack traces and profiling concepts
 
+## Quick Start
+
+```bash
+# Build the profiler
+make
+
+# Run the test
+sudo ./run_test.sh
+
+# Or profile a specific Python process
+sudo ./python-stack -p <PID> -d 10
+```
+
 ## Building and Running
+
+### Build
 
 ```bash
 make
-sudo ./python-stack
+```
+
+### Profile All Python Processes
+
+```bash
+sudo ./python-stack -d 10
+```
+
+### Profile Specific Process
+
+```bash
+# Find your Python process
+ps aux | grep python
+
+# Profile it
+sudo ./python-stack -p 12345 -d 30
+```
+
+### Generate Flamegraph
+
+```bash
+# Collect folded stacks
+sudo ./python-stack -p 12345 -f -d 10 > stacks.txt
+
+# Generate flamegraph (requires flamegraph.pl from Brendan Gregg)
+flamegraph.pl stacks.txt > flamegraph.svg
 ```
 
 ## How It Works
@@ -79,12 +119,44 @@ Each line shows the stack trace and sample count.
 - **Data processing**: Optimize pandas, polars operations
 - **General Python**: Any Python application performance analysis
 
+## Current Limitations
+
+This is an educational implementation demonstrating the concepts. For production use, you would need:
+
+1. **Python Thread State Discovery**: The current implementation requires manually populating the `python_thread_states` map. A complete implementation would:
+   - Parse `/proc/<pid>/maps` to find `libpython.so`
+   - Read Python's global interpreter state (`_PyRuntime`)
+   - Walk the thread state list to find each thread's `PyThreadState`
+   - Use uprobes on Python's thread creation functions
+
+2. **Python Version Compatibility**: Python internal structures vary between versions (3.8, 3.9, 3.10, 3.11, 3.12). A robust implementation would:
+   - Detect Python version from the binary
+   - Use different struct layouts per version
+   - Support both debug and release builds
+
+3. **Symbol Resolution**: Native stack addresses need symbol resolution via:
+   - `/proc/<pid>/maps` for address ranges
+   - DWARF/ELF parsing for function names
+   - Integration with blazesym (like in oncputime)
+
+## Production Alternatives
+
+For production Python profiling, consider:
+- **py-spy**: Sampling profiler that doesn't require instrumentation
+- **Austin**: Frame stack sampler for CPython
+- **Pyroscope**: Continuous profiling platform with Python support
+- **pyperf** with **eBPF backend**: Official Python profiling with eBPF
+
 ## Next Steps
 
-- Extend to capture GIL contention
-- Add Python object allocation tracking
-- Integrate with other eBPF metrics (CPU, memory)
-- Build flamegraph visualization
+Extend this tutorial to:
+- Implement Python thread state discovery via `/proc` parsing
+- Add multi-version Python struct support (3.8-3.12)
+- Integrate blazesym for native symbol resolution
+- Capture GIL contention events
+- Track Python object allocation
+- Measure function-level CPU time
+- Support PyPy and other Python implementations
 
 ## References
 
