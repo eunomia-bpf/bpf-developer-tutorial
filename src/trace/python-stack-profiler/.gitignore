@@ -1,0 +1,18 @@
+# Build outputs
+*.o
+*.bpf.o
+*.skel.h
+python-stack
+
+# Output directory
+.output/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp

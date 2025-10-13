@@ -18,11 +18,11 @@ Traditional BPF_PROG_RUN operates in "dry run" mode - packets are processed but 
 
 ### Live Frames Mode: Real Packet Injection
 
-In Linux 5.18+, the kernel introduced **live frames mode** via the `BPF_F_TEST_XDP_LIVE_FRAMES` flag. This fundamentally changes BPF_PROG_RUN behavior. When enabled, XDP_TX actions don't just return - they actually transmit packets on the wire through the specified network interface. This turns BPF_PROG_RUN into a powerful packet generator.
+In Linux 5.18+, the kernel introduced live frames mode via the `BPF_F_TEST_XDP_LIVE_FRAMES` flag. This fundamentally changes BPF_PROG_RUN behavior. When enabled, XDP_TX actions don't just return; they actually transmit packets on the wire through the specified network interface. This turns BPF_PROG_RUN into a powerful packet generator.
 
 Here's how it works: Your userspace program constructs a packet (Ethernet frame with IP header, UDP payload, etc.) and passes it to `bpf_prog_test_run()` with live frames enabled. The XDP program receives this packet in its `xdp_md` context. If the program returns `XDP_TX`, the kernel transmits the packet through the network driver as if it arrived on the interface and was reflected back. The packet appears on the wire with full hardware offload support (checksumming, segmentation, etc.).
 
-This enables several powerful use cases. **Network stack stress testing**: Flood your system with millions of packets per second to find breaking points in the network stack, driver, or application layer. **XDP program benchmarking**: Measure how many packets per second your XDP program can process under realistic load without external packet generators. **Protocol fuzzing**: Generate malformed packets or unusual protocol sequences to test robustness. **Synthetic traffic generation**: Create realistic traffic patterns for testing load balancers, firewalls, or intrusion detection systems.
+This enables several powerful use cases. Network stack stress testing floods your system with millions of packets per second to find breaking points in the network stack, driver, or application layer. XDP program benchmarking measures how many packets per second your XDP program can process under realistic load without external packet generators. Protocol fuzzing generates malformed packets or unusual protocol sequences to test robustness. Synthetic traffic generation creates realistic traffic patterns for testing load balancers, firewalls, or intrusion detection systems.
 
 ### The XDP_TX Reflection Loop
 
