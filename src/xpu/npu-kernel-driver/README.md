@@ -10,11 +10,11 @@ This tutorial shows you how to trace Intel NPU kernel driver operations using eB
 
 Intel's NPU driver follows a two-layer architecture similar to GPU drivers. The kernel module (`intel_vpu`) lives in mainline Linux at `drivers/accel/ivpu/` and exposes `/dev/accel/accel0` as the device interface. This handles hardware communication, memory management through an MMU, and IPC (Inter-Processor Communication) with NPU firmware running on the accelerator itself.
 
-The userspace driver (`libze_intel_vpu.so`) implements the Level Zero API - Intel's unified programming interface for accelerators. When you call Level Zero functions like `zeMemAllocHost()` or `zeCommandQueueExecuteCommandLists()`, the library translates these into DRM ioctls that hit the kernel module. The kernel validates requests, sets up memory mappings, submits work to the NPU firmware, and polls for completion.
+The userspace driver (`libze_intel_vpu.so`) implements the Level Zero API, Intel's unified programming interface for accelerators. When you call Level Zero functions like `zeMemAllocHost()` or `zeCommandQueueExecuteCommandLists()`, the library translates these into DRM ioctls that hit the kernel module. The kernel validates requests, sets up memory mappings, submits work to the NPU firmware, and polls for completion.
 
-The NPU firmware itself runs autonomously on the accelerator hardware. It receives command buffers from the kernel, schedules compute kernels, manages on-chip memory, and signals completion through interrupts. All communication happens via IPC channels - shared memory regions where kernel and firmware exchange messages. This architecture means three layers must coordinate correctly: your application, the kernel driver, and NPU firmware.
+The NPU firmware itself runs autonomously on the accelerator hardware. It receives command buffers from the kernel, schedules compute kernels, manages on-chip memory, and signals completion through interrupts. All communication happens via IPC channels, which are shared memory regions where kernel and firmware exchange messages. This architecture means three layers must coordinate correctly: your application, the kernel driver, and NPU firmware.
 
-Understanding this flow is critical for debugging. When an AI inference stalls, is it the kernel waiting for firmware? Is memory allocation thrashing? Are IPC messages backing up? eBPF tracing reveals the kernel side of this story - every ioctl, every memory mapping, every IPC interrupt.
+Understanding this flow is critical for debugging. When an AI inference stalls, is it the kernel waiting for firmware? Is memory allocation thrashing? Are IPC messages backing up? eBPF tracing reveals the kernel side of this story including every ioctl, every memory mapping, and every IPC interrupt.
 
 ## Level Zero API to Kernel Driver Mapping
 
@@ -24,19 +24,19 @@ The Level Zero workflow breaks down into five phases. Initialization opens the N
 
 Here's how each API call translates to kernel operations:
 
-**zeMemAllocHost** allocates host-visible memory accessible by both CPU and NPU. This triggers `DRM_IOCTL_IVPU_BO_CREATE` ioctl, hitting `ivpu_bo_create_ioctl()` in the kernel. The driver calls `ivpu_gem_create_object()` to allocate a GEM (Graphics Execution Manager) buffer object, then `ivpu_mmu_context_map_page()` maps pages into NPU's address space via the MMU. Finally `ivpu_bo_pin()` pins the buffer in memory so it can't be swapped out during compute.
+zeMemAllocHost allocates host-visible memory accessible by both CPU and NPU. This triggers `DRM_IOCTL_IVPU_BO_CREATE` ioctl, hitting `ivpu_bo_create_ioctl()` in the kernel. The driver calls `ivpu_gem_create_object()` to allocate a GEM (Graphics Execution Manager) buffer object, then `ivpu_mmu_context_map_page()` maps pages into NPU's address space via the MMU. Finally `ivpu_bo_pin()` pins the buffer in memory so it can't be swapped out during compute.
 
-For our matrix multiplication example with three buffers (input matrix A, input matrix B, output matrix C), we see three `zeMemAllocHost()` calls. Each triggers approximately 1,377 `ivpu_mmu_context_map_page()` calls - that's 4,131 total page mappings for setting up compute memory.
+For our matrix multiplication example with three buffers (input matrix A, input matrix B, output matrix C), we see three `zeMemAllocHost()` calls. Each triggers approximately 1,377 `ivpu_mmu_context_map_page()` calls, totaling 4,131 page mappings for setting up compute memory.
 
-**zeCommandQueueCreate** establishes a queue for submitting work. This maps to `DRM_IOCTL_IVPU_GET_PARAM` ioctl calling `ivpu_get_param_ioctl()` to query queue capabilities. The actual queue object lives in userspace - the kernel just provides device parameters.
+zeCommandQueueCreate establishes a queue for submitting work. This maps to `DRM_IOCTL_IVPU_GET_PARAM` ioctl calling `ivpu_get_param_ioctl()` to query queue capabilities. The actual queue object lives in userspace; the kernel just provides device parameters.
 
-**zeCommandListCreate** builds a command list in userspace. No kernel call happens here - the library constructs command buffers in memory that will later be submitted to the NPU.
+zeCommandListCreate builds a command list in userspace. No kernel call happens here. The library constructs command buffers in memory that will later be submitted to the NPU.
 
-**zeCommandQueueExecuteCommandLists** is where work actually reaches the NPU. This triggers `DRM_IOCTL_IVPU_SUBMIT` ioctl, calling `ivpu_submit_ioctl()` in the kernel. The driver validates the command buffer, sets up DMA transfers, and sends an IPC message to NPU firmware requesting execution. The firmware wakes up, processes the request, schedules compute kernels on NPU hardware, and starts sending IPC interrupts back to signal progress.
+zeCommandQueueExecuteCommandLists is where work actually reaches the NPU. This triggers `DRM_IOCTL_IVPU_SUBMIT` ioctl, calling `ivpu_submit_ioctl()` in the kernel. The driver validates the command buffer, sets up DMA transfers, and sends an IPC message to NPU firmware requesting execution. The firmware wakes up, processes the request, schedules compute kernels on NPU hardware, and starts sending IPC interrupts back to signal progress.
 
-During execution, we observe massive IPC traffic: 946 `ivpu_ipc_irq_handler()` calls (interrupt handler for IPC messages from firmware), 945 `ivpu_ipc_receive()` calls (reading messages from shared memory), and 951 `ivpu_hw_ip_ipc_rx_count_get()` calls (polling IPC queue depth). This intense communication is normal - the firmware sends status updates, memory fence signals, and completion notifications throughout the compute operation.
+During execution, we observe massive IPC traffic: 946 `ivpu_ipc_irq_handler()` calls (interrupt handler for IPC messages from firmware), 945 `ivpu_ipc_receive()` calls (reading messages from shared memory), and 951 `ivpu_hw_ip_ipc_rx_count_get()` calls (polling IPC queue depth). This intense communication is normal since the firmware sends status updates, memory fence signals, and completion notifications throughout the compute operation.
 
-**zeFenceHostSynchronize** blocks until the NPU completes work. This doesn't trigger a dedicated ioctl - instead the library continuously calls `ivpu_get_param_ioctl()` to poll fence status. The kernel checks if the firmware signaled completion via IPC. More `ivpu_ipc_irq_handler()` calls fire as the firmware sends the final completion message.
+zeFenceHostSynchronize blocks until the NPU completes work. This doesn't trigger a dedicated ioctl. Instead the library continuously calls `ivpu_get_param_ioctl()` to poll fence status. The kernel checks if the firmware signaled completion via IPC. More `ivpu_ipc_irq_handler()` calls fire as the firmware sends the final completion message.
 
 ## Tracing NPU Operations with Bpftrace
 

@@ -1,0 +1,331 @@
+#!/usr/bin/env bpftrace
+/*
+ * nvidia_driver.bt - Monitor NVIDIA proprietary GPU driver activity
+ *
+ * This script tracks NVIDIA GPU operations using kernel probes on the
+ * proprietary nvidia.ko driver. Unlike DRM drivers, NVIDIA uses its own
+ * kernel interface with vendor-specific tracepoints and functions.
+ *
+ * Key monitoring areas:
+ * - GPU operations (open/close/ioctl/mmap)
+ * - Interrupt handling (ISR activity)
+ * - Memory management (page faults)
+ * - P2P transfers (GPU-to-GPU communication)
+ * - Error reporting (Xid errors)
+ * - Power management (suspend/resume)
+ *
+ * Usage: sudo bpftrace nvidia_driver.bt
+ */
+
+BEGIN
+{
+    printf("Tracing NVIDIA GPU driver activity... Hit Ctrl-C to end.\n");
+    printf("%-12s %-18s %-16s %-8s %-8s %-20s\n",
+           "TIME(ms)", "EVENT", "COMM", "PID", "GPU_ID", "DETAILS");
+}
+
+/* ========== GPU Device Operations ========== */
+
+/* GPU device opened by application */
+kprobe:nvidia_open
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000,
+           "OPEN",
+           comm,
+           pid,
+           "-",
+           "GPU device opened");
+
+    @opens[comm] = count();
+    @open_pids[pid] = 1;
+}
+
+/* GPU device closed */
+kprobe:nvidia_close
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000,
+           "CLOSE",
+           comm,
+           pid,
+           "-",
+           "GPU device closed");
+
+    @closes[comm] = count();
+    delete(@open_pids[pid]);
+}
+
+/* ioctl commands to GPU (most frequent operation) */
+kprobe:nvidia_unlocked_ioctl
+{
+    @ioctl_count = count();
+    @ioctls_per_process[comm] = count();
+
+    /* Sample only 1% to reduce overhead */
+    if (rand % 100 == 0) {
+        printf("%-12llu %-18s %-16s %-8d %-8s cmd=0x%lx\n",
+               elapsed / 1000000,
+               "IOCTL",
+               comm,
+               pid,
+               "-",
+               arg1);
+    }
+}
+
+/* Memory mapping operations */
+kprobe:nvidia_mmap
+{
+    $offset = arg1;
+    $size = arg2;
+
+    printf("%-12llu %-18s %-16s %-8d %-8s offset=0x%lx size=%lu\n",
+           elapsed / 1000000,
+           "MMAP",
+           comm,
+           pid,
+           "-",
+           $offset,
+           $size);
+
+    @mmap_count = count();
+    @total_mmap_bytes = sum($size);
+}
+
+/* GPU page faults (when GPU or CPU accesses unmapped memory) */
+kprobe:nvidia_fault
+{
+    $address = arg1;
+
+    printf("%-12llu %-18s %-16s %-8d %-8s addr=0x%lx\n",
+           elapsed / 1000000,
+           "PAGE_FAULT",
+           comm,
+           pid,
+           "-",
+           $address);
+
+    @fault_count = count();
+    @faults_per_process[comm] = count();
+}
+
+/* ========== Interrupt Handling ========== */
+
+/* GPU interrupt handler (high frequency event) */
+kprobe:nvidia_isr
+{
+    @isr_count = count();
+    @last_isr_time = nsecs;
+}
+
+/* MSI-X interrupt handler (modern GPUs) */
+kprobe:nvidia_isr_msix
+{
+    @isr_msix_count = count();
+}
+
+/* Bottom-half interrupt handler (actual work processing) */
+kprobe:nvidia_isr_kthread_bh
+{
+    @isr_bh_count = count();
+
+    /* Calculate ISR latency if we have last ISR time */
+    if (@last_isr_time > 0) {
+        $latency_us = (nsecs - @last_isr_time) / 1000;
+        @isr_latency_us = hist($latency_us);
+    }
+}
+
+/* ========== P2P GPU-to-GPU Communication ========== */
+
+/* P2P memory pages requested (for GPU-GPU transfers) */
+kprobe:nvidia_p2p_get_pages
+{
+    $offset = arg1;
+    $size = arg2;
+
+    printf("%-12llu %-18s %-16s %-8d %-8s offset=0x%lx entries=%lu\n",
+           elapsed / 1000000,
+           "P2P_GET_PAGES",
+           comm,
+           pid,
+           "-",
+           $offset,
+           $size);
+
+    @p2p_get_count = count();
+}
+
+/* P2P DMA mapping for direct GPU-GPU transfers */
+kprobe:nvidia_p2p_dma_map_pages
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000,
+           "P2P_DMA_MAP",
+           comm,
+           pid,
+           "-",
+           "DMA mapping for P2P");
+
+    @p2p_dma_map_count = count();
+}
+
+/* ========== Power Management ========== */
+
+/* GPU entering suspend */
+kprobe:nvidia_suspend
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000,
+           "SUSPEND",
+           comm,
+           pid,
+           "-",
+           "GPU suspending");
+
+    @suspend_count = count();
+    @suspend_start = nsecs;
+}
+
+/* GPU resuming from suspend */
+kprobe:nvidia_resume
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000,
+           "RESUME",
+           comm,
+           pid,
+           "-",
+           "GPU resuming");
+
+    @resume_count = count();
+
+    /* Calculate suspend duration if we tracked suspend start */
+    if (@suspend_start > 0) {
+        $suspend_duration_ms = (nsecs - @suspend_start) / 1000000;
+        printf("  └─ Suspend duration: %llu ms\n", $suspend_duration_ms);
+        @suspend_duration_ms = hist($suspend_duration_ms);
+        @suspend_start = 0;
+    }
+}
+
+/* ========== Error Reporting ========== */
+
+/* NVIDIA Xid errors (hardware/driver errors) */
+tracepoint:nvidia:nvidia_dev_xid
+{
+    $dev = str(args->dev);
+    $xid = args->error_code;
+    $msg = str(args->msg);
+
+    printf("\n!!! GPU ERROR !!!\n");
+    printf("%-12llu %-18s %-16s %-8d %-8s dev=%s\n",
+           elapsed / 1000000,
+           "XID_ERROR",
+           comm,
+           pid,
+           "-",
+           $dev);
+    printf("  └─ Xid: %u - %s\n\n", $xid, $msg);
+
+    @xid_errors = count();
+    @xid_codes[$xid] = count();
+}
+
+/* ========== Statistics and Histograms ========== */
+
+/* Track VMA (Virtual Memory Area) operations */
+kprobe:nvidia_vma_open
+{
+    @vma_open_count = count();
+}
+
+kprobe:nvidia_vma_release
+{
+    @vma_release_count = count();
+}
+
+/* Poll operations (async I/O) */
+kprobe:nvidia_poll
+{
+    @poll_count = count();
+}
+
+END
+{
+    printf("\n");
+    printf("========================================\n");
+    printf("  NVIDIA GPU Driver Statistics\n");
+    printf("========================================\n");
+
+    /* Device Operations */
+    printf("\n--- Device Operations ---\n");
+    printf("Opens by process:\n");
+    print(@opens);
+    printf("\nCloses by process:\n");
+    print(@closes);
+    printf("\nTotal ioctls:\n");
+    print(@ioctl_count);
+    printf("Top ioctl callers:\n");
+    print(@ioctls_per_process);
+    printf("\nTotal mmaps:\n");
+    print(@mmap_count);
+    printf("Total mmap bytes:\n");
+    print(@total_mmap_bytes);
+
+    /* Memory Management */
+    printf("\n--- Memory Management ---\n");
+    printf("Total page faults:\n");
+    print(@fault_count);
+    printf("Faults by process:\n");
+    print(@faults_per_process);
+    printf("VMA opens:\n");
+    print(@vma_open_count);
+    printf("VMA releases:\n");
+    print(@vma_release_count);
+
+    /* Interrupt Statistics */
+    printf("\n--- Interrupt Handling ---\n");
+    printf("Total ISR calls:\n");
+    print(@isr_count);
+    printf("MSI-X ISR calls:\n");
+    print(@isr_msix_count);
+    printf("Bottom-half handlers:\n");
+    print(@isr_bh_count);
+    printf("\nISR latency distribution (μs):\n");
+    print(@isr_latency_us);
+
+    /* P2P Operations */
+    printf("\n--- P2P GPU-GPU Communication ---\n");
+    printf("P2P get_pages:\n");
+    print(@p2p_get_count);
+    printf("P2P DMA mappings:\n");
+    print(@p2p_dma_map_count);
+
+    /* Power Management */
+    printf("\n--- Power Management ---\n");
+    printf("Suspends:\n");
+    print(@suspend_count);
+    printf("Resumes:\n");
+    print(@resume_count);
+    printf("Suspend duration distribution (ms):\n");
+    print(@suspend_duration_ms);
+
+    /* Errors */
+    printf("\n--- Errors ---\n");
+    printf("Total Xid errors:\n");
+    print(@xid_errors);
+    printf("Xid error codes:\n");
+    print(@xid_codes);
+
+    /* Async I/O */
+    printf("\n--- Async Operations ---\n");
+    printf("Poll calls:\n");
+    print(@poll_count);
+
+    printf("\nCurrently open PIDs:\n");
+    print(@open_pids);
+
+    printf("\n========================================\n");
+}
