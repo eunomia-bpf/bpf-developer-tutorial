@@ -52,6 +52,14 @@ struct {
 	__uint(max_entries, 1024);
 } python_thread_states SEC(".maps");
 
+// Per-CPU array to avoid stack overflow (key_t is too large for BPF stack)
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, u32);
+	__type(value, struct key_t);
+	__uint(max_entries, 1);
+} key_storage SEC(".maps");
+
 static __always_inline void *
 bpf_map_lookup_or_try_init(void *map, const void *key, const void *init)
 {
@@ -161,11 +169,12 @@ SEC("perf_event")
 int do_perf_event(struct bpf_perf_event_data *ctx)
 {
 	u64 *valp;
-	static const u64 zero;
-	struct key_t key = {};
+	static const u64 zero = 0;
+	struct key_t *key;
 	u64 id;
 	u32 pid;
 	u32 tid;
+	u32 zero_key = 0;
 
 	id = bpf_get_current_pid_tgid();
 	pid = id >> 32;
@@ -180,19 +189,32 @@ int do_perf_event(struct bpf_perf_event_data *ctx)
 	if (filter_by_tid && !bpf_map_lookup_elem(&tids, &tid))
 		return 0;
 
-	key.pid = pid;
-	bpf_get_current_comm(&key.name, sizeof(key.name));
+	// Use per-CPU array to avoid stack overflow
+	key = bpf_map_lookup_elem(&key_storage, &zero_key);
+	if (!key)
+		return 0;
+
+	// Initialize key (can't use memset in eBPF, must zero manually)
+	key->py_stack.depth = 0;
+	for (int i = 0; i < MAX_STACK_DEPTH; i++) {
+		key->py_stack.frames[i].line_number = 0;
+		key->py_stack.frames[i].function_name[0] = 0;
+		key->py_stack.frames[i].file_name[0] = 0;
+	}
+
+	key->pid = pid;
+	bpf_get_current_comm(&key->name, sizeof(key->name));
 
 	// Get native stacks
 	if (user_stacks_only)
-		key.kern_stack_id = -1;
+		key->kern_stack_id = -1;
 	else
-		key.kern_stack_id = bpf_get_stackid(&ctx->regs, &stackmap, 0);
+		key->kern_stack_id = bpf_get_stackid(&ctx->regs, &stackmap, 0);
 
 	if (kernel_stacks_only)
-		key.user_stack_id = -1;
+		key->user_stack_id = -1;
 	else
-		key.user_stack_id = bpf_get_stackid(&ctx->regs, &stackmap,
+		key->user_stack_id = bpf_get_stackid(&ctx->regs, &stackmap,
 						    BPF_F_USER_STACK);
 
 	// Try to get Python stack
@@ -200,7 +222,7 @@ int do_perf_event(struct bpf_perf_event_data *ctx)
 	// 1. Find the PyThreadState for this thread (via TLS or global state)
 	// 2. This requires knowing Python's thread state location, which varies
 	// For now, we initialize an empty Python stack
-	key.py_stack.depth = 0;
+	key->py_stack.depth = 0;
 
 	// TODO: Implement Python thread state discovery
 	// This would typically involve:
@@ -215,12 +237,12 @@ int do_perf_event(struct bpf_perf_event_data *ctx)
 		if (bpf_probe_read_user(&thread_state, sizeof(thread_state),
 					(void *)*thread_state_ptr) == 0) {
 			if (thread_state.frame) {
-				get_python_stack(thread_state.frame, &key.py_stack);
+				get_python_stack(thread_state.frame, &key->py_stack);
 			}
 		}
 	}
 
-	valp = bpf_map_lookup_or_try_init(&counts, &key, &zero);
+	valp = bpf_map_lookup_or_try_init(&counts, key, &zero);
 	if (valp)
 		__sync_fetch_and_add(valp, 1);
 
