@@ -1,5 +1,7 @@
 use std::mem::MaybeUninit;
 use std::time::Duration;
+use std::sync::mpsc;
+use std::thread;
 
 use clap::ArgAction;
 use clap::Parser;
@@ -155,17 +157,30 @@ fn main() -> Result<(), libbpf_rs::Error> {
         event::OutputFormat::Standard
     };
 
-    let event_handler = event::EventHandler::new(output_format);
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+    // Spawn processing thread
+    let processing_thread = thread::spawn(move || {
+        let event_handler = event::EventHandler::new(output_format);
+        for event_data in rx {
+            event_handler.handle(&event_data);
+        }
+    });
 
     let mut builder = libbpf_rs::RingBufferBuilder::new();
     builder
         .add(&skel.maps.events, move |data| {
-            event_handler.handle(data)
+            let _ = tx.send(data.to_vec());
+            0
         })
         .unwrap();
 
     let ringbuf = builder.build().unwrap();
     while ringbuf.poll(Duration::MAX).is_ok() {}
+
+    // Wait for processing thread to finish
+    drop(ringbuf);
+    let _ = processing_thread.join();
 
     // Clean up perf events if in perf mode
     if !pefds.is_empty() {
