@@ -1,58 +1,87 @@
-# eBPF Tutorial by Example: GPU Flamegraph Profiling with CUPTI and eBPF
+# eBPF by Example: Building a GPU Flamegraph Profiler with CUPTI
 
-CPU profilers show host stacks but not which GPU kernel they launch; GPU profilers show device kernels but not the host code path that triggered them. What you usually need is the handoff: "Which CPU function called `cudaLaunchKernel()` and what kernel did that produce?"
+Have you ever wondered which part of your CPU code is responsible for launching a specific GPU kernel? CPU profilers can show you the host-side call stacks, but they lose visibility once the work is handed off to the GPU. On the other hand, GPU profilers detail what's happening on the device but often don't link it back to the specific CPU function that initiated it. This creates a blind spot, making it difficult to answer a critical question: "Which line of my code is causing this slow GPU kernel to run?"
 
-In this tutorial you'll build a CPU to GPU kernel launch flamegraph using eBPF plus CUPTI. This is a flamegraph where CPU stacks captured at `cudaLaunchKernel()` are extended with the GPU kernel name using CUPTI correlation IDs. The result makes kernel hotspots discoverable in the context of your host code, without rebuilding the application. CUPTI activity records for runtime API and concurrent kernels carry matching `correlationId` fields. [NVIDIA Docs](https://docs.nvidia.com/cupti/api/structCUpti__ActivityKernel8.html)
+This tutorial will guide you through building a profiler that bridges this gap. You will create a unified CPU-to-GPU flamegraph using the power of eBPF and NVIDIA's CUPTI (CUDA Profiling Tools Interface). By the end, you'll have a tool that captures CPU stack traces at the moment of a `cudaLaunchKernel()` call and intelligently stitches them together with the corresponding GPU kernel's execution data. The result is a powerful visualization that reveals exactly which host code paths are triggering which GPU kernels, allowing you to pinpoint performance bottlenecks without recompiling your application. We'll achieve this by using CUPTI's correlation IDs, which act as a bridge connecting CPU-side API calls with their GPU-side kernel executions.
 
-## How we inject & correlate
+## A Real-World Example: Profiling a Qwen3 LLM Inference
 
-We load a small CUPTI library via `CUDA_INJECTION64_PATH` so the CUDA runtime records runtime API and kernel activity with timestamps and correlation IDs. In parallel, an eBPF uprobe on `cudaLaunchKernel()` collects the CPU call stack and kernel time. After the run, a merger uses the CUPTI `correlationId` to connect the runtime API call to the kernel event, and appends `[GPU Kernel] <name>` to the CPU stack before generating a standard folded file for `flamegraph.pl`. [NVIDIA Docs](https://docs.nvidia.com/drive/drive-os-5.2.6.0L/nsight-systems/pdf/UserGuide.pdf)
+To see our profiler in action, let's look at a real-world example: profiling a Qwen3 0.6B Large Language Model during inference. The resulting flamegraph, shown below, visualizes the entire operation, merging CPU call stacks with the GPU kernels they launch. It immediately becomes clear that the `matmul_kernel` (matrix multiplication) is the most time-consuming part, accounting for 95% of the total GPU execution time.
 
-> The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/xpu/flamegraph>
+![Qwen3 LLM Inference Flamegraph](qwen3_flamegraph.svg)
 
-## The Challenge: Correlating CPU and GPU Activity
+**Key Insights from this Flamegraph:**
 
-GPU profiling requires understanding two separate execution domains. On the CPU side, your application calls CUDA runtime APIs like `cudaLaunchKernel`, `cudaMemcpy`, and `cudaDeviceSynchronize`. These functions prepare work, validate parameters, and submit commands to the GPU driver. On the GPU side, kernels execute thousands of parallel threads, access memory, and signal completion through interrupts. The gap between these domains is where performance problems hide.
+This visualization gives us a clear breakdown of where the GPU is spending its time:
+- **`matmul_kernel`**: 3.1 seconds (95% of GPU time). This tells us that matrix multiplication is, by far, the biggest performance bottleneck.
+- **`multi_head_attention_kernel`**: 105ms (3.2%). The attention mechanism adds a small amount of overhead.
+- **`rmsnorm_kernel`**: 44ms (1.3%). Normalization is a relatively inexpensive operation.
+- **End-to-End Visibility**: The flamegraph shows the complete call chain, from the `main` function on the CPU all the way to the specific `[GPU_Kernel]` executing on the device.
 
-This challenge is universal across GPU vendors. NVIDIA GPUs use CUDA runtime and CUPTI, AMD GPUs use ROCm and rocProfiler, and Intel GPUs use Level Zero and GPU Observability Architecture. Each vendor provides different APIs, but the fundamental problem remains the same: correlating CPU code paths with GPU kernel execution. Tools like iaprof for Intel GPUs demonstrate similar architectures - using eBPF to capture CPU stacks, vendor-specific APIs to trace GPU activity, and correlation logic to merge them into unified flamegraphs. The techniques in this tutorial apply to NVIDIA GPUs but the principles transfer to any GPU platform.
+## The Magic Behind the Scenes: Injection and Correlation
 
-The key insight: CUDA runtime assigns a unique correlation ID to every API call. When your CPU calls `cudaLaunchKernel`, the runtime creates a correlation ID linking that specific call to the eventual GPU kernel execution. NVIDIA's CUPTI (CUDA Profiling Tools Interface) library records both runtime API calls and GPU kernel executions, embedding these correlation IDs in activity records. By matching correlation IDs between CPU-side eBPF stack traces and GPU-side CUPTI events, we reconstruct the complete execution flow.
+So, how do we create this unified view? The process involves two key technologies working in tandem: eBPF for the CPU side and CUPTI for the GPU side.
 
-Traditional profiling approaches fall short. CPU profilers like perf or eBPF-based profilers capture application and runtime stack traces but have no visibility into GPU execution. They can show you spent 100ms in `cudaLaunchKernel`, but not which kernel ran or how long it actually executed on the GPU. GPU profilers like NVIDIA Nsight or nvprof capture detailed kernel metrics but only show the kernel name, losing context about which CPU code path triggered it. You see a kernel took 50ms, but not why your application called it or what happened before and after.
+1.  **GPU Tracing with CUPTI Injection**: We start by creating a small, custom CUPTI library. By setting the `CUDA_INJECTION64_PATH` environment variable, we tell the CUDA runtime to load our library alongside the application. Once loaded, this library uses the CUPTI API to record all GPU activities, such as kernel launches and memory transfers. Crucially, it captures timestamps and special **correlation IDs** for each event.
 
-CUPTI provides the bridge. It's a callback and activity-based API that instruments the CUDA runtime and driver. When you enable CUPTI activity tracing, it records timestamped events for runtime API calls (entry and exit), kernel executions (launch and completion), memory transfers, and synchronization operations. Each event contains a correlation ID linking GPU work back to the CPU API call that submitted it. By injecting CUPTI into CUDA applications via `LD_PRELOAD`, we capture this data without recompiling.
+2.  **CPU Profiling with eBPF**: At the same time, we use an eBPF "uprobe" to monitor the application from the outside. This probe is attached to the `cudaLaunchKernel()` function within the CUDA runtime library. Whenever the application calls this function to launch a kernel, our eBPF program springs into action, capturing the complete CPU call stack at that exact moment.
 
-## Architecture: eBPF Profiler + CUPTI Injection
+3.  **Connecting the Dots**: After the application finishes running, we are left with two sets of data: a trace of GPU events from CUPTI and a collection of CPU stack traces from eBPF. A final script then merges them. It uses the **correlation IDs** from CUPTI to link a specific `cudaLaunchKernel` API call to the actual kernel that ran on the GPU. It then finds the corresponding CPU stack trace captured by eBPF (usually by matching timestamps) and appends the GPU kernel's name to it.
 
-The profiling system has three components working in concert. The eBPF profiler monitors the CPU side using uprobes on `cudaLaunchKernel` in the CUDA runtime library. Every time any process calls this function to launch a GPU kernel, the eBPF program captures the complete CPU stack trace with nanosecond timestamps. This stack shows the application call chain leading to the kernel launch - revealing which functions, which loops, which code paths triggered GPU work.
+The result is a "folded" stack file, ready to be turned into a flamegraph, where each line represents a complete CPU-to-GPU call chain.
 
-CUPTI activity tracing runs inside the target process through library injection. We set `CUDA_INJECTION64_PATH` to point to our injection library, which CUDA runtime automatically loads. This library enables CUPTI activity callbacks for runtime APIs and concurrent kernel execution. As the application runs, CUPTI accumulates activity records in internal buffers. When buffers fill or the application exits, CUPTI calls our buffer completion callback, where we serialize events to a trace file. Each event contains start/end timestamps in nanoseconds and correlation IDs.
+> You can find the complete source code for this tutorial here: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/xpu/flamegraph>
 
-The trace merger combines these two data sources. It parses CPU stack traces in extended folded format (timestamp, command name, PID, TID, CPU, semicolon-separated stack) and GPU traces in Chrome JSON format (CUPTI events converted to Chrome trace format for visualization). Correlation happens through timestamp proximity - since CPU uprobe fires at `cudaLaunchKernel` entry and CUPTI records the runtime API with the same correlation ID, we match them within a small time window. The merger then matches GPU kernel events to their corresponding runtime API calls via correlation ID. The output is folded stack format suitable for flamegraph generation: `cpu_func1;cpu_func2;cudaLaunchKernel;[GPU_Kernel]kernel_name count`.
+## The Core Problem: Why Is Correlating CPU and GPU So Hard?
 
-## Component Overview
+To understand why we need a special tool, it's important to grasp the fundamental challenge of GPU profiling. When you run a CUDA application, you're dealing with two distinct worlds operating in parallel: the **CPU** and the **GPU**.
 
-The system consists of four key tools that work together to provide end-to-end visibility.
+-   **On the CPU side**, your application code makes calls to the CUDA runtime library (e.g., `cudaLaunchKernel`, `cudaMemcpy`). These calls don't execute the work directly; instead, they package up commands and send them to the GPU driver.
+-   **On the GPU side**, the hardware picks up these commands and executes them. This involves launching kernels with thousands of threads, moving data, and performing computations.
 
-The gpuperf.py script is the main orchestration component that launches the target application with both eBPF CPU profiling and CUPTI GPU tracing enabled. It manages environment variables for CUPTI injection (including `CUDA_INJECTION64_PATH` and `CUPTI_TRACE_OUTPUT_FILE`). The script starts the Rust eBPF profiler with cudaLaunchKernel uprobes before the target process to catch all kernel launches. Then it runs the target application with CUPTI injection enabled, collects traces from both sources, and automatically merges them into a unified flamegraph-ready format. The script handles cleanup, error cases, and provides multiple output modes including CPU-only, GPU-only, or merged.
+The performance bottlenecks you want to find often live in the handoff between these two worlds. Traditional profilers struggle here. A CPU profiler (`perf`, for example) can tell you that your program spent a lot of time inside `cudaLaunchKernel`, but it can't tell you *which* kernel was launched or how long it actually ran on the GPU. Conversely, a GPU profiler (like NVIDIA's Nsight) will give you detailed metrics about a kernel's execution but won't show you the specific line of CPU code that caused it to run.
 
-The Rust eBPF Profiler in the `profiler/` directory is a stack trace collector built with libbpf. It attaches uprobes to `cudaLaunchKernel` in the CUDA runtime library. The profiler captures full stack traces using eBPF's `bpf_get_stackid()` helper, records timestamps with nanosecond precision, and outputs extended folded format directly without post-processing. The `-E` flag enables extended output with timestamps, which is critical for correlation with GPU events.
+This disconnect is the problem we're solving. And it's not unique to NVIDIA. Whether you're using AMD's ROCm or Intel's Level Zero, the challenge of linking CPU-side causes to GPU-side effects is universal. The solution, regardless of the platform, is to find a way to "tag" a request on the CPU and find that same tag on the GPU.
 
-CUPTI Trace Injection in the `cupti_trace/` directory is a shared library loaded into CUDA applications via injection. It initializes CUPTI activity tracing for runtime API and kernel events. The library registers buffer management callbacks for asynchronous event collection, captures correlation IDs linking CPU API calls to GPU kernels, and records nanosecond-precision timestamps from GPU hardware counters. It serializes events to a text format for parsing, and properly handles cleanup on application exit or crashes. The injection approach works without modifying or recompiling applications, as it intercepts CUDA runtime initialization.
+Fortunately, NVIDIA's CUDA runtime provides exactly what we need: **correlation IDs**. Every time an API call like `cudaLaunchKernel` is made, the runtime assigns it a unique ID. This ID is passed along with the work to the GPU. Later, when the kernel executes, it carries the same ID. By capturing this ID on both sides, we can definitively link a CPU call stack to a GPU kernel execution. This is where CUPTI becomes essential, as it gives us access to these activity records. By injecting a CUPTI-based tracer into our application, we can harvest these events without having to recompile anything.
 
-The Trace Merger in `merge_gpu_cpu_trace.py` performs the correlation logic. It parses CPU traces in extended folded format extracting timestamps, process info, and stack traces. The merger also parses GPU traces from CUPTI (via Chrome JSON format) identifying kernel executions and runtime API calls. It matches CPU stacks to GPU events using correlation logic where the CPU uprobe timestamp matches the CUPTI runtime API timestamp, and the runtime API correlation ID matches the GPU kernel correlation ID. Finally, it generates folded output where GPU kernel names extend CPU stacks. For example, `app_func;cudaLaunchKernel;[GPU_Kernel]matmul_kernel 1000` means the matmul kernel was sampled 1000 times from that code path.
+## Our Profiler's Architecture: eBPF + CUPTI Injection
 
-## High-Level Code Analysis: The Complete Profiling Pipeline
+Our profiler is built on a three-part architecture that combines eBPF, CUPTI, and a final merging step. Here’s how the pieces fit together:
 
-The complete profiling flow starts when you run `gpuperf.py` to launch your CUDA application. Let's walk through what happens from process startup to final flamegraph generation, following the actual code paths.
+1.  **The eBPF Profiler (CPU-Side Monitoring)**: This component acts as our CPU-side watchdog. It uses an eBPF **uprobe** to attach to the `cudaLaunchKernel` function inside the CUDA runtime library. Whenever any process on the system calls this function, our eBPF program triggers, instantly capturing the full CPU call stack with nanosecond precision. This gives us a snapshot of the exact code path—from the main function down to the specific loop or method—that initiated the GPU work.
 
-### Key Implementation: Three-Component Architecture
+2.  **The CUPTI Injection Library (GPU-Side Tracing)**: To see what the GPU is doing, we use a clever trick called library injection. We compile a small shared library that uses the CUPTI API. By setting the `CUDA_INJECTION64_PATH` environment variable, we instruct the CUDA runtime to load our library into the target application automatically. Once inside, it activates CUPTI's activity tracing, which records detailed events for kernel executions and runtime API calls. These records include high-precision timestamps and, most importantly, the **correlation IDs** that link everything together.
 
-The profiling pipeline consists of three key components working together. Here's the essential logic from each:
+3.  **The Trace Merger (Connecting the Traces)**: After the profiling session ends, we have two raw data streams: CPU stack traces from eBPF and GPU activity records from CUPTI. The final step is to merge them. A script parses both traces and begins the correlation process. It first finds matching `cudaLaunchKernel` events between the two traces (using timestamps as a guide) and then uses the correlation ID from those events to link the CPU-side call to the correct GPU kernel execution. The output is a unified "folded stack" file, where each line looks something like this: `cpu_func1;cpu_func2;cudaLaunchKernel;[GPU_Kernel]kernel_name count`. This format is exactly what the standard `flamegraph.pl` script needs to generate the final visualization.
 
-1. eBPF Profiler in `profiler/src/bpf/profile.bpf.c` for kernel-space stack capture:
+## Meet the Team: The Components of Our Profiler
 
-The Rust profiler in `profiler/` is a libbpf-based eBPF application. Unlike bpftrace or BCC which interpret scripts at runtime, this profiler compiles to native code for minimal overhead. It attaches uprobes dynamically to any function in any library, making it perfect for instrumenting CUDA runtime without modifying NVIDIA's binaries.
+Our profiling system is made up of four key components that work together to give us a complete picture of our application's performance. Let's get to know the role each one plays.
+
+*   **The Conductor: `gpuperf.py`**
+    This Python script is the main entry point and orchestrator of the entire profiling process. It's responsible for launching the target application with both the eBPF profiler and CUPTI tracer active. It sets up the necessary environment variables, starts and stops the tracers at the right time, and kicks off the final merge step to produce the unified flamegraph data. It also gracefully handles cleanup and offers different modes, allowing you to run a CPU-only, GPU-only, or a combined profile.
+
+*   **The CPU Spy: The Rust eBPF Profiler (`profiler/`)**
+    This is a high-performance stack trace collector built in Rust using the `libbpf` library. Its job is to spy on the CPU. It attaches an eBPF uprobe to the `cudaLaunchKernel` function in the CUDA runtime library. Every time this function is called, the profiler captures the full user-space stack trace, records a high-precision timestamp, and saves it in a special "extended folded format." This extended format is crucial because the timestamps are what allow us to later correlate these CPU events with GPU activity.
+
+*   **The GPU Informant: The CUPTI Trace Injection Library (`cupti_trace/`)**
+    This is a C++ shared library that acts as our informant on the inside. Loaded into the target application via `CUDA_INJECTION64_PATH`, it uses the CUPTI API to subscribe to GPU activities. It records detailed information about runtime API calls and kernel executions, including their start and end timestamps and their all-important **correlation IDs**. This library is designed to be non-intrusive; it collects data asynchronously and writes it to a trace file, all without requiring any changes to the original application.
+
+*   **The Detective: The Trace Merger (`merge_gpu_cpu_trace.py`)**
+    This Python script plays the role of the detective. After the profiling run is complete, it takes the CPU trace from our eBPF spy and the GPU trace from our CUPTI informant and pieces the story together. It intelligently matches the CPU stack traces to their corresponding GPU kernel executions using a two-step process: first by finding events that are close in time, and then by confirming the match using the correlation ID. Once a match is found, it appends the GPU kernel's name to the CPU stack trace and generates the final folded stack file, ready for visualization.
+
+## A Deeper Look: How the Profiling Pipeline Works
+
+To truly understand how our profiler works, let's follow the journey of a single `cudaLaunchKernel` call as it travels through our entire pipeline. From the moment you execute the `gpuperf.py` script to the final generation of the flamegraph, we'll trace the data flow and see how each component plays its part.
+
+### The Three Pillars of Our Profiler
+
+Our pipeline is built on three core technical implementations. Let's examine the key code snippets from each to understand how they function.
+
+1.  **Capturing CPU Stacks with the eBPF Profiler (`profiler/src/bpf/profile.bpf.c`)**
+
+    At the heart of our CPU-side monitoring is a lightweight eBPF program written in C. This program is compiled into highly efficient, native bytecode that runs directly in the kernel, ensuring minimal performance overhead. Unlike tools that interpret scripts at runtime, this `libbpf`-based approach is fast and safe. We use it to dynamically attach a uprobe to the `cudaLaunchKernel` function without having to modify any of NVIDIA's own binaries.
 
 ```c
 // eBPF program that captures stack traces when cudaLaunchKernel is called
@@ -81,18 +110,20 @@ int uprobe_handler(struct pt_regs *ctx)
 }
 ```
 
-When the uprobe fires at `cudaLaunchKernel` entry, the eBPF program reads the current stack using kernel helpers. It stores stack traces in a BPF stack map, which is a hash table mapping stack IDs to stack traces to deduplicate identical stacks. The program records a sample event containing timestamp, process info, and stack ID, then sends the event to userspace via a BPF ring buffer.
+When the `uprobe_handler` is triggered, it captures all the necessary information about the CPU-side call. It records the process and thread ID, grabs a nanosecond-precision timestamp, and, most importantly, uses the `bpf_get_stack()` helper to walk the user-space stack and capture the full call chain. This data is then efficiently sent from the kernel to our user-space Rust application via a BPF ring buffer.
 
-The Rust userspace code polls for events, looks up stack traces using stack IDs, and resolves addresses to symbol names using DWARF debug info via the blazesym library. It outputs extended folded format: `timestamp_ns comm pid tid cpu stack1;stack2;...;stackN`. This format is critical because the timestamp enables correlation with GPU events, and the folded stack format feeds directly into flamegraph generation.
+Once in user space, the Rust profiler performs several key tasks. It receives the raw stack data, resolves the memory addresses to human-readable function names (a process called symbolization, done here with the `blazesym` library), and formats it all into our special "extended folded format."
 
-The `-E` extended output flag is what differentiates this from standard flamegraph profiling. Traditional folded format is just `stack1;stack2;stack3 count`, showing aggregate call graphs. Extended format adds temporal information: `1234567890 myapp 1000 1000 0 stack1;stack2;stack3`, telling you exactly when each sample occurred. This timestamp precision is what allows matching CPU stacks to GPU kernel launches that happen milliseconds or microseconds later.
+A standard folded stack for a flamegraph looks like this: `stack1;stack2;stack3 1`. The `1` at the end is simply a count. Our extended format, enabled with the `-E` flag, adds crucial temporal and contextual information: `timestamp_ns comm pid tid cpu stack1;stack2;...;stackN`. This timestamp is the key that will unlock the correlation with the GPU trace data. It tells us *exactly when* the `cudaLaunchKernel` call happened, allowing us to match it with GPU events that occur microseconds or milliseconds later.
 
-2. CUPTI Injection in `cupti_trace/cupti_trace_injection.cpp` for GPU activity tracking:
+2.  **Spying on the GPU with the CUPTI Injection Library (`cupti_trace/cupti_trace_injection.cpp`)**
 
-The CUPTI injection library in `cupti_trace/` implements the GPU-side instrumentation. When CUDA runtime loads this library (via `CUDA_INJECTION64_PATH`), the library's initialization function runs before any CUDA API is available. This is the perfect time to set up CUPTI callbacks.
+    Now for the GPU side. How do we see what the GPU is doing without modifying the application? We use a powerful feature of the CUDA driver called **library injection**. We create a small C++ shared library that acts as our GPU informant. By setting the `CUDA_INJECTION64_PATH` environment variable to point to our library, we tell the CUDA runtime to load it into the application's process space automatically.
+
+    The magic happens because our library is loaded *before* the main CUDA runtime is fully initialized. This gives us the perfect opportunity to set up our spy gear. We use a `__attribute__((constructor))` function, which the Linux dynamic loader runs automatically when our library is loaded. Inside this constructor, we activate CUPTI and tell it which events we're interested in.
 
 ```cpp
-// Initialize CUPTI tracing when library is loaded
+// This function is automatically called when our library is loaded.
 __attribute__((constructor))
 void InitializeInjection(void)
 {
@@ -103,91 +134,89 @@ void InitializeInjection(void)
     cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
     cuptiActivityEnable(CUPTI_ACTIVITY_KIND_RUNTIME);
 
-    // Register buffer management callbacks
+    // Register our callback functions to handle the data buffers.
+    // CUPTI will call `BufferRequested` when it needs memory to store data,
+    // and `BufferCompleted` when a buffer is full and ready for processing.
     cuptiActivityRegisterCallbacks(BufferRequested, BufferCompleted);
 }
 
-// Callback when CUPTI fills an activity buffer
+// This callback is triggered by CUPTI whenever a buffer of activity records is full.
 void CUPTIAPI BufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
                                size_t size, size_t validSize)
 {
     CUpti_Activity *record = NULL;
 
-    // Iterate through all activity records in the buffer
+    // Iterate through all the activity records in the completed buffer.
     while (CUPTI_SUCCESS == cuptiActivityGetNextRecord(buffer, validSize, &record)) {
         switch (record->kind) {
+            // This record type contains details about a GPU kernel's execution.
             case CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL: {
                 CUpti_ActivityKernel4 *kernel = (CUpti_ActivityKernel4 *)record;
 
-                // Extract kernel execution details
+                // We extract the most important details: the kernel's name, its start and
+                // end timestamps (from the GPU's own high-precision clock), and the
+                // all-important correlation ID that links it back to a CPU-side API call.
                 fprintf(outputFile, "CONCURRENT_KERNEL [ %llu, %llu ] duration %llu, \"%s\", correlationId %u\n",
                         kernel->start,           // GPU timestamp (ns)
                         kernel->end,             // GPU timestamp (ns)
                         kernel->end - kernel->start,
                         kernel->name,            // Kernel function name
-                        kernel->correlationId);  // Links to CPU API call
+                        kernel->correlationId);  // The link to the CPU API call!
                 break;
             }
+            // This record type contains details about a CUDA runtime API call.
             case CUPTI_ACTIVITY_KIND_RUNTIME: {
                 CUpti_ActivityAPI *api = (CUpti_ActivityAPI *)record;
 
-                // Track cudaLaunchKernel API calls
+                // We only care about `cudaLaunchKernel` calls, as they are the ones
+                // that launch the kernels we're tracking.
                 if (api->cbid == CUPTI_RUNTIME_TRACE_CBID_cudaLaunchKernel_v7000) {
                     fprintf(outputFile, "RUNTIME [ %llu, %llu ] \"cudaLaunchKernel\", correlationId %u\n",
                             api->start,          // API entry timestamp
                             api->end,            // API exit timestamp
-                            api->correlationId); // Same ID as kernel
+                            api->correlationId); // The same ID as the corresponding kernel.
                 }
                 break;
             }
         }
     }
 }
-
-// Initialize CUPTI tracing when library is loaded
-__attribute__((constructor))
-void InitializeInjection(void)
-{
-    // Subscribe to CUPTI callbacks
-    cuptiSubscribe(&subscriberHandle, CallbackHandler, NULL);
-
-    // Enable activity tracing for kernels and runtime APIs
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
-    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_RUNTIME);
-
-    // Register buffer management callbacks
-    cuptiActivityRegisterCallbacks(BufferRequested, BufferCompleted);
-}
-
 ```
 
-As the application runs, CUPTI accumulates activity records in internal buffers. Buffer management is asynchronous, as CUPTI requires the application to provide memory buffers. The buffer request callback allocates an 8MB buffer. When the buffer fills or the application exits, CUPTI calls `BufferCompleted` with activity records.
+As the target application runs, CUPTI works silently in the background, filling up memory buffers with detailed activity records. This process is highly efficient and asynchronous. When a buffer is full, CUPTI invokes our `BufferCompleted` callback, delivering a batch of events for us to process.
 
-The buffer completion callback iterates through records. For `CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL`, the record contains kernel name, start and end timestamps (nanoseconds from GPU hardware timer), correlation ID linking to the runtime API call, grid and block dimensions, device, context, and stream IDs, as well as memory and register usage. For `CUPTI_ACTIVITY_KIND_RUNTIME`, it captures API entry and exit timestamps, function names like "cudaLaunchKernel", and the correlation ID that will appear in kernel records.
+Inside this callback, we iterate through two important types of records:
 
-The injection library serializes events to text format: `CONCURRENT_KERNEL [ start, end ] duration us, "kernel_name", correlationId`. This format is parsed by `cupti_trace_parser.py` which converts to Chrome Trace JSON format for timeline visualization.
+1.  **`CUPTI_ACTIVITY_KIND_RUNTIME`**: This tells us whenever a CUDA runtime function was called, such as `cudaLaunchKernel`. We record its timestamp and, most importantly, the **correlation ID** that the CUDA runtime assigned to this specific call.
 
-The critical piece is correlation IDs. When your application calls `cudaLaunchKernel`, CUDA runtime assigns a unique correlation ID to that call. It records this ID in the runtime API activity record and passes it to the GPU driver. When the GPU executes the kernel, the driver records the same correlation ID in the kernel activity record. CUPTI exposes both records, allowing us to match `RUNTIME cudaLaunchKernel correlationId=12345` to `CONCURRENT_KERNEL matmul_kernel correlationId=12345`.
+2.  **`CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL`**: This record is generated after a GPU kernel finishes executing. It contains a wealth of information, including the kernel's name, its precise start and end timestamps (measured by the GPU's own hardware clock), and the exact same **correlation ID** that we saw in the runtime API record.
 
-3. Trace Merger in `merge_gpu_cpu_trace.py` for correlation logic:
+This shared correlation ID is the entire key to our profiler. It's the "tag" that allows us to definitively prove that the `cudaLaunchKernel` call with ID `12345` on the CPU is directly responsible for the `matmul_kernel` execution with ID `12345` on the GPU. Our injection library simply writes these events out to a text file, creating a log of all GPU activity, ready for the final merging step.
 
-The `TraceMerger` class performs the critical correlation logic. It loads CPU stacks from extended folded format and GPU events from Chrome JSON format, then matches them using timestamps and correlation IDs.
+3.  **The Detective Work: Merging Traces in `merge_gpu_cpu_trace.py`**
 
-The CPU trace format is: `timestamp_ns comm pid tid cpu stack1;stack2;...;stackN`. Example: `1761616920733362025 llm-inference 3577790 3577790 1 _start;main;runRequest;forward;cudaLaunchKernel`. The timestamp is absolute nanoseconds since boot (from `bpf_ktime_get_ns()`), and the stack is bottom-to-top.
+    After the profiling run is complete, we have two crucial pieces of evidence: a file of CPU stack traces from our eBPF profiler and a file of GPU activity from our CUPTI library. The final step is to bring them together to tell a single, coherent story. This is the job of our Python-based detective, the `TraceMerger`.
 
-The GPU trace contains two event types. Runtime API events: `{"name": "cudaLaunchKernel", "ph": "X", "ts": 1761616920733, "dur": 45, "args": {"correlation": 12345}}` (timestamp in microseconds). Kernel events: `{"name": "matmul_kernel", "cat": "CONCURRENT_KERNEL", "ph": "X", "ts": 1761616920800, "dur": 5000, "args": {"correlation": 12345}}`. The same correlation ID links runtime to kernel.
+    The `TraceMerger` class is where the core correlation logic lives. It starts by parsing both trace files. The CPU trace is in our "extended folded format," with each line containing a nanosecond timestamp and a full call stack. The GPU trace contains all the `RUNTIME` and `CONCURRENT_KERNEL` events we logged.
+
+    The script then performs a two-step matching process for every CPU stack trace it captured:
+
+    1.  **Timestamp Matching**: For a given CPU stack captured at a specific nanosecond, it searches for a `cudaLaunchKernel` *runtime event* from the GPU trace that occurred at roughly the same time. We have to allow for a small time window (e.g., 10 milliseconds) because the CPU and GPU clocks aren't perfectly synchronized, and there can be small delays.
+
+    2.  **Correlation ID Confirmation**: Once it finds a potential match based on time, it takes the correlation ID from that `cudaLaunchKernel` runtime event. It then searches for a *kernel execution event* that has the exact same correlation ID.
+
+    If both steps succeed, we have a confirmed match! We now know that the CPU stack trace is directly responsible for that specific GPU kernel execution. The script then appends the GPU kernel's name to the CPU call stack, creating a unified view.
 
 ```python
 class TraceMerger:
     def find_matching_kernel(self, cpu_stack: CPUStack) -> Optional[GPUKernelEvent]:
         """
-        Correlate CPU stack with GPU kernel using two-step matching:
-        1. Match CPU timestamp to cudaLaunchKernel runtime API call
-        2. Match runtime API correlation ID to GPU kernel execution
+        Correlates a CPU stack with a GPU kernel using our two-step matching process.
         """
-        # Step 1: Find cudaLaunchKernel runtime call closest to CPU timestamp
+        # Step 1: Find the cudaLaunchKernel runtime call that happened
+        # closest in time to our CPU stack capture.
         best_launch = None
-        min_time_diff = self.timestamp_tolerance_ns  # 10ms window
+        min_time_diff = self.timestamp_tolerance_ns  # 10ms search window
 
         for launch in self.cuda_launches.values():
             time_diff = abs(cpu_stack.timestamp_ns - launch.start_ns)
@@ -196,174 +225,243 @@ class TraceMerger:
                 best_launch = launch
 
         if not best_launch:
-            return None
+            return None # No launch found within our time window.
 
-        # Step 2: Find GPU kernel with matching correlation ID
+        # Step 2: Use the correlation ID from the launch event to find the
+        # exact GPU kernel that was executed.
         for kernel in self.gpu_kernels:
             if kernel.correlation_id == best_launch.correlation_id:
-                return kernel  # Found the GPU kernel triggered by this CPU call
+                return kernel  # Success! We found the matching kernel.
 
         return None
 
     def merge_traces(self):
-        """Build merged stacks: cpu_func1;cpu_func2;cudaLaunchKernel;[GPU_Kernel]kernel_name"""
+        """
+        Builds the final merged stacks, ready for the flamegraph script.
+        Example: cpu_func1;cpu_func2;cudaLaunchKernel;[GPU_Kernel]kernel_name
+        """
         for cpu_stack in self.cpu_stacks:
-            merged_stack = cpu_stack.stack.copy()  # Start with CPU stack
+            merged_stack = cpu_stack.stack.copy()
 
             gpu_kernel = self.find_matching_kernel(cpu_stack)
             if gpu_kernel:
+                # If a match is found, append the GPU kernel's name.
                 merged_stack.append(f"[GPU_Kernel]{gpu_kernel.name}")
             else:
+                # If no match is found, we still note that a launch was attempted.
                 merged_stack.append("[GPU_Launch_Pending]")
 
-            # Output folded format weighted by GPU kernel duration
+            # Convert the final, merged stack into a string.
             stack_str = ';'.join(merged_stack)
-            # Weight by GPU kernel duration in microseconds (not just count=1)
-            kernel_duration_us = int(gpu_kernel.end_us - gpu_kernel.start_us)
+            
+            # This is the crucial step: weight the stack by the GPU kernel's
+            # actual execution time in microseconds, not just a simple count.
+            kernel_duration_us = int(gpu_kernel.end_us - gpu_kernel.start_us) if gpu_kernel else 0
             self.merged_stacks[stack_str] += kernel_duration_us
 ```
 
-Critical Implementation Detail: Duration Weighting
+### The Importance of Duration Weighting
 
-The flamegraph is weighted by GPU kernel execution time, not by kernel launch count. Each matched stack is weighted by the kernel's actual duration in microseconds (`end_us - start_us`). This means a kernel that runs for 1000μs contributes 1000x more to the flamegraph width than a kernel that runs for 1μs. This accurately reflects where GPU time is actually spent, as longer-running kernels appear wider in the flamegraph, making performance bottlenecks immediately visible.
+One of the most critical details in this entire process is how we generate the final data for the flamegraph. A standard flamegraph just counts how many times each unique stack trace appears. This is fine for CPU-only profiling, where every sample represents a roughly equal slice of time. But for our use case, it would be misleading.
 
-Without duration weighting, a frequently-called but fast kernel would appear as a hotspot even if it consumes minimal total GPU time. With duration weighting, the flamegraph correctly shows that a single slow kernel consuming 100ms is more important than 1000 fast kernels consuming 1ms total.
+A `cudaLaunchKernel` call might launch a kernel that runs for 2 microseconds or one that runs for 200 milliseconds. If we just counted them as "1" each, the flamegraph would incorrectly show them as having equal importance.
 
-The algorithm builds mappings: `gpu_kernels[12345] = GPUKernelEvent(...)` and `cuda_launches[12345] = CudaLaunchEvent(...)`. For each CPU stack with timestamp T, it searches for `cuda_launches` where `|runtime.start_ns - T| < 10ms`. Why a time window? Clock sources differ (eBPF uses `CLOCK_MONOTONIC`, CUPTI uses GPU hardware counters), and there's jitter from eBPF overhead and context switches.
+To solve this, we use **duration weighting**. Instead of adding `1` to the count for a matched stack, we add the GPU kernel's *actual execution duration in microseconds*.
 
-Once matched, we have: CPU stack to runtime API to GPU kernel. The merger outputs: `cpu_stack_frames;cudaLaunchKernel;[GPU_Kernel]kernel_name duration_us` where `duration_us` is the actual GPU execution time. Unmatched events appear as `[GPU_Launch_Pending]` (kernel launch without observed execution) or standalone `[GPU_Kernel]kernel_name` (kernel without CPU context).
+-   `cpu_stack;...;[GPU_Kernel]fast_kernel 2` (ran for 2 µs)
+-   `cpu_stack;...;[GPU_Kernel]slow_kernel 200000` (ran for 200,000 µs)
 
-Orchestration in gpuperf.py:
+This ensures the width of the bars in the final flamegraph is proportional to the *actual time spent on the GPU*. A kernel that runs 1000x longer will appear 1000x wider, immediately and accurately drawing your eye to the real performance hotspots. Without this, you'd be flying blind, unable to distinguish truly expensive operations from trivial ones.
+
+### Putting It All Together: Orchestration in `gpuperf.py`
+
+The final piece of the puzzle is the `gpuperf.py` script, which acts as the conductor for our profiling orchestra. It's responsible for starting the tracers, running the target application, stopping the tracers, and kicking off the final merge and analysis. The order of operations is critical for everything to work correctly.
+
+Let's look at the core logic in the `run_with_trace` function:
 
 ```python
 def run_with_trace(self, command, cpu_profile, chrome_trace, merged_trace):
-    # 1. Set environment for CUPTI injection
+    # 1. Set up the environment for CUPTI injection. This tells the CUDA
+    #    runtime where to find our custom tracer library.
     env = os.environ.copy()
     env['CUDA_INJECTION64_PATH'] = str(self.injection_lib)
     env['CUPTI_TRACE_OUTPUT_FILE'] = trace_file
 
-    # 2. Start eBPF profiler BEFORE target (must attach uprobe first)
+    # 2. Start the eBPF CPU profiler *before* the target application.
+    #    This is crucial because the uprobe must be attached and ready
+    #    before the application makes its first CUDA call.
     self.start_cpu_profiler(cpu_output_file=cpu_profile)
-    time.sleep(1.0)  # Ensure uprobe is attached
+    time.sleep(1.0)  # Give it a moment to ensure the uprobe is active.
 
-    # 3. Launch target application (CUPTI loads automatically via injection)
+    # 3. Launch the target application. The CUDA runtime will automatically
+    #    load our injection library because of the environment variable we set.
     target_proc = subprocess.Popen(command, env=env)
     target_proc.wait()
 
-    # 4. Stop profiler and merge traces
+    # 4. Once the application finishes, stop the CPU profiler and
+    #    begin the final trace merging process.
     self.stop_cpu_profiler()
     self.generate_merged_trace(cpu_trace=cpu_profile, gpu_trace=chrome_trace,
                                 output_file=merged_trace)
 ```
 
-The orchestration starts in `GPUPerf.__init__()`, which locates required components. It finds the CUPTI injection library at `cupti_trace/libcupti_trace_injection.so` and verifies the Rust eBPF profiler exists at `profiler/target/release/profile`. The function searches common CUDA installation paths for the CUPTI library needed for NVTX annotations. If any component is missing, it prints warnings but continues, as you can run CPU-only or GPU-only profiling.
+Here’s a step-by-step breakdown of the timeline:
 
-When you run `gpuperf.py -c gpu.json -p cpu.txt -m merged.folded ./my_cuda_app`, the script calls `run_with_trace()`. This function orchestrates the entire profiling session. First, it sets up environment variables that CUDA runtime will check during initialization. The `CUDA_INJECTION64_PATH` variable points to our CUPTI injection library so CUDA loads it automatically. The `CUPTI_TRACE_OUTPUT_FILE` variable tells the injection library where to write GPU events. The injection approach works without modifying applications because CUDA runtime explicitly supports injection libraries for profiling.
+1.  **Environment Setup**: The script first sets the `CUDA_INJECTION64_PATH` environment variable. This is an official feature of the CUDA driver that tells it to load a specific shared library into any application that initializes the CUDA runtime. This is the hook that lets our CUPTI tracer get inside the target process.
 
-The critical ordering happens next. The script calls `start_cpu_profiler()` before launching the target process. This is essential because the eBPF profiler must attach its uprobe to `cudaLaunchKernel` before any CUDA initialization occurs. The Rust profiler runs `sudo ./profile --uprobe /usr/local/cuda-12.9/lib64/libcudart.so.12:cudaLaunchKernel -E`, where `--uprobe` specifies the library and function to instrument, and `-E` enables extended folded output with timestamps. The script waits 1 second after starting the profiler to ensure uprobes are fully attached before the target process loads the CUDA runtime.
+2.  **Start CPU Profiler First**: The script calls `start_cpu_profiler()` *before* launching the user's command. This is the most critical step in the orchestration. The eBPF profiler needs to attach its uprobe to the `cudaLaunchKernel` function in the `libcudart.so` library. If the application starts first, it might load the CUDA library and make calls before our probe is in place, causing us to miss events. By starting the profiler first (and adding a small sleep), we ensure our CPU spy is in position and ready to record from the very beginning.
 
-Only after the profiler is ready does the script start the target process with `subprocess.Popen(command, env=env)`. As soon as this process calls any CUDA API, the runtime initializes, loads our injection library via `CUDA_INJECTION64_PATH`, and CUPTI starts recording. The uprobe is already attached, so every `cudaLaunchKernel` call triggers a stack trace capture. The script then waits for the target to exit, handles signals gracefully (including SIGTERM and SIGINT), and ensures both profilers shut down cleanly.
+3.  **Launch the Target**: With the environment set and the eBPF probe active, the script launches the target application using `subprocess.Popen`. As soon as the application makes its first CUDA call, the CUDA runtime initializes and, thanks to our environment variable, loads our `libcupti_trace_injection.so` library. At this point, both our CPU and GPU tracers are active and recording data.
 
-After the target exits, `generate_merged_trace()` performs correlation. It instantiates `TraceMerger` and parses the CPU trace file (extended folded format). It also parses the GPU trace (Chrome JSON format from CUPTI), then calls `merger.merge_traces()` which matches events via correlation IDs and timestamps. The output is folded format combining CPU and GPU stacks, ready for flamegraph generation.
+4.  **Stop and Merge**: The script waits for the target application to complete. Once it's finished, it cleanly shuts down the eBPF profiler and then calls `generate_merged_trace()`. This function is the trigger for the `TraceMerger` detective, which begins the work of parsing, correlating, and weighting the data to produce the final, unified folded stack file.
 
 
-## Example Applications
+## Putting It to the Test: Example Applications
 
-The tutorial provides two CUDA applications for profiling demonstration.
+Theory is great, but the best way to learn is by doing. To help you see the profiler in action and experiment with it yourself, this tutorial includes two different CUDA applications that you can build and profile.
 
-### Real LLM Inference: Qwen3.cu (Recommended)
+### The Main Event: A Real LLM Inference Engine (`qwen3.cu`)
 
-The primary example is `qwen3.cu`, a single-file CUDA implementation of the Qwen3 0.6B transformer model. This is a real, working language model that runs inference on GPU, making it perfect for profiling actual AI workloads. The implementation includes tokenization, multi-head attention, feedforward layers, and RMS normalization - all the components of modern transformer architectures.
+This is the recommended example and the one we used to generate the flamegraph at the beginning of this tutorial. `qwen3.cu` is a complete, self-contained CUDA implementation of the Qwen3 0.6B transformer model. It's not a simplified mock-up; it's a real Large Language Model that performs inference on the GPU.
 
-### Alternative: Mock Transformer Simulator
+Profiling this application gives you a realistic view of the workloads you'll encounter in modern AI. You'll see the interplay between the core components of a transformer architecture, including:
+- Tokenization
+- Multi-head attention layers
+- Feedforward networks
+- RMS normalization
 
-The `mock-test/llm-inference.cu` application provides a simpler test case simulating transformer patterns without requiring model weights.
+This example is perfect for understanding how high-level concepts in a neural network translate into specific GPU kernels and where the true performance bottlenecks lie in a real-world AI application.
 
-## Compilation and Execution
+### A Simpler Starting Point: The Mock Transformer Simulator (`mock-test/llm-inference.cu`)
 
-Build the complete profiling stack by first compiling the CUPTI injection library, then the Rust eBPF profiler, and finally the mock application.
+If you want a simpler, lightweight test case, the `mock-test/llm-inference.cu` application is a great alternative. It simulates the computational patterns of a transformer model (like matrix multiplications and other typical operations) but does so without the overhead of loading a large model's weights. This makes it quick to compile and run, providing a straightforward way to verify that all the components of your profiling stack are working correctly before moving on to more complex workloads.
 
-### Build CUPTI Injection Library
+## Let's Get Building: Compilation and Execution
 
-Navigate to the CUPTI trace directory and compile:
+Now that you understand the architecture, it's time to get your hands dirty. This section will walk you through compiling all the necessary components of our profiling stack: the CUPTI injection library, the Rust eBPF profiler, and the example applications. We'll then run the full profiler to generate our first unified flamegraph.
+
+### Step 1: Build the CUPTI Injection Library
+
+First, we need to compile our GPU informant—the C++ shared library that uses CUPTI to trace GPU activities. This library will be injected into our target application to report back on what the GPU is doing.
+
+Navigate to the `cupti_trace` directory and use the provided `Makefile` to build the library:
 
 ```bash
 cd cupti_trace
 make
 ```
 
-This compiles `cupti_trace.cpp` into `libcupti_trace_injection.so`, linking against CUPTI and CUDA runtime libraries. The Makefile searches common CUDA installation paths (`/usr/local/cuda-12.9`, `/usr/local/cuda-13.0`, etc.) and uses the appropriate include paths and library paths. Verify the library exists:
+This command compiles `cupti_trace_injection.cpp` into a shared library file named `libcupti_trace_injection.so`. The `Makefile` is designed to automatically locate your CUDA installation (it checks common paths like `/usr/local/cuda-12.x` and `/usr/local/cuda-13.x`) and links against the necessary CUPTI and CUDA runtime libraries.
+
+Once the compilation is finished, verify that the shared library has been created:
 
 ```bash
 ls -lh libcupti_trace_injection.so
 ```
 
-You should see a shared library around 100-120KB. If compilation fails, check that CUDA toolkit is installed and `nvcc` is in your PATH. CUPTI comes with the CUDA toolkit in `extras/CUPTI/`.
+You should see a new file, typically around 100-120KB in size. If the compilation fails, the most common reasons are:
+- The CUDA Toolkit is not installed on your system.
+- The `nvcc` compiler is not in your system's `PATH`.
+- The `CUPTI` development files are missing (they are usually included with the CUDA Toolkit under `extras/CUPTI/`).
 
-### Build Rust eBPF Profiler
+### Step 2: Build the Rust eBPF Profiler
 
-Navigate to the profiler directory and compile in release mode for minimal overhead:
+Next, we'll build the CPU spy—our high-performance eBPF profiler written in Rust. This tool is responsible for capturing the CPU-side stack traces whenever `cudaLaunchKernel` is called.
+
+Navigate to the `profiler` directory and use `cargo` to compile the application. We'll build it in `--release` mode to ensure it runs with maximum performance and minimal overhead.
 
 ```bash
 cd profiler
 cargo build --release
 ```
 
-This compiles the Rust profiler with full optimizations. The eBPF program is compiled to BPF bytecode and embedded in the Rust binary. Verify the profiler:
+This command does two important things:
+1.  It compiles the Rust user-space application, which manages the eBPF probes and processes the data.
+2.  It also compiles the C-based eBPF program (`profile.bpf.c`) into BPF bytecode and embeds it directly into the final Rust executable. This creates a self-contained binary that's easy to distribute and run.
+
+After the build completes, verify that the profiler executable is ready:
 
 ```bash
 ls -lh target/release/profile
+```
+
+You can also run it with the `--help` flag to see the available command-line options:
+
+```bash
 ./target/release/profile --help
 ```
 
-The profiler should show options for `--uprobe` (specify function to trace) and `-E` (extended folded output). The binary should be around 2-3MB including embedded eBPF code and symbol resolution libraries.
+You should see a list of options, including `--uprobe` (which we'll use to specify the `cudaLaunchKernel` function) and `-E` (which enables the "extended folded output" format with nanosecond timestamps). The final binary will be around 2-3MB, as it includes not only our code but also the powerful `blazesym` library for fast, offline stack symbolization.
 
-### Build Mock LLM Application
+### Step 3: Build the Mock LLM Application
 
-Navigate to the mock test directory and compile the CUDA application:
+With our profiling tools compiled, we now need a target application to profile. We'll start with the simpler of the two examples: the mock LLM simulator. This lightweight CUDA application is perfect for a quick test to ensure all parts of our profiler are working together correctly.
+
+Navigate to the `mock-test` directory and compile the application using its `Makefile`:
 
 ```bash
 cd mock-test
 make
 ```
 
-This uses `nvcc` to compile `llm-inference.cu` into an executable. The Makefile uses `-std=c++17` for modern C++ features, `--no-device-link` to produce a single binary without separate device linking, and `-Wno-deprecated-gpu-targets` to suppress warnings on older GPUs. Verify compilation:
+This command uses `nvcc`, the NVIDIA CUDA compiler, to build the `llm-inference.cu` source file into an executable named `llm-inference`. The `Makefile` includes a few useful flags:
+- `-std=c++17`: Enables modern C++ features.
+- `--no-device-link`: Creates a single, self-contained executable, which simplifies compilation.
+- `-Wno-deprecated-gpu-targets`: Suppresses warnings you might see if you're using a newer CUDA toolkit with a slightly older GPU.
+
+Verify that the compilation was successful by listing the file:
 
 ```bash
 ls -lh llm-inference
 ```
 
-The binary should be around 200KB. You can test it runs (though it will execute for 10 seconds by default):
+The resulting binary should be small, around 200KB. You can run it directly to see it in action. By default, it runs a continuous simulation for 10 seconds, so you can stop it early with `Ctrl+C` after a few moments.
 
 ```bash
 ./llm-inference
-# Press Ctrl+C after a few seconds to stop early
+# The application will start printing output...
+# Press Ctrl+C after a few seconds to stop it.
 ```
 
-### Build Real LLM Inference Application (Qwen3.cu)
+### Step 4: Build the Real LLM Inference Application
 
-The tutorial includes a real LLM inference engine - qwen3.cu, a single-file CUDA implementation of the Qwen3 0.6B model:
+Now for the main event: compiling the `qwen3.cu` application. This is a real, self-contained LLM inference engine that runs the Qwen3 0.6B model. Profiling this will give you a fantastic, real-world view of a modern AI workload.
+
+First, navigate to the `qwen3.cu` directory.
 
 ```bash
 cd qwen3.cu
+```
 
-# Download the FP32 model (3GB)
+Before you can compile the code, you need to download the model weights. The `Makefile` provides a convenient target for this.
+
+```bash
+# This will download the 3GB FP32 model file
 make download-model
+```
 
-# Compile with dynamic CUDA runtime for uprobe support
+Next, compile the application. There's a critical detail here: for our eBPF uprobe to work, the application must dynamically link against the CUDA runtime library (`libcudart.so`). If it's statically linked, the `cudaLaunchKernel` symbol won't be available in a shared library for our probe to find. The `Makefile` has a specific target, `runcu`, that handles this for you.
+
+```bash
+# Compile the application with dynamic linking
 make runcu
 ```
 
-Verify dynamic linking (required for eBPF uprobes):
+To be absolutely sure it's linked correctly, you can use the `ldd` command to inspect the executable's dependencies.
 
 ```bash
 ldd runcu | grep cudart
-# Should show: libcudart.so.12 => /usr/local/cuda-12.9/lib64/libcudart.so.12
+# The output should look something like this:
+# libcudart.so.12 => /usr/local/cuda-12.9/lib64/libcudart.so.12
 ```
 
-### Running the Profiler
+If you see a line showing that `runcu` is linked to `libcudart.so`, you're all set! All the components are now built and ready for action.
 
-With all components built, run the complete profiling stack. The `gpuperf.py` script orchestrates everything:
+### Time to Shine: Running the Profiler
+
+With all the components built, you're now ready to run the full profiling stack and see it in action! The `gpuperf.py` script is your central command hub. It seamlessly orchestrates the eBPF profiler, the CUPTI injection, and the final trace merging, giving you a complete, end-to-end view of your application's performance.
+
+Let's profile the real LLM inference workload using the Qwen3 model. The following command tells `gpuperf.py` to run the `runcu` executable and trace its execution:
 
 ```bash
 # Profile real LLM inference (Qwen3 model)
@@ -374,49 +472,73 @@ sudo timeout -s 2 10 python3 gpuperf.py \
     bash -c 'cd qwen3.cu && ./runcu Qwen3-0.6B-FP32.gguf -q "Explain eBPF" -r 1'
 ```
 
-The script output shows the profiling session:
+Let's break down this command to understand what each part does:
+- `sudo`: Required because the eBPF profiler needs elevated privileges to attach probes to the kernel and other processes.
+- `timeout -s 2 10`: A useful utility that runs the command for a maximum of 10 seconds. It sends an interrupt signal (`-s 2`, which is `SIGINT` or `Ctrl+C`) to gracefully stop the process. This is perfect for capturing a short, representative sample of a long-running application.
+- `python3 gpuperf.py`: Our main orchestration script.
+- `-c qwen3_gpu.json`: Specifies the output file for the GPU trace data, which will be saved in the Chrome Trace JSON format.
+- `-p qwen3_cpu.txt`: Specifies the output file for the CPU stack traces, saved in our extended folded format.
+- `-m qwen3_merged.folded`: The grand prize! This is the output file for the final, merged, and duration-weighted folded stacks.
+- `bash -c '...'`: The command to be profiled. We use `bash -c` to ensure that we first change into the `qwen3.cu` directory before executing the `runcu` application.
+
+As the script runs, you'll see a detailed log of its progress:
 
 ```
+CUPTI trace output will be written to: /home/yunwei37/workspace/bpf-developer-tutorial/src/xpu/flamegraph/gpu_results.txt
 Starting CPU profiler with cudaLaunchKernel hook
   CUDA library: /usr/local/cuda-12.9/lib64/libcudart.so.12
-  Output: qwen3_cpu.txt
-Running command with GPU profiling: bash -c cd qwen3.cu && ./runcu...
-Trace output: qwen3_gpu.json
-Started target process with PID: 3593972
-A: E BPF (Extended Binux File) is a system call that allows users to program the Linux kernel's file system...
-tok/s: 55.710306
+  Output: /home/yunwei37/workspace/bpf-developer-tutorial/src/xpu/flamegraph/qwen3_cpu.txt
+Running command with GPU profiling: bash -c cd qwen3.cu && ./runcu Qwen3-0.6B-FP32.gguf -q "What is eBPF?" -r 1
+Trace output: /home/yunwei37/workspace/bpf-developer-tutorial/src/xpu/flamegraph/gpu_results.txt
+Started target process with PID: 3861826
+A: E BPF stands for "Extended Bounded Performance" and is a system designed to allow users to create custom user-space programs...
+tok/s: 54.489164
 
 Stopping CPU profiler...
-CPU profile saved to: qwen3_cpu.txt
+CPU profile saved to: /home/yunwei37/workspace/bpf-developer-tutorial/src/xpu/flamegraph/qwen3_cpu.txt
 
 Converting trace to Chrome format: qwen3_gpu.json
-Parsed 2452 events
+Parsed 185867 events
 
 Chrome trace file written to: qwen3_gpu.json
 
 Generating merged CPU+GPU trace: qwen3_merged.folded
-Parsed 8794 CPU stack traces from cudaLaunchKernel hooks
-Parsed 1036 GPU kernel events
-Parsed 1036 cudaLaunchKernel runtime events
+Parsing CPU uprobe trace (extended folded format): qwen3_cpu.txt
+Parsed 92732 CPU stack traces from cudaLaunchKernel hooks
+Found 1 unique threads
+Parsing GPU CUPTI trace: qwen3_gpu.json
+Parsed 92732 GPU kernel events
+Parsed 92732 cudaLaunchKernel runtime events
 Correlating CPU stacks with GPU kernels...
-Matched 0 CPU stacks with GPU kernels
-Unmatched: 8794
-Total unique stacks: 3
-Wrote 3 unique stacks (8794 total samples)
+  Thread (3861826, 3861826): Using sequential matching (92732 events)
+Matched 92732 CPU stacks with GPU kernels
+Total unique stacks: 7
+Wrote 7 unique stacks (3265164 total samples)
 ✓ Merged trace generated: qwen3_merged.folded
 ```
 
-The key statistics show that 8,794 CPU stack traces were captured (one per `cudaLaunchKernel` call during inference). The profiler recorded 2,452 total GPU events including kernels, memcpy, and runtime API calls. There were 3 unique stack patterns representing the main code paths. The `forward()` function for transformer layer execution had 5,176 samples. The `matmul()` function for matrix multiplication had 3,614 samples. The `rmsnorm()` function for RMS normalization had 4 samples. This real-world LLM inference trace reveals the actual computation patterns of transformer models.
+The output is a goldmine of information. Let's analyze the key statistics:
+- **92,732 CPU stack traces captured**: This means that during the 10-second run, the `cudaLaunchKernel` function was called over 92,000 times. Our eBPF profiler caught every single one.
+- **185,867 total GPU events**: The CUPTI tracer recorded a huge amount of activity, including kernel launches, memory copies, and other runtime events.
+- **100% Correlation Rate**: The line `Matched 92732 CPU stacks with GPU kernels` is the most important one. It confirms that our correlation logic worked perfectly, successfully linking every single CPU-side launch event to its corresponding GPU-side kernel execution.
+- **7 unique stacks**: Although there were over 92,000 calls, they all originated from just 7 unique code paths in the application.
+- **3,265,164 total samples**: This is the sum of all GPU kernel durations in microseconds. It tells us that the total time spent executing kernels on the GPU during this run was approximately 3.27 seconds.
 
-### Generate Flamegraph
+This successful run leaves us with three valuable trace files (`qwen3_cpu.txt`, `qwen3_gpu.json`, and `qwen3_merged.folded`), which we'll use in the next steps to visualize and inspect the performance data.
 
-Convert the merged folded trace to a flamegraph SVG:
+### Step 5: Generate the Flamegraph
+
+After a successful profiling run, you're left with the `qwen3_merged.folded` file. This is the culmination of our data collection and correlation efforts, containing all the information needed to build our unified CPU+GPU flamegraph. To turn this data into a beautiful and interactive visualization, we use the classic `flamegraph.pl` script, a powerful Perl program created by Brendan Gregg, the performance engineering expert who pioneered the use of flamegraphs.
+
+This repository includes a convenient wrapper script, `combined_flamegraph.pl`, which is based on the original and tailored for our needs. Let's use it to generate our SVG file:
 
 ```bash
 ./combined_flamegraph.pl qwen3_merged.folded > qwen3_flamegraph.svg
 ```
 
-Open the SVG in a web browser:
+This command reads the duration-weighted folded stacks from `qwen3_merged.folded` and outputs a scalable vector graphics (SVG) file named `qwen3_flamegraph.svg`.
+
+Now, open the newly created SVG file in any modern web browser to explore it:
 
 ```bash
 firefox qwen3_flamegraph.svg
@@ -424,78 +546,148 @@ firefox qwen3_flamegraph.svg
 google-chrome qwen3_flamegraph.svg
 ```
 
-The flamegraph is interactive. Click on a stack frame to zoom in, showing only that subtree. Hover over frames to see function names and sample counts. The width of each frame represents time consumption, as wider frames are hotspots. The color is random and doesn't mean anything (it's just for visual distinction).
+#### Navigating Your Interactive Flamegraph
 
-In the Qwen3 LLM inference flamegraph, you'll see the actual transformer inference code paths. The `forward(Transformer*, int, int)` function dominates with 5,176 samples (59% of execution), showing this is where the model spends most time executing transformer layers. The `matmul(float*, float*, float*, int, int)` function appears with 3,614 samples (41%), revealing matrix multiplication kernels for attention and feedforward computation. The `rmsnorm(float*, float*, float*, int)` function shows only 4 samples, indicating normalization is fast compared to matrix operations. Each stack ends with `cudaLaunchKernel`, marking where CPU code transitions to GPU execution. This reveals the computational hotspots in real LLM inference, where matrix multiplication dominates, followed by layer-wise forward passes.
+Welcome to your unified performance profile! The flamegraph you see is a powerful tool for understanding your application's behavior. Here’s how to interpret it:
+- **The Y-Axis is the Call Stack**: Each vertical level represents a function in the call stack. The function at the bottom (`main`) calls the one above it, and so on, all the way up to the final functions that launch the GPU kernels.
+- **The X-Axis is Time**: The width of each rectangle (or "frame") is directly proportional to the total time it spent on the GPU. Because we used duration weighting, a kernel that ran for 200ms will have a frame that is 100 times wider than a kernel that ran for 2ms. This immediately draws your attention to the most expensive parts of your code.
+- **Interactivity is Key**:
+    - **Hover**: Move your mouse over any frame to see its full function name, the total time it consumed (in microseconds), and what percentage of the total execution time it represents.
+    - **Click to Zoom**: Click on any frame to "zoom in" on it. The flamegraph will redraw to show only the call stacks that pass through that function, making it easy to analyze specific parts of your application.
+- **Color is Random**: The colors are chosen randomly to help distinguish adjacent frames. They don't have any specific meaning.
 
-### Inspecting Individual Traces
+#### Analyzing the Qwen3 LLM Flamegraph
 
-The profiler generates three trace files that can be inspected independently.
+When you explore the `qwen3_flamegraph.svg`, you're looking at the real computational fingerprint of a transformer model. You'll be able to trace the execution from the `main` function, through the `chat()` and `forward()` loops, all the way to the specific GPU kernels.
 
-The CPU trace (qwen3_cpu.txt) contains raw uprobe samples in extended folded format:
+You will likely notice a few dominant kernels that make up the vast majority of the graph's width:
+- **`_Z13matmul_kernel...` (Matrix Multiplication)**: This will be the widest block by a large margin, consuming around 3.1 seconds (95%) of the GPU time. This is the heart of a transformer's feed-forward networks and is the primary computational bottleneck.
+- **`_Z27multi_head_attention_kernel...` (Multi-Head Attention)**: This kernel, responsible for the attention mechanism, will be the next largest, but significantly smaller than matrix multiplication (around 105ms, or 3.2%).
+- **`_Z14rmsnorm_kernel...` (RMS Normalization)**: These kernels are even smaller, showing that normalization is a relatively cheap operation in this model.
 
+This visualization provides an immediate, intuitive understanding of where your program's time is going. It proves that for this LLM, optimizing the matrix multiplication operations would yield the biggest performance gains.
+
+### Going Deeper: Inspecting the Raw Trace Files
+
+While the flamegraph gives you a fantastic high-level overview, sometimes you need to get your hands on the raw data to answer specific questions. Our profiler generates three distinct trace files, each offering a different lens through which to view your application's performance. Let's explore what each one contains and how you can use it.
+
+#### 1. The CPU-Side Story: `qwen3_cpu.txt`
+
+This file contains the raw output from our Rust eBPF profiler. It's a log of every single time the `cudaLaunchKernel` function was called, captured in our special "extended folded format."
+
+You can peek at the first few lines using `head`:
 ```bash
 head -5 qwen3_cpu.txt
 ```
 
-Example output:
-
+The output will look something like this:
 ```
-1761618697756454073 runcu 3593972 3593972 1 forward(Transformer*, int, int);cudaLaunchKernel
-1761618697756957027 runcu 3593972 3593972 1 matmul(float*, float*, float*, int, int);cudaLaunchKernel
-1761618697756968813 runcu 3593972 3593972 1 matmul(float*, float*, float*, int, int);cudaLaunchKernel
+1761680628903821454 runcu 3861826 3861826 1 _start;__libc_start_main;0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);__device_stub__Z12accum_kernelPfS_i(...);cudaLaunchKernel
+1761680628903827398 runcu 3861826 3861826 1 _start;__libc_start_main;0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);__device_stub__Z13matmul_kernelPfS_S_ii(...);cudaLaunchKernel
+1761680628903830126 runcu 3861826 3861826 1 _start;__libc_start_main;0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);__device_stub__Z13matmul_kernelPfS_S_ii(...);cudaLaunchKernel
 ...
 ```
 
-Each line is a stack trace captured when `cudaLaunchKernel` was called. You can process this independently with `flamegraph.pl` to see just CPU-side behavior. The traces show the actual Qwen3 model code, including `forward()` for transformer layers and `matmul()` for matrix multiplication.
+Each line is a complete snapshot of a single event, broken down as follows:
+- `1761680628903821454`: The nanosecond timestamp when the event occurred.
+- `runcu`: The command name of the process.
+- `3861826`: The process ID (PID).
+- `3861826`: The thread ID (TID).
+- `1`: The CPU core where the event was captured.
+- `_start;__libc_start_main;...;cudaLaunchKernel`: The full, semicolon-delimited user-space call stack.
 
-The GPU trace (qwen3_gpu.json) is in Chrome Trace Format for timeline visualization:
+This file is a treasure trove of information on its own. You can see the exact sequence of kernel launches and the CPU code paths that led to them. You could even generate a CPU-only flamegraph from this file to see which parts of your host code are responsible for calling the CUDA API most frequently.
 
+#### 2. The GPU-Side Story: `qwen3_gpu.json`
+
+This file contains the detailed GPU activity trace from our CUPTI injection library, conveniently formatted as a JSON file that can be loaded into the Chrome Trace Viewer. This gives you a powerful timeline visualization of everything that happened on the GPU.
+
+Take a look at the beginning of the file:
 ```bash
 head -20 qwen3_gpu.json
 ```
 
-This is JSON containing an array of trace events. Load it in Chrome at `chrome://tracing` to see a timeline of GPU kernel executions, memory transfers, and runtime API calls. The timeline shows parallelism (overlapping kernels), bubbles (idle time), and memory transfer costs.
+You'll see a standard JSON structure. To make sense of it, open Google Chrome and navigate to `chrome://tracing`. Click the "Load" button and select your `qwen3_gpu.json` file.
 
-The merged trace (qwen3_merged.folded) combines both:
+The timeline view you'll see is invaluable for understanding the dynamics of GPU execution. You can:
+- **See Parallelism**: Visually identify when multiple kernels are running concurrently on different CUDA streams.
+- **Spot Bubbles**: Find gaps in the timeline where the GPU was idle, which might indicate CPU-side bottlenecks or inefficient data loading.
+- **Analyze Memory Transfers**: See how long `cudaMemcpy` operations are taking and whether they are blocking kernel execution.
 
+#### 3. The Unified Story: `qwen3_merged.folded`
+
+This is the final, merged output that we used to generate our flamegraph. It represents the successful correlation of our CPU and GPU traces.
+
+Let's examine its contents:
 ```bash
 cat qwen3_merged.folded
 ```
 
-Example output:
-
+The output shows the unique, combined call stacks and their total weighted durations:
 ```
-forward(Transformer*, int, int);cudaLaunchKernel;[GPU_Kernel]matmul_kernel 850432
-matmul(float*, float*, float*, int, int);cudaLaunchKernel;[GPU_Kernel]attention_kernel 621847
-rmsnorm(float*, float*, float*, int);cudaLaunchKernel;[GPU_Kernel]rmsnorm_kernel 3215
+0x70c45902a1ca;main;chat(Transformer*, Tokenizer*, Sampler*, char*, char*, int, int, int, TokenBuffer*, int);forward(Transformer*, int, int);__device_stub__Z12accum_kernelPfS_i(float*, float*, int);cudaLaunchKernel;[GPU_Kernel]_Z12accum_kernelPfS_i 29
+0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);__device_stub__Z13matmul_kernelPfS_S_ii(float*, float*, float*, int, int);cudaLaunchKernel;[GPU_Kernel]_Z13matmul_kernelPfS_S_ii 3099632
+0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);__device_stub__Z14rmsnorm_kernelPfS_S_ii(float*, float*, float*, int, int);cudaLaunchKernel;[GPU_Kernel]_Z14rmsnorm_kernelPfS_S_ii 22119
+0x70c45902a1ca;main;chat(...);forward(Transformer*, int, int);multi_head_attention(...);__device_stub__Z27multi_head_attention_kerneliiPfS_S_S_S_iiii(...);cudaLaunchKernel;[GPU_Kernel]_Z27multi_head_attention_kerneliiPfS_S_S_S_iiii 105359
 ```
 
-This is folded stack format with GPU kernel names appended. The numbers on the right are GPU kernel execution times in microseconds, not sample counts. For example, `850432` means 850.432 milliseconds of total GPU execution time for the `matmul_kernel` when called from the `forward()` function. This duration weighting ensures the flamegraph accurately reflects where GPU time is actually spent, as longer-running kernels appear wider, making performance bottlenecks immediately visible. Feed this directly to `combined_flamegraph.pl` to generate the unified visualization.
+This format is simple but powerful. Each line consists of two parts:
+1.  A semicolon-delimited string representing a full call stack, starting from the CPU, going through `cudaLaunchKernel`, and ending with the name of the GPU kernel that was executed (e.g., `[GPU_Kernel]_Z13matmul_kernel...`).
+2.  A number at the end representing the total time in **microseconds** that this specific call stack spent executing on the GPU.
 
-## Limitations and Future Directions
+For example, the line ending in `3099632` tells us that the call stack leading to the `matmul_kernel` was responsible for a total of 3,099,632 microseconds (or 3.1 seconds) of GPU compute time. This duration weighting is the key to creating a flamegraph that accurately reflects where time is truly being spent, making it an indispensable tool for performance analysis.
 
-This profiler captures kernel launches but not kernel internals. When the flamegraph shows a GPU kernel consumed 50ms, it doesn't tell you why, whether threads are memory-bound, compute-bound, or stalled on divergence. For kernel-internal profiling, use NVIDIA Nsight Compute or Nsight Systems which instrument GPU execution at the warp level.
+## The Road Ahead: Limitations and Future Directions
 
-Advanced profilers like iaprof for Intel GPUs demonstrate the next evolution in GPU observability. iaprof combines eBPF kernel tracing with hardware performance sampling using Intel GPU Observability Architecture (OA) and Debug API. Instead of just showing "kernel X ran for 50ms", iaprof captures execution unit stall reasons (memory latency, ALU bottlenecks, instruction fetch stalls) and attributes them back to specific shader instructions. This requires deeper integration with GPU hardware, including reading performance counters during kernel execution, sampling execution unit state, and deferred attribution to handle out-of-order hardware execution. The correlation challenge becomes even harder because hardware samples arrive asynchronously and must be matched to kernel contexts after execution completes.
+You've successfully built a powerful profiler that provides incredible insight into CPU-GPU interactions. However, like any tool, it has its limitations. Understanding these boundaries is key to using the profiler effectively and seeing the exciting possibilities for future development.
 
-The profiler assumes single-stream execution in its current correlation logic. Multi-stream applications launch kernels on multiple CUDA streams, which can execute concurrently on the GPU. The merger should track stream IDs from CUPTI events and handle concurrent executions properly. Currently it may attribute concurrent kernels to whichever CPU launch happened closest in time. iaprof handles this with deferred attribution where hardware samples are buffered, then matched to shader contexts using timestamps and context IDs after all executions complete. This approach could be adapted for CUDA streams by buffering correlation matches and resolving them based on stream timelines.
+### What Our Profiler Doesn't Tell You: Inside the Kernel
 
-Correlation ID overflow can occur in very long-running applications. CUDA's correlation IDs are 32-bit integers that may wrap around after billions of API calls. The merger doesn't currently handle wraparound, which could cause mismatches in applications running for days or weeks. Production profilers use epoch-based correlation where IDs reset at defined intervals and events include epoch markers.
+Our profiler excels at showing you *which* CPU code launches *which* GPU kernel and for *how long* that kernel runs. If your flamegraph shows a kernel consuming 50ms, you've found a hotspot. But it doesn't tell you *why* it's slow. Is the kernel memory-bound, waiting on data from VRAM? Is it compute-bound, with all its math units saturated? Or is it suffering from thread divergence, where threads within the same warp take different code paths?
 
-Multi-GPU applications launch work on multiple devices. The profiler tracks device IDs in CUPTI events but doesn't distinguish them in the merged output. A proper multi-GPU flamegraph should separate stacks by device, showing which GPUs execute which kernels and whether load is balanced. The folded stack format could be extended with device tags: `cpu_stack;cudaLaunchKernel;[GPU0_Kernel]kernel_name` vs `cpu_stack;cudaLaunchKernel;[GPU1_Kernel]kernel_name`.
+To answer these questions, you need to go a level deeper with **kernel-internal profiling**. This is the domain of specialized tools like **NVIDIA Nsight Compute** or **Nsight Systems**. These profilers can instrument the GPU at the hardware level, collecting metrics on warp occupancy, instruction throughput, and memory latency. The typical workflow is to use our flamegraph profiler first to identify the most time-consuming kernels, and then use Nsight Compute to perform a deep-dive analysis on those specific kernels to optimize their internal performance.
 
-Integration with higher-level profilers would be valuable. Combining this tool with NVIDIA Nsight Systems would provide both high-level code flow (from flamegraphs) and detailed kernel metrics (from Nsight). Similarly, integrating with perf or BPF-based full-system profilers would show GPU work in the context of system-wide resource usage (CPU scheduling, interrupts, memory pressure). The folded stack format is designed for this, as you can merge CPU perf samples with GPU samples by concatenating stacks.
+An alternative approach to achieve fine-grained GPU observability is to run eBPF programs directly on the GPU. This is the direction explored by the eGPU paper and [bpftime GPU examples](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu). `bpftime` converts eBPF bytecode to PTX instructions that GPUs can execute, then dynamically patches CUDA binaries at runtime to inject these eBPF programs at kernel entry/exit points. This enables observing GPU-specific information like block indices, thread indices, global timers, and warp-level metrics. Developers can instrument critical paths inside GPU kernels to measure execution behavior and diagnose complex performance issues that kernel-side tracing cannot reach. This GPU-internal observability complements kernel tracepoints - together they provide end-to-end visibility from API calls through kernel drivers to GPU execution.
 
-For fine-grained GPU observability, explore eBPF programs running on the GPU itself. The [bpftime GPU project](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu) compiles eBPF bytecode to PTX instructions, enabling instrumentation inside GPU kernels. This exposes thread-level metrics like memory coalescing efficiency, warp occupancy, and bank conflicts, which are data impossible to obtain from kernel-side tracing. Future directions could combine kernel-side CUPTI tracing with GPU-side eBPF instrumentation for complete visibility from application code to individual warp execution.
+### The Next Frontier: Building a Unified, System-Wide Profiler
 
-## Summary
+This tutorial provides a powerful foundation, but the journey doesn't end here. The next evolution is to build a production-grade, continuous profiler that offers a truly holistic view of system performance. This involves moving beyond just correlating CPU calls and GPU kernels to understanding the "why" behind performance bottlenecks and scaling to complex, real-world workloads.
 
-GPU profiling requires bridging two execution domains: CPU code submitting work and GPU hardware executing it. This tutorial demonstrated a complete profiling stack combining eBPF for CPU stack traces, CUPTI for GPU activity tracing, and correlation logic to merge them into unified flamegraphs. The eBPF profiler captures CPU stacks at every `cudaLaunchKernel` call with nanosecond timestamps. CUPTI injection records GPU kernel executions with correlation IDs linking them back to CPU API calls. The trace merger matches events via timestamps and correlation IDs, producing folded stacks showing complete execution paths from application code through CUDA runtime to GPU kernels. The resulting flamegraphs visualize end-to-end execution, revealing hotspots across both CPU and GPU.
+The future of this work is being developed at **[eunomia-bpf/xpu-perf](https://github.com/eunomia-bpf/xpu-perf)**, an open-source project aimed at creating an online, continuous profiler for both CPU and GPU. Here are the key directions being explored:
 
-This approach works without recompiling applications, supports any CUDA framework (PyTorch, TensorFlow, JAX, raw CUDA), and provides low overhead suitable for production profiling. The tools are modular. You can use eBPF profiling alone for CPU analysis, CUPTI injection alone for GPU timelines, or combine them for unified visibility. Apply these techniques to diagnose performance bottlenecks in ML training, GPU-accelerated applications, or any CUDA workload where understanding CPU-GPU interaction is critical.
+*   **From "What" to "Why": Deep Kernel and Instruction-Level Analysis**
+    Our current profiler tells you *what* kernel ran and for *how long*. The next step is to understand *why* it was slow. This requires diving into the GPU hardware itself.
+    -   **Instruction-Level Stalls**: Using advanced features in vendor libraries like **NVIDIA CUPTI** or technologies like the Intel GPU Observability Architecture (OA) found in tools like **iaprof**, we can capture the specific reasons for stalls within the GPU's execution units. This means identifying bottlenecks caused by memory latency (waiting for data), ALU contention, or other hardware limitations and attributing them back to the exact shader instructions responsible.
+    -   **Hardware Performance Counters**: By sampling hardware performance counters on the GPU, we can collect detailed metrics on cache hit rates, memory bandwidth, and warp occupancy, providing a rich, data-driven picture of in-kernel performance.
 
-> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
+*   **A Holistic System View: Combining On-CPU, Off-CPU, and GPU Data**
+    A process has many states, and a complete profiler must capture all of them.
+    -   **On-CPU vs. Off-CPU**: Our current eBPF profiler focuses on "on-CPU" activity. A complete solution would also trace "off-CPU" time, showing you not just what the CPU was doing, but why it was *waiting*. Was it blocked on I/O, a lock, or, most relevantly, waiting for a GPU kernel to complete?
+    -   **Unified Flamegraphs**: By merging on-CPU, off-CPU, and GPU traces, we can create a single, system-wide flamegraph. This would visualize the entire lifecycle of a request, showing time spent in active CPU computation, time spent waiting for the GPU, and time spent executing on the GPU, all in one seamless view.
+
+*   **Scaling to Production Workloads: Multi-GPU and Multi-Stream Support**
+    Modern AI and HPC workloads are rarely confined to a single GPU or a single stream. A production-ready profiler must handle this complexity.
+    -   **Multi-GPU Awareness**: The profiler should be able to distinguish between different GPUs, tagging events with a device ID (e.g., `[GPU0_Kernel]name` vs. `[GPU1_Kernel]name`). This enables the analysis of load balancing and helps identify issues specific to one device in a multi-GPU setup.
+    -   **Multi-Stream Correlation**: For applications using multiple CUDA streams for concurrent execution, the correlation logic must be enhanced. This involves tracking stream IDs for both CPU launch calls and GPU kernel executions to correctly attribute work in complex, out-of-order scenarios.
+
+By integrating these advanced capabilities, we can build a next-generation observability tool that provides unparalleled, end-to-end insight into the performance of accelerated applications. The work on `xpu-perf` aims to make this vision a reality.
+
+## Tying It All Together: Your Journey in Review
+
+Congratulations! You've successfully navigated the complex world of CPU-GPU performance analysis. The fundamental challenge in profiling modern accelerated applications is bridging two distinct domains: the CPU, which submits work, and the GPU, which executes it. In this tutorial, you built a complete, end-to-end profiling solution that does exactly that.
+
+Let's recap the powerful stack you've assembled:
+-   An **eBPF Profiler**, built in Rust, that uses uprobes to capture CPU stack traces with nanosecond precision at the exact moment `cudaLaunchKernel` is called.
+-   A **CUPTI Injection Library**, which seamlessly loads into any CUDA application to record detailed GPU activity, complete with the crucial correlation IDs that link GPU work back to its CPU origin.
+-   A **Python-based Trace Merger**, which acts as a detective, intelligently stitching the CPU and GPU traces together using timestamps and correlation IDs. It produces a duration-weighted folded stack file, ensuring the final visualization accurately reflects real-world execution time.
+
+The result is a unified flamegraph that provides an intuitive, end-to-end view of your application's execution, from the highest-level CPU functions down to the specific kernels running on the GPU.
+
+The beauty of this approach is its power and flexibility. It works without recompiling your target application, supports any framework built on CUDA (including PyTorch, TensorFlow, and JAX), and has a low enough overhead to be used in production environments. The tools are modular, allowing you to use the eBPF profiler for CPU-only analysis, the CUPTI tracer for a GPU timeline, or combine them for unparalleled insight.
+
+You are now equipped with the techniques and tools to diagnose performance bottlenecks in complex machine learning workloads, scientific simulations, or any GPU-accelerated application where understanding the intricate dance between the CPU and GPU is the key to unlocking performance.
+
+> We hope this tutorial has been an empowering step in your developer journey. To continue learning and exploring the world of eBPF, check out our full collection of tutorials at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>. Happy profiling!
 
 
 ## References

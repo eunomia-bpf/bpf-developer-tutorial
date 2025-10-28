@@ -59,7 +59,8 @@ class GPUPerf:
         if not cpu_output_file:
             cpu_output_file = f"cpu_profile_{pid if pid else 'cuda'}.txt"
 
-        self.profiler_output = cpu_output_file
+        # Convert to absolute path to handle working directory changes
+        self.profiler_output = str(Path(cpu_output_file).absolute())
 
         # Find CUDA runtime library if not specified
         if not cuda_lib_path:
@@ -131,14 +132,15 @@ class GPUPerf:
         trace_file = None
         if do_gpu_profiling:
             if output_trace:
-                trace_file = output_trace
+                # Convert to absolute path to handle target process changing directories
+                trace_file = str(Path(output_trace).absolute())
             else:
                 # Create temporary file for trace output
                 fd, trace_file = tempfile.mkstemp(suffix=".txt", prefix="gpuperf_trace_")
                 os.close(fd)
                 self.temp_trace_file = trace_file
                 atexit.register(self.cleanup_temp_files)
-        
+
         # Set up environment variables
         env = os.environ.copy()
         env['CUDA_INJECTION64_PATH'] = str(self.injection_lib)

@@ -71,11 +71,17 @@ class TraceMerger:
         with open(cpu_file, 'r') as f:
             lines = f.readlines()
 
+        # ANSI escape sequence pattern
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
         stack_count = 0
         for line in lines:
             line = line.strip()
             if not line:
                 continue
+
+            # Remove ANSI color codes if present
+            line = ansi_escape.sub('', line)
 
             # Extended folded format: timestamp_ns comm pid tid cpu stack1;stack2;stack3
             parts = line.split(None, 5)  # Split on whitespace, max 6 parts
