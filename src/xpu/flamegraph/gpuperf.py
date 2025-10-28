@@ -184,6 +184,10 @@ class GPUPerf:
             print(f"Error running command: {e}", file=sys.stderr)
             return_code = 1
         finally:
+            # Give CUPTI time to flush remaining buffered events
+            # CUPTI may continue recording events after target exits
+            time.sleep(0.5)
+
             # Stop CPU profiler if running
             self.stop_cpu_profiler()
         
