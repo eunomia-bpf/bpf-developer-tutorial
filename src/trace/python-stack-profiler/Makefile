@@ -1,4 +1,5 @@
 APP := python-stack
+DISCOVER := python_discover
 
 THIRD_PARTY_PATH := ../../third_party
 
@@ -37,7 +38,7 @@ USER_SRC := $(APP).c
 USER_OBJ := $(APP).o
 
 .PHONY: all
-all: $(APPS)
+all: $(APP) $(DISCOVER)
 
 # Build libbpf
 $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.c) $(wildcard $(LIBBPF_SRC)/*.h)
@@ -77,10 +78,15 @@ $(APP): $(USER_OBJ) $(LIBBPF_OBJ)
 	@echo "Linking $(APP)..."
 	$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
+# Build Python discovery helper
+$(DISCOVER): python_discover.c
+	@echo "Building $(DISCOVER)..."
+	$(CC) $(CFLAGS) $< -o $@
+
 # Clean
 .PHONY: clean
 clean:
-	rm -f $(BPF_OBJ) $(BPF_SKEL) $(USER_OBJ) $(APP)
+	rm -f $(BPF_OBJ) $(BPF_SKEL) $(USER_OBJ) $(APP) $(DISCOVER)
 	rm -f *.o *.skel.h
 
 # Help
