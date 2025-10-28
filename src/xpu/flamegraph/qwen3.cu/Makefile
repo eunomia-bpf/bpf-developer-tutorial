@@ -8,9 +8,10 @@ INCLUDES := -I"$(CUDA_INSTALL_PATH)/include"
 LIB_PATH ?= $(CUDA_INSTALL_PATH)/lib64
 
 # compile the Cuda version (with dynamic libcudart for eBPF uprobe profiling)
+# Use -Xcompiler to pass frame pointer flag to host compiler for eBPF stack unwinding
 .PHONY: runcu
 runcu: runcu.cu
-	$(NVCC) $(INCLUDES) -O3 -Wno-deprecated-gpu-targets --no-device-link -o runcu runcu.cu -L $(LIB_PATH) -lcudart -lm
+	$(NVCC) $(INCLUDES) -O2 -Xcompiler -fno-omit-frame-pointer -Wno-deprecated-gpu-targets --no-device-link -o runcu runcu.cu -L $(LIB_PATH) -lcudart -lm
 # compile cublas included
 .PHONY: runcublas
 runcublas: runcu.cu

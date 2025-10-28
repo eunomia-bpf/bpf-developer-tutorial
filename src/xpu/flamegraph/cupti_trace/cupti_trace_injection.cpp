@@ -207,18 +207,33 @@ RegisterAtExitHandler(void)
 static CUptiResult
 SelectActivities()
 {
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_DRIVER);
+    // Core activities - always enabled
     SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_RUNTIME);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_OVERHEAD);
     SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMSET);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMCPY);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMCPY2);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMORY2);
-    // Enable activities to capture the NVTX annotations - markers, ranges and resource naming.
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_NAME);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MARKER);
-    SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MARKER_DATA);
+
+    // Optional: DRIVER activity - enable via CUPTI_ENABLE_DRIVER=1
+    const char *enableDriver = getenv("CUPTI_ENABLE_DRIVER");
+    if (enableDriver && atoi(enableDriver) == 1) {
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_DRIVER);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_OVERHEAD);
+    }
+
+    // Optional: Memory operations - enable via CUPTI_ENABLE_MEMORY=1
+    const char *enableMemory = getenv("CUPTI_ENABLE_MEMORY");
+    if (enableMemory && atoi(enableMemory) == 1) {
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMSET);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMCPY);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMCPY2);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MEMORY2);
+    }
+
+    // Optional: NVTX annotations - enable via CUPTI_ENABLE_NVTX=1
+    const char *enableNvtx = getenv("CUPTI_ENABLE_NVTX");
+    if (enableNvtx && atoi(enableNvtx) == 1) {
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_NAME);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MARKER);
+        SELECT_ACTIVITY(injectionGlobals.profileMode, CUPTI_ACTIVITY_KIND_MARKER_DATA);
+    }
 
     return CUPTI_SUCCESS;
 }

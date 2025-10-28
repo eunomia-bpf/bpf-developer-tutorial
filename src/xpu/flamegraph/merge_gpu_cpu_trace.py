@@ -28,13 +28,15 @@ class GPUKernelEvent:
 
 class CudaLaunchEvent:
     """Represents a cudaLaunchKernel runtime API call - timestamps kept in microseconds"""
-    def __init__(self, start_us: float, end_us: float, correlation_id: int):
+    def __init__(self, start_us: float, end_us: float, correlation_id: int, pid: int = 0, tid: int = 0):
         self.start_us = start_us  # Keep in microseconds (native GPU format)
         self.end_us = end_us
         self.correlation_id = correlation_id
+        self.pid = pid
+        self.tid = tid
 
     def __repr__(self):
-        return f"CudaLaunch({self.start_us}-{self.end_us} us, corr={self.correlation_id})"
+        return f"CudaLaunch({self.start_us}-{self.end_us} us, corr={self.correlation_id}, pid={self.pid}, tid={self.tid})"
 
 
 class CPUStack:
@@ -58,6 +60,7 @@ class TraceMerger:
         self.gpu_kernels = []  # List of GPUKernelEvent
         self.cuda_launches = {}  # correlation_id -> CudaLaunchEvent
         self.cpu_stacks = []  # List of CPUStack from uprobe (extended folded format)
+        self.cpu_stacks_by_thread = defaultdict(list)  # (pid, tid) -> List[CPUStack]
         self.merged_stacks = defaultdict(int)  # stack_string -> count
         self.timestamp_tolerance_ns = int(timestamp_tolerance_ms * 1_000_000)
 
@@ -95,8 +98,9 @@ class TraceMerger:
                     for frame in frames:
                         frame = frame.strip()
                         if frame and frame not in ['<no-symbol>', '_start', '__libc_start_main']:
-                            # Clean up cudaLaunchKernel variations - keep only first occurrence
-                            if 'cudaLaunchKernel' in frame or '__device_stub__' in frame:
+                            # Keep __device_stub__ as it shows which kernel is launched
+                            # Only collapse the final cudaLaunchKernel wrapper
+                            if 'cudaLaunchKernel' in frame and '__device_stub__' not in frame:
                                 if not seen_cuda_launch:
                                     frame = 'cudaLaunchKernel'
                                     stack_frames.append(frame)
@@ -105,9 +109,10 @@ class TraceMerger:
                                 stack_frames.append(frame)
 
                 if stack_frames:
-                    self.cpu_stacks.append(CPUStack(
-                        timestamp_ns, comm, pid, tid, cpu, stack_frames
-                    ))
+                    cpu_stack = CPUStack(timestamp_ns, comm, pid, tid, cpu, stack_frames)
+                    self.cpu_stacks.append(cpu_stack)
+                    # Also index by thread for per-thread matching
+                    self.cpu_stacks_by_thread[(pid, tid)].append(cpu_stack)
                     stack_count += 1
 
             except (ValueError, IndexError) as e:
@@ -115,6 +120,7 @@ class TraceMerger:
                 continue
 
         print(f"Parsed {stack_count} CPU stack traces from cudaLaunchKernel hooks")
+        print(f"Found {len(self.cpu_stacks_by_thread)} unique threads")
 
     def parse_gpu_trace(self, gpu_json_file: str):
         """Parse GPU trace JSON file and extract kernel events and launch correlations"""
@@ -131,6 +137,9 @@ class TraceMerger:
             name = event.get('name', '')
             category = event.get('cat', '')
             correlation_id = event.get('args', {}).get('correlationId', 0)
+            # Extract PID/TID from Chrome trace format
+            pid = event.get('pid', 0)
+            tid = event.get('tid', 0)
 
             # Extract cudaLaunchKernel runtime events
             if category == 'CUDA_Runtime' and 'LaunchKernel' in name:
@@ -142,7 +151,7 @@ class TraceMerger:
                     end_us = start_us + duration_us
 
                     self.cuda_launches[correlation_id] = CudaLaunchEvent(
-                        start_us, end_us, correlation_id
+                        start_us, end_us, correlation_id, pid, tid
                     )
                     launch_count += 1
 
@@ -170,138 +179,130 @@ class TraceMerger:
         print(f"Parsed {kernel_count} GPU kernel events")
         print(f"Parsed {launch_count} cudaLaunchKernel runtime events")
 
-    def calculate_clock_offset(self):
-        """
-        Calculate the offset between CPU and GPU clocks.
-        CPU and GPU use different time bases, so we need to align them.
-
-        Strategy: Use the median offset from the first few events to be robust against outliers.
-        Also report drift to help diagnose correlation issues.
-        """
-        if not self.cpu_stacks or not self.cuda_launches:
-            return 0.0
-
-        # Sample first 100 events from each to calculate offset
-        sample_size = min(100, len(self.cpu_stacks), len(self.cuda_launches))
-
-        sorted_cpu = sorted(self.cpu_stacks[:sample_size], key=lambda x: x.timestamp_ns)
-        sorted_gpu = sorted(self.cuda_launches.values(), key=lambda x: x.start_us)[:sample_size]
-
-        offsets = []
-        for cpu, gpu in zip(sorted_cpu, sorted_gpu):
-            cpu_us = cpu.timestamp_ns / 1000.0
-            offset = cpu_us - gpu.start_us
-            offsets.append(offset)
-
-        # Use median to be robust against outliers
-        offsets.sort()
-        median_offset = offsets[len(offsets) // 2]
-
-        # Calculate drift across entire trace to warn about correlation issues
-        if len(self.cpu_stacks) > 100 and len(self.cuda_launches) > 100:
-            # Sample at start and end
-            cpu_first = min(self.cpu_stacks, key=lambda x: x.timestamp_ns)
-            cpu_last = max(self.cpu_stacks, key=lambda x: x.timestamp_ns)
-            gpu_first = min(self.cuda_launches.values(), key=lambda x: x.start_us)
-            gpu_last = max(self.cuda_launches.values(), key=lambda x: x.start_us)
-
-            offset_start = cpu_first.timestamp_ns / 1000.0 - gpu_first.start_us
-            offset_end = cpu_last.timestamp_ns / 1000.0 - gpu_last.start_us
-            drift = offset_end - offset_start
-
-            cpu_duration = (cpu_last.timestamp_ns - cpu_first.timestamp_ns) / 1_000_000  # ms
-
-            print(f"Clock offset: {median_offset / 1000:.3f} ms (CPU - GPU)")
-            print(f"Clock drift: {drift / 1000:.3f} ms over {cpu_duration:.1f} ms trace duration")
-            if abs(drift) > 1000:  # More than 1ms drift
-                print(f"WARNING: Significant clock drift detected ({drift / cpu_duration:.3f} ms/ms)")
-                print(f"         This may cause timestamp correlation issues")
-        else:
-            print(f"Calculated clock offset: {median_offset / 1000:.3f} ms (CPU - GPU)")
-
-        return median_offset
-
-    def find_matching_kernel(self, cpu_stack: CPUStack) -> Optional[GPUKernelEvent]:
-        """
-        Find GPU kernel that matches the CPU stack trace.
-        Strategy:
-        1. Convert CPU nanosecond timestamp to microseconds
-        2. Apply clock offset to align CPU and GPU time bases
-        3. Use binary search to find cudaLaunchKernel runtime call within timestamp tolerance
-        4. Use correlation ID to find actual GPU kernel execution
-        """
-        import bisect
-
-        # Convert CPU timestamp from nanoseconds to microseconds
-        cpu_timestamp_us = cpu_stack.timestamp_ns / 1000.0
-
-        # Apply clock offset to align CPU and GPU timestamps
-        cpu_timestamp_aligned = cpu_timestamp_us - self.clock_offset_us
-
-        tolerance_us = self.timestamp_tolerance_ns / 1000.0
-
-        # Binary search to find nearest GPU launch timestamp
-        idx = bisect.bisect_left(self.launch_timestamps, cpu_timestamp_aligned)
-
-        # Check surrounding launches (idx-1, idx, idx+1) for best match
-        candidates = []
-        for i in [idx - 1, idx, idx + 1]:
-            if 0 <= i < len(self.sorted_launches):
-                launch = self.sorted_launches[i]
-                time_diff = abs(cpu_timestamp_aligned - launch.start_us)
-                if time_diff < tolerance_us:
-                    candidates.append((time_diff, launch))
-
-        if not candidates:
-            return None
-
-        # Get launch with smallest time difference
-        candidates.sort(key=lambda x: x[0])
-        best_launch = candidates[0][1]
-
-        # Find GPU kernel with matching correlation ID (using pre-built map)
-        if not hasattr(self, 'corr_to_kernel'):
-            self.corr_to_kernel = {k.correlation_id: k for k in self.gpu_kernels}
-
-        return self.corr_to_kernel.get(best_launch.correlation_id)
 
     def merge_traces(self):
-        """Correlate CPU stacks with GPU kernels using correlation IDs and timestamps"""
+        """Correlate CPU stacks with GPU kernels using optimal matching strategy"""
         print("Correlating CPU stacks with GPU kernels...")
 
-        # Calculate clock offset between CPU and GPU timestamps
-        self.clock_offset_us = self.calculate_clock_offset()
+        # Sort CPU stacks by thread and timestamp
+        for thread_id in self.cpu_stacks_by_thread:
+            self.cpu_stacks_by_thread[thread_id].sort(key=lambda x: x.timestamp_ns)
 
-        # Pre-sort GPU launches by timestamp for efficient binary search
-        self.sorted_launches = sorted(self.cuda_launches.values(), key=lambda x: x.start_us)
-        self.launch_timestamps = [l.start_us for l in self.sorted_launches]
+        # Group GPU launches by PID only (TID from CUPTI may not match Linux TID)
+        launches_by_thread = defaultdict(list)
+        for launch in self.cuda_launches.values():
+            try:
+                pid = int(launch.pid) if launch.pid else 0
+                if pid > 0:
+                    for thread_id in self.cpu_stacks_by_thread.keys():
+                        if thread_id[0] == pid:  # Match by PID
+                            launches_by_thread[thread_id].append(launch)
+                            break
+            except (ValueError, TypeError):
+                continue
+
+        # Sort GPU launches by timestamp
+        for thread_id in launches_by_thread:
+            launches_by_thread[thread_id].sort(key=lambda x: x.start_us)
+
+        # Build correlation ID to kernel mapping once
+        self.corr_to_kernel = {k.correlation_id: k for k in self.gpu_kernels}
 
         matched_count = 0
         unmatched_count = 0
 
-        for cpu_stack in self.cpu_stacks:
-            # Find matching GPU kernel
-            gpu_kernel = self.find_matching_kernel(cpu_stack)
+        # Process each thread
+        for thread_id, cpu_stacks in self.cpu_stacks_by_thread.items():
+            gpu_launches = launches_by_thread.get(thread_id, [])
+            if not gpu_launches:
+                unmatched_count += len(cpu_stacks)
+                continue
 
-            # Build merged stack
-            merged_stack = cpu_stack.stack.copy()
-
-            if gpu_kernel:
-                # Add GPU kernel to the top of the stack
-                merged_stack.append(f"[GPU_Kernel]{gpu_kernel.name}")
-                matched_count += 1
-
-                # Create folded stack string - only add matched stacks
-                stack_str = ';'.join(merged_stack)
-                self.merged_stacks[stack_str] += 1
+            # Check if counts match for sequential matching
+            if len(cpu_stacks) == len(gpu_launches):
+                print(f"  Thread {thread_id}: Using sequential matching ({len(cpu_stacks)} events)")
+                # Perfect 1:1 correspondence - use simple index matching
+                for i, cpu_stack in enumerate(cpu_stacks):
+                    gpu_kernel = self.corr_to_kernel.get(gpu_launches[i].correlation_id)
+                    if gpu_kernel:
+                        merged_stack = cpu_stack.stack.copy()
+                        merged_stack.append(f"[GPU_Kernel]{gpu_kernel.name}")
+                        stack_str = ';'.join(merged_stack)
+                        kernel_duration_us = int(gpu_kernel.end_us - gpu_kernel.start_us)
+                        self.merged_stacks[stack_str] += kernel_duration_us
+                        matched_count += 1
+                    else:
+                        unmatched_count += 1
             else:
-                # Skip unmatched launches - don't add to merged output
-                unmatched_count += 1
+                # More GPU events than CPU - use sequential with time window validation
+                print(f"  Thread {thread_id}: Using sequential+time matching (CPU={len(cpu_stacks)}, GPU={len(gpu_launches)})")
+
+                # Estimate clock offset from first events
+                if cpu_stacks and gpu_launches:
+                    cpu_first_us = cpu_stacks[0].timestamp_ns / 1000.0
+                    gpu_first_us = gpu_launches[0].start_us
+                    clock_offset_us = gpu_first_us - cpu_first_us
+                    print(f"    Estimated clock offset: {clock_offset_us/1000:.2f} ms")
+                else:
+                    clock_offset_us = 0
+
+                # Tolerance window (default 10ms)
+                tolerance_us = self.timestamp_tolerance_ns / 1000.0
+
+                gpu_idx = 0
+                skipped_cpu = 0
+                skipped_gpu = 0
+
+                for cpu_stack in cpu_stacks:
+                    cpu_ts_us = (cpu_stack.timestamp_ns / 1000.0) + clock_offset_us
+
+                    # Skip GPU events that are too far behind CPU
+                    while gpu_idx < len(gpu_launches):
+                        gpu_ts_us = gpu_launches[gpu_idx].start_us
+                        time_diff = cpu_ts_us - gpu_ts_us
+
+                        if time_diff > tolerance_us:
+                            # GPU event is too old, skip it
+                            gpu_idx += 1
+                            skipped_gpu += 1
+                        else:
+                            break
+
+                    # Check if GPU exhausted
+                    if gpu_idx >= len(gpu_launches):
+                        unmatched_count += 1
+                        skipped_cpu += 1
+                        continue
+
+                    # Check if current GPU is within window
+                    gpu_ts_us = gpu_launches[gpu_idx].start_us
+                    time_diff = abs(cpu_ts_us - gpu_ts_us)
+
+                    if time_diff <= tolerance_us:
+                        # Within window - match!
+                        gpu_kernel = self.corr_to_kernel.get(gpu_launches[gpu_idx].correlation_id)
+
+                        if gpu_kernel:
+                            merged_stack = cpu_stack.stack.copy()
+                            merged_stack.append(f"[GPU_Kernel]{gpu_kernel.name}")
+                            stack_str = ';'.join(merged_stack)
+                            kernel_duration_us = int(gpu_kernel.end_us - gpu_kernel.start_us)
+                            self.merged_stacks[stack_str] += kernel_duration_us
+                            matched_count += 1
+                            gpu_idx += 1
+                        else:
+                            unmatched_count += 1
+                    else:
+                        # CPU is too far ahead - skip this CPU sample
+                        unmatched_count += 1
+                        skipped_cpu += 1
+
+                if skipped_cpu > 0 or skipped_gpu > 0:
+                    print(f"    Skipped: {skipped_cpu} CPU events, {skipped_gpu} GPU events (outside time window)")
 
         print(f"Matched {matched_count} CPU stacks with GPU kernels")
         if unmatched_count > 0:
-            print(f"WARNING: {unmatched_count} CPU stacks could not be correlated with GPU kernels")
-            print(f"         This may indicate profiler timing mismatch or clock drift")
+            print(f"Unmatched: {unmatched_count} CPU stacks (may indicate missing GPU events)")
         print(f"Total unique stacks: {len(self.merged_stacks)}")
 
     def write_folded_output(self, output_file: str):
