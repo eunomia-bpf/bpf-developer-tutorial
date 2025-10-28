@@ -1,0 +1,3 @@
+llm-inference
+*.o
+*.bak

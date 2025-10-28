@@ -1,0 +1,12 @@
+*.o
+*.so
+cpu_results.txt
+gpu_results.txt
+gpu_results.json
+__pycache__/
+*.svg
+*.folded
+*.txt
+/*.json
+test_cupti
+venv/

@@ -1,0 +1,10 @@
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+runcu
+runcublas
+*.gguf
+Qwen3-0.6B-GGUF-FP32/

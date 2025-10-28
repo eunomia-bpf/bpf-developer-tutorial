@@ -1,0 +1,19 @@
+[package]
+name = "profile"
+version = "0.1.0"
+authors = ["Kuifeng Lee <kuifeng@fb.com>"]
+license = "GPL-2.0 OR BSD-3-Clause"
+edition = "2021"
+rust-version = "1.71"
+
+[dependencies]
+blazesym = { version = "0.2.0-rc.4",features = ["tracing"] }
+clap = { version = "4.5", features = ["derive"] }
+libbpf-rs = "0.24"
+libc = "*"
+nix = "0.29.0"
+tracing = "0.1"
+tracing-subscriber = {version = "0.3", features = ["ansi", "env-filter", "fmt"]}
+
+[build-dependencies]
+libbpf-cargo = "0.24"
