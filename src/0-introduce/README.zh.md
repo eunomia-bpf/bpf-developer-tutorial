@@ -167,8 +167,8 @@ eBPF 能够动态调整系统行为并扩展到用户空间，使其成为现代
 
 想要更系统、深入地学习 eBPF 技术？推荐《深入理解 eBPF 与可观测性》——业内首本系统性穿透 Linux 内核观测技术指南。本书由龙蜥社区多位资深专家联袂打造，深入剖析 eBPF 底层原理和开发框架，结合网络、内存、I/O、调度等六大领域，提供丰富的生产级实践代码。
 
-![书籍推荐](../third_party/book-picture.png)
+![书籍推荐](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/third_party/book-picture.png)
 
 欢迎关注我们的微信公众号，获取更多 eBPF 技术文章和教程更新！
 
-![微信公众号](../third_party/wechat-qrcode.png)
+![微信公众号](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/third_party/wechat-qrcode.png)
