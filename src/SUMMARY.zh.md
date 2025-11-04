@@ -46,6 +46,7 @@ GPU:
 
 - [lesson 47-cuda-events](src/47-cuda-events/README.zh.md) eBPF 教程：追踪 CUDA GPU 操作
 - [lesson xpu/npu-kernel-driver](src/xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
+- [xpu flamegraph](src/xpu/flamegraph/README.zh.md) eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器
 - [lesson xpu/gpu-kernel-driver](src/xpu/gpu-kernel-driver/README.zh.md) eBPF 实例教程：使用内核跟踪点监控 GPU 驱动活动
 调度器:
 
@@ -83,3 +84,17 @@ Android:
 - [lesson 22-android](src/22-android/README.zh.md) 在 Android 上使用 eBPF 程序
 
 持续更新中...
+
+## 推荐书籍：《深入理解 eBPF 与可观测性》
+
+在当今云原生、人工智能和大模型迅猛发展的时代，理解和优化操作系统性能变得尤为重要。龙蜥社区多位资深专家历时两年，联袂打造业内首本系统性穿透 Linux 内核观测技术指南——《深入理解 eBPF 与可观测性》。
+
+本书不仅深入剖析了 eBPF 的底层原理和开发框架，结合了网络、内存、I/O、调度等六大领域，提供了原理和代码级的深度解析，包含了丰富的生产级实践代码，助力读者快速掌握 eBPF 技术，应用于网络流量分析、故障排查、性能调优等实际场景。
+
+无论是内核开发者、运维工程师、eBPF 技术爱好者，还是可观测领域、操作系统领域专家，这本书都将成为您洞悉 Linux 系统的必备武器。
+
+![书籍推荐](third_party/book-picture.png)
+
+欢迎关注我们的微信公众号，获取更多 eBPF 相关的技术文章、教程更新和社区动态！
+
+![微信公众号](third_party/wechat-qrcode.png)
