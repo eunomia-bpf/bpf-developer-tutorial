@@ -93,8 +93,8 @@ Android:
 
 无论是内核开发者、运维工程师、eBPF 技术爱好者，还是可观测领域、操作系统领域专家，这本书都将成为您洞悉 Linux 系统的必备武器。
 
-![书籍推荐](third_party/book-picture.png)
+![书籍推荐](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/third_party/book-picture.png)
 
 欢迎关注我们的微信公众号，获取更多 eBPF 相关的技术文章、教程更新和社区动态！
 
-![微信公众号](third_party/wechat-qrcode.png)
+![微信公众号](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/third_party/wechat-qrcode.png)
