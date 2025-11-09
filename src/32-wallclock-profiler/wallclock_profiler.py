@@ -32,7 +32,7 @@ class CombinedProfiler:
         self.offcpu_error = None
         
         # Find tool paths
-        self.script_dir = Path(__file__).parent
+        self.script_dir = Path(__file__).absolute().parent
         self.oncpu_tool = self.script_dir / "oncputime"
         self.offcpu_tool = self.script_dir / "offcputime"
         
