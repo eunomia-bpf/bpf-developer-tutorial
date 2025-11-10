@@ -1,89 +1,193 @@
-#include <linux/init.h>   // Macros for module initialization
-#include <linux/module.h> // Core header for loading modules
-#include <linux/kernel.h> // Kernel logging macros
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
-__bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz);
-
-/* Define a kfunc function */
-__bpf_kfunc_start_defs();
-
-__bpf_kfunc int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz)
-{
-    // Edge case: if substr is empty, return 0 (assuming empty string is found at the start)
-    if (substr__sz == 0)
-    {
-        return 0;
-    }
-    // Edge case: if the substring is longer than the main string, it's impossible to find
-    if (substr__sz > str__sz)
-    {
-        return -1; // Return -1 to indicate not found
-    }
-
-    // Iterate through the main string, considering the size limit
-    for (size_t i = 0; i <= str__sz - substr__sz; i++)
-    {
-        size_t j = 0;
-        // Compare the substring with the current position in the string
-        while (j < substr__sz && str[i + j] == substr[j])
-        {
-            j++;
-        }
-        // If the entire substring was found
-        if (j == substr__sz)
-        {
-            return i; // Return the index of the first match
-        }
-    }
-    // Return -1 if the substring is not found
-    return -1;
-}
-
-__bpf_kfunc_end_defs();
-
-BTF_KFUNCS_START(bpf_kfunc_example_ids_set)
-BTF_ID_FLAGS(func, bpf_strstr)
-BTF_KFUNCS_END(bpf_kfunc_example_ids_set)
-
-// Register the kfunc ID set
-static const struct btf_kfunc_id_set bpf_kfunc_example_set = {
-    .owner = THIS_MODULE,
-    .set = &bpf_kfunc_example_ids_set,
+/* Define our custom struct_ops operations */
+struct bpf_testmod_ops {
+	int (*test_1)(void);
+	int (*test_2)(int a, int b);
+	void (*test_3)(const char *buf, int len);
 };
 
-// Function executed when the module is loaded
-static int __init hello_init(void)
-{
-    int ret;
+/* Global instance that BPF programs will implement */
+static struct bpf_testmod_ops __rcu *testmod_ops;
 
-    printk(KERN_INFO "Hello, world!\n");
-    // Register the BTF kfunc ID set
-    ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_kfunc_example_set);
-    if (ret)
-    {
-        pr_err("bpf_kfunc_example: Failed to register BTF kfunc ID set\n");
-        return ret;
-    }
-    printk(KERN_INFO "bpf_kfunc_example: Module loaded successfully\n");
-    return 0; // Return 0 if successful
+/* Proc file to trigger the struct_ops */
+static struct proc_dir_entry *trigger_file;
+
+/* CFI stub functions - required for struct_ops */
+static int bpf_testmod_ops__test_1(void)
+{
+	return 0;
 }
 
-// Function executed when the module is removed
-static void __exit hello_exit(void)
+static int bpf_testmod_ops__test_2(int a, int b)
 {
-    // Unregister the BTF kfunc ID set
-    // unregister_btf_kfunc_id_set(BPF_PROG_TYPE_UNSPEC, &bpf_kfunc_example_set);
-    printk(KERN_INFO "Goodbye, world!\n");
+	return 0;
 }
 
-// Macros to define the module’s init and exit points
-module_init(hello_init);
-module_exit(hello_exit);
+static void bpf_testmod_ops__test_3(const char *buf, int len)
+{
+}
 
-MODULE_LICENSE("GPL");                 // License type (GPL)
-MODULE_AUTHOR("Your Name");            // Module author
-MODULE_DESCRIPTION("A simple module"); // Module description
-MODULE_VERSION("1.0");                 // Module version
+/* CFI stubs structure */
+static struct bpf_testmod_ops __bpf_ops_bpf_testmod_ops = {
+	.test_1 = bpf_testmod_ops__test_1,
+	.test_2 = bpf_testmod_ops__test_2,
+	.test_3 = bpf_testmod_ops__test_3,
+};
+
+/* BTF and verifier callbacks */
+static int bpf_testmod_ops_init(struct btf *btf)
+{
+	/* Initialize BTF if needed */
+	return 0;
+}
+
+static bool bpf_testmod_ops_is_valid_access(int off, int size,
+					    enum bpf_access_type type,
+					    const struct bpf_prog *prog,
+					    struct bpf_insn_access_aux *info)
+{
+	/* Allow all accesses for now */
+	return true;
+}
+
+static const struct bpf_verifier_ops bpf_testmod_verifier_ops = {
+	.is_valid_access = bpf_testmod_ops_is_valid_access,
+};
+
+static int bpf_testmod_ops_init_member(const struct btf_type *t,
+				       const struct btf_member *member,
+				       void *kdata, const void *udata)
+{
+	/* No special member initialization needed */
+	return 0;
+}
+
+/* Registration function */
+static int bpf_testmod_ops_reg(void *kdata, struct bpf_link *link)
+{
+	struct bpf_testmod_ops *ops = kdata;
+	
+	/* Only one instance at a time */
+	if (cmpxchg(&testmod_ops, NULL, ops) != NULL)
+		return -EEXIST;
+
+	pr_info("bpf_testmod_ops registered\n");
+	return 0;
+}
+
+/* Unregistration function */
+static void bpf_testmod_ops_unreg(void *kdata, struct bpf_link *link)
+{
+	struct bpf_testmod_ops *ops = kdata;
+
+	if (cmpxchg(&testmod_ops, ops, NULL) != ops) {
+		pr_warn("bpf_testmod_ops: unexpected unreg\n");
+		return;
+	}
+
+	pr_info("bpf_testmod_ops unregistered\n");
+}
+
+/* Struct ops definition */
+static struct bpf_struct_ops bpf_testmod_ops_struct_ops = {
+	.verifier_ops = &bpf_testmod_verifier_ops,
+	.init = bpf_testmod_ops_init,
+	.init_member = bpf_testmod_ops_init_member,
+	.reg = bpf_testmod_ops_reg,
+	.unreg = bpf_testmod_ops_unreg,
+	.cfi_stubs = &__bpf_ops_bpf_testmod_ops,
+	.name = "bpf_testmod_ops",
+	.owner = THIS_MODULE,
+};
+
+/* Proc file write handler to trigger struct_ops */
+static ssize_t trigger_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *pos)
+{
+	struct bpf_testmod_ops *ops;
+	char kbuf[64];
+	int ret = 0;
+	
+	if (count >= sizeof(kbuf))
+		count = sizeof(kbuf) - 1;
+	
+	if (copy_from_user(kbuf, buf, count))
+		return -EFAULT;
+	
+	kbuf[count] = '\0';
+	
+	rcu_read_lock();
+	ops = rcu_dereference(testmod_ops);
+	if (ops) {
+		pr_info("Calling struct_ops callbacks:\n");
+		
+		if (ops->test_1) {
+			ret = ops->test_1();
+			pr_info("test_1() returned: %d\n", ret);
+		}
+		
+		if (ops->test_2) {
+			ret = ops->test_2(10, 20);
+			pr_info("test_2(10, 20) returned: %d\n", ret);
+		}
+		
+		if (ops->test_3) {
+			ops->test_3(kbuf, count);
+			pr_info("test_3() called with buffer\n");
+		}
+	} else {
+		pr_info("No struct_ops registered\n");
+	}
+	rcu_read_unlock();
+	
+	return count;
+}
+
+static const struct proc_ops trigger_proc_ops = {
+	.proc_write = trigger_write,
+};
+
+static int __init testmod_init(void)
+{
+	int ret;
+
+	/* Register the struct_ops */
+	ret = register_bpf_struct_ops(&bpf_testmod_ops_struct_ops, bpf_testmod_ops);
+	if (ret) {
+		pr_err("Failed to register struct_ops: %d\n", ret);
+		return ret;
+	}
+
+	/* Create proc file for triggering */
+	trigger_file = proc_create("bpf_testmod_trigger", 0222, NULL, &trigger_proc_ops);
+	if (!trigger_file) {
+		/* Note: No unregister function available in this kernel version */
+		return -ENOMEM;
+	}
+
+	pr_info("bpf_testmod loaded with struct_ops support\n");
+	return 0;
+}
+
+static void __exit testmod_exit(void)
+{
+	proc_remove(trigger_file);
+	/* Note: struct_ops unregister happens automatically on module unload */
+	pr_info("bpf_testmod unloaded\n");
+}
+
+module_init(testmod_init);
+module_exit(testmod_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("eBPF Example");
+MODULE_DESCRIPTION("BPF struct_ops test module");
+MODULE_VERSION("1.0");

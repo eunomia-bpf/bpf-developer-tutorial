@@ -4,7 +4,7 @@ obj-m += hello.o  # hello.o is the target
 KBUILD_CFLAGS += -g -O2
 
 all:
-	# Compile the module with BTF information
+	# Compile the module
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 clean:

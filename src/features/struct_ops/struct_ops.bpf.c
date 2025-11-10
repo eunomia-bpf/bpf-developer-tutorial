@@ -1,28 +1,40 @@
-/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
-#define BPF_NO_GLOBAL_DATA
-#include <linux/bpf.h>
+/* SPDX-License-Identifier: GPL-2.0 */
+#include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
+#include "module/bpf_testmod.h"
 
-typedef unsigned int u32;
-typedef unsigned long long u64;
-typedef int pid_t;
+char _license[] SEC("license") = "GPL";
 
-extern int bpf_strstr(const char *str, u32 str__sz, const char *substr, u32 substr__sz) __ksym;
-
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
-
-SEC("kprobe/do_unlinkat")
-int handle_kprobe(void *ctx)
+/* Implement the struct_ops callbacks */
+SEC("struct_ops/test_1")
+int BPF_PROG(bpf_testmod_test_1)
 {
-	pid_t pid = bpf_get_current_pid_tgid() >> 32;
-	char str[] = "Hello, world!";
-	char substr[] = "wor";
-	u32 result = bpf_strstr(str, sizeof(str) - 1, substr, sizeof(substr) - 1);
-	if (result != -1)
-	{
-		bpf_printk("'%s' found in '%s' at index %d\n", substr, str, result);
-	}
-	bpf_printk("Hello, world! (pid: %d) bpf_strstr %d\n", pid, result);
-	return 0;
+	bpf_printk("BPF test_1 called!\n");
+	return 42;
 }
+
+SEC("struct_ops/test_2")
+int BPF_PROG(bpf_testmod_test_2, int a, int b)
+{
+	int result = a + b;
+	bpf_printk("BPF test_2 called: %d + %d = %d\n", a, b, result);
+	return result;
+}
+
+SEC("struct_ops/test_3")
+void BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
+{
+	bpf_printk("BPF test_3 called with buffer length %d\n", len);
+	if (len > 0) {
+		bpf_printk("First char: %c\n", buf[0]);
+	}
+}
+
+/* Define the struct_ops map */
+SEC(".struct_ops")
+struct bpf_testmod_ops testmod_ops = {
+	.test_1 = (void *)bpf_testmod_test_1,
+	.test_2 = (void *)bpf_testmod_test_2,
+	.test_3 = (void *)bpf_testmod_test_3,
+};
