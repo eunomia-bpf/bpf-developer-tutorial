@@ -10,25 +10,24 @@ char _license[] SEC("license") = "GPL";
 SEC("struct_ops/test_1")
 int BPF_PROG(bpf_testmod_test_1)
 {
-	bpf_printk("BPF test_1 called!\n");
+	/* Return a special value to indicate BPF implementation */
 	return 42;
 }
 
 SEC("struct_ops/test_2")
 int BPF_PROG(bpf_testmod_test_2, int a, int b)
 {
+	/* Compute and return the sum */
 	int result = a + b;
-	bpf_printk("BPF test_2 called: %d + %d = %d\n", a, b, result);
 	return result;
 }
 
 SEC("struct_ops/test_3")
 void BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
 {
-	bpf_printk("BPF test_3 called with buffer length %d\n", len);
-	if (len > 0) {
-		bpf_printk("First char: %c\n", buf[0]);
-	}
+	/* Process buffer (no printk allowed in struct_ops) */
+	(void)buf;
+	(void)len;
 }
 
 /* Define the struct_ops map */
