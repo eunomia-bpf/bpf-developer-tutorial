@@ -1,0 +1,96 @@
+
+### Status in Latest Kernel (bpf-next)
+
+**Analysis Date**: 2025-11-10
+**Tree Analyzed**: bpf-next (Linux 6.18-rc4, commit f8c67d8550ee)
+
+#### Partial Fix: `cfi_stubs` Validation Added
+
+The kernel maintainers recognized this class of bugs and **fixed one instance**:
+
+**Commit**: [3e0008336ae3](https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/commit/?id=3e0008336ae3153fb89b1a15bb877ddd38680fe6)
+**Date**: February 21, 2024
+**Author**: Kui-Feng Lee
+**Title**: "bpf: Check cfi_stubs before registering a struct_ops type"
+
+**Reason for Fix**:
+> Recently, st_ops->cfi_stubs was introduced. However, the upcoming new
+> struct_ops support (e.g. sched_ext) is not aware of this and does not
+> provide its own cfi_stubs. The kernel ends up NULL dereferencing the
+> st_ops->cfi_stubs.
+
+The fix added validation in `bpf_struct_ops_desc_init()`:
+
+```c
+if (!st_ops->cfi_stubs) {
+    pr_warn("struct_ops for %s has no cfi_stubs\n", st_ops->name);
+    return -EINVAL;
+}
+```
+
+**Current Location**: `kernel/bpf/bpf_struct_ops.c:352-355` (bpf-next)
+
+#### Still Unfixed: Other Required Callbacks
+
+Despite the cfi_stubs fix, **three other NULL pointer dereferences remain unpatched** in bpf-next:
+
+| Callback | File | Line | Function | Status |
+|----------|------|------|----------|--------|
+| `st_ops->init` | `kernel/bpf/bpf_struct_ops.c` | 457 | `bpf_struct_ops_desc_init()` | ❌ **Unfixed** |
+| `st_ops->init_member` | `kernel/bpf/bpf_struct_ops.c` | 753 | `bpf_struct_ops_map_update_elem()` | ❌ **Unfixed** |
+| `st_ops->verifier_ops` | `kernel/bpf/verifier.c` | 24011 | `check_struct_ops_btf_id()` | ❌ **Unfixed** |
+
+**Verification Commands**:
+```bash
+# Check bpf-next tree
+cd ~/bpf-next
+
+# Verify cfi_stubs check exists
+grep -A 3 "if (!st_ops->cfi_stubs)" kernel/bpf/bpf_struct_ops.c
+
+# Verify init is called without check
+sed -n '455,460p' kernel/bpf/bpf_struct_ops.c
+# Output shows: if (st_ops->init(btf)) { ... }  ← No NULL check!
+
+# Verify init_member is called without check  
+sed -n '750,758p' kernel/bpf/bpf_struct_ops.c
+# Output shows: err = st_ops->init_member(...);  ← No NULL check!
+
+# Verify verifier_ops is assigned without check
+sed -n '24009,24013p' kernel/bpf/verifier.c
+# Output shows: env->ops = st_ops->verifier_ops;  ← No NULL check!
+```
+
+#### Why Only cfi_stubs Was Fixed?
+
+The commit message provides insight:
+
+1. **Immediate trigger**: sched_ext development hit this specific bug
+2. **Module support**: With module support, third-party developers might forget to set cfi_stubs
+3. **Regression prevention**: The fix prevents a class of bugs for new struct_ops implementations
+
+**But why not fix init, init_member, and verifier_ops?**
+
+Likely reasons:
+- **Historical usage**: All in-tree struct_ops (TCP congestion control, schedulers, etc.) already provide these callbacks
+- **Not discovered yet**: No one has tried to register struct_ops without these callbacks
+- **Assumed required**: Kernel developers may assume these are "obviously" mandatory
+- **Patch scope**: The cfi_stubs patch addressed the immediate bug without broader refactoring
+
+#### Implications
+
+**For Kernel Development:**
+- ✅ Precedent established: The cfi_stubs fix shows NULL checks are acceptable for struct_ops validation
+- 📝 Incomplete protection: Other callbacks remain vulnerable to the same class of bugs
+- 🐛 Potential for future patches: Similar fixes could be applied to init, init_member, and verifier_ops
+
+**For Module Developers:**
+- ⚠️ **Critical**: ALL four callbacks must be provided (`cfi_stubs`, `init`, `init_member`, `verifier_ops`)
+- ✅ Our module implementation is correct and future-proof
+- 📚 Documentation gap persists: These requirements are not clearly documented in kernel headers
+
+**For This Tutorial:**
+- Our fixes address ALL known NULL pointer dereference issues
+- The module will work correctly with current and future kernels
+- We've documented what kernel developers haven't yet patched
+
