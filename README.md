@@ -105,6 +105,7 @@ Features:
 - [lesson 43-kfuncs](src/43-kfuncs/README.md) Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules
 - [features bpf_wq](src/features/bpf_wq/README.md) BPF Workqueues for Asynchronous Sleepable Tasks
 - [features bpf_iters](src/features/bpf_iters/README.md) BPF Iterators for Kernel Data Export
+- [features struct_ops](src/features/struct_ops/README.md) BPF struct_ops Example with Custom Kernel Module
 - [features bpf_arena](src/features/bpf_arena/README.md) BPF Arena for Zero-Copy Shared Memory
 
 Other:
