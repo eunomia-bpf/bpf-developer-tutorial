@@ -6,12 +6,13 @@
 #include <linux/btf_ids.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/bpf_verifier.h>
 
 /* Define our custom struct_ops operations */
 struct bpf_testmod_ops {
 	int (*test_1)(void);
 	int (*test_2)(int a, int b);
-	void (*test_3)(const char *buf, int len);
+	int (*test_3)(const char *buf, int len);
 };
 
 /* Global instance that BPF programs will implement */
@@ -31,8 +32,9 @@ static int bpf_testmod_ops__test_2(int a, int b)
 	return 0;
 }
 
-static void bpf_testmod_ops__test_3(const char *buf, int len)
+static int bpf_testmod_ops__test_3(const char *buf, int len)
 {
+	return 0;
 }
 
 /* CFI stubs structure */
@@ -58,8 +60,18 @@ static bool bpf_testmod_ops_is_valid_access(int off, int size,
 	return true;
 }
 
+/* Allow specific BPF helpers to be used in struct_ops programs */
+static const struct bpf_func_proto *
+bpf_testmod_ops_get_func_proto(enum bpf_func_id func_id,
+			       const struct bpf_prog *prog)
+{
+	/* Use base func proto which includes trace_printk and other basic helpers */
+	return bpf_base_func_proto(func_id, prog);
+}
+
 static const struct bpf_verifier_ops bpf_testmod_verifier_ops = {
 	.is_valid_access = bpf_testmod_ops_is_valid_access,
+	.get_func_proto = bpf_testmod_ops_get_func_proto,
 };
 
 static int bpf_testmod_ops_init_member(const struct btf_type *t,

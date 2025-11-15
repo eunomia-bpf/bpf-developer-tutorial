@@ -23,12 +23,11 @@ int BPF_PROG(bpf_testmod_test_2, int a, int b)
 }
 
 SEC("struct_ops/test_3")
-void BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
+int BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
 {
 	bpf_printk("BPF test_3 called with buffer length %d\n", len);
-	if (len > 0) {
-		bpf_printk("First char: %c\n", buf[0]);
-	}
+	/* Note: Accessing buf pointer requires proper context setup in kernel module */
+	return 0;
 }
 
 /* Define the struct_ops map */

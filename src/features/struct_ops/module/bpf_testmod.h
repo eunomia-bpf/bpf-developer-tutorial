@@ -5,7 +5,7 @@
 struct bpf_testmod_ops {
 	int (*test_1)(void);
 	int (*test_2)(int a, int b);
-	void (*test_3)(const char *buf, int len);
+	int (*test_3)(const char *buf, int len);
 };
 
 #endif /* _BPF_TESTMOD_H */
