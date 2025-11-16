@@ -25,9 +25,25 @@ int BPF_PROG(bpf_testmod_test_2, int a, int b)
 SEC("struct_ops/test_3")
 int BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
 {
+	char read_buf[64] = {0};
+	int read_len = len < sizeof(read_buf) ? len : sizeof(read_buf) - 1;
+
 	bpf_printk("BPF test_3 called with buffer length %d\n", len);
-	/* Note: Accessing buf pointer requires proper context setup in kernel module */
-	return 0;
+
+	/* Safely read from kernel buffer using bpf_probe_read_kernel */
+	if (buf && read_len > 0) {
+		long ret = bpf_probe_read_kernel(read_buf, read_len, buf);
+		if (ret == 0) {
+			/* Successfully read buffer - print first few characters */
+			bpf_printk("Buffer content: '%c%c%c%c'\n",
+				   read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
+			bpf_printk("Full buffer: %s\n", read_buf);
+		} else {
+			bpf_printk("Failed to read buffer, ret=%ld\n", ret);
+		}
+	}
+
+	return len;
 }
 
 /* Define the struct_ops map */
