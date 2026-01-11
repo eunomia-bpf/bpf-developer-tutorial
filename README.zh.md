@@ -83,6 +83,7 @@ GPU:
 - [lesson 43-kfuncs](src/43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
 - [features bpf_wq](src/features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
 - [features bpf_iters](src/features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
+- [features struct_ops](src/features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
 - [features bpf_arena](src/features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
 特性:
 
