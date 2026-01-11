@@ -26,7 +26,7 @@ Enter **kfuncs (BPF Kernel Functions)**. By defining your own kfuncs within kern
 
 Best of all, you achieve this without modifying the core kernel, keeping your system stable and your code safe.
 
-In this tutorial, we'll show you how to define custom kfuncs to fill any gaps in eBPF's capabilities. We'll walk through creating a kernel module that introduces new kfuncs and demonstrate how to use them in your eBPF programs. Whether you're looking to overcome performance bottlenecks or need features the eBPF runtime doesn't offer, custom kfuncs can unlock new possibilities for your projects.
+In this tutorial, we'll show you how to define custom kfuncs to fill any gaps in eBPF's capabilities. We'll walk through creating a kernel module that introduces new kfuncs and demonstrate how to use them in your eBPF programs. Whether you're looking to overcome performance bottlenecks or need features the eBPF runtime doesn't offer, custom kfuncs can unlock new possibilities for your projects. For instance, kfuncs are also used to implement GPU scheduling and memory offloading extensions with eBPF in GPU drivers (see [LPC 2024 talk](https://lpc.events/event/19/contributions/2168/) and the [gpu_ext project](https://github.com/eunomia-bpf/gpu_ext)).
 
 ## Understanding kfunc: Extending eBPF Beyond Helpers
 
