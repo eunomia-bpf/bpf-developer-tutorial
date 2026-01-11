@@ -1,437 +1,713 @@
-# BPF struct_ops Example with Custom Kernel Module
+# eBPF Tutorial: Extending Kernel Subsystems with BPF struct_ops
 
-This example demonstrates BPF struct_ops functionality using a custom kernel module that defines struct_ops operations triggered via a proc file write.
+Have you ever wanted to implement a kernel feature, like a new network protocol or a custom security policy, but were put off by the complexity of writing and maintaining a full kernel module? What if you could define the operational logic of a kernel subsystem directly in eBPF, allowing for dynamic updates, safe execution, and programmable control, all without recompiling the kernel or risking system stability?
 
-## Overview
+This is the power of **BPF struct_ops**. This advanced eBPF feature allows BPF programs to implement the callbacks for a kernel structure of operations, effectively allowing you to "plug in" BPF code to act as a kernel subsystem. It's a step beyond simple tracing or filtering; it's about implementing core kernel logic in BPF.
 
-struct_ops allows BPF programs to implement kernel subsystem operations dynamically. This example includes:
+In this tutorial, we will explore how to use `struct_ops` to dynamically implement a kernel subsystem's functionality. We won't be using the common TCP congestion control example. Instead, we'll take a more fundamental approach that mirrors the extensibility seen with kfuncs. We will create a custom kernel module that defines a new, simple subsystem with a set of operations. This module will act as a placeholder, creating new attachment points for our BPF programs. Then, we will write a BPF program to implement the logic for these operations. This demonstrates a powerful pattern: using a minimal kernel module to expose a `struct_ops` interface, and then using BPF to provide the full, complex implementation.
 
-1. **Kernel Module** (`module/hello.c`) - Defines `bpf_testmod_ops` struct_ops with three callbacks
-2. **BPF Program** (`struct_ops.bpf.c`) - Implements the struct_ops callbacks in BPF
-3. **User-space Loader** (`struct_ops.c`) - Loads the BPF program and triggers callbacks via `/proc/bpf_testmod_trigger`
+> The complete source code for this tutorial can be found here: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/struct_ops>
 
-## Building and Running
+## Introduction to BPF struct_ops: Programmable Kernel Subsystems
 
-### 1. Build the kernel module:
+### The Challenge: Extending Kernel Behavior Safely and Dynamically
+
+Traditionally, adding new functionality to the Linux kernel, such as a new file system, a network protocol, or a scheduler algorithm, requires writing a kernel module. While powerful, kernel modules come with significant challenges:
+- **Complexity:** Kernel development has a steep learning curve and requires a deep understanding of kernel internals.
+- **Safety:** A bug in a kernel module can easily crash the entire system. There are no sandboxing guarantees.
+- **Maintenance:** Kernel modules must be maintained and recompiled for different kernel versions, creating a tight coupling with the kernel's internal APIs.
+
+eBPF has traditionally addressed these issues for tracing, networking, and security by providing a safe, sandboxed environment. However, most eBPF programs are attached to existing hooks (like tracepoints, kprobes, or XDP) and react to events. They don't typically *implement* the core logic of a kernel subsystem.
+
+### The Solution: Implementing Kernel Operations with BPF
+
+BPF `struct_ops` bridges this gap. It allows a BPF program to implement the functions within a `struct_ops`—a common pattern in the kernel where a structure holds function pointers for a set of operations. Instead of these pointers pointing to functions compiled into the kernel or a module, they can point to BPF programs.
+
+This is a paradigm shift. It's no longer just about observing or filtering; it's about *implementing*. Imagine a kernel subsystem that defines a set of operations like `open`, `read`, `write`. With `struct_ops`, you can write BPF programs that serve as the implementation for these very functions.
+
+This approach is similar in spirit to how **kfuncs** allow developers to extend the capabilities of BPF. With kfuncs, we can add custom helper functions to the BPF runtime by defining them in a kernel module. With `struct_ops`, we take this a step further: we define a whole new *set of attach points* for BPF programs, effectively creating a custom, BPF-programmable subsystem within the kernel.
+
+The benefits are immense:
+- **Dynamic Implementation**: You can load, update, and unload the BPF programs implementing the subsystem logic on the fly, without restarting the kernel or the application.
+- **Safety**: The BPF verifier ensures that the BPF programs are safe to run, preventing common pitfalls like infinite loops, out-of-bounds memory access, and system crashes.
+- **Flexibility**: The logic is in the BPF program, which can be developed and updated independently of the kernel module that defines the `struct_ops` interface.
+- **Programmability**: Userspace applications can interact with and control the BPF programs, allowing for dynamic configuration and control of the kernel subsystem's behavior.
+
+In this tutorial, we will walk through a practical example of this pattern. We'll start with a kernel module that defines a new `struct_ops` type, and then we'll write a BPF program to implement its functions.
+
+## The Kernel Module: Defining the Subsystem Interface
+
+The first step is to create a kernel module that defines our new BPF-programmable subsystem. This module doesn't need to contain much logic itself. Its primary role is to define a `struct_ops` type and register it with the kernel, creating a new attachment point for BPF programs. It also provides a mechanism to trigger the operations, which in our case will be a simple proc file.
+
+This approach is powerful because it separates the interface definition (in the kernel module) from the implementation (in the BPF program). The kernel module is stable and minimal, while the complex, dynamic logic resides in the BPF program, which can be updated at any time.
+
+### Complete Kernel Module: `module/hello.c`
+
+Here is the complete source code for our kernel module. It defines a `struct_ops` named `bpf_testmod_ops` with three distinct operations that our BPF program will later implement.
+
+```c
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/bpf.h>
+#include <linux/btf.h>
+#include <linux/btf_ids.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/bpf_verifier.h>
+
+/* Define our custom struct_ops operations */
+struct bpf_testmod_ops {
+	int (*test_1)(void);
+	int (*test_2)(int a, int b);
+	int (*test_3)(const char *buf, int len);
+};
+
+/* Global instance that BPF programs will implement */
+static struct bpf_testmod_ops __rcu *testmod_ops;
+
+/* Proc file to trigger the struct_ops */
+static struct proc_dir_entry *trigger_file;
+
+/* CFI stub functions - required for struct_ops */
+static int bpf_testmod_ops__test_1(void)
+{
+	return 0;
+}
+
+static int bpf_testmod_ops__test_2(int a, int b)
+{
+	return 0;
+}
+
+static int bpf_testmod_ops__test_3(const char *buf, int len)
+{
+	return 0;
+}
+
+/* CFI stubs structure */
+static struct bpf_testmod_ops __bpf_ops_bpf_testmod_ops = {
+	.test_1 = bpf_testmod_ops__test_1,
+	.test_2 = bpf_testmod_ops__test_2,
+	.test_3 = bpf_testmod_ops__test_3,
+};
+
+/* BTF and verifier callbacks */
+static int bpf_testmod_ops_init(struct btf *btf)
+{
+	/* Initialize BTF if needed */
+	return 0;
+}
+
+static bool bpf_testmod_ops_is_valid_access(int off, int size,
+					    enum bpf_access_type type,
+					    const struct bpf_prog *prog,
+					    struct bpf_insn_access_aux *info)
+{
+	/* Allow all accesses for now */
+	return true;
+}
+
+/* Allow specific BPF helpers to be used in struct_ops programs */
+static const struct bpf_func_proto *
+bpf_testmod_ops_get_func_proto(enum bpf_func_id func_id,
+			       const struct bpf_prog *prog)
+{
+	/* Use base func proto which includes trace_printk and other basic helpers */
+	return bpf_base_func_proto(func_id, prog);
+}
+
+static const struct bpf_verifier_ops bpf_testmod_verifier_ops = {
+	.is_valid_access = bpf_testmod_ops_is_valid_access,
+	.get_func_proto = bpf_testmod_ops_get_func_proto,
+};
+
+static int bpf_testmod_ops_init_member(const struct btf_type *t,
+				       const struct btf_member *member,
+				       void *kdata, const void *udata)
+{
+	/* No special member initialization needed */
+	return 0;
+}
+
+/* Registration function */
+static int bpf_testmod_ops_reg(void *kdata, struct bpf_link *link)
+{
+	struct bpf_testmod_ops *ops = kdata;
+	
+	/* Only one instance at a time */
+	if (cmpxchg(&testmod_ops, NULL, ops) != NULL)
+		return -EEXIST;
+
+	pr_info("bpf_testmod_ops registered\n");
+	return 0;
+}
+
+/* Unregistration function */
+static void bpf_testmod_ops_unreg(void *kdata, struct bpf_link *link)
+{
+	struct bpf_testmod_ops *ops = kdata;
+
+	if (cmpxchg(&testmod_ops, ops, NULL) != ops) {
+		pr_warn("bpf_testmod_ops: unexpected unreg\n");
+		return;
+	}
+
+	pr_info("bpf_testmod_ops unregistered\n");
+}
+
+/* Struct ops definition */
+static struct bpf_struct_ops bpf_testmod_ops_struct_ops = {
+	.verifier_ops = &bpf_testmod_verifier_ops,
+	.init = bpf_testmod_ops_init,
+	.init_member = bpf_testmod_ops_init_member,
+	.reg = bpf_testmod_ops_reg,
+	.unreg = bpf_testmod_ops_unreg,
+	.cfi_stubs = &__bpf_ops_bpf_testmod_ops,
+	.name = "bpf_testmod_ops",
+	.owner = THIS_MODULE,
+};
+
+/* Proc file write handler to trigger struct_ops */
+static ssize_t trigger_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *pos)
+{
+	struct bpf_testmod_ops *ops;
+	char kbuf[64];
+	int ret = 0;
+	
+	if (count >= sizeof(kbuf))
+		count = sizeof(kbuf) - 1;
+	
+	if (copy_from_user(kbuf, buf, count))
+		return -EFAULT;
+	
+	kbuf[count] = '\0';
+	
+	rcu_read_lock();
+	ops = rcu_dereference(testmod_ops);
+	if (ops) {
+		pr_info("Calling struct_ops callbacks:\n");
+		
+		if (ops->test_1) {
+			ret = ops->test_1();
+			pr_info("test_1() returned: %d\n", ret);
+		}
+		
+		if (ops->test_2) {
+			ret = ops->test_2(10, 20);
+			pr_info("test_2(10, 20) returned: %d\n", ret);
+		}
+		
+		if (ops->test_3) {
+			ops->test_3(kbuf, count);
+			pr_info("test_3() called with buffer\n");
+		}
+	} else {
+		pr_info("No struct_ops registered\n");
+	}
+	rcu_read_unlock();
+	
+	return count;
+}
+
+static const struct proc_ops trigger_proc_ops = {
+	.proc_write = trigger_write,
+};
+
+static int __init testmod_init(void)
+{
+	int ret;
+
+	/* Register the struct_ops */
+	ret = register_bpf_struct_ops(&bpf_testmod_ops_struct_ops, bpf_testmod_ops);
+	if (ret) {
+		pr_err("Failed to register struct_ops: %d\n", ret);
+		return ret;
+	}
+
+	/* Create proc file for triggering */
+	trigger_file = proc_create("bpf_testmod_trigger", 0222, NULL, &trigger_proc_ops);
+	if (!trigger_file) {
+		/* Note: No unregister function available in this kernel version */
+		return -ENOMEM;
+	}
+
+	pr_info("bpf_testmod loaded with struct_ops support\n");
+	return 0;
+}
+
+static void __exit testmod_exit(void)
+{
+	proc_remove(trigger_file);
+	/* Note: struct_ops unregister happens automatically on module unload */
+	pr_info("bpf_testmod unloaded\n");
+}
+
+module_init(testmod_init);
+module_exit(testmod_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("eBPF Example");
+MODULE_DESCRIPTION("BPF struct_ops test module");
+MODULE_VERSION("1.0");
+```
+
+### Understanding the Kernel Module Code
+
+This module may seem complex, but its structure is logical and serves a clear purpose: to safely expose a new programmable interface to the BPF subsystem. Let's break it down.
+
+First, we define the structure of our new operations. This is a simple C struct containing function pointers. This `struct bpf_testmod_ops` is the interface that our BPF program will implement. Each function pointer defines a "slot" that a BPF program can fill.
+
+```c
+struct bpf_testmod_ops {
+	int (*test_1)(void);
+	int (*test_2)(int a, int b);
+	int (*test_3)(const char *buf, int len);
+};
+```
+
+Next, we have the core `bpf_struct_ops` definition. This is a special kernel structure that describes our new `struct_ops` type to the BPF system. It's the glue that connects our custom `bpf_testmod_ops` to the BPF infrastructure.
+
+```c
+static struct bpf_struct_ops bpf_testmod_ops_struct_ops = {
+	.verifier_ops = &bpf_testmod_verifier_ops,
+	.init = bpf_testmod_ops_init,
+	.init_member = bpf_testmod_ops_init_member,
+	.reg = bpf_testmod_ops_reg,
+	.unreg = bpf_testmod_ops_unreg,
+	.cfi_stubs = &__bpf_ops_bpf_testmod_ops,
+	.name = "bpf_testmod_ops",
+	.owner = THIS_MODULE,
+};
+```
+
+This structure is filled with callbacks that the kernel will use to manage our `struct_ops`:
+- `.reg` and `.unreg`: These are registration and unregistration callbacks. The kernel invokes `.reg` when a BPF program tries to attach an implementation for `bpf_testmod_ops`. Our implementation uses `cmpxchg` to ensure only one BPF program can be attached at a time. `.unreg` is called when the BPF program is detached.
+- `.verifier_ops`: This points to a structure of callbacks for the BPF verifier. It allows us to customize how the verifier treats BPF programs attached to this `struct_ops`. For example, we can control which helper functions are allowed. In our case, we use `bpf_base_func_proto` to allow a basic set of helpers, including `bpf_printk`, which is useful for debugging.
+- `.init` and `.init_member`: These are for BTF (BPF Type Format) initialization. They are required for the kernel to understand the types and layout of our `struct_ops`.
+- `.name` and `.owner`: These identify our `struct_ops` and tie it to our module, ensuring proper reference counting so the module isn't unloaded while a BPF program is still attached.
+
+The module's `testmod_init` function is where the magic starts. It calls `register_bpf_struct_ops`, passing our definition. This makes the kernel aware of the new `bpf_testmod_ops` type, and from this point on, BPF programs can target it.
+
+Finally, to make this demonstrable, the module creates a file in the proc filesystem: `/proc/bpf_testmod_trigger`. When a userspace program writes to this file, the `trigger_write` function is called. This function checks if a BPF program has registered an implementation for `testmod_ops`. If so, it calls the function pointers (`test_1`, `test_2`, `test_3`), which will execute the code in our BPF program. This provides a simple way to invoke the BPF-implemented operations from userspace. The use of RCU (`rcu_read_lock`, `rcu_dereference`) ensures that we can safely access the `testmod_ops` pointer even if it's being updated concurrently.
+
+## The BPF Program: Implementing the Operations
+
+With the kernel module in place defining the *what* (the `bpf_testmod_ops` interface), we can now write a BPF program to define the *how* (the actual implementation of those operations). This BPF program will contain the logic that executes when the `test_1`, `test_2`, and `test_3` functions are called from the kernel.
+
+### Complete BPF Program: `struct_ops.bpf.c`
+
+This program provides the concrete implementations for the function pointers in `bpf_testmod_ops`.
+
+```c
+/* SPDX-License-Identifier: GPL-2.0 */
+#include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "module/bpf_testmod.h"
+
+char _license[] SEC("license") = "GPL";
+
+/* Implement the struct_ops callbacks */
+SEC("struct_ops/test_1")
+int BPF_PROG(bpf_testmod_test_1)
+{
+	bpf_printk("BPF test_1 called!\n");
+	return 42;
+}
+
+SEC("struct_ops/test_2")
+int BPF_PROG(bpf_testmod_test_2, int a, int b)
+{
+	int result = a + b;
+	bpf_printk("BPF test_2 called: %d + %d = %d\n", a, b, result);
+	return result;
+}
+
+SEC("struct_ops/test_3")
+int BPF_PROG(bpf_testmod_test_3, const char *buf, int len)
+{
+	char read_buf[64] = {0};
+	int read_len = len < sizeof(read_buf) ? len : sizeof(read_buf) - 1;
+
+	bpf_printk("BPF test_3 called with buffer length %d\n", len);
+
+	/* Safely read from kernel buffer using bpf_probe_read_kernel */
+	if (buf && read_len > 0) {
+		long ret = bpf_probe_read_kernel(read_buf, read_len, buf);
+		if (ret == 0) {
+			/* Successfully read buffer - print first few characters */
+			bpf_printk("Buffer content: '%c%c%c%c'\n",
+				   read_buf[0], read_buf[1], read_buf[2], read_buf[3]);
+			bpf_printk("Full buffer: %s\n", read_buf);
+		} else {
+			bpf_printk("Failed to read buffer, ret=%ld\n", ret);
+		}
+	}
+
+	return len;
+}
+
+/* Define the struct_ops map */
+SEC(".struct_ops")
+struct bpf_testmod_ops testmod_ops = {
+	.test_1 = (void *)bpf_testmod_test_1,
+	.test_2 = (void *)bpf_testmod_test_2,
+	.test_3 = (void *)bpf_testmod_test_3,
+};
+```
+
+### Understanding the BPF Code
+
+The BPF code is remarkably straightforward, which is a testament to the power of the `struct_ops` abstraction.
+
+Each function in the BPF program corresponds to one of the operations defined in the kernel module's `bpf_testmod_ops` struct. The magic lies in the `SEC` annotations:
+- `SEC("struct_ops/test_1")`: This tells the BPF loader that the `bpf_testmod_test_1` program is an implementation for a `struct_ops` operation. The name after the slash isn't strictly enforced to match the function name, but it's a good convention. The key part is the `struct_ops` prefix.
+
+The implementations themselves are simple:
+- `bpf_testmod_test_1`: This function takes no arguments, prints a message to the kernel trace log using `bpf_printk`, and returns the integer `42`.
+- `bpf_testmod_test_2`: This function takes two integers, `a` and `b`, calculates their sum, prints the operation and result, and returns the sum.
+- `bpf_testmod_test_3`: This function demonstrates handling data from userspace. It receives a character buffer and its length. It uses `bpf_probe_read_kernel` to safely copy the data from the buffer passed by the kernel module into a local buffer on the BPF stack. This is a crucial safety measure, as BPF programs cannot directly access arbitrary kernel memory pointers. After reading, it prints the content.
+
+The final piece is the `struct_ops` map itself:
+
+```c
+SEC(".struct_ops")
+struct bpf_testmod_ops testmod_ops = {
+	.test_1 = (void *)bpf_testmod_test_1,
+	.test_2 = (void *)bpf_testmod_test_2,
+	.test_3 = (void *)bpf_testmod_test_3,
+};
+```
+
+This is the most critical part for linking everything together.
+- `SEC(".struct_ops")`: This special section identifies the following data structure as a `struct_ops` map.
+- `struct bpf_testmod_ops testmod_ops`: We declare a variable named `testmod_ops` of the type `struct bpf_testmod_ops`. The **name of this variable is important**. It must match the `name` field in the `bpf_struct_ops` definition within the kernel module (`.name = "bpf_testmod_ops"`). This is how `libbpf` knows which kernel `struct_ops` this BPF program intends to implement.
+- The structure is initialized by assigning the BPF programs (`bpf_testmod_test_1`, etc.) to the corresponding function pointers. This maps our BPF functions to the "slots" in the `struct_ops` interface.
+
+When the userspace loader attaches this `struct_ops`, `libbpf` and the kernel work together to find the `bpf_testmod_ops` registered by our kernel module and link these BPF programs as its implementation.
+
+## The Userspace Loader: Attaching and Triggering
+
+The final component is the userspace program. Its job is to load the BPF program, attach it to the `struct_ops` defined by the kernel module, and then trigger the operations to demonstrate that everything is working.
+
+### Complete Userspace Program: `struct_ops.c`
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+
+#include "struct_ops.skel.h"
+
+static volatile bool exiting = false;
+
+void handle_signal(int sig) {
+    exiting = true;
+}
+
+static int trigger_struct_ops(const char *message) {
+    int fd, ret;
+    
+    fd = open("/proc/bpf_testmod_trigger", O_WRONLY);
+    if (fd < 0) {
+        perror("open /proc/bpf_testmod_trigger");
+        return -1;
+    }
+    
+    ret = write(fd, message, strlen(message));
+    if (ret < 0) {
+        perror("write");
+        close(fd);
+        return -1;
+    }
+    
+    close(fd);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    struct struct_ops_bpf *skel;
+    struct bpf_link *link;
+    int err;
+
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
+
+    /* Open BPF application */
+    skel = struct_ops_bpf__open();
+    if (!skel) {
+        fprintf(stderr, "Failed to open BPF skeleton\n");
+        return 1;
+    }
+
+    /* Load BPF programs */
+    err = struct_ops_bpf__load(skel);
+    if (err) {
+        fprintf(stderr, "Failed to load BPF skeleton: %d\n", err);
+        goto cleanup;
+    }
+
+    /* Register struct_ops */
+    link = bpf_map__attach_struct_ops(skel->maps.testmod_ops);
+    if (!link) {
+        fprintf(stderr, "Failed to attach struct_ops\n");
+        err = -1;
+        goto cleanup;
+    }
+
+    printf("Successfully loaded and attached BPF struct_ops!\n");
+    printf("Triggering struct_ops callbacks...\n");
+    
+    /* Trigger the struct_ops by writing to proc file */
+    if (trigger_struct_ops("Hello from userspace!") < 0) {
+        printf("Failed to trigger struct_ops - is the kernel module loaded?\n");
+        printf("Load it with: sudo insmod module/hello.ko\n");
+    } else {
+        printf("Triggered struct_ops successfully! Check dmesg for output.\n");
+    }
+    
+    printf("\nPress Ctrl-C to exit...\n");
+
+    /* Main loop - trigger periodically */
+    while (!exiting) {
+        sleep(2);
+        if (!exiting && trigger_struct_ops("Periodic trigger") == 0) {
+            printf("Triggered struct_ops again...\n");
+        }
+    }
+
+    printf("\nDetaching struct_ops...\n");
+    bpf_link__destroy(link);
+
+cleanup:
+    struct_ops_bpf__destroy(skel);
+    return err < 0 ? -err : 0;
+}
+```
+
+### Understanding the Userspace Code
+
+The userspace code orchestrates the entire process.
+1.  **Signal Handling**: It sets up a signal handler for `SIGINT` and `SIGTERM` to allow for a graceful exit. This is crucial for `struct_ops` because we need to ensure the BPF program is detached properly.
+
+2.  **Open and Load**: It uses the standard `libbpf` skeleton API to open and load the BPF application (`struct_ops_bpf__open()` and `struct_ops_bpf__load()`). This loads the BPF programs and the `struct_ops` map into the kernel.
+
+3.  **Attach `struct_ops`**: The key step is the attachment:
+    ```c
+    link = bpf_map__attach_struct_ops(skel->maps.testmod_ops);
+    ```
+    This `libbpf` function does the heavy lifting. It takes the `struct_ops` map from our BPF skeleton (`skel->maps.testmod_ops`) and asks the kernel to link it to the corresponding `struct_ops` definition (which it finds by the name "bpf_testmod_ops"). If successful, the kernel's `reg` callback in our module is executed, and the function pointers in the kernel are now pointing to our BPF programs. The function returns a `bpf_link`, which represents the active attachment.
+
+4.  **Triggering**: The `trigger_struct_ops` function simply opens the `/proc/bpf_testmod_trigger` file and writes a message to it. This action invokes the `trigger_write` handler in our kernel module, which in turn calls the BPF-implemented operations.
+
+5.  **Cleanup**: When the user presses Ctrl-C, the `exiting` flag is set, the loop terminates, and `bpf_link__destroy(link)` is called. This is the counterpart to the attach step. It detaches the BPF programs, causing the kernel to call the `unreg` callback in our module. This cleans up the link and decrements the module's reference count, allowing it to be unloaded cleanly. If this step is skipped (e.g., by killing the process with `-9`), the module will remain "in use" until the kernel's garbage collection cleans up the link, which can take time.
+
+## Compilation and Execution
+
+Now that we have all three components—the kernel module, the BPF program, and the userspace loader—let's compile and run the example to see `struct_ops` in action.
+
+### 1. Build the Kernel Module
+
+First, navigate to the `module` directory and compile the kernel module. This requires having the kernel headers installed for your current kernel version.
+
 ```bash
 cd module
 make
 cd ..
 ```
 
-### 2. Load the kernel module:
+This will produce a `hello.ko` file, which is our compiled kernel module.
+
+### 2. Load the Kernel Module
+
+Load the module into the kernel using `insmod`. This will register our `bpf_testmod_ops` struct_ops type and create the `/proc/bpf_testmod_trigger` file.
+
 ```bash
 sudo insmod module/hello.ko
 ```
 
-### 3. Build the BPF program:
+You can verify that the module loaded successfully by checking the kernel log:
+
 ```bash
-make
+dmesg | tail -n 1
 ```
 
-### 4. Run the example:
+You should see a message like: `bpf_testmod loaded with struct_ops support`.
+
+### 3. Build and Run the eBPF Application
+
+Next, compile and run the userspace loader, which will also compile the BPF program.
+
 ```bash
+make
 sudo ./struct_ops
 ```
 
-### 5. Check kernel logs:
+Upon running, the userspace application will:
+1.  Load the BPF programs.
+2.  Attach the BPF implementation to the `bpf_testmod_ops` struct_ops.
+3.  Write to `/proc/bpf_testmod_trigger` to invoke the BPF functions.
+
+You should see output in your terminal like this:
+
+```
+Successfully loaded and attached BPF struct_ops!
+Triggering struct_ops callbacks...
+Triggered struct_ops successfully! Check dmesg for output.
+
+Press Ctrl-C to exit...
+Triggered struct_ops again...
+```
+
+### 4. Check the Kernel Log for BPF Output
+
+While the userspace program is running, open another terminal and watch the kernel log to see the output from our BPF programs.
+
 ```bash
 sudo dmesg -w
 ```
 
-You should see output like:
+Every time the proc file is written to, you will see messages printed by the BPF programs via `bpf_printk`:
+
 ```
-bpf_testmod loaded with struct_ops support
-bpf_testmod_ops registered
-Calling struct_ops callbacks:
-BPF test_1 called!
-test_1() returned: 42
-BPF test_2 called: 10 + 20 = 30
-test_2(10, 20) returned: 30
-BPF test_3 called with buffer length 21
-First char: H
-test_3() called with buffer
+[ ... ] bpf_testmod_ops registered
+[ ... ] Calling struct_ops callbacks:
+[ ... ] BPF test_1 called!
+[ ... ] test_1() returned: 42
+[ ... ] BPF test_2 called: 10 + 20 = 30
+[ ... ] test_2(10, 20) returned: 30
+[ ... ] BPF test_3 called with buffer length 21
+[ ... ] Buffer content: 'Hell'
+[ ... ] Full buffer: Hello from userspace!
+[ ... ] test_3() called with buffer
 ```
 
-### 6. Clean up:
+This output confirms that the calls from the kernel module are being correctly dispatched to our BPF programs.
+
+### 5. Clean Up
+
+When you are finished, press `Ctrl-C` in the terminal running `./struct_ops`. The program will gracefully detach the BPF link. Then, you can unload the kernel module.
+
 ```bash
-# First, stop the BPF program gracefully (Ctrl-C if running in foreground)
-# This ensures the BPF link is properly destroyed
-
-# Then unload the kernel module
 sudo rmmod hello
+```
 
-# If you get "Module hello is in use", there may still be a BPF struct_ops attached
-# This can happen if the userspace process was killed (-9) instead of stopped gracefully
-# Solutions:
-#   1. Wait ~30 seconds for kernel to garbage collect the BPF link
-#   2. Force unload: sudo rmmod -f hello (may be unstable)
-#   3. Reboot the system
+Finally, clean up the build artifacts:
 
-# Clean build artifacts
+```bash
+make clean
+cd module
 make clean
 ```
 
-**Note on Module Unloading:**
-The kernel module maintains a reference count while BPF struct_ops programs are attached. When you stop the userspace loader program gracefully (Ctrl-C), it calls `bpf_link__destroy()` which properly detaches the struct_ops and decrements the module reference count. If the process is killed abruptly (kill -9), the kernel should eventually garbage collect the BPF link, but this may take some time.
+**Note on Unloading the Module**: Gracefully stopping the userspace program is important. It ensures `bpf_link__destroy()` is called, which allows the kernel module's reference count to be decremented. If the userspace process is killed abruptly (e.g., with `kill -9`), the kernel module may remain "in use," and `rmmod` will fail until the BPF link is garbage collected by the kernel, which can take some time.
 
-## How It Works
+## Troubleshooting Common Issues
 
-1. The kernel module registers a custom struct_ops type `bpf_testmod_ops`
-2. It creates `/proc/bpf_testmod_trigger` - writing to this file triggers the callbacks
-3. The BPF program implements the three callbacks: `test_1`, `test_2`, and `test_3`
-4. The user-space program loads the BPF program and periodically writes to the proc file
-5. Each write triggers all registered callbacks, demonstrating BPF struct_ops in action
+When working with advanced features like `struct_ops`, which involve kernel modules, BTF, and the BPF verifier, you may encounter some tricky issues. This section covers common problems and their solutions, based on the development process of this example.
 
-## Troubleshooting
+### Issue 1: Failed to find BTF for `struct_ops`
 
-### Common Issues
+**Symptom:** The userspace loader fails with an error like:
 
-- If you get "Failed to attach struct_ops", make sure the kernel module is loaded
-- Check `dmesg` for any error messages from the kernel module or BPF verifier
-- Ensure your kernel has CONFIG_BPF_SYSCALL=y and supports struct_ops
-
-## Detailed Troubleshooting Guide
-
-This section documents the complete process of resolving BTF and struct_ops issues encountered during development.
-
-### Issue 1: Missing BTF in Kernel Module
-
-**Problem:**
 ```
 libbpf: failed to find BTF info for struct_ops/bpf_testmod_ops
+Failed to attach struct_ops
 ```
 
-**Root Cause:**
-The kernel module was not compiled with BTF (BPF Type Format) information, which is required for struct_ops to work. BTF provides type information that BPF programs need to interact with kernel structures.
+**Root Cause:** This error means the kernel module (`hello.ko`) was compiled without the necessary BTF (BPF Type Format) information. The BPF system relies on BTF to understand the structure and types defined in the module, which is essential for linking the BPF program to the `struct_ops`.
 
 **Solution:**
 
-#### Step 1: Extract vmlinux with BTF
-The kernel build system needs the `vmlinux` ELF binary (not just headers) to generate BTF for modules.
+1.  **Ensure `vmlinux` with BTF is available:** The kernel build system needs access to the `vmlinux` file corresponding to your running kernel to generate BTF for external modules. This file is often not available by default. You may need to copy it from `/sys/kernel/btf/vmlinux` or build it from your kernel source. A common location for the build system to look is `/lib/modules/$(uname -r)/build/vmlinux`.
+
+2.  **Ensure `pahole` is up-to-date:** BTF generation depends on the `pahole` tool (part of the `dwarves` package). Older versions of `pahole` may lack the features needed for modern BTF generation. Ensure you have `pahole` v1.16 or newer. If your distribution's version is too old, you may need to compile it from source.
+
+3.  **Rebuild the module:** After ensuring the dependencies are met, rebuild the kernel module. The `Makefile` for this example already includes the `-g` flag, which instructs the compiler to generate debug information that `pahole` uses to create BTF.
+
+You can verify that BTF information is present in your module with `readelf`:
 
 ```bash
-# Extract vmlinux from compressed kernel image
-sudo /usr/src/linux-headers-$(uname -r)/scripts/extract-vmlinux \
-    /boot/vmlinuz-$(uname -r) > /tmp/vmlinux
-
-# Copy to kernel build directory
-sudo cp /tmp/vmlinux /usr/src/linux-headers-$(uname -r)/vmlinux
-
-# Verify it's an ELF binary
-file /tmp/vmlinux
-# Output: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked
+readelf -S module/hello.ko | grep .BTF
 ```
 
-#### Step 2: Upgrade pahole (if needed)
-The BTF generation requires `pahole` (from dwarves package) version 1.16+. Older versions don't support the `--btf_features` flag.
-
-Check your version:
-```bash
-pahole --version
-```
-
-If version is < 1.25, compile from source:
-
-```bash
-# Install dependencies
-sudo apt-get install -y libelf-dev cmake zlib1g-dev
-
-# Downgrade elfutils packages to matching versions
-sudo apt-get install -y --allow-downgrades \
-    libelf1t64=0.190-1.1ubuntu0.1 \
-    libdw1t64=0.190-1.1ubuntu0.1 \
-    libdw-dev=0.190-1.1ubuntu0.1 \
-    libelf-dev=0.190-1.1ubuntu0.1
-
-# Clone and build pahole
-git clone https://git.kernel.org/pub/scm/devel/pahole/pahole.git /tmp/pahole
-cd /tmp/pahole
-mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX=/usr ..
-make -j$(nproc)
-sudo make install
-
-# Verify new version
-pahole --version  # Should show v1.30 or higher
-```
-
-#### Step 3: Rebuild the module with BTF
-The module Makefile already has BTF enabled with `-g -O2` flags. Simply rebuild:
-
-```bash
-cd module
-make clean
-make
-```
-
-Verify BTF was generated:
-```bash
-readelf -S hello.ko | grep BTF
-# Should show:
-#   [60] .BTF              PROGBITS         ...
-#   [61] .BTF.base         PROGBITS         ...
-```
+You should see sections named `.BTF` and `.BTF.ext`, indicating that BTF data has been embedded.
 
 ### Issue 2: Kernel Panic on Module Load
 
-**Problem:**
-Loading the module causes a kernel panic or NULL pointer dereference.
+**Symptom:** The system crashes (kernel panic) immediately after you run `sudo insmod hello.ko`. The `dmesg` log might show a `NULL pointer dereference` inside `register_bpf_struct_ops`.
 
-**Root Cause:**
-The `bpf_struct_ops` structure was missing required callback functions that the kernel tries to access during registration:
-- `.verifier_ops` - BPF verifier operations (NULL pointer dereference)
-- `.init` - BTF initialization callback
-- `.init_member` - Member initialization callback
+**Root Cause:** The kernel's `struct_ops` registration logic expects certain callback pointers in the `bpf_struct_ops` structure to be non-NULL. In older kernel versions or certain configurations, if callbacks like `.verifier_ops`, `.init`, or `.init_member` are missing, the kernel may dereference a NULL pointer, causing a panic. The kernel's code doesn't always perform defensive NULL checks.
 
-**Error Pattern in dmesg:**
-```
-BUG: kernel NULL pointer dereference
-Call Trace:
-  register_bpf_struct_ops
-  ...
-```
-
-**Solution:**
-Add the required callbacks to the module (`module/hello.c`):
+**Solution:** Always provide all required callbacks in your `bpf_struct_ops` definition, even if they are just empty functions.
 
 ```c
-/* BTF initialization callback */
-static int bpf_testmod_ops_init(struct btf *btf)
-{
-    /* Initialize BTF if needed */
-    return 0;
-}
-
-/* Verifier access control */
-static bool bpf_testmod_ops_is_valid_access(int off, int size,
-                                            enum bpf_access_type type,
-                                            const struct bpf_prog *prog,
-                                            struct bpf_insn_access_aux *info)
-{
-    /* Allow all accesses for this example */
-    return true;
-}
-
-/* Verifier operations structure */
+// In module/hello.c
 static const struct bpf_verifier_ops bpf_testmod_verifier_ops = {
     .is_valid_access = bpf_testmod_ops_is_valid_access,
+    .get_func_proto = bpf_testmod_ops_get_func_proto,
 };
 
-/* Member initialization callback */
-static int bpf_testmod_ops_init_member(const struct btf_type *t,
-                                       const struct btf_member *member,
-                                       void *kdata, const void *udata)
-{
-    /* No special member initialization needed */
-    return 0;
-}
-
-/* Updated struct_ops definition with ALL required callbacks */
 static struct bpf_struct_ops bpf_testmod_ops_struct_ops = {
-    .verifier_ops = &bpf_testmod_verifier_ops,  // REQUIRED
-    .init = bpf_testmod_ops_init,              // REQUIRED
-    .init_member = bpf_testmod_ops_init_member, // REQUIRED
-    .reg = bpf_testmod_ops_reg,
-    .unreg = bpf_testmod_ops_unreg,
-    .cfi_stubs = &__bpf_ops_bpf_testmod_ops,
-    .name = "bpf_testmod_ops",
-    .owner = THIS_MODULE,
+	.verifier_ops = &bpf_testmod_verifier_ops,  // REQUIRED
+	.init = bpf_testmod_ops_init,              // REQUIRED
+	.init_member = bpf_testmod_ops_init_member, // REQUIRED
+	.reg = bpf_testmod_ops_reg,
+	.unreg = bpf_testmod_ops_unreg,
+	/* ... */
 };
 ```
 
-**Why This Matters:**
-The kernel's `register_bpf_struct_ops()` function expects these callbacks to be present. When it tries to call them and finds NULL pointers, it causes a kernel panic. These callbacks are essential for:
-- **verifier_ops**: Validates BPF program access to struct_ops members
-- **init**: Initializes BTF type information for the struct_ops
-- **init_member**: Handles special initialization for data members
+By explicitly defining these callbacks, you prevent the kernel from attempting to call a NULL function pointer.
 
-After adding these callbacks, rebuild and reload:
-```bash
-cd module
-make clean
-make
-sudo insmod hello.ko
-dmesg | tail
-# Should see: "bpf_testmod loaded with struct_ops support"
-```
+### Issue 3: BPF Program Fails to Load with "Invalid Argument"
 
-### Issue 3: BPF Program Load Failure - Invalid Helper
+**Symptom:** The userspace loader fails with an error indicating that a BPF helper function is not allowed.
 
-**Problem:**
 ```
 libbpf: prog 'bpf_testmod_test_1': BPF program load failed: Invalid argument
 program of this type cannot use helper bpf_trace_printk#6
 ```
 
-**Root Cause:**
-struct_ops BPF programs have restricted helper function access. `bpf_trace_printk` (bpf_printk) is not allowed in struct_ops context because these programs run in a different context than tracing programs.
+**Root Cause:** BPF programs of type `struct_ops` run in a different kernel context than tracing programs (like kprobes or tracepoints). As a result, they are subject to a different, often more restrictive, set of allowed helper functions. The `bpf_trace_printk` helper (which `bpf_printk` is a macro for) is a tracing helper and is not allowed by default in `struct_ops` programs.
 
-**Solution:**
-Remove all `bpf_printk()` calls from struct_ops BPF programs:
+**Solution:** While you can't use `bpf_printk` by default, you can explicitly allow it for your `struct_ops` type. This is done in the kernel module by implementing the `.get_func_proto` callback in your `bpf_verifier_ops`.
 
 ```c
-// BEFORE (fails to load):
-SEC("struct_ops/test_1")
-int BPF_PROG(bpf_testmod_test_1)
+// In module/hello.c
+static const struct bpf_func_proto *
+bpf_testmod_ops_get_func_proto(enum bpf_func_id func_id,
+			       const struct bpf_prog *prog)
 {
-    bpf_printk("BPF test_1 called!\n");  // NOT ALLOWED
-    return 42;
+	/* Use base func proto which includes trace_printk and other basic helpers */
+	return bpf_base_func_proto(func_id, prog);
 }
 
-// AFTER (works):
-SEC("struct_ops/test_1")
-int BPF_PROG(bpf_testmod_test_1)
-{
-    /* Return a special value to indicate BPF implementation */
-    return 42;
-}
+static const struct bpf_verifier_ops bpf_testmod_verifier_ops = {
+	.is_valid_access = bpf_testmod_ops_is_valid_access,
+	.get_func_proto = bpf_testmod_ops_get_func_proto, // Add this line
+};
 ```
 
-**Alternative Debugging Approaches:**
-1. Use BPF maps to export counters/statistics to userspace
-2. Use the kernel module's `printk()` to log struct_ops invocations
-3. Use `bpftool prog tracelog` to see what programs are being called
+The `bpf_base_func_proto` function provides access to a set of common, basic helpers, including `bpf_trace_printk`. By adding this to our verifier operations, we tell the BPF verifier that programs attached to `bpf_testmod_ops` are permitted to use these helpers. This makes debugging with `bpf_printk` possible.
 
-### Verification Checklist
+## Summary
 
-After resolving all issues, verify everything works:
+In this tutorial, we explored the powerful capabilities of BPF `struct_ops` by moving beyond common examples. We demonstrated a robust pattern for extending the kernel: creating a minimal kernel module to define a new, BPF-programmable subsystem interface, and then providing the full, complex implementation in a safe, updatable BPF program. This approach combines the extensibility of kernel modules with the safety and flexibility of eBPF.
 
-```bash
-# 1. Check module BTF
-readelf -S module/hello.ko | grep BTF
+We saw how the kernel module registers a `struct_ops` type, how the BPF program implements the required functions, and how a userspace loader attaches this implementation and triggers its execution. This architecture opens the door to implementing a wide range of kernel-level features in BPF, from custom network protocols and security policies to new filesystem behaviors, all while maintaining system stability and avoiding the need to recompile the kernel.
 
-# 2. Load module successfully
-sudo insmod module/hello.ko
-dmesg | tail -5
-# Should see: "bpf_testmod loaded with struct_ops support"
+> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 
-# 3. Verify proc file created
-ls -l /proc/bpf_testmod_trigger
-# Should exist with write permissions
+## References
 
-# 4. Build and load BPF program
-make
-sudo ./struct_ops
-# Should see: "Successfully loaded and attached BPF struct_ops!"
-
-# 5. Verify callbacks are being invoked
-sudo dmesg | tail -20
-# Should see periodic output:
-#   Calling struct_ops callbacks:
-#   test_1() returned: 42
-#   test_2(10, 20) returned: 30
-#   test_3() called with buffer
-
-# 6. Clean up
-sudo rmmod hello
-```
-
-### Key Takeaways
-
-1. **BTF is mandatory** for struct_ops - ensure `vmlinux` is available and `pahole` is recent enough
-2. **All required callbacks must be present** in the `bpf_struct_ops` structure (verifier_ops, init, init_member)
-3. **Helper restrictions apply** - struct_ops programs cannot use tracing helpers like `bpf_printk`
-4. **Test incrementally** - load module first, then BPF program, to isolate issues
-
-## Kernel Source Code Analysis
-
-### Root Cause of Kernel Panic (Confirmed from Kernel 6.18-rc4 Source)
-
-The kernel panic was caused by **missing NULL pointer checks** in the kernel's struct_ops registration code. Analysis of the Linux kernel source code (version 6.18-rc4) reveals three critical locations where callback pointers are dereferenced without validation:
-
-#### 1. Missing NULL check for `st_ops->init` callback
-**Location**: `kernel/bpf/bpf_struct_ops.c:381`
-
-```c
-if (st_ops->init(btf)) {          // ← NULL pointer dereference if init is NULL
-    pr_warn("Error in init bpf_struct_ops %s\n",
-        st_ops->name);
-    err = -EINVAL;
-    goto errout;
-}
-```
-
-The code calls `st_ops->init(btf)` directly in the `bpf_struct_ops_desc_init()` function without checking if the callback exists. If a module registers struct_ops with `init = NULL`, this causes an immediate kernel panic.
-
-#### 2. Missing NULL check for `st_ops->init_member` callback
-**Location**: `kernel/bpf/bpf_struct_ops.c:753`
-
-```c
-err = st_ops->init_member(t, member, kdata, udata);  // ← NULL pointer dereference
-if (err < 0)
-    goto reset_unlock;
-
-/* The ->init_member() has handled this member */
-if (err > 0)
-    continue;
-```
-
-During map update operations, the kernel calls `st_ops->init_member()` for each struct member without verifying the callback pointer is non-NULL.
-
-#### 3. Missing NULL check for `st_ops->verifier_ops`
-**Location**: `kernel/bpf/verifier.c:23486`
-
-```c
-env->ops = st_ops->verifier_ops;  // ← Assigns potentially NULL pointer
-```
-
-The BPF verifier assigns `verifier_ops` directly and later dereferences it through `env->ops->*` calls. If `verifier_ops` is NULL, subsequent verifier operations will cause a kernel panic.
-
-### Why These Callbacks Are Mandatory
-
-The kernel code **assumes** these callbacks exist and does not provide fallback behavior:
-
-1. **`init`**: Called during struct_ops registration to initialize BTF type information. No default implementation exists.
-2. **`init_member`**: Called for each struct member during map updates to handle special initialization. Return value of 0 means "not handled", >0 means "handled", <0 is error.
-3. **`verifier_ops`**: Provides verification operations (e.g., `is_valid_access`) that control BPF program access to struct_ops context.
-
-### Is This Fixed in Current Kernel?
-
-**No.** As of Linux kernel 6.18-rc4 (checked 2025-11-10), these NULL pointer dereferences still exist. The kernel code has not added defensive NULL checks for these callbacks.
-
-This means:
-- ✅ **Our fix is correct** - providing all three callbacks prevents the kernel panic
-- ❌ **Kernel could be more defensive** - ideally it should validate callbacks before dereferencing
-- ⚠️ **All struct_ops modules MUST provide these callbacks** - this is an undocumented requirement
-
-### Recommendation for Kernel Upstream
-
-The kernel should add validation before dereferencing these pointers:
-
-```c
-// Suggested fix for kernel/bpf/bpf_struct_ops.c:381
-if (st_ops->init && st_ops->init(btf)) {
-    pr_warn("Error in init bpf_struct_ops %s\n", st_ops->name);
-    err = -EINVAL;
-    goto errout;
-}
-
-// Suggested fix for kernel/bpf/bpf_struct_ops.c:753
-if (st_ops->init_member) {
-    err = st_ops->init_member(t, member, kdata, udata);
-    if (err < 0)
-        goto reset_unlock;
-    if (err > 0)
-        continue;
-}
-
-// Suggested fix for registration
-if (!st_ops->verifier_ops) {
-    pr_warn("struct_ops %s missing verifier_ops\n", st_ops->name);
-    return -EINVAL;
-}
-```
-
-However, until such changes are merged, **all struct_ops implementations must provide these callbacks** to avoid kernel panics.
-
----
-
-## Additional Resources
-
-- **Kernel Test Module**: `/home/yunwei37/linux/tools/testing/selftests/bpf/test_kmods/bpf_testmod.c` - Official kernel reference implementation
-- **BPF Documentation**: https://www.kernel.org/doc/html/latest/bpf/
-
-## Contributing
-
-If you encounter similar issues or have improvements, please document them and contribute back to the tutorial.
+- **Kernel Source for `struct_ops`**: The implementation can be found in `kernel/bpf/bpf_struct_ops.c` in the Linux source tree.
+- **Kernel Test Module for `struct_ops`**: The official kernel self-test module provides a reference implementation: `tools/testing/selftests/bpf/test_kmods/bpf_testmod.c`.
+- **BPF Documentation**: The official BPF documentation in the kernel source: [https://www.kernel.org/doc/html/latest/bpf/](https://www.kernel.org/doc/html/latest/bpf/)
