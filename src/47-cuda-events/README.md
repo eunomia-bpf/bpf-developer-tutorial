@@ -477,6 +477,8 @@ The `cuda_events` tool supports these options:
 
 ## Next Steps
 
+Beyond tracing, eBPF can also extend GPU driver behavior—see our [gpu_ext project](https://github.com/eunomia-bpf/gpu_ext) for GPU scheduling and memory offloading via BPF struct_ops ([LPC 2024 talk](https://lpc.events/event/19/contributions/2168/)).
+
 Once you're comfortable with this basic CUDA tracing tool, you could extend it to:
 
 1. Add support for more CUDA API functions

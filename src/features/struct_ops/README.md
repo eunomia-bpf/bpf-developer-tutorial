@@ -4,7 +4,7 @@ Have you ever wanted to implement a kernel feature, like a new network protocol 
 
 This is the power of **BPF struct_ops**. This advanced eBPF feature allows BPF programs to implement the callbacks for a kernel structure of operations, effectively allowing you to "plug in" BPF code to act as a kernel subsystem. It's a step beyond simple tracing or filtering; it's about implementing core kernel logic in BPF. For instance, we also use it to implement GPU scheduling and memory offloading extensions with eBPF in GPU drivers (see [LPC 2024 talk](https://lpc.events/event/19/contributions/2168/) and the [gpu_ext project](https://github.com/eunomia-bpf/gpu_ext)).
 
-In this tutorial, we will explore how to use `struct_ops` to dynamically implement a kernel subsystem's functionality. We won't be using the common TCP congestion control example. Instead, we'll take a more fundamental approach that mirrors the extensibility seen with kfuncs. We will create a custom kernel module that defines a new, simple subsystem with a set of operations. This module will act as a placeholder, creating new attachment points for our BPF programs. Then, we will write a BPF program to implement the logic for these operations. This demonstrates a powerful pattern: using a minimal kernel module to expose a `struct_ops` interface, and then using BPF to provide the full, complex implementation.
+In this tutorial, we will explore how to use `struct_ops` to dynamically extend kernel subsystem behavior. We won't be using the common TCP congestion control example. Instead, we'll take a more fundamental approach that mirrors the extensibility seen with kfuncs. We will create a custom kernel module that defines a new, simple subsystem with a set of operations. This module will act as a placeholder, creating new attachment points for our BPF programs. Then, we will write a BPF program to implement the logic for these operations. This demonstrates a powerful pattern: using a minimal kernel module to expose a `struct_ops` interface, and then using BPF to provide the full, complex implementation.
 
 > The complete source code for this tutorial can be found here: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/struct_ops>
 
@@ -13,6 +13,7 @@ In this tutorial, we will explore how to use `struct_ops` to dynamically impleme
 ### The Challenge: Extending Kernel Behavior Safely and Dynamically
 
 Traditionally, adding new functionality to the Linux kernel, such as a new file system, a network protocol, or a scheduler algorithm, requires writing a kernel module. While powerful, kernel modules come with significant challenges:
+
 - **Complexity:** Kernel development has a steep learning curve and requires a deep understanding of kernel internals.
 - **Safety:** A bug in a kernel module can easily crash the entire system. There are no sandboxing guarantees.
 - **Maintenance:** Kernel modules must be maintained and recompiled for different kernel versions, creating a tight coupling with the kernel's internal APIs.
@@ -28,6 +29,7 @@ This is a paradigm shift. It's no longer just about observing or filtering; it's
 This approach is similar in spirit to how **kfuncs** allow developers to extend the capabilities of BPF. With kfuncs, we can add custom helper functions to the BPF runtime by defining them in a kernel module. With `struct_ops`, we take this a step further: we define a whole new *set of attach points* for BPF programs, effectively creating a custom, BPF-programmable subsystem within the kernel.
 
 The benefits are immense:
+
 - **Dynamic Implementation**: You can load, update, and unload the BPF programs implementing the subsystem logic on the fly, without restarting the kernel or the application.
 - **Safety**: The BPF verifier ensures that the BPF programs are safe to run, preventing common pitfalls like infinite loops, out-of-bounds memory access, and system crashes.
 - **Flexibility**: The logic is in the BPF program, which can be developed and updated independently of the kernel module that defines the `struct_ops` interface.

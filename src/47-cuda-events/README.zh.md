@@ -483,6 +483,8 @@ cudaFree:               0.00 µs
 
 ## 下一步
 
+除了追踪，eBPF 还可以扩展 GPU 驱动行为——参见我们的 [gpu_ext 项目](https://github.com/eunomia-bpf/gpu_ext)，通过 BPF struct_ops 实现 GPU 调度和内存卸载（[LPC 2024 演讲](https://lpc.events/event/19/contributions/2168/)）。
+
 一旦你熟悉了这个基本的CUDA追踪工具，你可以扩展它来：
 
 1. 添加对更多CUDA API函数的支持

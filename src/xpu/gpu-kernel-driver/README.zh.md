@@ -295,6 +295,8 @@ sudo cat /sys/kernel/debug/tracing/available_events | grep -E '(gpu_scheduler|i9
 
 要实现细粒度的 GPU 可观测性，eBPF 程序必须直接在 GPU 上运行。这正是 eGPU 论文和 [bpftime GPU 示例](https://github.com/eunomia-bpf/bpftime/tree/master/example/gpu)所探索的方向。bpftime 将 eBPF 字节码转换为 GPU 可以执行的 PTX 指令，然后在运行时动态修补 CUDA 二进制文件，将这些 eBPF 程序注入到内核入口/出口点。这使得开发者可以观察 GPU 特有的信息，如块索引、线程索引、全局计时器和 warp 级指标。开发者可以在 GPU 内核的关键路径上进行插桩，测量执行行为并诊断内核侧追踪无法触及的复杂性能问题。这种 GPU 内部的可观测性与内核跟踪点互补 - 它们一起提供了从 API 调用通过内核驱动到 GPU 执行的端到端可见性。
 
+除了追踪，eBPF 还可以扩展 GPU 驱动行为——参见我们的 [gpu_ext 项目](https://github.com/eunomia-bpf/gpu_ext)，通过 BPF struct_ops 实现 GPU 调度和内存卸载（[LPC 2024 演讲](https://lpc.events/event/19/contributions/2168/)）。
+
 ## 总结
 
 GPU 内核跟踪点提供零开销的驱动内部可见性。DRM 调度器的稳定 uAPI 跟踪点跨所有供应商工作，适合生产监控。供应商特定跟踪点暴露详细的内存管理和命令提交管道。bpftrace 脚本演示了跟踪作业调度、测量延迟和识别依赖停顿 - 所有这些对于诊断游戏、ML 训练和云 GPU 工作负载中的性能问题都至关重要。对于超越内核追踪的 GPU 内部可观测性，请探索 bpftime 的 GPU eBPF 能力。
