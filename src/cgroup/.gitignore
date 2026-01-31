@@ -1,0 +1,20 @@
+# Build artifacts
+*.o
+*.skel.h
+*.skel.json
+.output/
+cgroup_guard
+
+# Test artifacts
+*.tmp
+*.err
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
