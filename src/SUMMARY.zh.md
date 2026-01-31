@@ -45,9 +45,9 @@
 GPU:
 
 - [lesson 47-cuda-events](47-cuda-events/README.zh.md) eBPF 教程：追踪 CUDA GPU 操作
-- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
-- [xpu flamegraph](xpu/flamegraph/README.zh.md) eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器
 - [lesson xpu/gpu-kernel-driver](xpu/gpu-kernel-driver/README.zh.md) eBPF 实例教程：使用内核跟踪点监控 GPU 驱动活动
+- [xpu flamegraph](xpu/flamegraph/README.zh.md) eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器
+- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
 调度器:
 
 - [lesson 44-scx-simple](44-scx-simple/README.zh.md) eBPF 教程：BPF 调度器入门
@@ -73,13 +73,14 @@ GPU:
 - [lesson 36-userspace-ebpf](36-userspace-ebpf/README.zh.md) 用户空间 eBPF 运行时：深度解析与应用实践
 - [lesson 38-btf-uprobe](38-btf-uprobe/README.zh.md) 借助 eBPF 和 BTF，让用户态也能一次编译、到处运行
 - [lesson 43-kfuncs](43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
-- [features bpf_wq](features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
-- [features bpf_iters](features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features struct_ops](features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
+- [features bpf_iters](features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features bpf_arena](features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
+- [features bpf_wq](features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
 特性:
 
 - [lesson 49-hid](49-hid/README.zh.md) eBPF 教程：无需内核补丁修复故障的 HID 设备
+- [cgroup](cgroup/README.zh.md) eBPF 实例教程：基于 cgroup 的策略控制
 Android:
 
 - [lesson 22-android](22-android/README.zh.md) 在 Android 上使用 eBPF 程序

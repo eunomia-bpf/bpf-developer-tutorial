@@ -37,6 +37,9 @@ def generate_toc(base_dir, project_root, output_file_dir):
             # Add numbered directories directly
             if re.match(r'^\d+', item):
                 all_dirs.append(item)
+            # Also add non-numbered directories that have .config file
+            elif os.path.exists(os.path.join(item_path, ".config")):
+                all_dirs.append(item)
             # Also scan subdirectories (like features/, xpu/)
             else:
                 for subitem in os.listdir(item_path):
@@ -164,6 +167,9 @@ def generate_toc_cn(base_dir, project_root, output_file_dir):
         if os.path.isdir(item_path):
             # Add numbered directories directly
             if re.match(r'^\d+', item):
+                all_dirs.append(item)
+            # Also add non-numbered directories that have .config file
+            elif os.path.exists(os.path.join(item_path, ".config")):
                 all_dirs.append(item)
             # Also scan subdirectories (like features/, xpu/)
             else:
