@@ -89,13 +89,13 @@ struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
-    __type(value, struct config);
+    __type(value, struct dynptr_cfg);
 } cfg_map SEC(".maps");
 
 SEC("tc")
 int dynptr_tc_ingress(struct __sk_buff *ctx)
 {
-    const struct config *cfg;
+    const struct dynptr_cfg *cfg;
     struct bpf_dynptr skb_ptr;
 
     /* Temporary buffers for slice (data may be copied here) */
@@ -136,7 +136,8 @@ int dynptr_tc_ingress(struct __sk_buff *ctx)
         return TC_ACT_OK;
 
     __u16 dport = bpf_ntohs(tcp->dest);
-    __u8 drop = (cfg->blocked_port && dport == cfg->blocked_port);
+    __u16 sport = bpf_ntohs(tcp->source);
+    __u8 drop = (cfg->blocked_port && (sport == cfg->blocked_port || dport == cfg->blocked_port));
 
     /* Output variable-length event using ringbuf dynptr */
     if (cfg->enable_ringbuf) {
@@ -250,7 +251,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 int main(int argc, char **argv)
 {
     const char *ifname = NULL;
-    struct config cfg = { .blocked_port = 0, .snap_len = 64, .enable_ringbuf = 1 };
+    struct dynptr_cfg cfg = { .blocked_port = 0, .snap_len = 64, .enable_ringbuf = 1 };
 
     /* Parse arguments */
     for (int i = 1; i < argc; i++) {
