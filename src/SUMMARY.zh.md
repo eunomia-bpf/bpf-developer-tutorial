@@ -73,6 +73,10 @@ GPU:
 - [lesson 36-userspace-ebpf](36-userspace-ebpf/README.zh.md) 用户空间 eBPF 运行时：深度解析与应用实践
 - [lesson 38-btf-uprobe](38-btf-uprobe/README.zh.md) 借助 eBPF 和 BTF，让用户态也能一次编译、到处运行
 - [lesson 43-kfuncs](43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
+- [features struct_ops](features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
+- [features bpf_iters](features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
+- [features dynptr](features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
+- [features bpf_arena](features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
 - [features bpf_wq](features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
 - [features bpf_iters](features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features struct_ops](features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统

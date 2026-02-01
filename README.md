@@ -103,6 +103,10 @@ Features:
 - [lesson 36-userspace-ebpf](src/36-userspace-ebpf/README.md) Userspace eBPF Runtimes: Overview and Applications
 - [lesson 38-btf-uprobe](src/38-btf-uprobe/README.md) Expanding eBPF Compile Once, Run Everywhere(CO-RE) to Userspace Compatibility
 - [lesson 43-kfuncs](src/43-kfuncs/README.md) Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules
+- [features struct_ops](src/features/struct_ops/README.md) Extending Kernel Subsystems with BPF struct_ops
+- [features bpf_iters](src/features/bpf_iters/README.md) BPF Iterators for Kernel Data Export
+- [features dynptr](src/features/dynptr/README.md) BPF Dynamic Pointers for Variable-Length Data
+- [features bpf_arena](src/features/bpf_arena/README.md) BPF Arena for Zero-Copy Shared Memory
 - [features bpf_wq](src/features/bpf_wq/README.md) BPF Workqueues for Asynchronous Sleepable Tasks
 - [features bpf_iters](src/features/bpf_iters/README.md) BPF Iterators for Kernel Data Export
 - [features struct_ops](src/features/struct_ops/README.md) Extending Kernel Subsystems with BPF struct_ops
