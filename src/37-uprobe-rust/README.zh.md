@@ -67,7 +67,7 @@ Attaching 1 probe...
 Function hello-world called
 ```
 
-## 一个奇怪的现象：多次调用、获取参数
+## 追踪多次调用的函数并获取返回值
 
 对于一个更复杂的例子，包含多次调用和获取参数：
 
@@ -97,18 +97,33 @@ fn main() {
 }
 ```
 
-我们再次进行类似的操作，会发现一个奇怪的现象：
+首先，我们需要使用 debug 模式构建，因为 `hello` 函数在 release 模式下会被内联，不会有自己的符号：
 
 ```console
-$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
-Attaching 1 probe...
-Function hello-world called
+$ cd args
+$ cargo build
+$ nm target/debug/helloworld | grep hello
+0000000000016250 t _ZN10helloworld4main17ha3594bca2af541f6E
+0000000000016540 t _ZN10helloworld5hello17h5f3a03dda56661e1E
 ```
 
-这时候我们希望 hello 函数运行多次，但 bpftrace 中只输出了一次调用：
+注意，在 release 模式（`cargo build --release`）下，只会出现 `main` 函数符号，因为 `hello` 在优化过程中被内联了。
+
+现在我们可以使用符号来追踪 `hello` 函数：
 
 ```console
-$ args/target/release/helloworld 1 2 3 4
+$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello called\n"); }'
+Attaching 1 probe...
+Function hello called
+Function hello called
+Function hello called
+Function hello called
+```
+
+当我们使用多个参数运行程序时，bpftrace 正确地捕获了所有对 `hello` 函数的调用：
+
+```console
+$ ./target/debug/helloworld 1 2 3 4
 Hello, world! 1 in 5
 return value: 6
 Hello, world! 2 in 5
@@ -119,29 +134,18 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-而且看起来 bpftrace 并不能正确获取参数：
+我们也可以使用 Uretprobe 来获取返回值：
 
 ```console
-$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called %d\n"
-, arg0); }'
+$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello returned: %d\n", retval); }'
 Attaching 1 probe...
-Function hello-world called 63642464
+Function hello returned: 6
+Function hello returned: 7
+Function hello returned: 8
+Function hello returned: 9
 ```
 
-Uretprobe 捕捉到了第一次调用的返回值：
-
-```console
-$ sudo bpftrace -e 'uretprobe:args/tar
-get/release/helloworld:_ZN10helloworld4main17h2dce92
-cb81426b91E { printf("Function hello-world called %d
-\n", retval); }'
-Attaching 1 probe...
-Function hello-world called 6
-```
-
-这可能是由于 Rust 没有稳定的 ABI。 Rust，正如它迄今为止所存在的那样，保留了以任何它想要的方式对这些结构成员进行排序的权利。 因此，被调用者的编译版本可能会完全按照上面的方式对成员进行排序，而调用库的编程的编译版本可能会认为它实际上是这样布局的：
-
-TODO: 进一步分析（未完待续）
+注意：由于 Rust 的符号名称混淆，确切的符号名称在每次编译时都会变化。请使用 `nm` 命令来找到当前构建的符号名称。
 
 ## 参考资料
 

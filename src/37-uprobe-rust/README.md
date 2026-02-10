@@ -69,7 +69,7 @@ Attaching 1 probe...
 Function hello-world called
 ```
 
-## A strange phenomenon: multiple calls, getting parameters
+## Tracing function calls with multiple invocations and getting return values
 
 For a more complex example, which includes multiple calls and parameter fetching:
 
@@ -99,18 +99,33 @@ fn main() {
 }
 ```
 
-We repeat a similar operation and notice a strange phenomenon:
+First, we need to build in debug mode because the `hello` function gets inlined in release mode and won't have its own symbol:
 
 ```console
-$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
-Attaching 1 probe...
-Function hello-world called
+$ cd args
+$ cargo build
+$ nm target/debug/helloworld | grep hello
+0000000000016250 t _ZN10helloworld4main17ha3594bca2af541f6E
+0000000000016540 t _ZN10helloworld5hello17h5f3a03dda56661e1E
 ```
 
-At this point we expect the hello function to run several times, but bpftrace only prints out one call:
+Note that in release mode (`cargo build --release`), only the `main` function symbol appears because `hello` gets inlined during optimization.
+
+Now we can trace the `hello` function using its symbol:
 
 ```console
-$ args/target/release/helloworld 1 2 3 4
+$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello called\n"); }'
+Attaching 1 probe...
+Function hello called
+Function hello called
+Function hello called
+Function hello called
+```
+
+When we run the program with multiple arguments, bpftrace correctly catches all calls to the `hello` function:
+
+```console
+$ ./target/debug/helloworld 1 2 3 4
 Hello, world! 1 in 5
 return value: 6
 Hello, world! 2 in 5
@@ -121,29 +136,18 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-And it appears that bpftrace cannot correctly get the parameter:
+We can also get the return value using Uretprobe:
 
 ```console
-$ sudo bpftrace -e 'uprobe:args/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called %d\n"
-, arg0); }'
+$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello returned: %d\n", retval); }'
 Attaching 1 probe...
-Function hello-world called 63642464
+Function hello returned: 6
+Function hello returned: 7
+Function hello returned: 8
+Function hello returned: 9
 ```
 
-The Uretprobe did catch the return value of the first call:
-
-```console
-$ sudo bpftrace -e 'uretprobe:args/tar
-get/release/helloworld:_ZN10helloworld4main17h2dce92
-cb81426b91E { printf("Function hello-world called %d
-\n", retval); }'
-Attaching 1 probe...
-Function hello-world called 6
-```
-
-This may due to Rust does not have a stable ABI. Rust, as it has existed so far, has reserved the right to order those struct members any way it wants. So the compiled version of the callee might order the members exactly as above, while the compiled version of the programming calling into the library might think its actually laid out like this:
-
-TODO: Further analysis (to be continued)
+Note: The exact symbol names will vary between compilations due to Rust's symbol mangling. Use `nm` to find the current symbol name for your build.
 
 ## References
 
