@@ -83,6 +83,72 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
               rm-9290    [004] d..2  4637.798843: bpf_trace_printk: fexit: pid = 9290, filename = test_file2, ret = 0
 ```
 
+## Troubleshooting
+
+If you encounter errors when running this example, here are some common issues and solutions:
+
+### Error: "failed to attach: ERROR: strerror_r(-524)=22"
+
+This error (error code -524 = ENOTSUPP) typically means your kernel doesn't support fentry/fexit. Here's how to troubleshoot:
+
+**1. Check your kernel version:**
+
+```console
+$ uname -r
+```
+
+You need:
+- Kernel 5.5 or newer for x86/x86_64 processors
+- Kernel 6.0 or newer for ARM/ARM64 processors
+
+If your kernel is too old, you have two options:
+- Upgrade your kernel to a supported version
+- Use the kprobe example instead (see [example 2-kprobe-unlink](../2-kprobe-unlink/))
+
+**2. Verify BTF (BPF Type Format) support:**
+
+BTF is required for fentry/fexit to work. Check if it's enabled:
+
+```console
+$ cat /boot/config-$(uname -r) | grep CONFIG_DEBUG_INFO_BTF
+CONFIG_DEBUG_INFO_BTF=y
+```
+
+If BTF is not enabled, you'll need to either:
+- Use a kernel with BTF support enabled
+- Use the kprobe example as an alternative
+
+**3. Check if the kernel function exists:**
+
+The function `do_unlinkat` may have a different name or may not be exported in some kernel versions. You can check available functions:
+
+```console
+$ sudo cat /sys/kernel/debug/tracing/available_filter_functions | grep unlink
+```
+
+If `do_unlinkat` is not listed, the function may not be available for tracing on your kernel.
+
+**4. Verify your kernel configuration:**
+
+Ensure your kernel was compiled with the necessary eBPF features:
+
+```console
+$ cat /boot/config-$(uname -r) | grep BPF
+```
+
+Look for these important settings:
+- `CONFIG_BPF=y`
+- `CONFIG_BPF_SYSCALL=y`
+- `CONFIG_DEBUG_INFO_BTF=y`
+- `CONFIG_BPF_JIT=y`
+
+If you're still experiencing issues after checking these items, please report your kernel version and OS distribution by running:
+
+```console
+$ uname -a
+$ cat /etc/os-release
+```
+
 ## Summary
 
 This program is an eBPF program that captures the `do_unlinkat` and `do_unlinkat_exit` functions using fentry and fexit, and uses `bpf_get_current_pid_tgid` and `bpf_printk` functions to obtain the ID, filename, and return value of the process calling do_unlinkat, and print them in the kernel log.

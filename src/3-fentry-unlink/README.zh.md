@@ -91,6 +91,72 @@ $ sudo cat /sys/kernel/debug/tracing/trace_pipe
               rm-9290    [004] d..2  4637.798843: bpf_trace_printk: fexit: pid = 9290, filename = test_file2, ret = 0
 ```
 
+## 故障排查
+
+如果您在运行此示例时遇到错误，以下是一些常见问题和解决方案：
+
+### 错误："failed to attach: ERROR: strerror_r(-524)=22"
+
+此错误（错误代码 -524 = ENOTSUPP）通常表示您的内核不支持 fentry/fexit。以下是排查方法：
+
+**1. 检查内核版本：**
+
+```console
+$ uname -r
+```
+
+您需要：
+- x86/x86_64 处理器需要内核 5.5 或更高版本
+- ARM/ARM64 处理器需要内核 6.0 或更高版本
+
+如果您的内核版本过旧，您有两个选择：
+- 将内核升级到支持的版本
+- 使用 kprobe 示例代替（参见 [示例 2-kprobe-unlink](../2-kprobe-unlink/)）
+
+**2. 验证 BTF（BPF Type Format）支持：**
+
+fentry/fexit 需要 BTF 支持。检查是否已启用：
+
+```console
+$ cat /boot/config-$(uname -r) | grep CONFIG_DEBUG_INFO_BTF
+CONFIG_DEBUG_INFO_BTF=y
+```
+
+如果 BTF 未启用，您需要：
+- 使用已启用 BTF 支持的内核
+- 使用 kprobe 示例作为替代方案
+
+**3. 检查内核函数是否存在：**
+
+`do_unlinkat` 函数在某些内核版本中可能有不同的名称或未导出。您可以检查可用的函数：
+
+```console
+$ sudo cat /sys/kernel/debug/tracing/available_filter_functions | grep unlink
+```
+
+如果未列出 `do_unlinkat`，则该函数可能在您的内核上无法用于跟踪。
+
+**4. 验证内核配置：**
+
+确保您的内核编译时包含了必要的 eBPF 功能：
+
+```console
+$ cat /boot/config-$(uname -r) | grep BPF
+```
+
+查找这些重要设置：
+- `CONFIG_BPF=y`
+- `CONFIG_BPF_SYSCALL=y`
+- `CONFIG_DEBUG_INFO_BTF=y`
+- `CONFIG_BPF_JIT=y`
+
+如果检查这些项目后仍然遇到问题，请通过运行以下命令报告您的内核版本和操作系统发行版：
+
+```console
+$ uname -a
+$ cat /etc/os-release
+```
+
 ## 总结
 
 这段程序是一个 eBPF 程序，通过使用 fentry 和 fexit 捕获 `do_unlinkat` 和 `do_unlinkat_exit` 函数，并通过使用 `bpf_get_current_pid_tgid` 和 `bpf_printk` 函数获取调用 do_unlinkat 的进程的 ID、文件名和返回值，并在内核日志中打印出来。
