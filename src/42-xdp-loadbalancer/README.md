@@ -470,9 +470,20 @@ You can test the setup by starting HTTP servers on the two backend namespaces (`
 
 Start servers on `h2` and `h3`:
 
+**Important**: The HTTP servers must bind to `0.0.0.0` to accept connections from any interface. This is necessary because the load balancer forwards packets with its own IP address (10.0.0.10) as the source, and the HTTP request will contain `Host: 10.0.0.10:8000` in the header, which differs from the backend server's actual IP address.
+
+**Option 1**: Using the provided simple HTTP server (recommended):
+
 ```sh
-sudo ip netns exec h2 python3 -m http.server
-sudo ip netns exec h3 python3 -m http.server
+sudo ip netns exec h2 python3 simple_http_server.py &
+sudo ip netns exec h3 python3 simple_http_server.py &
+```
+
+**Option 2**: Using Python's built-in http.server with explicit binding:
+
+```sh
+sudo ip netns exec h2 python3 -m http.server --bind 0.0.0.0 &
+sudo ip netns exec h3 python3 -m http.server --bind 0.0.0.0 &
 ```
 
 Then, send a request to the load balancer IP:
@@ -482,6 +493,8 @@ curl 10.0.0.10:8000
 ```
 
 The load balancer will distribute traffic to the backends (`h2` and `h3`) based on the hashing function.
+
+> **Note**: If you experience hanging requests with `curl`, ensure the backend HTTP servers are bound to `0.0.0.0` and accept requests with any Host header. The XDP load balancer operates at Layer 3/4 (IP/TCP) and does not modify HTTP headers, so the Host header in requests will still show `10.0.0.10:8000` even though packets are forwarded to the backend IPs (10.0.0.2 or 10.0.0.3).
 
 ### Monitoring with `bpf_printk`
 
@@ -506,6 +519,24 @@ Example output:
 ```
 
 ### Debugging Issues
+
+#### Curl Requests Hanging
+
+If `curl` requests to the load balancer hang and never complete, the most likely cause is that the backend HTTP servers are rejecting requests with mismatched Host headers. 
+
+**Problem**: When you run `curl 10.0.0.10:8000`, the HTTP request includes a Host header set to `10.0.0.10:8000`. The XDP load balancer forwards the packet at Layer 3/4 (IP/TCP) to a backend server (10.0.0.2 or 10.0.0.3), but the HTTP headers remain unchanged. If the backend HTTP server validates the Host header and expects it to match its own IP address, it may reject or drop the request.
+
+**Solution**: Ensure backend HTTP servers bind to `0.0.0.0` and accept requests with any Host header:
+- Use `python3 simple_http_server.py` (provided in this directory), or
+- Use `python3 -m http.server --bind 0.0.0.0`
+
+**Verification**: Check the backend server logs to see if requests are being received. You can also use `tcpdump` in the backend namespace to verify packets are arriving:
+
+```sh
+sudo ip netns exec h2 tcpdump -i veth2 -n port 8000
+```
+
+#### XDP Packet Forwarding Issues
 
 Some systems may experience packet loss or failure to forward packets due to issues similar to those described in this [blog post](https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/). You can debug these issues using `bpftrace` to trace XDP errors:
 

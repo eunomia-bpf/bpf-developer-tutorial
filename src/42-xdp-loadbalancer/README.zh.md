@@ -463,13 +463,24 @@ Press Ctrl+C to exit...
 
 ### 测试设置
 
-您可以通过在两个后端命名空间（`h2` 和 `h3`）启动 HTTP 服务器，并从本地机器向负载均衡器发送请求来测试设置：
+您可以通过在两个后端命名空间（`h2` 和 `h3`）启动 HTTP 服务器,并从本地机器向负载均衡器发送请求来测试设置：
 
 在 `h2` 和 `h3` 上启动服务器：
 
+**重要提示**：HTTP 服务器必须绑定到 `0.0.0.0` 以接受来自任何接口的连接。这是必需的，因为负载均衡器使用自己的 IP 地址（10.0.0.10）作为源地址转发数据包，并且 HTTP 请求的 Host 头将包含 `Host: 10.0.0.10:8000`，这与后端服务器的实际 IP 地址不同。
+
+**选项 1**：使用提供的简单 HTTP 服务器（推荐）：
+
 ```sh
-sudo ip netns exec h2 python3 -m http.server
-sudo ip netns exec h3 python3 -m http.server
+sudo ip netns exec h2 python3 simple_http_server.py &
+sudo ip netns exec h3 python3 simple_http_server.py &
+```
+
+**选项 2**：使用 Python 内置的 http.server 并显式绑定：
+
+```sh
+sudo ip netns exec h2 python3 -m http.server --bind 0.0.0.0 &
+sudo ip netns exec h3 python3 -m http.server --bind 0.0.0.0 &
 ```
 
 然后，向负载均衡器 IP 发送请求：
@@ -479,6 +490,8 @@ curl 10.0.0.10:8000
 ```
 
 负载均衡器将根据哈希函数将流量分配到后端服务器（`h2` 和 `h3`）。
+
+> **注意**：如果您使用 `curl` 时遇到请求挂起的问题，请确保后端 HTTP 服务器绑定到 `0.0.0.0` 并接受任何 Host 头的请求。XDP 负载均衡器在第 3/4 层（IP/TCP）运行，不会修改 HTTP 头，因此请求中的 Host 头仍将显示 `10.0.0.10:8000`，即使数据包被转发到后端 IP（10.0.0.2 或 10.0.0.3）。
 
 ### 使用 `bpf_printk` 进行监控
 
@@ -503,6 +516,24 @@ sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
 
 ### 调试问题
+
+#### Curl 请求挂起
+
+如果对负载均衡器的 `curl` 请求挂起且永不完成，最可能的原因是后端 HTTP 服务器拒绝了具有不匹配 Host 头的请求。
+
+**问题**：当您运行 `curl 10.0.0.10:8000` 时，HTTP 请求包含设置为 `10.0.0.10:8000` 的 Host 头。XDP 负载均衡器在第 3/4 层（IP/TCP）将数据包转发到后端服务器（10.0.0.2 或 10.0.0.3），但 HTTP 头保持不变。如果后端 HTTP 服务器验证 Host 头并期望它与自己的 IP 地址匹配，它可能会拒绝或丢弃该请求。
+
+**解决方案**：确保后端 HTTP 服务器绑定到 `0.0.0.0` 并接受任何 Host 头的请求：
+- 使用 `python3 simple_http_server.py`（在此目录中提供），或
+- 使用 `python3 -m http.server --bind 0.0.0.0`
+
+**验证**：检查后端服务器日志以查看是否收到请求。您还可以在后端命名空间中使用 `tcpdump` 验证数据包是否到达：
+
+```sh
+sudo ip netns exec h2 tcpdump -i veth2 -n port 8000
+```
+
+#### XDP 数据包转发问题
 
 某些系统可能会因为类似于此[博客文章](https://fedepaol.github.io/blog/2023/09/11/xdp-ate-my-packets-and-how-i-debugged-it/)中描述的问题而导致数据包丢失或转发失败。您可以使用 `bpftrace` 跟踪 XDP 错误进行调试：
 
