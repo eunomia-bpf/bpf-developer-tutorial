@@ -71,7 +71,7 @@ Function hello-world called
 
 ## Tracing function calls with multiple invocations and getting return values
 
-For a more complex example, which includes multiple calls and parameter fetching:
+For a more complex example, which includes multiple calls and retrieving return values:
 
 ```rust
 use std::env;
