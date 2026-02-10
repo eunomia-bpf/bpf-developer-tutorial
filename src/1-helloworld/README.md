@@ -77,7 +77,7 @@ We will start with a simple eBPF program that prints a message in the kernel. We
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #define BPF_NO_GLOBAL_DATA
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
@@ -157,7 +157,7 @@ If you're still not seeing output, make sure the program is actually loaded and 
 
 As mentioned above, the basic framework of an eBPF program includes:
 
-- Including header files: You need to include <linux/bpf.h> and <bpf/bpf_helpers.h> header files, among others.
+- Including header files: You need to include "vmlinux.h" and <bpf/bpf_helpers.h> header files, among others.
 - Defining a license: You need to define a license, typically using "Dual BSD/GPL".
 - Defining a BPF function: You need to define a BPF function, for example, named handle_tp, which takes void *ctx as a parameter and returns int. This is usually written in the C language.
 - Using BPF helper functions: In the BPF function, you can use BPF helper functions such as bpf_get_current_pid_tgid() and bpf_printk().

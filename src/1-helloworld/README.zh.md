@@ -76,7 +76,7 @@ Packing ebpf object and config into /src/package.json...
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #define BPF_NO_GLOBAL_DATA
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
@@ -156,7 +156,7 @@ $ sudo sh -c 'echo 1 > /sys/kernel/debug/tracing/tracing_on'
 
 如上所述， eBPF 程序的基本框架包括：
 
-- 包含头文件：需要包含 <linux/bpf.h> 和 <bpf/bpf_helpers.h> 等头文件。
+- 包含头文件：需要包含 "vmlinux.h" 和 <bpf/bpf_helpers.h> 等头文件。
 - 定义许可证：需要定义许可证，通常使用 "Dual BSD/GPL"。
 - 定义 BPF 函数：需要定义一个 BPF 函数，例如其名称为 handle_tp，其参数为 void *ctx，返回值为 int。通常用 C 语言编写。
 - 使用 BPF 助手函数：在例如 BPF 函数中，可以使用 BPF 助手函数 bpf_get_current_pid_tgid() 和 bpf_printk()。
