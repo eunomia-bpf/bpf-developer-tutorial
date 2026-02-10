@@ -137,3 +137,18 @@ jobs:
         # Run the binary to ensure it works
         ./target/debug/helloworld 1 2 3 | grep -q "Hello, world!" || (echo "Error: binary execution failed" && exit 1)
         echo "✓ args binary runs successfully"
+    
+    - name: test 37 uprobe-rust bpftrace attach
+      run: |
+        cd src/37-uprobe-rust/args
+        # Test that bpftrace can attach to the hello function with wildcard pattern
+        # Run bpftrace with the binary and verify it can trace the function
+        sudo timeout 3 bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("traced\n"); exit(); }' -c "./target/debug/helloworld 1" > /tmp/bpftrace_output.txt 2>&1 || true
+        # Check if bpftrace successfully attached and traced the function
+        if grep -q "traced" /tmp/bpftrace_output.txt && grep -q "Attaching 1 probe" /tmp/bpftrace_output.txt; then
+          echo "✓ bpftrace successfully attached to hello function with wildcard pattern"
+        else
+          echo "Error: bpftrace failed to attach or trace the hello function"
+          cat /tmp/bpftrace_output.txt
+          exit 1
+        fi
