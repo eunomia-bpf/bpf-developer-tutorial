@@ -111,10 +111,10 @@ $ nm target/debug/helloworld | grep hello
 
 Note that in release mode (`cargo build --release`), only the `main` function symbol appears because `hello` gets inlined during optimization.
 
-Now we can trace the `hello` function using its symbol:
+Now we can trace the `hello` function using its symbol. Since Rust mangles symbol names and includes a hash that changes with each compilation, we use a wildcard pattern to match any version of the `hello` function:
 
 ```console
-$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello called\n"); }'
+$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello called\n"); }'
 Attaching 1 probe...
 Function hello called
 Function hello called
@@ -136,10 +136,10 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-We can also get the return value using Uretprobe:
+We can also get the return value using Uretprobe. Again, we use a wildcard to match the symbol:
 
 ```console
-$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello returned: %d\n", retval); }'
+$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello returned: %d\n", retval); }'
 Attaching 1 probe...
 Function hello returned: 6
 Function hello returned: 7
@@ -147,7 +147,7 @@ Function hello returned: 8
 Function hello returned: 9
 ```
 
-Note: The exact symbol names will vary between compilations due to Rust's symbol mangling. Use `nm` to find the current symbol name for your build.
+Note: The wildcard pattern `_ZN10helloworld5hello*` matches the `hello` function symbol regardless of the hash suffix that Rust adds during compilation. You can use `nm target/debug/helloworld | grep hello` to see the exact symbol names if needed.
 
 ## References
 

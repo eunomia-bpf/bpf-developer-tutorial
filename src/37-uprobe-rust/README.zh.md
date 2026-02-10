@@ -109,10 +109,10 @@ $ nm target/debug/helloworld | grep hello
 
 注意，在 release 模式（`cargo build --release`）下，只会出现 `main` 函数符号，因为 `hello` 在优化过程中被内联了。
 
-现在我们可以使用符号来追踪 `hello` 函数：
+现在我们可以使用符号来追踪 `hello` 函数。由于 Rust 会对符号名称进行混淆并加入每次编译都会变化的哈希值，我们使用通配符模式来匹配任何版本的 `hello` 函数：
 
 ```console
-$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello called\n"); }'
+$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello called\n"); }'
 Attaching 1 probe...
 Function hello called
 Function hello called
@@ -134,10 +134,10 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-我们也可以使用 Uretprobe 来获取返回值：
+我们也可以使用 Uretprobe 来获取返回值。同样，我们使用通配符来匹配符号：
 
 ```console
-$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello17h5f3a03dda56661e1E { printf("Function hello returned: %d\n", retval); }'
+$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello returned: %d\n", retval); }'
 Attaching 1 probe...
 Function hello returned: 6
 Function hello returned: 7
@@ -145,7 +145,7 @@ Function hello returned: 8
 Function hello returned: 9
 ```
 
-注意：由于 Rust 的符号名称混淆，确切的符号名称在每次编译时都会变化。请使用 `nm` 命令来找到当前构建的符号名称。
+注意：通配符模式 `_ZN10helloworld5hello*` 可以匹配 `hello` 函数符号，无论 Rust 在编译时添加了什么哈希后缀。如果需要，你可以使用 `nm target/debug/helloworld | grep hello` 来查看确切的符号名称。
 
 ## 参考资料
 
