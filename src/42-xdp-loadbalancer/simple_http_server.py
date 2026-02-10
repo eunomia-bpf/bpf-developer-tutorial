@@ -41,7 +41,6 @@ def main():
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\nShutting down server...")
-            httpd.shutdown()
 
 
 if __name__ == "__main__":
