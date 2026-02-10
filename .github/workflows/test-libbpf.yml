@@ -111,3 +111,29 @@ jobs:
     - name: test features bpf_wq
       run: |
           make -C src/features/bpf_wq
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+    
+    - name: test 37 uprobe-rust helloworld
+      run: |
+        cd src/37-uprobe-rust/helloworld
+        cargo build
+        # Verify the hello function symbol exists in debug build
+        nm target/debug/helloworld | grep "_ZN10helloworld5hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
+        echo "✓ helloworld debug build has correct hello symbol"
+        
+    - name: test 37 uprobe-rust args
+      run: |
+        cd src/37-uprobe-rust/args
+        cargo build
+        # Verify the hello function symbol exists in debug build
+        nm target/debug/helloworld | grep "_ZN10helloworld5hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
+        echo "✓ args debug build has correct hello symbol"
+        # Run the binary to ensure it works
+        ./target/debug/helloworld 1 2 3 | grep -q "Hello, world!" || (echo "Error: binary execution failed" && exit 1)
+        echo "✓ args binary runs successfully"
