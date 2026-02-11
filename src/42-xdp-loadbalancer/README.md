@@ -470,7 +470,7 @@ You can test the setup by starting HTTP servers on the two backend namespaces (`
 
 Start servers on `h2` and `h3`:
 
-**Important**: The HTTP servers must bind to `0.0.0.0` to accept connections from any interface. This is necessary because the load balancer forwards packets with its own IP address (10.0.0.10) as the source, and the HTTP request will contain `Host: 10.0.0.10:8000` in the header, which differs from the backend server's actual IP address.
+**Important**: The HTTP servers must bind to `0.0.0.0` so they listen on all local addresses in the namespace and can accept connections arriving via the load balancer. The forwarded HTTP requests will use the load balancer's virtual IP and port in the `Host` header (for example, `Host: 10.0.0.10:8000`), which may differ from the backend's own IP address; for this tutorial we use simple HTTP servers that accept such requests without enforcing strict `Host` header checks.
 
 **Option 1**: Using the provided simple HTTP server (recommended):
 
