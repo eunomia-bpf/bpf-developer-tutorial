@@ -70,8 +70,9 @@ runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;  /* 注意：此实现不支持 cgroup 过滤，
-                                          * 因为 bpf_current_task_under_cgroup() 只检查当前任务（唤醒者），
+const volatile bool filter_cg = false;  /* 已弃用：cgroup 过滤未实现。
+                                          * 设置此变量无效。
+                                          * 原因：bpf_current_task_under_cgroup() 只检查当前任务（唤醒者），
                                           * 而不是被测量的任务（被唤醒者）。
                                           * 正确的过滤需要 bpf_task_under_cgroup() kfunc，
                                           * 该函数仅在内核 5.7+ 版本中可用。 */
@@ -213,7 +214,12 @@ char LICENSE[] SEC("license") = "GPL";
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;
+const volatile bool filter_cg = false;  /* 已弃用：cgroup 过滤未实现。
+                                          * 设置此变量无效。
+                                          * 原因：bpf_current_task_under_cgroup() 只检查当前任务（唤醒者），
+                                          * 而不是被测量的任务（被唤醒者）。
+                                          * 正确的过滤需要 bpf_task_under_cgroup() kfunc，
+                                          * 该函数仅在内核 5.7+ 版本中可用。 */
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
@@ -223,7 +229,7 @@ const volatile pid_t targ_tgid = 0;
 
 - `MAX_ENTRIES`:  map 条目最大数量
 - `TASK_RUNNING`: 任务状态值
-- `filter_cg`: **注意：此变量当前未使用。** cgroup 过滤已被移除，因为 `bpf_current_task_under_cgroup()` 只检查当前任务（唤醒者），而不是被测量的任务（被唤醒者）。正确的过滤需要 `bpf_task_under_cgroup()` kfunc，该函数仅在内核 5.7+ 版本中可用。
+- `filter_cg`: **注意：此变量当前未使用，对应的命令行选项 `--filter_cg` 已弃用且当前为 no-op。** cgroup 过滤已被移除，因为 `bpf_current_task_under_cgroup()` 只检查当前任务（唤醒者），而不是被测量的任务（被唤醒者）。正确的过滤需要 `bpf_task_under_cgroup()` kfunc，该函数仅在内核 5.7+ 版本中可用。
 - `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: 用于过滤选项和目标选项的布尔变量。这些选项可以通过用户空间程序设置来自定义eBPF程序的行为。
 
 #### eBPF Maps 映射

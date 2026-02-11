@@ -67,8 +67,9 @@ First, we need to write a source code file `runqlat.bpf.c`:
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;  /* Note: cgroup filtering is not supported in this implementation
-                                          * because bpf_current_task_under_cgroup() only checks the current
+const volatile bool filter_cg = false;  /* DEPRECATED: cgroup filtering is not implemented.
+                                          * Setting this variable has no effect.
+                                          * Reason: bpf_current_task_under_cgroup() only checks the current
                                           * task (the waker), not the task being measured (the wakee).
                                           * Proper filtering would require bpf_task_under_cgroup() kfunc
                                           * which is only available in kernel 5.7+. */
@@ -210,7 +211,12 @@ The code defines several constants and volatile global variables used for filter
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;
+const volatile bool filter_cg = false;  /* DEPRECATED: cgroup filtering is not implemented.
+                                          * Setting this variable has no effect.
+                                          * Reason: bpf_current_task_under_cgroup() only checks the current
+                                          * task (the waker), not the task being measured (the wakee).
+                                          * Proper filtering would require bpf_task_under_cgroup() kfunc
+                                          * which is only available in kernel 5.7+. */
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
@@ -220,7 +226,7 @@ const volatile pid_t targ_tgid = 0;
 
 - `MAX_ENTRIES`: The maximum number of map entries.
 - `TASK_RUNNING`: The task status value.
-- `filter_cg`: **Note: This variable is currently unused.** Cgroup filtering was removed because `bpf_current_task_under_cgroup()` only checks the current task (the waker), not the task being measured (the wakee). Proper filtering would require `bpf_task_under_cgroup()` kfunc which is only available in kernel 5.7+.
+- `filter_cg`: **Note: This variable is currently unused.** Cgroup filtering was removed because `bpf_current_task_under_cgroup()` only checks the current task (the waker), not the task being measured (the wakee). Proper filtering would require `bpf_task_under_cgroup()` kfunc which is only available in kernel 5.7+. The corresponding command-line option `--filter_cg` is therefore **deprecated and acts as a no-op**, and may still appear in `ecli ... -h` output only for backward compatibility.
 - `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: Boolean variables for filtering and target options. These options can be set by user-space programs to customize the behavior of the eBPF program.
 
 #### eBPF Maps
