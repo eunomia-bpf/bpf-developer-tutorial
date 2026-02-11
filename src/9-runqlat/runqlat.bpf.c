@@ -12,8 +12,9 @@
 #define MAX_ENTRIES	10240
 #define TASK_RUNNING 	0
 
-const volatile bool filter_cg = false;  /* Note: cgroup filtering is not supported in this implementation
-                                          * because bpf_current_task_under_cgroup() only checks the current
+const volatile bool filter_cg = false;  /* DEPRECATED: cgroup filtering is not implemented.
+                                          * Setting this variable has no effect.
+                                          * Reason: bpf_current_task_under_cgroup() only checks the current
                                           * task (the waker), not the task being measured (the wakee).
                                           * Proper filtering would require bpf_task_under_cgroup() kfunc
                                           * which is only available in kernel 5.7+. */
