@@ -85,7 +85,7 @@ The test verifies that both server options correctly handle HTTP requests with m
 XDP programs operate at the earliest point in the network stack, directly in the NIC driver. While this provides extremely high performance, it also means:
 
 - Limited packet inspection: XDP can access raw packet data but parsing complex protocols like HTTP is inefficient
-- No packet size changes: Modifying HTTP headers might require changing the packet size, which is not supported in XDP_TX mode
+- Packet size adjustments are constrained: While helpers like `bpf_xdp_adjust_head`/`bpf_xdp_adjust_tail` can change the accessible data region, safely modifying HTTP headers (often requiring length changes and revalidation) is complex and error-prone in high-performance XDP_TX paths
 - Performance impact: Parsing and modifying HTTP headers would significantly slow down packet processing
 
 For these reasons, the XDP load balancer operates at Layer 3/4 (IP/TCP) only, and the backend servers must be configured to handle the Host header mismatch.
