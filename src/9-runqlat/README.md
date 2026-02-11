@@ -67,7 +67,11 @@ First, we need to write a source code file `runqlat.bpf.c`:
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;
+const volatile bool filter_cg = false;  /* Note: cgroup filtering is not supported in this implementation
+                                          * because bpf_current_task_under_cgroup() only checks the current
+                                          * task (the waker), not the task being measured (the wakee).
+                                          * Proper filtering would require bpf_task_under_cgroup() kfunc
+                                          * which is only available in kernel 5.7+. */
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
@@ -137,9 +141,6 @@ u64 *tsp, slot;
 u32 pid, hkey;
 s64 delta;
 
-if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
 if (get_task_state(prev) == TASK_RUNNING)
   trace_enqueue(BPF_CORE_READ(prev, tgid), BPF_CORE_READ(prev, pid));
 
@@ -183,18 +184,12 @@ return 0;
 SEC("raw_tp/sched_wakeup")
 int BPF_PROG(handle_sched_wakeup, struct task_struct *p)
 {
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
  return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
 SEC("raw_tp/sched_wakeup_new")
 int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
 {
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
  return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
@@ -225,7 +220,8 @@ const volatile pid_t targ_tgid = 0;
 
 - `MAX_ENTRIES`: The maximum number of map entries.
 - `TASK_RUNNING`: The task status value.
-- `filter_cg`, `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: Boolean variables for filtering and target options. These options can be set by user-space programs to customize the behavior of the eBPF program.
+- `filter_cg`: **Note: This variable is currently unused.** Cgroup filtering was removed because `bpf_current_task_under_cgroup()` only checks the current task (the waker), not the task being measured (the wakee). Proper filtering would require `bpf_task_under_cgroup()` kfunc which is only available in kernel 5.7+.
+- `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: Boolean variables for filtering and target options. These options can be set by user-space programs to customize the behavior of the eBPF program.
 
 #### eBPF Maps
 
@@ -256,7 +252,7 @@ struct {
 } hists SEC(".maps");
 ```
 
-- `cgroup_map`: A cgroup array map used for filtering cgroups.
+- `cgroup_map`: A cgroup array map (currently unused - see note below about cgroup filtering).
 - `start`: A hash map used to store timestamps when processes are enqueued.
 - `hists`: A hash map used to store histogram data for recording process scheduling delays.
 
@@ -313,7 +309,9 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 }
 ```
 
-Firstly, the function determines whether to filter cgroup based on the setting of `filter_cg`. Then, if the previous process state is `TASK_RUNNING`, the `trace_enqueue` function is called to record the enqueue time of the process. Then, the function looks up the enqueue timestamp of the next process. If it is not found, it returns directly. The scheduling latency (delta) is calculated, and the key for the histogram map (hkey) is determined based on different options (targ_per_process, targ_per_thread, targ_per_pidns). Then, the histogram map is looked up or initialized, and the histogram data is updated. Finally, the enqueue timestamp record of the process is deleted.
+If the previous process state is `TASK_RUNNING`, the `trace_enqueue` function is called to record the enqueue time of the process. Then, the function looks up the enqueue timestamp of the next process. If it is not found, it returns directly. The scheduling latency (delta) is calculated, and the key for the histogram map (hkey) is determined based on different options (targ_per_process, targ_per_thread, targ_per_pidns). Then, the histogram map is looked up or initialized, and the histogram data is updated. Finally, the enqueue timestamp record of the process is deleted.
+
+**Note:** The previous implementation incorrectly used `bpf_current_task_under_cgroup()` for cgroup filtering, which checks the current task (the waker) instead of the task being measured (the wakee). Since the proper helper `bpf_task_under_cgroup()` is only available in kernel 5.7+, cgroup filtering has been removed from this implementation to ensure correctness. Users should filter by process ID instead if needed.
 
 Next is the entry point of the eBPF program. The program uses three entry points to capture different scheduling events:
 

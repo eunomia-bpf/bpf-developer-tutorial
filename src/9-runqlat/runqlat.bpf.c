@@ -12,7 +12,11 @@
 #define MAX_ENTRIES	10240
 #define TASK_RUNNING 	0
 
-const volatile bool filter_cg = false;
+const volatile bool filter_cg = false;  /* Note: cgroup filtering is not supported in this implementation
+                                          * because bpf_current_task_under_cgroup() only checks the current
+                                          * task (the waker), not the task being measured (the wakee).
+                                          * Proper filtering would require bpf_task_under_cgroup() kfunc
+                                          * which is only available in kernel 5.7+. */
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
@@ -82,9 +86,6 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 	u32 pid, hkey;
 	s64 delta;
 
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return 0;
-
 	if (get_task_state(prev) == TASK_RUNNING)
 		trace_enqueue(BPF_CORE_READ(prev, tgid), BPF_CORE_READ(prev, pid));
 
@@ -128,18 +129,12 @@ cleanup:
 SEC("raw_tp/sched_wakeup")
 int BPF_PROG(handle_sched_wakeup, struct task_struct *p)
 {
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return 0;
-
 	return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
 SEC("raw_tp/sched_wakeup_new")
 int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
 {
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return 0;
-
 	return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
