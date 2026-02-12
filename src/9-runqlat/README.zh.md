@@ -70,19 +70,11 @@ runqlat 的实现利用了 eBPF 程序，它通过内核跟踪点和函数探针
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
 const volatile bool targ_ms = false;
 const volatile pid_t targ_tgid = 0;
-
-struct {
- __uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
- __type(key, u32);
- __type(value, u32);
- __uint(max_entries, 1);
-} cgroup_map SEC(".maps");
 
 struct {
  __uint(type, BPF_MAP_TYPE_HASH);
@@ -140,9 +132,6 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
  u32 pid, hkey;
  s64 delta;
 
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
  if (get_task_state(prev) == TASK_RUNNING)
   trace_enqueue(BPF_CORE_READ(prev, tgid), BPF_CORE_READ(prev, pid));
 
@@ -186,18 +175,12 @@ cleanup:
 SEC("raw_tp/sched_wakeup")
 int BPF_PROG(handle_sched_wakeup, struct task_struct *p)
 {
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
  return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
 SEC("raw_tp/sched_wakeup_new")
 int BPF_PROG(handle_sched_wakeup_new, struct task_struct *p)
 {
- if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-  return 0;
-
  return trace_enqueue(BPF_CORE_READ(p, tgid), BPF_CORE_READ(p, pid));
 }
 
@@ -218,7 +201,6 @@ char LICENSE[] SEC("license") = "GPL";
 #define MAX_ENTRIES 10240
 #define TASK_RUNNING  0
 
-const volatile bool filter_cg = false;
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
@@ -228,20 +210,13 @@ const volatile pid_t targ_tgid = 0;
 
 - `MAX_ENTRIES`:  map 条目最大数量
 - `TASK_RUNNING`: 任务状态值
-- `filter_cg`, `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: 用于过滤选项和目标选项的布尔变量。这些选项可以通过用户空间程序设置来自定义eBPF程序的行为。
+- `targ_per_process`, `targ_per_thread`, `targ_per_pidns`, `targ_ms`, `targ_tgid`: 用于过滤选项和目标选项的布尔变量。这些选项可以通过用户空间程序设置来自定义eBPF程序的行为.
 
 #### eBPF Maps 映射
 
 接下来，定义了一些 eBPF 映射：
 
 ```c
-struct {
- __uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
- __type(key, u32);
- __type(value, u32);
- __uint(max_entries, 1);
-} cgroup_map SEC(".maps");
-
 struct {
  __uint(type, BPF_MAP_TYPE_HASH);
  __uint(max_entries, MAX_ENTRIES);
@@ -261,7 +236,6 @@ struct {
 
 这些映射包括：
 
-- `cgroup_map` 用于过滤 cgroup；
 - `start` 用于存储进程入队时的时间戳；
 - `hists` 用于存储直方图数据，记录进程调度延迟。
 
@@ -318,7 +292,7 @@ static int handle_switch(bool preempt, struct task_struct *prev, struct task_str
 }
 ```
 
-首先，函数根据 `filter_cg` 的设置判断是否需要过滤 cgroup。然后，如果之前的进程状态为 `TASK_RUNNING`，则调用 `trace_enqueue` 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
+如果之前的进程状态为 `TASK_RUNNING`，则调用 `trace_enqueue` 函数记录进程的入队时间。接着，函数查找下一个进程的入队时间戳，如果找不到，直接返回。计算调度延迟（delta），并根据不同的选项设置（targ_per_process，targ_per_thread，targ_per_pidns），确定直方图映射的键（hkey）。然后查找或初始化直方图映射，更新直方图数据，最后删除进程的入队时间戳记录。
 
 接下来是 eBPF 程序的入口点。程序使用三个入口点来捕获不同的调度事件：
 
@@ -379,7 +353,7 @@ Run:
 
 ```console
 $ sudo ecli run examples/bpftools/runqlat/package.json -h
-Usage: runqlat_bpf [--help] [--version] [--verbose] [--filter_cg] [--targ_per_process] [--targ_per_thread] [--targ_per_pidns] [--targ_ms] [--targ_tgid VAR]
+Usage: runqlat_bpf [--help] [--version] [--verbose] [--targ_per_process] [--targ_per_thread] [--targ_per_pidns] [--targ_ms] [--targ_tgid VAR]
 
 A simple eBPF program
 
@@ -387,7 +361,6 @@ Optional arguments:
   -h, --help            shows help message and exits 
   -v, --version         prints version information and exits 
   --verbose             prints libbpf debug information 
-  --filter_cg           set value of bool variable filter_cg 
   --targ_per_process    set value of bool variable targ_per_process 
   --targ_per_thread     set value of bool variable targ_per_thread 
   --targ_per_pidns      set value of bool variable targ_per_pidns 
