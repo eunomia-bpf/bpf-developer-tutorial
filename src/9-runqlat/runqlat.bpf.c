@@ -12,24 +12,11 @@
 #define MAX_ENTRIES	10240
 #define TASK_RUNNING 	0
 
-const volatile bool filter_cg = false;  /* DEPRECATED: cgroup filtering is not implemented.
-                                          * Setting this variable has no effect.
-                                          * Reason: bpf_current_task_under_cgroup() only checks the current
-                                          * task (the waker), not the task being measured (the wakee).
-                                          * Proper filtering would require bpf_task_under_cgroup() kfunc
-                                          * which is only available in kernel 5.7+. */
 const volatile bool targ_per_process = false;
 const volatile bool targ_per_thread = false;
 const volatile bool targ_per_pidns = false;
 const volatile bool targ_ms = false;
 const volatile pid_t targ_tgid = 0;
-
-struct {
-	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
-	__type(key, u32);
-	__type(value, u32);
-	__uint(max_entries, 1);
-} cgroup_map SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
