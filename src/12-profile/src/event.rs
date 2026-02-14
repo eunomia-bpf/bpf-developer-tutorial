@@ -1,7 +1,7 @@
-use std::mem;
-use std::time::{SystemTime, UNIX_EPOCH};
 use blazesym::symbolize;
 use nix::sys::sysinfo;
+use std::mem;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MAX_STACK_DEPTH: usize = 128;
 pub const TASK_COMM_LEN: usize = 16;
@@ -35,7 +35,7 @@ impl EventHandler {
     pub fn new(format: OutputFormat) -> Self {
         // Get system uptime to calculate boot time
         let boot_time_ns = Self::get_boot_time_ns();
-        
+
         Self {
             symbolizer: symbolize::Symbolizer::new(),
             format,
@@ -49,11 +49,11 @@ impl EventHandler {
             .duration_since(UNIX_EPOCH)
             .expect("System time before Unix epoch");
         let now_ns = now.as_nanos() as u64;
-        
+
         // Get system uptime in nanoseconds
         let info = sysinfo::sysinfo().expect("Failed to get sysinfo");
         let uptime_ns = (info.uptime().as_secs_f64() * 1_000_000_000.0) as u64;
-        
+
         // Boot time = current time - uptime
         now_ns - uptime_ns
     }
@@ -104,8 +104,10 @@ impl EventHandler {
         let unix_timestamp_ns = event.timestamp + self.boot_time_ns;
         let timestamp_sec = unix_timestamp_ns / 1_000_000_000;
         let timestamp_nsec = unix_timestamp_ns % 1_000_000_000;
-        println!("[{}.{:09}] COMM: {} (pid={}) @ CPU {}", 
-                 timestamp_sec, timestamp_nsec, comm, event.pid, event.cpu_id);
+        println!(
+            "[{}.{:09}] COMM: {} (pid={}) @ CPU {}",
+            timestamp_sec, timestamp_nsec, comm, event.pid, event.cpu_id
+        );
 
         if event.kstack_size > 0 {
             println!("Kernel:");
@@ -128,47 +130,42 @@ impl EventHandler {
 
     fn handle_folded_extended(&self, event: &StacktraceEvent) {
         let comm = Self::get_comm_str(&event.comm);
-        let tid = event.pid; // For single-threaded processes, TID = PID
-        
+
         let mut stack_frames = Vec::new();
 
-        // Process user stack (if present)
-        if event.ustack_size > 0 {
-            let ustack = Self::get_stack_slice(&event.ustack, event.ustack_size);
-            let user_frames = symbolize_stack_to_vec(&self.symbolizer, ustack, event.pid);
-            
-            // Add user frames in reverse order (top to bottom)
-            for frame in user_frames.iter().rev() {
-                stack_frames.push(frame.clone());
-            }
-        }
-
-        // Process kernel stack (if present)
+        // Process kernel stack first (bottom of stack, closer to root)
         if event.kstack_size > 0 {
             let kstack = Self::get_stack_slice(&event.kstack, event.kstack_size);
             let kernel_frames = symbolize_stack_to_vec(&self.symbolizer, kstack, 0);
-            
-            // Add kernel frames with [k] suffix in reverse order (top to bottom)
-            for frame in kernel_frames.iter().rev() {
+
+            // Add kernel frames with [k] suffix (from bottom to top)
+            for frame in kernel_frames.iter() {
                 stack_frames.push(format!("{}_[k]", frame));
             }
         }
 
-        // Format: timestamp_ns comm pid tid cpu stack1;stack2;stack3
-        // Convert kernel timestamp to Unix timestamp
-        let unix_timestamp_ns = event.timestamp + self.boot_time_ns;
-        println!(
-            "{} {} {} {} {} {}",
-            unix_timestamp_ns,
-            comm,
-            event.pid,
-            tid,
-            event.cpu_id,
-            stack_frames.join(";")
-        );
+        // Process user stack (on top of kernel stack)
+        if event.ustack_size > 0 {
+            let ustack = Self::get_stack_slice(&event.ustack, event.ustack_size);
+            let user_frames = symbolize_stack_to_vec(&self.symbolizer, ustack, event.pid);
+
+            // Add user frames (from bottom to top)
+            for frame in user_frames.iter() {
+                stack_frames.push(frame.clone());
+            }
+        }
+
+        // If no frames, skip this event
+        if stack_frames.is_empty() {
+            return;
+        }
+
+        // Format for flamegraph.pl folded format:
+        // comm;stack_frame1;stack_frame2;stack_frame3 count
+        // The count is 1 for each sample
+        println!("{};{} 1", comm, stack_frames.join(";"));
     }
 }
-
 
 fn print_frame(
     name: &str,
@@ -217,7 +214,11 @@ fn convert_stack_addresses(stack: &[u64]) -> Vec<blazesym::Addr> {
             .collect::<Vec<_>>()
     } else {
         // For same-sized types, still need to return owned data for consistency
-        stack.iter().copied().map(|addr| addr as blazesym::Addr).collect()
+        stack
+            .iter()
+            .copied()
+            .map(|addr| addr as blazesym::Addr)
+            .collect()
     }
 }
 
@@ -242,26 +243,30 @@ fn get_symbolize_source(pid: u32) -> symbolize::source::Source<'static> {
 }
 
 // Symbolize stack and return as vector of strings for folded format
-fn symbolize_stack_to_vec(symbolizer: &symbolize::Symbolizer, stack: &[u64], pid: u32) -> Vec<String> {
+fn symbolize_stack_to_vec(
+    symbolizer: &symbolize::Symbolizer,
+    stack: &[u64],
+    pid: u32,
+) -> Vec<String> {
     let converted = convert_stack_addresses(stack);
     let stack_addrs = get_stack_slice(stack, &converted);
     let src = get_symbolize_source(pid);
-    
+
     let syms = match symbolizer.symbolize(&src, symbolize::Input::AbsAddr(stack_addrs)) {
         Ok(syms) => syms,
         Err(_) => {
             // Return addresses if symbolization fails
-            return stack_addrs.iter().map(|addr| format!("{:#x}", addr)).collect();
+            return stack_addrs
+                .iter()
+                .map(|addr| format!("{:#x}", addr))
+                .collect();
         }
     };
 
     let mut result = Vec::new();
     for (addr, sym) in stack_addrs.iter().copied().zip(syms) {
         match sym {
-            symbolize::Symbolized::Sym(symbolize::Sym {
-                name,
-                ..
-            }) => {
+            symbolize::Symbolized::Sym(symbolize::Sym { name, .. }) => {
                 result.push(name.to_string());
             }
             symbolize::Symbolized::Unknown(..) => {
