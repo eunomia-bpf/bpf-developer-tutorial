@@ -47,8 +47,8 @@ This section covers advanced topics related to eBPF, including using eBPF progra
 GPU:
 
 - [lesson 47-cuda-events](47-cuda-events/README.md) Tracing CUDA GPU Operations
-- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.md) Tracing Intel NPU Kernel Driver Operations
 - [xpu flamegraph](xpu/flamegraph/README.md) Building a GPU Flamegraph Profiler with CUPTI
+- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.md) Tracing Intel NPU Kernel Driver Operations
 - [lesson xpu/gpu-kernel-driver](xpu/gpu-kernel-driver/README.md) Monitoring GPU Driver Activity with Kernel Tracepoints
 
 
@@ -95,10 +95,10 @@ Features:
 - [lesson 38-btf-uprobe](38-btf-uprobe/README.md) Expanding eBPF Compile Once, Run Everywhere(CO-RE) to Userspace Compatibility
 - [lesson 43-kfuncs](43-kfuncs/README.md) Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules
 - [features bpf_wq](features/bpf_wq/README.md) BPF Workqueues for Asynchronous Sleepable Tasks
-- [features bpf_iters](features/bpf_iters/README.md) BPF Iterators for Kernel Data Export
 - [features struct_ops](features/struct_ops/README.md) Extending Kernel Subsystems with BPF struct_ops
 - [features dynptr](features/dynptr/README.md) BPF Dynamic Pointers for Variable-Length Data
 - [features bpf_arena](features/bpf_arena/README.md) BPF Arena for Zero-Copy Shared Memory
+- [features bpf_iters](features/bpf_iters/README.md) BPF Iterators for Kernel Data Export
 
 Other:
 
