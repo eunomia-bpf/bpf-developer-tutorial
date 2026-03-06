@@ -111,7 +111,7 @@ $ uname -r
 
 如果您的内核版本过旧，您有两个选择：
 - 将内核升级到支持的版本
-- 使用 kprobe 示例代替（参见 [示例 2-kprobe-unlink](../2-kprobe-unlink/)）
+- 使用 kprobe 示例代替（参见 [示例 2-kprobe-unlink](../2-kprobe-unlink/README.zh.md)）
 
 **2. 验证 BTF（BPF Type Format）支持：**
 

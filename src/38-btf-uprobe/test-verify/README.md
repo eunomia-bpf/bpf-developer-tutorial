@@ -22,10 +22,10 @@ By reusing the kernel verifier, we can provide:
 
 The BTF format is a binary format that contains the type information of the progam.
 
-The based program can be found in the [examples](../examples) directory, they represent the different version of host userspace applications, include:
+The base programs live in the tutorial source tree under [src/38-btf-uprobe/examples](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/38-btf-uprobe/examples). They represent different versions of the host userspace application and include:
 
 - `btf-base`: the base version of `btf-base-complete`, which contain the type information of `struct data` the same as [verify-failed-no-btf/uprobe.bpf.c](verify-failed-no-btf/uprobe.bpf.c).  
-- `btf-base-new`: the new version of `btf-base`, which contains the type information of `struct data` different from `btf-base` and [verify-failed-btf/uprobe.bpf.c](verify-failed-btf/uprobe.bpf.c). We can use it to test CO-RE relocation.
+- `btf-base-new`: the new version of `btf-base`, which contains the type information of `struct data` different from `btf-base` and [verify-failed-no-btf/uprobe_failed.bpf.c](verify-failed-no-btf/uprobe_failed.bpf.c). We can use it to test CO-RE relocation.
 - `btf-base-complete`: the complete version of `btf-base`, which contains all the types that are used in the eBPF program, and a resource allocation and deallocation function.
 
 run `make -C ../` in this directory to generate the BTF files.
@@ -153,7 +153,7 @@ If the extension (BPF program) access the invalid userspace struct variable, the
 
 ## Verify memory pointer access
 
-See [verify-memory-access](verify-memory-access) directory.
+See the `verify-memory-access/` sources in the tutorial tree for the full example.
 
 The data struct is:
 
@@ -275,7 +275,7 @@ Failed to load and verify BPF skeleton
 
 ## Verify resource allocation and deallocation with psudo ufuncs
 
-See [verify-resource-allocation](verify-resource-allocation) directory.
+See the `verify-resource-allocation/` sources in the tutorial tree for the full example.
 
 First, give kernel the psudo ufunc information through the kernel module:
 
@@ -448,4 +448,3 @@ And run the userspace program:
 my_alloc_data
 my_free_data
 ```
-

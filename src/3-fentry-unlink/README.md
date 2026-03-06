@@ -103,7 +103,7 @@ You need:
 
 If your kernel is too old, you have two options:
 - Upgrade your kernel to a supported version
-- Use the kprobe example instead (see [example 2-kprobe-unlink](../2-kprobe-unlink/))
+- Use the kprobe example instead (see [example 2-kprobe-unlink](../2-kprobe-unlink/README.md))
 
 **2. Verify BTF (BPF Type Format) support:**
 
