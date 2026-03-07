@@ -74,7 +74,7 @@ Networking:
 - [lesson 41-xdp-tcpdump](src/41-xdp-tcpdump/README.md) Capturing TCP Information with XDP
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.md) XDP Load Balancer
 - [lesson 46-xdp-test](src/46-xdp-test/README.md) Building a High-Performance XDP Packet Generator
-- [lesson 50-tcx](src/50-tcx/README.md) TCX and Link-Based Traffic Control Chains
+- [lesson 50-tcx](src/50-tcx/README.md) Composable Traffic Control with TCX Links
 
 
 Tracing:
@@ -104,7 +104,7 @@ Features:
 - [lesson 36-userspace-ebpf](src/36-userspace-ebpf/README.md) Userspace eBPF Runtimes: Overview and Applications
 - [lesson 38-btf-uprobe](src/38-btf-uprobe/README.md) Expanding eBPF Compile Once, Run Everywhere(CO-RE) to Userspace Compatibility
 - [lesson 43-kfuncs](src/43-kfuncs/README.md) Extending eBPF Beyond Its Limits: Custom kfuncs in Kernel Modules
-- [features bpf_token](src/features/bpf_token/README.md) BPF Token for Delegated Program Loading
+- [features bpf_token](src/features/bpf_token/README.md) BPF Token for Delegated Privilege and Secure Program Loading
 - [features bpf_wq](src/features/bpf_wq/README.md) BPF Workqueues for Asynchronous Sleepable Tasks
 - [features struct_ops](src/features/struct_ops/README.md) Extending Kernel Subsystems with BPF struct_ops
 - [features dynptr](src/features/dynptr/README.md) BPF Dynamic Pointers for Variable-Length Data

@@ -67,7 +67,7 @@ GPU:
 - [lesson 41-xdp-tcpdump](src/41-xdp-tcpdump/README.zh.md) eBPF 示例教程：使用 XDP 捕获 TCP 信息
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.zh.md) eBPF 开发者教程： 简单的 XDP 负载均衡器
 - [lesson 46-xdp-test](src/46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
-- [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 教程：TCX 与基于 Link 的流量控制链
+- [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
 安全:
 
 - [lesson 24-hide](src/24-hide/README.zh.md) eBPF 开发实践：使用 eBPF 隐藏进程或文件信息
@@ -82,7 +82,7 @@ GPU:
 - [lesson 36-userspace-ebpf](src/36-userspace-ebpf/README.zh.md) 用户空间 eBPF 运行时：深度解析与应用实践
 - [lesson 38-btf-uprobe](src/38-btf-uprobe/README.zh.md) 借助 eBPF 和 BTF，让用户态也能一次编译、到处运行
 - [lesson 43-kfuncs](src/43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
-- [features bpf_token](src/features/bpf_token/README.zh.md) eBPF 教程：BPF Token 用于受控的委托加载
+- [features bpf_token](src/features/bpf_token/README.zh.md) eBPF 入门实践教程：BPF Token，安全的委托式权限与程序加载
 - [features bpf_wq](src/features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
 - [features struct_ops](src/features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
 - [features dynptr](src/features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
