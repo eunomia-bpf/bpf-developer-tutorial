@@ -28,7 +28,7 @@ jobs:
 
       - name: Test page build
         run: |
-          mkdocs build -v
+          .venv/bin/mkdocs build -v
 
       - name: Trigger sync workflow
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
