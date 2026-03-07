@@ -2,9 +2,9 @@
 
 Ever needed to let a container or CI job load an eBPF program without giving it full `CAP_BPF` or `CAP_SYS_ADMIN`? Or wanted to expose XDP packet processing to a tenant workload while ensuring it can only create the specific map types and program types you've approved? Before BPF token, the answer was binary: either you had the capabilities to do *everything* in BPF, or you could do *nothing*. There was no middle ground.
 
-This is what **BPF Token** solves. Introduced by Andrii Nakryiko and merged in Linux 6.9, BPF token is a delegation mechanism that lets a privileged process (like a container runtime or systemd) create a precisely scoped permission set for BPF operations, then hand it to an unprivileged process through a bpffs mount. The unprivileged process can load programs, create maps, and attach hooks — but only the types that were explicitly allowed. No broad capabilities required.
+This is what **BPF Token** solves. Introduced by Andrii Nakryiko and merged in Linux 6.9, BPF token is a delegation mechanism that lets a privileged process (like a container runtime or systemd) create a precisely scoped permission set for BPF operations, then hand it to an unprivileged process through a bpffs mount. The unprivileged process can load programs, create maps, and attach hooks, but only the types that were explicitly allowed. No broad capabilities required.
 
-In this tutorial, we'll set up a delegated bpffs mount in a user namespace, derive a BPF token from it, and use libbpf to load and attach a minimal XDP program — all from a process that has zero BPF capabilities of its own.
+In this tutorial, we'll set up a delegated bpffs mount in a user namespace, derive a BPF token from it, and use libbpf to load and attach a minimal XDP program, all from a process that has zero BPF capabilities of its own.
 
 > The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/bpf_token>
 
@@ -12,7 +12,7 @@ In this tutorial, we'll set up a delegated bpffs mount in a user namespace, deri
 
 ### The Problem: All-or-Nothing BPF Capabilities
 
-Traditional eBPF requires `CAP_BPF` for program loading and map creation, plus additional capabilities like `CAP_PERFMON` for tracing, `CAP_NET_ADMIN` for networking hooks, and `CAP_SYS_ADMIN` for certain advanced operations. These capabilities are inherently **system-wide** — you cannot namespace or sandbox `CAP_BPF`. As the kernel documentation explains, this is by design: BPF tracing helpers like `bpf_probe_read_kernel()` can access arbitrary kernel memory, which fundamentally cannot be scoped to a single namespace.
+Traditional eBPF requires `CAP_BPF` for program loading and map creation, plus additional capabilities like `CAP_PERFMON` for tracing, `CAP_NET_ADMIN` for networking hooks, and `CAP_SYS_ADMIN` for certain advanced operations. These capabilities are inherently **system-wide**: you cannot namespace or sandbox `CAP_BPF`. As the kernel documentation explains, this is by design: BPF tracing helpers like `bpf_probe_read_kernel()` can access arbitrary kernel memory, which fundamentally cannot be scoped to a single namespace.
 
 This creates a real problem in multi-tenant environments:
 
@@ -60,11 +60,11 @@ For applications built with libbpf (which is most of them), token usage is nearl
 2. **Environment variable**: Set `LIBBPF_BPF_TOKEN_PATH` to point to the bpffs mount. libbpf picks it up automatically.
 3. **Default path**: If the default `/sys/fs/bpf` is a delegated bpffs in the current user namespace, libbpf uses it implicitly.
 
-Once the token is derived, libbpf passes it to every relevant syscall — `BPF_MAP_CREATE`, `BPF_BTF_LOAD`, `BPF_PROG_LOAD`, and `BPF_LINK_CREATE` — without any source-code changes in the BPF application.
+Once the token is derived, libbpf passes it to every relevant syscall (`BPF_MAP_CREATE`, `BPF_BTF_LOAD`, `BPF_PROG_LOAD`, and `BPF_LINK_CREATE`) without any source-code changes in the BPF application.
 
 ## Writing the eBPF Program
 
-The BPF side of this demo is intentionally minimal — a tiny XDP program on loopback. This keeps the focus on the token workflow. Here's the complete source:
+The BPF side of this demo is intentionally minimal: a tiny XDP program on loopback. This keeps the focus on the token workflow. Here's the complete source:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -103,7 +103,7 @@ int handle_packet(struct xdp_md *ctx)
 
 A few design choices to note:
 
-**`BPF_MAP_TYPE_ARRAY`** was chosen because the delegation policy explicitly allows `array` maps. If we had used a hash map instead, loading would fail because the token doesn't grant `hash` map creation permission. This is the token model in action — even trivial program changes can be caught by the delegation policy.
+**`BPF_MAP_TYPE_ARRAY`** was chosen because the delegation policy explicitly allows `array` maps. If we had used a hash map instead, loading would fail because the token doesn't grant `hash` map creation permission. This is the token model in action; even trivial program changes can be caught by the delegation policy.
 
 **`SEC("xdp")`** matches the `delegate_progs=xdp` policy. If you changed this to `SEC("kprobe/...")`, the kernel would reject it at load time with an `EPERM` because kprobe isn't in the allowed program types.
 
@@ -111,7 +111,7 @@ A few design choices to note:
 
 ## User-Space Loader: Token-Backed Loading
 
-The `token_trace.c` loader is a standard libbpf skeleton program with one key addition — it passes a `bpf_token_path`:
+The `token_trace.c` loader is a standard libbpf skeleton program with one key addition: it passes a `bpf_token_path`:
 
 ```c
 struct bpf_object_open_opts open_opts = {};
@@ -177,7 +177,7 @@ parent (root, init_user_ns)          child (new userns)
          │   ───────── send ack ─────────────────>│
 ```
 
-The child calls `fsopen("bpf", 0)` to create a bpffs filesystem context in its user namespace, then sends the file descriptor to the parent via a Unix socket (`SCM_RIGHTS`). The parent — running as root in the init namespace — configures the delegation policy with `fsconfig()`, then materializes the filesystem with `FSCONFIG_CMD_CREATE`.
+The child calls `fsopen("bpf", 0)` to create a bpffs filesystem context in its user namespace, then sends the file descriptor to the parent via a Unix socket (`SCM_RIGHTS`). The parent, running as root in the init namespace, configures the delegation policy with `fsconfig()`, then materializes the filesystem with `FSCONFIG_CMD_CREATE`.
 
 This two-step dance is necessary because: (a) the bpffs must be created in the child's user namespace (for the token to be valid there), but (b) only the privileged parent can set delegation options (because those options grant BPF capabilities).
 
@@ -192,7 +192,7 @@ child (new userns)
     exec("./token_trace", "-t", token_path, "-i", "lo")
 ```
 
-The child materializes the bpffs as a detached mount (no mount point needed — `/proc/self/fd/<mnt_fd>` gives a path), brings the loopback interface up in its network namespace, and `exec`s `token_trace` with the bpffs path. From `token_trace`'s perspective, it's just opening a BPF object with a token path — it doesn't know or care about the namespace setup.
+The child materializes the bpffs as a detached mount (no mount point needed, since `/proc/self/fd/<mnt_fd>` gives a path), brings the loopback interface up in its network namespace, and `exec`s `token_trace` with the bpffs path. From `token_trace`'s perspective, it's just opening a BPF object with a token path. It doesn't know or care about the namespace setup.
 
 ## Preparing a bpffs Mount Manually
 
@@ -244,7 +244,7 @@ delta          : 1
 last ifindex   : 1
 ```
 
-The `delta: 1` confirms that the XDP program was successfully loaded and attached using a BPF token — no `CAP_BPF` or `CAP_SYS_ADMIN` in the child process.
+The `delta: 1` confirms that the XDP program was successfully loaded and attached using a BPF token, with no `CAP_BPF` or `CAP_SYS_ADMIN` in the child process.
 
 Add `-v` for verbose libbpf output to see the token being created and used:
 
@@ -266,13 +266,13 @@ While this tutorial uses a minimal XDP program, the BPF token pattern scales to 
 
 - **CI/CD testing**: Give build jobs the ability to load and test specific eBPF programs without granting them host-level capabilities. The delegation policy acts as an allowlist for BPF operations.
 
-- **Multi-tenant BPF platforms**: A platform daemon creates per-tenant bpffs mounts with different delegation policies — one tenant might be allowed XDP + array maps, another might get tracepoint + ringbuf access.
+- **Multi-tenant BPF platforms**: A platform daemon creates per-tenant bpffs mounts with different delegation policies. One tenant might be allowed XDP + array maps, while another might get tracepoint + ringbuf access.
 
 - **LSM integration**: Because BPF tokens integrate with Linux Security Modules, you can combine token delegation with SELinux or AppArmor policies for defense-in-depth. Each token gets its own security context that LSM hooks can inspect.
 
 ## Summary
 
-In this tutorial, we learned how BPF token provides a delegation model for eBPF privilege that goes beyond the binary "all or nothing" of Linux capabilities. We walked through the complete flow: a privileged parent configures a bpffs instance with specific delegation options, an unprivileged child in a user namespace derives a token from that bpffs, and libbpf transparently uses the token for map creation, program loading, and attachment. The result is a minimal XDP program running in an unprivileged context — something that was impossible before Linux 6.9.
+In this tutorial, we learned how BPF token provides a delegation model for eBPF privilege that goes beyond the binary "all or nothing" of Linux capabilities. We walked through the complete flow: a privileged parent configures a bpffs instance with specific delegation options, an unprivileged child in a user namespace derives a token from that bpffs, and libbpf transparently uses the token for map creation, program loading, and attachment. The result is a minimal XDP program running in an unprivileged context, something that was impossible before Linux 6.9.
 
 BPF token is not a niche feature. It represents the kernel's answer to a fundamental question in the eBPF ecosystem: how do you safely share BPF capabilities in a multi-tenant world without granting unconstrained access to the BPF subsystem?
 

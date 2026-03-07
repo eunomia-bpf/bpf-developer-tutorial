@@ -1,10 +1,10 @@
-# eBPF 入门实践教程：BPF Token——安全的委托式权限与程序加载
+# eBPF 入门实践教程：BPF Token，安全的委托式权限与程序加载
 
 你是否需要让容器或 CI 任务加载一个 eBPF 程序，但又不想给它完整的 `CAP_BPF` 或 `CAP_SYS_ADMIN`？或者你想把 XDP 数据包处理能力开放给租户工作负载，同时确保它只能创建你批准过的 map 类型和 program 类型？在 BPF token 出现之前，答案是二元的：要么你有能力在 BPF 中做*一切*，要么你*什么都做不了*。没有中间地带。
 
-这就是 **BPF Token** 要解决的问题。BPF token 由 Andrii Nakryiko 开发，于 Linux 6.9 合入内核，它是一种委托机制，让特权进程（如容器运行时或 systemd）创建一组精确限定范围的 BPF 操作许可集合，然后通过 bpffs 挂载传递给非特权进程。非特权进程可以加载程序、创建 map、挂载 hook——但只能使用被显式允许的类型。不需要任何宽泛的 capability。
+这就是 **BPF Token** 要解决的问题。BPF token 由 Andrii Nakryiko 开发，于 Linux 6.9 合入内核，它是一种委托机制，让特权进程（如容器运行时或 systemd）创建一组精确限定范围的 BPF 操作许可集合，然后通过 bpffs 挂载传递给非特权进程。非特权进程可以加载程序、创建 map、挂载 hook，但只能使用被显式允许的类型。不需要任何宽泛的 capability。
 
-本教程将在 user namespace 中设置一个带委托策略的 bpffs 挂载，从中派生 BPF token，然后用 libbpf 加载并挂载一个最小的 XDP 程序——所有操作来自一个本身没有任何 BPF capability 的进程。
+本教程将在 user namespace 中设置一个带委托策略的 bpffs 挂载，从中派生 BPF token，然后用 libbpf 加载并挂载一个最小的 XDP 程序。所有操作来自一个本身没有任何 BPF capability 的进程。
 
 > 完整源代码: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/features/bpf_token>
 
@@ -12,7 +12,7 @@
 
 ### 问题：全有或全无的 BPF Capability
 
-传统 eBPF 需要 `CAP_BPF` 来加载程序和创建 map，还需要 `CAP_PERFMON`（用于 tracing）、`CAP_NET_ADMIN`（用于网络 hook）、`CAP_SYS_ADMIN`（用于某些高级操作）等额外的 capability。这些 capability 本质上是**系统级**的——你无法对 `CAP_BPF` 做 namespace 隔离或沙箱化。内核文档解释了原因：BPF tracing helper（如 `bpf_probe_read_kernel()`）可以访问任意内核内存，这在根本上无法被限定到单个 namespace 中。
+传统 eBPF 需要 `CAP_BPF` 来加载程序和创建 map，还需要 `CAP_PERFMON`（用于 tracing）、`CAP_NET_ADMIN`（用于网络 hook）、`CAP_SYS_ADMIN`（用于某些高级操作）等额外的 capability。这些 capability 本质上是**系统级**的，你无法对 `CAP_BPF` 做 namespace 隔离或沙箱化。内核文档解释了原因：BPF tracing helper（如 `bpf_probe_read_kernel()`）可以访问任意内核内存，这在根本上无法被限定到单个 namespace 中。
 
 这在多租户环境中造成了实际问题：
 
@@ -60,11 +60,11 @@ token 沿四个独立轴进行限定：
 2. **环境变量**：设置 `LIBBPF_BPF_TOKEN_PATH` 指向 bpffs 挂载。libbpf 自动识别。
 3. **默认路径**：如果默认的 `/sys/fs/bpf` 是当前 user namespace 中的委托 bpffs，libbpf 隐式使用它。
 
-一旦 token 被派生，libbpf 会在每个相关的 syscall 中传递它——`BPF_MAP_CREATE`、`BPF_BTF_LOAD`、`BPF_PROG_LOAD` 和 `BPF_LINK_CREATE`——不需要修改 BPF 应用的任何源代码。
+一旦 token 被派生，libbpf 会在每个相关的 syscall（`BPF_MAP_CREATE`、`BPF_BTF_LOAD`、`BPF_PROG_LOAD` 和 `BPF_LINK_CREATE`）中传递它，不需要修改 BPF 应用的任何源代码。
 
 ## 编写 eBPF 程序
 
-本教程的 BPF 侧故意保持最小——loopback 上的一个 XDP 小程序。这样可以把注意力集中在 token 工作流上。以下是完整源码：
+本教程的 BPF 侧故意保持最小，只有 loopback 上的一个 XDP 小程序。这样可以把注意力集中在 token 工作流上。以下是完整源码：
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -103,7 +103,7 @@ int handle_packet(struct xdp_md *ctx)
 
 有几个设计选择值得注意：
 
-**`BPF_MAP_TYPE_ARRAY`** 被选中是因为委托策略显式允许了 `array` map。如果我们改用 hash map，加载会失败，因为 token 不授予 `hash` map 的创建权限。这正是 token 模型在起作用——即使是微小的程序改动也会被委托策略捕获。
+**`BPF_MAP_TYPE_ARRAY`** 被选中是因为委托策略显式允许了 `array` map。如果我们改用 hash map，加载会失败，因为 token 不授予 `hash` map 的创建权限。这正是 token 模型在起作用：即使是微小的程序改动也会被委托策略捕获。
 
 **`SEC("xdp")`** 匹配 `delegate_progs=xdp` 策略。如果你把它改成 `SEC("kprobe/...")`，内核会在加载时返回 `EPERM` 拒绝，因为 kprobe 不在允许的程序类型中。
 
@@ -177,7 +177,7 @@ printf("delta          : %llu\n", after.packets - before.packets);
          │   ───────── 发送确认 ─────────────────>│
 ```
 
-子进程调用 `fsopen("bpf", 0)` 在自己的 user namespace 中创建一个 bpffs 文件系统上下文，然后通过 Unix socket（`SCM_RIGHTS`）把文件描述符发给父进程。父进程——以 root 身份运行在 init namespace 中——用 `fsconfig()` 配置委托策略，然后用 `FSCONFIG_CMD_CREATE` 实例化文件系统。
+子进程调用 `fsopen("bpf", 0)` 在自己的 user namespace 中创建一个 bpffs 文件系统上下文，然后通过 Unix socket（`SCM_RIGHTS`）把文件描述符发给父进程。父进程以 root 身份运行在 init namespace 中，用 `fsconfig()` 配置委托策略，然后用 `FSCONFIG_CMD_CREATE` 实例化文件系统。
 
 这个两步配合是必要的，因为：(a) bpffs 必须在子进程的 user namespace 中创建（token 才能在那里有效），但 (b) 只有特权父进程才能设置委托选项（因为这些选项授予 BPF capability）。
 
@@ -192,7 +192,7 @@ printf("delta          : %llu\n", after.packets - before.packets);
     exec("./token_trace", "-t", token_path, "-i", "lo")
 ```
 
-子进程将 bpffs 实例化为一个分离的挂载（不需要挂载点——`/proc/self/fd/<mnt_fd>` 提供了路径），在自己的 network namespace 中拉起 loopback 接口，然后 `exec` 执行 `token_trace` 并传入 bpffs 路径。从 `token_trace` 的角度看，它只是在用一个 token path 打开 BPF 对象——它不知道也不关心 namespace 的设置过程。
+子进程将 bpffs 实例化为一个分离的挂载（不需要挂载点，因为 `/proc/self/fd/<mnt_fd>` 提供了路径），在自己的 network namespace 中拉起 loopback 接口，然后 `exec` 执行 `token_trace` 并传入 bpffs 路径。从 `token_trace` 的角度看，它只是在用一个 token path 打开 BPF 对象，完全不知道也不关心 namespace 的设置过程。
 
 ## 手动准备 bpffs 挂载
 
@@ -244,7 +244,7 @@ delta          : 1
 last ifindex   : 1
 ```
 
-`delta: 1` 确认 XDP 程序已使用 BPF token 成功加载和挂载——子进程中没有 `CAP_BPF` 或 `CAP_SYS_ADMIN`。
+`delta: 1` 确认 XDP 程序已使用 BPF token 成功加载和挂载，子进程中没有 `CAP_BPF` 或 `CAP_SYS_ADMIN`。
 
 加 `-v` 可以看到 libbpf 的详细输出，显示 token 的创建和使用过程：
 
@@ -266,13 +266,13 @@ sudo ./token_userns_demo -v
 
 - **CI/CD 测试**：赋予构建任务加载和测试特定 eBPF 程序的能力，无需授予主机级 capability。委托策略充当 BPF 操作的白名单。
 
-- **多租户 BPF 平台**：平台守护进程为每个租户创建不同委托策略的 bpffs 挂载——一个租户可能被允许使用 XDP + array map，另一个可能获得 tracepoint + ringbuf 访问权限。
+- **多租户 BPF 平台**：平台守护进程为每个租户创建不同委托策略的 bpffs 挂载。一个租户可能被允许使用 XDP + array map，另一个可能获得 tracepoint + ringbuf 访问权限。
 
 - **LSM 集成**：由于 BPF token 和 Linux Security Module 集成，你可以将 token 委托和 SELinux 或 AppArmor 策略结合实现纵深防御。每个 token 获得自己的安全上下文，LSM hook 可以对其进行检查。
 
 ## 总结
 
-本教程介绍了 BPF token 如何为 eBPF 权限提供一种超越 Linux capability "全有或全无"二元模型的委托机制。我们完整走过了整个流程：特权父进程用特定委托选项配置 bpffs 实例，user namespace 中的非特权子进程从该 bpffs 派生 token，libbpf 透明地使用 token 进行 map 创建、程序加载和挂载。最终结果是一个最小的 XDP 程序在非特权上下文中运行——这在 Linux 6.9 之前是不可能的。
+本教程介绍了 BPF token 如何为 eBPF 权限提供一种超越 Linux capability "全有或全无"二元模型的委托机制。我们完整走过了整个流程：特权父进程用特定委托选项配置 bpffs 实例，user namespace 中的非特权子进程从该 bpffs 派生 token，libbpf 透明地使用 token 进行 map 创建、程序加载和挂载。最终结果是一个最小的 XDP 程序在非特权上下文中运行，这在 Linux 6.9 之前是不可能的。
 
 BPF token 不是一个冷门功能。它代表了内核对 eBPF 生态系统中一个基本问题的回答：**在多租户环境中，如何安全地共享 BPF 能力，而不授予对 BPF 子系统的无约束访问？**
 
