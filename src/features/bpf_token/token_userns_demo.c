@@ -315,18 +315,22 @@ static int child_main(int sockfd)
 
 	snprintf(token_path, sizeof(token_path), "/proc/self/fd/%d", mnt_fd);
 
-	if (env.verbose && env.no_trigger) {
-		execl("./token_trace", "./token_trace", "-v", "-n",
-		      "-t", token_path, "-i", "lo", (char *)NULL);
-	} else if (env.verbose) {
-		execl("./token_trace", "./token_trace", "-v",
-		      "-t", token_path, "-i", "lo", (char *)NULL);
-	} else if (env.no_trigger) {
-		execl("./token_trace", "./token_trace", "-n",
-		      "-t", token_path, "-i", "lo", (char *)NULL);
-	} else {
-		execl("./token_trace", "./token_trace",
-		      "-t", token_path, "-i", "lo", (char *)NULL);
+	{
+		const char *argv[10];
+		int argc = 0;
+
+		argv[argc++] = "./token_trace";
+		if (env.verbose)
+			argv[argc++] = "-v";
+		if (env.no_trigger)
+			argv[argc++] = "-n";
+		argv[argc++] = "-t";
+		argv[argc++] = token_path;
+		argv[argc++] = "-i";
+		argv[argc++] = "lo";
+		argv[argc] = NULL;
+
+		execv("./token_trace", (char *const *)argv);
 	}
 
 	err = -errno;

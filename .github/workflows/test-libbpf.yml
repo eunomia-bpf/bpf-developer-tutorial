@@ -111,3 +111,11 @@ jobs:
     - name: test features bpf_wq
       run: |
           make -C src/features/bpf_wq
+
+    - name: test 50 tcx
+      run: |
+          make -C src/50-tcx
+
+    - name: test features bpf_token
+      run: |
+          make -C src/features/bpf_token
