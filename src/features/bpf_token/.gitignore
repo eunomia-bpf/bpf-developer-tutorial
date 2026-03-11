@@ -1,0 +1,13 @@
+# Build artifacts
+.output/
+*.o
+*.skel.h
+
+# Generated binaries
+token_trace
+token_userns_demo
+
+# Editor files
+*.swp
+*~
+.vscode/

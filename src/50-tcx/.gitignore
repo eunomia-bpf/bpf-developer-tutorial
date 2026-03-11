@@ -1,0 +1,12 @@
+# Build artifacts
+.output/
+*.o
+*.skel.h
+
+# Generated binaries
+tcx_demo
+
+# Editor files
+*.swp
+*~
+.vscode/
