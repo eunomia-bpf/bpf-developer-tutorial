@@ -21,7 +21,7 @@
 | [eBPF 入门实践教程十二：使用 eBPF 程序 profile 进行性能分析](12-profile/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_PERF_EVENTS=y | 无 | 需要 | CI 构建测试 |
 | [eBPF入门开发实践教程十三：统计 TCP 连接延时，并使用 libbpf 在用户态处理数据](13-tcpconnlat/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_KPROBE_EVENTS=y | 无 | 需要 | CI 运行测试 |
 | [eBPF入门实践教程十四：记录 TCP 连接状态与 TCP RTT](14-tcpstates/README.zh.md) | 5.5 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE=y, CONFIG_TRACEPOINTS=y | 无 | 需要 | CI 运行测试 |
-| [eBPF 入门实践教程十五：使用 USDT 捕获用户态 Java GC 事件耗时](15-javagc/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | 未纳入 CI |
+| [eBPF 入门实践教程十五：使用 USDT 捕获用户态 Java GC 事件耗时](15-javagc/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 入门实践教程十六：编写 eBPF 程序 Memleak 监控内存泄漏](16-memleak/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_TRACEPOINTS=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | CI 运行测试 |
 | [eBPF 入门实践教程十七：编写 eBPF 程序统计随机/顺序磁盘 I/O](17-biopattern/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_TRACEPOINTS=y | 块设备 | 需要 | CI 运行测试 |
 | [更多的参考资料：论文、项目等等](18-further-reading/README.zh.md) | 不适用 | 不适用 | 全部 | 不需要 | 无 | 无 | 不需要 | 仅文档 |
@@ -30,10 +30,10 @@
 | [eBPF 入门实践教程二十一： 使用 XDP 进行可编程数据包处理](21-xdp/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y | 网络接口 | 需要 | 未纳入 CI |
 | [在 Android 上使用 eBPF 程序](22-android/README.zh.md) | 5.15 | 教程文档 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | Android 设备或模拟器 | 需要 | 未纳入 CI |
 | [通过 eBPF socket filter 或 syscall trace 追踪 HTTP 请求等七层协议 - eBPF 实践教程](23-http/README.zh.md) | 5.17 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 运行测试 |
-| [eBPF 开发实践：使用 eBPF 隐藏进程或文件信息](24-hide/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | 未纳入 CI |
+| [eBPF 开发实践：使用 eBPF 隐藏进程或文件信息](24-hide/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 入门实践教程：用 bpf_send_signal 发送信号终止恶意进程](25-signal/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 运行测试 |
-| [eBPF 教程: 文件操纵实现 sudo 权限提升](26-sudo/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | 未纳入 CI |
-| [eBPF 教程: 替换任意程序读取或者写入的文本](27-replace/README.zh.md) | 5.17 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | 未纳入 CI |
+| [eBPF 教程: 文件操纵实现 sudo 权限提升](26-sudo/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 构建测试 |
+| [eBPF 教程: 替换任意程序读取或者写入的文本](27-replace/README.zh.md) | 5.17 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 构建测试 |
 | [在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期](28-detach/README.zh.md) | 5.8 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 开发实践：使用 sockops 加速网络请求转发](29-sockops/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_CGROUPS=y, CONFIG_CGROUP_BPF=y, CONFIG_DEBUG_INFO_BTF=y | 网络接口 | 需要 | CI 构建测试 |
 | [eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据](30-sslsniff/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | CI 运行测试 |
@@ -44,7 +44,7 @@
 | [eBPF开发实践：使用 user ring buffer 向内核异步发送信息](35-user-ringbuf/README.zh.md) | 6.1 | 教程文档 | x86_64, arm64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_FTRACE_SYSCALLS=y | 无 | 需要 | CI 运行测试 |
 | [用户空间 eBPF 运行时：深度解析与应用实践](36-userspace-ebpf/README.zh.md) | 不适用 | 不适用 | 全部 | 不需要 | 无 | 无 | 不需要 | 仅文档 |
 | [eBPF 实践：使用 Uprobe 追踪用户态 Rust 应用](37-uprobe-rust/README.zh.md) | 4.8 | 仓库基线 | x86_64, arm64 | 不需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | CI 运行测试 |
-| [借助 eBPF 和 BTF，让用户态也能一次编译、到处运行](38-btf-uprobe/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | 未纳入 CI |
+| [借助 eBPF 和 BTF，让用户态也能一次编译、到处运行](38-btf-uprobe/README.zh.md) | 5.2 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | CI 构建测试 |
 | [使用 eBPF 跟踪 Nginx 请求](39-nginx/README.zh.md) | 4.8 | 仓库基线 | x86_64, arm64 | 不需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | 未纳入 CI |
 | [使用 eBPF 跟踪 MySQL 查询](40-mysql/README.zh.md) | 4.8 | 仓库基线 | x86_64, arm64 | 不需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_UPROBE_EVENTS=y | 无 | 需要 | 未纳入 CI |
 | [eBPF 示例教程：使用 XDP 捕获 TCP 信息](41-xdp-tcpdump/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y | 网络接口 | 需要 | CI 构建测试 |
@@ -53,17 +53,17 @@
 | [eBPF 教程：BPF 调度器入门](44-scx-simple/README.zh.md) | 6.12 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_SCHED_CLASS_EXT=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 示例教程：实现 `scx_nest` 调度器](45-scx-nest/README.zh.md) | 6.12 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_SCHED_CLASS_EXT=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 实例教程：构建高性能 XDP 数据包生成器](46-xdp-test/README.zh.md) | 5.18 | 教程文档 | x86_64, arm64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_XDP_SOCKETS=y | 网络接口 | 需要 | CI 构建测试 |
-| [eBPF 教程：追踪 CUDA GPU 操作](47-cuda-events/README.zh.md) | 5.8 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | NVIDIA CUDA GPU | 需要 | 未纳入 CI |
-| [eBPF 教程：进程级能源监控与功耗分析](48-energy/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_TRACEPOINTS=y | 无 | 需要 | 未纳入 CI |
-| [eBPF 教程：无需内核补丁修复故障的 HID 设备](49-hid/README.zh.md) | 6.3 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_HID_BPF=y, CONFIG_UHID=y\|m | 无 | 需要 | 未纳入 CI |
+| [eBPF 教程：追踪 CUDA GPU 操作](47-cuda-events/README.zh.md) | 5.8 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_UPROBE_EVENTS=y | NVIDIA CUDA GPU | 需要 | CI 构建测试 |
+| [eBPF 教程：进程级能源监控与功耗分析](48-energy/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_TRACEPOINTS=y | 无 | 需要 | CI 构建测试 |
+| [eBPF 教程：无需内核补丁修复故障的 HID 设备](49-hid/README.zh.md) | 6.3 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_HID_BPF=y, CONFIG_UHID=y\|m | 无 | 需要 | CI 构建测试 |
 | [eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制](50-tcx/README.zh.md) | 6.6 | 教程文档 | x86_64, arm64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_NET_XGRESS=y | 网络接口 | 需要 | CI 构建测试 |
-| [eBPF 实例教程：基于 cgroup 的策略控制](cgroup/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_CGROUPS=y, CONFIG_CGROUP_BPF=y, CONFIG_CGROUP_DEVICE=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | 未纳入 CI |
+| [eBPF 实例教程：基于 cgroup 的策略控制](cgroup/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_CGROUPS=y, CONFIG_CGROUP_BPF=y, CONFIG_CGROUP_DEVICE=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 实例教程：BPF Arena 零拷贝共享内存](features/bpf_arena/README.zh.md) | 6.9 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 教程：BPF 迭代器用于内核数据导出](features/bpf_iters/README.zh.md) | 5.8 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 入门实践教程：BPF Token，安全的委托式权限与程序加载](features/bpf_token/README.zh.md) | 6.9 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_USER_NS=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 教程：BPF 工作队列用于异步可睡眠任务](features/bpf_wq/README.zh.md) | 6.10 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_FTRACE=y | 无 | 需要 | CI 构建测试 |
-| [eBPF 实例教程：BPF 动态指针处理可变长度数据](features/dynptr/README.zh.md) | 6.4 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_NET_CLS_BPF=y\|m, CONFIG_NET_SCHED=y | 网络接口 | 需要 | 未纳入 CI |
-| [eBPF 教程：使用 BPF struct_ops 扩展内核子系统](features/struct_ops/README.zh.md) | 未知 | 尚未验证 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_DEBUG_INFO_BTF_MODULES=y, CONFIG_MODULES=y | 无 | 需要 | 未纳入 CI |
+| [eBPF 实例教程：BPF 动态指针处理可变长度数据](features/dynptr/README.zh.md) | 6.4 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_NET_CLS_BPF=y\|m, CONFIG_NET_SCHED=y | 网络接口 | 需要 | CI 构建测试 |
+| [eBPF 教程：使用 BPF struct_ops 扩展内核子系统](features/struct_ops/README.zh.md) | 未知 | 尚未验证 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_DEBUG_INFO_BTF_MODULES=y, CONFIG_MODULES=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器](xpu/flamegraph/README.zh.md) | 5.8 | 必需特性 | x86_64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_PERF_EVENTS=y, CONFIG_UPROBE_EVENTS=y | NVIDIA CUDA GPU | 需要 | 未纳入 CI |
 | [eBPF 实例教程：使用内核跟踪点监控 GPU 驱动活动](xpu/gpu-kernel-driver/README.zh.md) | 4.8 | 仓库基线 | x86_64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y | GPU | 需要 | 未纳入 CI |
 | [eBPF 实例教程：跟踪 Intel NPU 内核驱动操作](xpu/npu-kernel-driver/README.zh.md) | 6.2 | 教程文档 | x86_64 | 可选 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_EVENTS=y, CONFIG_DRM_ACCEL=y, CONFIG_DRM_ACCEL_IVPU=y\|m, CONFIG_TRACEPOINTS=y | Intel NPU | 需要 | 未纳入 CI |

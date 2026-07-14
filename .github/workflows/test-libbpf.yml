@@ -22,7 +22,7 @@ jobs:
       run: |
         sudo apt-get install -y --no-install-recommends \
         libelf1 libelf-dev zlib1g-dev \
-        make git clang llvm pkg-config build-essential
+        make git clang llvm pkg-config build-essential dwarves linux-headers-generic
     - name: test 11 bootstrap
       run: |
         make -C src/11-bootstrap
@@ -39,6 +39,9 @@ jobs:
       run: |
         make -C src/14-tcpstates
         sudo timeout -s 2 3 src/14-tcpstates/tcpstates || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 15 javagc
+      run: |
+        make -C src/15-javagc
     - name: test 16 memleak
       run: |
         make -C src/16-memleak
@@ -51,6 +54,15 @@ jobs:
       run: |
         make -C src/23-http
         sudo timeout -s 2 3 src/23-http/sockfilter || if [ $? = 124 ]; then exit 0; else exit $?; fi
+    - name: test 24 hide
+      run: |
+        make -C src/24-hide
+    - name: test 26 sudo
+      run: |
+        make -C src/26-sudo
+    - name: test 27 replace
+      run: |
+        make -C src/27-replace
     - name: test 28 detach
       run: |
         make -C src/28-detach
@@ -76,10 +88,21 @@ jobs:
     - name: test 33 funclatency
       run: |
           make -C src/33-funclatency
+    - name: test 34 syscall
+      run: |
+          make -C src/34-syscall
     - name: test 35-user-ringbuf
       run: |
         make -C src/35-user-ringbuf
         sudo timeout -s 2 3 src/35-user-ringbuf/user_ringbuf || if [ $? = 124 ]; then exit 0; else exit $?; fi
+
+    - name: test 38 btf-uprobe
+      run: |
+          make -C src/38-btf-uprobe
+
+    - name: test 38 btf-uprobe examples
+      run: |
+          make -C src/38-btf-uprobe/examples
 
     - name: test 41 xdp
       run: |
@@ -93,6 +116,12 @@ jobs:
       run: |
           make -C src/43-kfuncs
 
+    - name: test 43 kfuncs module
+      run: |
+          KDIR=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | sort -V | tail -1)
+          test -n "$KDIR"
+          make -C src/43-kfuncs/module KDIR="$KDIR"
+
     - name: test 44
       run: |
           make -C src/44-scx-simple
@@ -103,6 +132,21 @@ jobs:
     - name: test 46 xdp-pktgen
       run: |
           make -C src/46-xdp-test
+
+    - name: test 47 cuda-events
+      run: |
+          make -C src/47-cuda-events cuda_events
+          if command -v nvcc >/dev/null; then
+            make -C src/47-cuda-events basic02 bench
+          fi
+
+    - name: test 48 energy
+      run: |
+          make -C src/48-energy
+
+    - name: test 49 HID
+      run: |
+          make -C src/49-hid
 
     - name: test features bpf_arena
       run: |
@@ -116,6 +160,20 @@ jobs:
       run: |
           make -C src/features/bpf_wq
 
+    - name: test features dynptr
+      run: |
+          make -C src/features/dynptr
+
+    - name: test features struct_ops
+      run: |
+          make -C src/features/struct_ops
+
+    - name: test features struct_ops module
+      run: |
+          KDIR=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | sort -V | tail -1)
+          test -n "$KDIR"
+          make -C src/features/struct_ops/module KDIR="$KDIR"
+
     - name: test 50 tcx
       run: |
           make -C src/50-tcx
@@ -123,3 +181,7 @@ jobs:
     - name: test features bpf_token
       run: |
           make -C src/features/bpf_token
+
+    - name: test cgroup
+      run: |
+          make -C src/cgroup
