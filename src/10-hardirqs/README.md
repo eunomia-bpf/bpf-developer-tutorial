@@ -35,6 +35,8 @@ By following the above approach, we can use hardirqs and softirqs in eBPF to cap
 
 The main purpose of the hardirqs program is to obtain the name, execution count, and execution time of interrupt handlers and display the distribution of execution time in the form of a histogram. Let's analyze this code step by step.
 
+The custom headers used below are part of the complete example rather than system headers. Build from the `src/10-hardirqs` directory, which contains [`hardirqs.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/10-hardirqs/hardirqs.h), [`bits.bpf.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/10-hardirqs/bits.bpf.h), and [`maps.bpf.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/10-hardirqs/maps.bpf.h) alongside the source file.
+
 ```c
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2020 Wenbo Zhang
