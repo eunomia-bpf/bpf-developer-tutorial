@@ -1,5 +1,5 @@
-#ifndef __XDP_TCPDUMP_H
-#define __XDP_TCPDUMP_H
+#ifndef XDP_TCPDUMP_H_
+#define XDP_TCPDUMP_H_
 
 #define MAX_TCP_HEADER_BYTES 60
 
@@ -8,4 +8,4 @@ struct tcp_event {
     unsigned char header[MAX_TCP_HEADER_BYTES];
 };
 
-#endif /* __XDP_TCPDUMP_H */
+#endif /* XDP_TCPDUMP_H_ */
