@@ -8,6 +8,8 @@ For the complete source code of the tutorial, please refer to the repo [https://
 
 ## Table of Contents
 
+- [Tutorial compatibility matrix](compatibility.md)
+
 ### Getting Started Examples
 
 This section contains simple eBPF program examples and introductions. It primarily utilizes the `eunomia-bpf` framework to simplify development and introduces the basic usage and development process of eBPF.

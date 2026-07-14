@@ -14,10 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Test documentation scripts
-        run: python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc
+        run: python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc scripts.test_generate_compatibility
       - name: Regenerate documentation indexes
-        run: python3 scripts/generate_toc.py
+        run: |
+          python3 scripts/generate_toc.py
+          python3 scripts/generate_compatibility.py
       - name: Verify generated documentation is current
-        run: git diff --exit-code -- README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md
+        run: git diff --exit-code -- README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md src/compatibility.md src/compatibility.zh.md
       - name: Check relative Markdown links
         run: python3 scripts/check_internal_links.py
