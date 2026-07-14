@@ -14,29 +14,51 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout tutorial revision
+        uses: actions/checkout@v7
+        with:
+          path: tutorial-source
+          persist-credentials: false
+
       - name: Checkout website repo
         uses: actions/checkout@v7
         with:
-          repository: ${{ github.repository_owner }}/eunomia.dev
+          repository: eunomia-bpf/eunomia.dev
           ref: main
-          path: ./.
+          path: website
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - name: Stage tutorial revision in website
+        run: |
+          rm -rf website/docs/tutorials
+          mkdir -p website/docs/tutorials
+          cp -a tutorial-source/src/* website/docs/tutorials/
+          cp tutorial-source/src/SUMMARY.md website/docs/tutorials/index.md
+          cp tutorial-source/src/SUMMARY.zh.md website/docs/tutorials/index.zh.md
+          rm website/docs/tutorials/SUMMARY.md website/docs/tutorials/SUMMARY.zh.md
+          mkdir -p website/docs/tutorials/imgs
+          cp -a tutorial-source/imgs/. website/docs/tutorials/imgs/
+
+      - uses: actions/setup-node@v6
         with:
-          python-version: 3.x
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/app/package-lock.json
 
-      - name: Install all
+      - name: Build production static export
+        working-directory: website/app
+        env:
+          NEXT_PUBLIC_SITE_URL: https://eunomia.dev
         run: |
-          make install
-
-      - name: Test page build
-        run: |
-          .venv/bin/mkdocs build -v
+          npm ci
+          npm run build
 
       - name: Trigger sync workflow
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'eunomia-bpf/bpf-developer-tutorial'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.PAT }}
-          repository: ${{ github.repository_owner }}/eunomia.dev
+          repository: eunomia-bpf/eunomia.dev
           event-type: trigger-tutorial-sync
+          client-payload: '{"source_repo":"eunomia-bpf/bpf-developer-tutorial","source_sha":"${{ github.sha }}"}'
