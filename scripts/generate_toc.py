@@ -3,7 +3,8 @@ import re
 
 # Define a function to walk through the directory and generate the TOC structure
 def generate_toc(base_dir, project_root, output_file_dir):
-    toc = "## Table of Contents\n\n"
+    compatibility = os.path.relpath(os.path.join(base_dir, "compatibility.md"), output_file_dir)
+    toc = f"## Table of Contents\n\n- [Tutorial compatibility matrix]({compatibility})\n\n"
     section_headers = {
         "Basic": "### Getting Started Examples\n\nThis section contains simple eBPF program examples and introductions. It primarily utilizes the `eunomia-bpf` framework to simplify development and introduces the basic usage and development process of eBPF.\n\n",
         "Advance": "### Advanced Documents and Examples\n\nWe start to build complete eBPF projects mainly based on `libbpf` and combine them with various application scenarios for practical use.\n\n",
@@ -135,7 +136,8 @@ def generate_toc(base_dir, project_root, output_file_dir):
 
 # Define a function to walk through the directory and generate the TOC structure in Chinese
 def generate_toc_cn(base_dir, project_root, output_file_dir):
-    toc = "## 目录\n\n"
+    compatibility = os.path.relpath(os.path.join(base_dir, "compatibility.zh.md"), output_file_dir)
+    toc = f"## 目录\n\n- [教程兼容性矩阵]({compatibility})\n\n"
     section_headers = {
         "Basic": "### 入门示例\n\n这一部分包含简单的 eBPF 程序示例和介绍。主要利用 `eunomia-bpf` 框架简化开发，介绍 eBPF 的基本用法和开发流程。\n\n",
         "Advance": "### 高级文档和示例\n\n我们开始构建完整的 eBPF 项目，主要基于 `libbpf`，并将其与各种应用场景结合起来，以便实际使用。\n\n",

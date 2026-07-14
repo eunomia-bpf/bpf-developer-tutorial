@@ -17,6 +17,8 @@ The tutorial focuses on eBPF examples in observability, networking, security, an
 
 ## Table of Contents
 
+- [Tutorial compatibility matrix](src/compatibility.md)
+
 ### Getting Started Examples
 
 This section contains simple eBPF program examples and introductions. It primarily utilizes the `eunomia-bpf` framework to simplify development and introduces the basic usage and development process of eBPF.

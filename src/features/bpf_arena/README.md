@@ -359,4 +359,4 @@ Our linked list example demonstrates the core arena concepts: defining an arena 
 - **Linux Kernel Source:** `kernel/bpf/arena.c` - Arena implementation
 - **LLVM Address Spaces:** Documentation on `__arena` compiler support
 
-This example is adapted from Meta's arena_list.c in the Linux kernel samples, with educational enhancements. Requires Linux kernel 6.10+ with `CONFIG_BPF_ARENA=y` enabled. Complete source code available in the tutorial repository.
+This example is adapted from Meta's arena_list.c in the Linux kernel samples, with educational enhancements. It requires Linux kernel 6.9+ with BPF JIT support (`CONFIG_BPF_JIT=y`). BPF arena is not controlled by a separate `CONFIG_BPF_ARENA` option. Complete source code is available in the tutorial repository.

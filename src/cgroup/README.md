@@ -602,4 +602,4 @@ This "policy guard" pattern can be extended to production use cases: container n
 - **eBPF docs:** [CGROUP_SYSCTL](https://docs.ebpf.io/linux/program-type/BPF_PROG_TYPE_CGROUP_SYSCTL/) - sysctl access control explained
 - **Tutorial repository:** <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/cgroup>
 
-Full source code is available in the tutorial repository. Requires Linux kernel 4.10+ (cgroup v2) and libbpf.
+Full source code is available in the tutorial repository. This implementation requires Linux kernel 5.8+ for BPF ring buffer event reporting, cgroup v2, and libbpf.

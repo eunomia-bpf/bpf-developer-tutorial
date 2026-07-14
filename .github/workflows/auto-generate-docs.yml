@@ -8,6 +8,7 @@ on:
       - 'src/**/README.zh.md'
       - 'src/**/.config'
       - 'scripts/generate_toc.py'
+      - 'scripts/generate_compatibility.py'
       - 'scripts/*.template'
   workflow_dispatch:
 
@@ -33,6 +34,7 @@ jobs:
       - name: Generate documentation
         run: |
           python3 scripts/generate_toc.py
+          python3 scripts/generate_compatibility.py
 
       - name: Check for changes
         id: check_changes
@@ -44,6 +46,6 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md
+          git add README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md src/compatibility.md src/compatibility.zh.md
           git commit -m "docs: auto-generate documentation"
           git push

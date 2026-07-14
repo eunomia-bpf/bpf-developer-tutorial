@@ -270,7 +270,7 @@ static void print_stats(struct energy_monitor_bpf *skel)
 
 ### 先决条件
 
-在构建之前，需要确保系统环境满足几个基本要求。首先需要 Linux 内核 5.4 或更新版本，且支持 BTF（BPF 类型格式）功能。其次要安装 libbpf 开发文件，这是 eBPF 程序开发的基础库。编译 eBPF 程序需要 clang 和 llvm 工具链。最后，还需要安装基本的构建工具，包括 make 和 gcc。
+在构建之前，需要确保系统环境满足几个基本要求。首先需要 Linux 内核 5.8 或更新版本（eBPF 监控器使用 BPF ring buffer），且支持 BTF（BPF 类型格式）功能。其次要安装 libbpf 开发文件，这是 eBPF 程序开发的基础库。编译 eBPF 程序需要 clang 和 llvm 工具链。最后，还需要安装基本的构建工具，包括 make 和 gcc。
 
 ### 编译
 
