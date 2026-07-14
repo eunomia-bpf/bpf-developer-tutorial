@@ -4,7 +4,7 @@
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee 镜像](https://gitee.com/yunwei37/bpf-developer-tutorial)
-[English Version](README_en.md)
+[English Version](README.md)
 
 #### [**Check out the English version here**](README.md)
 
@@ -18,7 +18,7 @@
 
 ## 为什么要写这个教程？
 
-在学习 eBPF 的过程中，我们受到了 [bcc python developer tutorial](src/bcc-documents/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从当下的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目，采用类似 bcc python developer tutorial 的组织方式，但使用 CO-RE 的 libbpf 进行开发。
+在学习 eBPF 的过程中，我们受到了 [bcc Python developer tutorial](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从当下的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目，采用类似 bcc Python developer tutorial 的组织方式，但使用 CO-RE 的 libbpf 进行开发。
 
 本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写，让开发者专注于内核态的 eBPF 代码的开发。
 
@@ -145,8 +145,6 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 5. 尝试让 ChatGPT 自动生成 eBPF 程序和对应的教程文档！例如
 
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
-
-完整的对话记录可以在这里找到: [ChatGPT.md](src/ChatGPT.md)
 
 我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：<https://github.com/eunomia-bpf/GPTtrace>
 

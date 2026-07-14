@@ -25,7 +25,8 @@ def generate_toc(base_dir, project_root, output_file_dir):
 
     # To ensure numeric sorting of directories
     def sort_key(directory_name):
-        return list(map(int, re.findall(r'\d+', directory_name)))
+        numbers = tuple(map(int, re.findall(r'\d+', directory_name)))
+        return (0, numbers, directory_name) if numbers else (1, (), directory_name)
 
     sections = {}  # {section_level: {subsection_type: [lessons]}}
 
@@ -48,7 +49,7 @@ def generate_toc(base_dir, project_root, output_file_dir):
                         all_dirs.append(os.path.join(item, subitem))
 
     # Sort directories properly by numeric order (non-numeric dirs go to end)
-    all_dirs = sorted(all_dirs, key=lambda d: sort_key(d) if re.search(r'\d+', d) else [999999])
+    all_dirs = sorted(all_dirs, key=sort_key)
 
     # Loop over the sorted directories
     for directory in all_dirs:
@@ -142,21 +143,22 @@ def generate_toc_cn(base_dir, project_root, output_file_dir):
     }
 
     subsection_titles = {
-        "Android": "Android:\n\n",
-        "GPU": "GPU:\n\n",
-        "Scheduler": "调度器:\n\n",
-        "Networking": "网络:\n\n",
-        "tracing": "Tracing:\n\n",
-        "Security": "安全:\n\n",
-        "Features": "特性:\n\n",
-        "Other": "特性:\n\n"
+        "Android": "\n\nAndroid:\n\n",
+        "GPU": "\n\nGPU:\n\n",
+        "Scheduler": "\n\n调度器:\n\n",
+        "Networking": "\n\n网络:\n\n",
+        "Tracing": "\n\n追踪:\n\n",
+        "Security": "\n\n安全:\n\n",
+        "Features": "\n\n特性:\n\n",
+        "Other": "\n\n其他:\n\n"
     }
 
-    subsection_order = ['GPU', 'Scheduler', 'Networking', 'tracing', 'Security', 'Features', 'Other', 'Android']
+    subsection_order = ['GPU', 'Scheduler', 'Networking', 'Tracing', 'Security', 'Features', 'Other', 'Android']
 
     # To ensure numeric sorting of directories
     def sort_key(directory_name):
-        return list(map(int, re.findall(r'\d+', directory_name)))
+        numbers = tuple(map(int, re.findall(r'\d+', directory_name)))
+        return (0, numbers, directory_name) if numbers else (1, (), directory_name)
 
     sections = {}  # {section_level: {subsection_type: [lessons]}}
 
@@ -179,7 +181,7 @@ def generate_toc_cn(base_dir, project_root, output_file_dir):
                         all_dirs.append(os.path.join(item, subitem))
 
     # Sort directories properly by numeric order (non-numeric dirs go to end)
-    all_dirs = sorted(all_dirs, key=lambda d: sort_key(d) if re.search(r'\d+', d) else [999999])
+    all_dirs = sorted(all_dirs, key=sort_key)
 
     # Loop over the sorted directories
     for directory in all_dirs:
