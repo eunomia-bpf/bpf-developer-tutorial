@@ -1,0 +1,35 @@
+name: Check documentation
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "**/*.md"
+      - "src/**/.config"
+      - "scripts/*.py"
+      - "scripts/*.template"
+      - ".github/workflows/check-docs.yml"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "src/**/.config"
+      - "scripts/*.py"
+      - "scripts/*.template"
+      - ".github/workflows/check-docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test internal link checker
+        run: python3 -m unittest scripts.test_check_internal_links
+      - name: Regenerate documentation indexes
+        run: python3 scripts/generate_toc.py
+      - name: Verify generated documentation is current
+        run: git diff --exit-code -- README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md
+      - name: Check relative Markdown links
+        run: python3 scripts/check_internal_links.py
