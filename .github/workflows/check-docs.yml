@@ -1,0 +1,23 @@
+name: Check documentation
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test documentation scripts
+        run: python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc
+      - name: Regenerate documentation indexes
+        run: python3 scripts/generate_toc.py
+      - name: Verify generated documentation is current
+        run: git diff --exit-code -- README.md README.zh.md src/SUMMARY.md src/SUMMARY.zh.md
+      - name: Check relative Markdown links
+        run: python3 scripts/check_internal_links.py

@@ -42,16 +42,22 @@
 
 这一部分涵盖了与 eBPF 相关的高级主题，包括在 Android 上使用 eBPF 程序、利用 eBPF 程序进行的潜在攻击和防御以及复杂的追踪。结合用户模式和内核模式的 eBPF 可以带来强大的能力（也可能带来安全风险）。
 
+
+
 GPU:
 
 - [lesson 47-cuda-events](47-cuda-events/README.zh.md) eBPF 教程：追踪 CUDA GPU 操作
-- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
 - [xpu flamegraph](xpu/flamegraph/README.zh.md) eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器
 - [lesson xpu/gpu-kernel-driver](xpu/gpu-kernel-driver/README.zh.md) eBPF 实例教程：使用内核跟踪点监控 GPU 驱动活动
+- [lesson xpu/npu-kernel-driver](xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
+
+
 调度器:
 
 - [lesson 44-scx-simple](44-scx-simple/README.zh.md) eBPF 教程：BPF 调度器入门
 - [lesson 45-scx-nest](45-scx-nest/README.zh.md) eBPF 示例教程：实现 `scx_nest` 调度器
+
+
 网络:
 
 - [lesson 23-http](23-http/README.zh.md) 通过 eBPF socket filter 或 syscall trace 追踪 HTTP 请求等七层协议 - eBPF 实践教程
@@ -60,6 +66,19 @@ GPU:
 - [lesson 42-xdp-loadbalancer](42-xdp-loadbalancer/README.zh.md) eBPF 开发者教程： 简单的 XDP 负载均衡器
 - [lesson 46-xdp-test](46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
 - [lesson 50-tcx](50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
+
+
+追踪:
+
+- [lesson 30-sslsniff](30-sslsniff/README.zh.md) eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据
+- [lesson 31-goroutine](31-goroutine/README.zh.md) eBPF 实践教程：使用 eBPF 跟踪 Go 协程状态
+- [lesson 33-funclatency](33-funclatency/README.zh.md) 使用 eBPF 测量函数延迟
+- [lesson 37-uprobe-rust](37-uprobe-rust/README.zh.md) eBPF 实践：使用 Uprobe 追踪用户态 Rust 应用
+- [lesson 39-nginx](39-nginx/README.zh.md) 使用 eBPF 跟踪 Nginx 请求
+- [lesson 40-mysql](40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
+- [lesson 48-energy](48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
+
+
 安全:
 
 - [lesson 24-hide](24-hide/README.zh.md) eBPF 开发实践：使用 eBPF 隐藏进程或文件信息
@@ -68,22 +87,28 @@ GPU:
 - [lesson 27-replace](27-replace/README.zh.md) 替换任意程序读取或者写入的文本
 - [lesson 28-detach](28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
+
+
 特性:
 
 - [lesson 35-user-ringbuf](35-user-ringbuf/README.zh.md) eBPF开发实践：使用 user ring buffer 向内核异步发送信息
 - [lesson 36-userspace-ebpf](36-userspace-ebpf/README.zh.md) 用户空间 eBPF 运行时：深度解析与应用实践
 - [lesson 38-btf-uprobe](38-btf-uprobe/README.zh.md) 借助 eBPF 和 BTF，让用户态也能一次编译、到处运行
 - [lesson 43-kfuncs](43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
+- [features bpf_arena](features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
 - [features bpf_iters](features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features bpf_token](features/bpf_token/README.zh.md) eBPF 入门实践教程：BPF Token，安全的委托式权限与程序加载
-- [features dynptr](features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
 - [features bpf_wq](features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
-- [features bpf_arena](features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
+- [features dynptr](features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
 - [features struct_ops](features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
-特性:
+
+
+其他:
 
 - [lesson 49-hid](49-hid/README.zh.md) eBPF 教程：无需内核补丁修复故障的 HID 设备
 - [cgroup](cgroup/README.zh.md) eBPF 实例教程：基于 cgroup 的策略控制
+
+
 Android:
 
 - [lesson 22-android](22-android/README.zh.md) 在 Android 上使用 eBPF 程序

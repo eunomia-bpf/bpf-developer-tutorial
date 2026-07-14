@@ -19,7 +19,7 @@ The tutorial focuses on eBPF examples in observability, networking, security, an
 
 ## Why write this tutorial?
 
-In the process of learning eBPF, we have been inspired and helped by the [bcc python developer tutorial](src/bcc-documents/tutorial_bcc_python_developer.md). However, from the current perspective, using `libbpf` to develop eBPF applications is a relatively better choice.
+In the process of learning eBPF, we have been inspired and helped by the [bcc Python developer tutorial](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md). However, from the current perspective, using `libbpf` to develop eBPF applications is a relatively better choice.
 
 This project is mainly based on [libbpf](https://github.com/libbpf/libbpf) frameworks.
 

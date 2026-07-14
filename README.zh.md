@@ -4,7 +4,7 @@
 
 [GitHub](https://github.com/eunomia-bpf/bpf-developer-tutorial)
 [Gitee 镜像](https://gitee.com/yunwei37/bpf-developer-tutorial)
-[English Version](README_en.md)
+[English Version](README.md)
 
 #### [**Check out the English version here**](README.md)
 
@@ -50,16 +50,22 @@
 
 这一部分涵盖了与 eBPF 相关的高级主题，包括在 Android 上使用 eBPF 程序、利用 eBPF 程序进行的潜在攻击和防御以及复杂的追踪。结合用户模式和内核模式的 eBPF 可以带来强大的能力（也可能带来安全风险）。
 
+
+
 GPU:
 
 - [lesson 47-cuda-events](src/47-cuda-events/README.zh.md) eBPF 教程：追踪 CUDA GPU 操作
-- [lesson xpu/npu-kernel-driver](src/xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
 - [xpu flamegraph](src/xpu/flamegraph/README.zh.md) eBPF 示例：使用 CUPTI 构建 GPU 火焰图分析器
 - [lesson xpu/gpu-kernel-driver](src/xpu/gpu-kernel-driver/README.zh.md) eBPF 实例教程：使用内核跟踪点监控 GPU 驱动活动
+- [lesson xpu/npu-kernel-driver](src/xpu/npu-kernel-driver/README.zh.md) eBPF 实例教程：跟踪 Intel NPU 内核驱动操作
+
+
 调度器:
 
 - [lesson 44-scx-simple](src/44-scx-simple/README.zh.md) eBPF 教程：BPF 调度器入门
 - [lesson 45-scx-nest](src/45-scx-nest/README.zh.md) eBPF 示例教程：实现 `scx_nest` 调度器
+
+
 网络:
 
 - [lesson 23-http](src/23-http/README.zh.md) 通过 eBPF socket filter 或 syscall trace 追踪 HTTP 请求等七层协议 - eBPF 实践教程
@@ -68,6 +74,19 @@ GPU:
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.zh.md) eBPF 开发者教程： 简单的 XDP 负载均衡器
 - [lesson 46-xdp-test](src/46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
 - [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
+
+
+追踪:
+
+- [lesson 30-sslsniff](src/30-sslsniff/README.zh.md) eBPF 实践教程：使用 uprobe 捕获多种库的 SSL/TLS 明文数据
+- [lesson 31-goroutine](src/31-goroutine/README.zh.md) eBPF 实践教程：使用 eBPF 跟踪 Go 协程状态
+- [lesson 33-funclatency](src/33-funclatency/README.zh.md) 使用 eBPF 测量函数延迟
+- [lesson 37-uprobe-rust](src/37-uprobe-rust/README.zh.md) eBPF 实践：使用 Uprobe 追踪用户态 Rust 应用
+- [lesson 39-nginx](src/39-nginx/README.zh.md) 使用 eBPF 跟踪 Nginx 请求
+- [lesson 40-mysql](src/40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
+- [lesson 48-energy](src/48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
+
+
 安全:
 
 - [lesson 24-hide](src/24-hide/README.zh.md) eBPF 开发实践：使用 eBPF 隐藏进程或文件信息
@@ -76,22 +95,28 @@ GPU:
 - [lesson 27-replace](src/27-replace/README.zh.md) 替换任意程序读取或者写入的文本
 - [lesson 28-detach](src/28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](src/34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
+
+
 特性:
 
 - [lesson 35-user-ringbuf](src/35-user-ringbuf/README.zh.md) eBPF开发实践：使用 user ring buffer 向内核异步发送信息
 - [lesson 36-userspace-ebpf](src/36-userspace-ebpf/README.zh.md) 用户空间 eBPF 运行时：深度解析与应用实践
 - [lesson 38-btf-uprobe](src/38-btf-uprobe/README.zh.md) 借助 eBPF 和 BTF，让用户态也能一次编译、到处运行
 - [lesson 43-kfuncs](src/43-kfuncs/README.zh.md) 超越 eBPF 的极限：在内核模块中定义自定义 kfunc
+- [features bpf_arena](src/features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
 - [features bpf_iters](src/features/bpf_iters/README.zh.md) eBPF 教程：BPF 迭代器用于内核数据导出
 - [features bpf_token](src/features/bpf_token/README.zh.md) eBPF 入门实践教程：BPF Token，安全的委托式权限与程序加载
-- [features dynptr](src/features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
 - [features bpf_wq](src/features/bpf_wq/README.zh.md) eBPF 教程：BPF 工作队列用于异步可睡眠任务
-- [features bpf_arena](src/features/bpf_arena/README.zh.md) eBPF 实例教程：BPF Arena 零拷贝共享内存
+- [features dynptr](src/features/dynptr/README.zh.md) BPF Dynamic Pointers for Variable-Length Data
 - [features struct_ops](src/features/struct_ops/README.zh.md) eBPF 教程：使用 BPF struct_ops 扩展内核子系统
-特性:
+
+
+其他:
 
 - [lesson 49-hid](src/49-hid/README.zh.md) eBPF 教程：无需内核补丁修复故障的 HID 设备
 - [cgroup](src/cgroup/README.zh.md) eBPF 实例教程：基于 cgroup 的策略控制
+
+
 Android:
 
 - [lesson 22-android](src/22-android/README.zh.md) 在 Android 上使用 eBPF 程序
@@ -100,7 +125,7 @@ Android:
 
 ## 为什么要写这个教程？
 
-在学习 eBPF 的过程中，我们受到了 [bcc python developer tutorial](src/bcc-documents/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从当下的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目，采用类似 bcc python developer tutorial 的组织方式，但使用 CO-RE 的 libbpf 进行开发。
+在学习 eBPF 的过程中，我们受到了 [bcc Python developer tutorial](https://github.com/iovisor/bcc/blob/master/docs/tutorial_bcc_python_developer.md) 的许多启发和帮助，但从当下的角度出发，使用 libbpf 开发 eBPF 的应用是目前相对更好的选择。但目前似乎很少有基于 libbpf 和 BPF CO-RE 出发的、通过案例和工具介绍 eBPF 开发的教程，因此我们发起了这个项目，采用类似 bcc Python developer tutorial 的组织方式，但使用 CO-RE 的 libbpf 进行开发。
 
 本项目主要基于 [libbpf-boostrap](https://github.com/libbpf/libbpf-bootstrap) 和 [eunomia-bpf](https://github.com/eunomia-bpf/eunomia-bpf) 两个框架完成，并使用 eunomia-bpf 帮助简化一部分 libbpf eBPF 用户态代码的编写，让开发者专注于内核态的 eBPF 代码的开发。
 
@@ -227,8 +252,6 @@ eunomia-bpf 由一个编译工具链和一个运行时库组成, 对比传统的
 5. 尝试让 ChatGPT 自动生成 eBPF 程序和对应的教程文档！例如
 
 ![ebpf-chatgpt-signal](imgs/ebpf-chatgpt-signal.png)
-
-完整的对话记录可以在这里找到: [ChatGPT.md](src/ChatGPT.md)
 
 我们也构建了一个命令行工具的 demo ，通过本教程的训练， 让它通过自然语言描述即可自动编写 eBPF 程序，追踪 Linux 系统：<https://github.com/eunomia-bpf/GPTtrace>
 
