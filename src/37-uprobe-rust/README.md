@@ -103,17 +103,20 @@ First, we need to build in debug mode because the `hello` function gets inlined 
 ```console
 $ cd args
 $ cargo build
-$ nm target/debug/helloworld | grep hello
-0000000000016250 t _ZN10helloworld4main17ha3594bca2af541f6E
-0000000000016540 t _ZN10helloworld5hello17h5f3a03dda56661e1E
+$ nm -C target/debug/helloworld | grep 'helloworld::hello'
+0000000000016f90 t helloworld::hello
 ```
 
 Note that in release mode (`cargo build --release`), only the `main` function symbol appears because `hello` gets inlined during optimization.
 
-Now we can trace the `hello` function using its symbol. Since Rust mangles symbol names and includes a hash that changes with each compilation, we use a wildcard pattern to match any version of the `hello` function:
+Rust 1.97 uses v0 symbol mangling by default. bpftrace needs the raw symbol, so resolve it from the address of the stable demangled name:
 
 ```console
-$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello called\n"); }'
+$ hello_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 == "helloworld::hello" { print $1; exit }')
+$ hello_symbol=$(nm target/debug/helloworld | awk -v address="$hello_address" '$1 == address && $2 ~ /^[tT]$/ { print $3; exit }')
+$ echo "$hello_symbol"
+_RNvCsiXtUZV4ocyZ_10helloworld5hello
+$ sudo bpftrace -e "uprobe:target/debug/helloworld:${hello_symbol} { printf(\"Function hello called\n\"); }"
 Attaching 1 probe...
 Function hello called
 Function hello called
@@ -135,10 +138,10 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-We can also get the return value using Uretprobe. Again, we use a wildcard to match the symbol:
+We can also get the return value using Uretprobe and the same resolved symbol:
 
 ```console
-$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello returned: %d\n", retval); }'
+$ sudo bpftrace -e "uretprobe:target/debug/helloworld:${hello_symbol} { printf(\"Function hello returned: %d\n\", retval); }"
 Attaching 1 probe...
 Function hello returned: 6
 Function hello returned: 7
@@ -146,7 +149,7 @@ Function hello returned: 8
 Function hello returned: 9
 ```
 
-Note: The wildcard pattern `_ZN10helloworld5hello*` matches the `hello` function symbol regardless of the hash suffix that Rust adds during compilation. You can use `nm target/debug/helloworld | grep hello` to see the exact symbol names if needed.
+Resolving the raw symbol through its demangled name works with both legacy and v0 Rust mangling.
 
 ## References
 
