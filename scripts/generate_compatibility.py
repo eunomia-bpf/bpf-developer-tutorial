@@ -71,84 +71,102 @@ def _csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",")]
 
 
-def validate_metadata(path: Path, metadata: dict[str, str]) -> None:
-    missing = [field for field in REQUIRED_FIELDS if not metadata.get(field)]
-    if missing:
-        raise ValueError(f"{path}: missing required fields: {', '.join(missing)}")
-
-    architectures = _csv(metadata["architectures"])
+def _validate_architectures(path: Path, value: str) -> list[str]:
+    architectures = _csv(value)
     if (
         not architectures
         or len(architectures) != len(set(architectures))
         or not set(architectures) <= ARCHITECTURES
         or ("all" in architectures and len(architectures) != 1)
     ):
-        raise ValueError(f"{path}: invalid architectures={metadata['architectures']}")
+        raise ValueError(f"{path}: invalid architectures={value}")
+    return architectures
 
-    kernel_min = metadata["kernel_min"]
-    if kernel_min not in {"not-applicable", "unknown"} and not KERNEL_VERSION.fullmatch(kernel_min):
-        per_arch = _csv(kernel_min)
-        per_arch_names = [item.split(":", 1)[0] for item in per_arch]
-        if (
-            not per_arch
-            or not all(ARCH_KERNEL_VERSION.fullmatch(item) for item in per_arch)
-            or len(per_arch_names) != len(set(per_arch_names))
-            or set(per_arch_names) != set(architectures)
-        ):
-            raise ValueError(f"{path}: invalid kernel_min={kernel_min}")
-    if metadata["kernel_min_basis"] not in KERNEL_BASES:
-        raise ValueError(f"{path}: invalid kernel_min_basis={metadata['kernel_min_basis']}")
-    if (kernel_min == "not-applicable") != (
-        metadata["kernel_min_basis"] == "not-applicable"
-    ):
+
+def _validate_per_arch_kernel(path: Path, value: str, architectures: list[str]) -> None:
+    per_arch = _csv(value)
+    per_arch_names = [item.split(":", 1)[0] for item in per_arch]
+    valid = (
+        per_arch
+        and all(ARCH_KERNEL_VERSION.fullmatch(item) for item in per_arch)
+        and len(per_arch_names) == len(set(per_arch_names))
+        and set(per_arch_names) == set(architectures)
+    )
+    if not valid:
+        raise ValueError(f"{path}: invalid kernel_min={value}")
+
+
+def _validate_kernel(path: Path, kernel_min: str, basis: str, architectures: list[str]) -> None:
+    special_values = {"not-applicable", "unknown"}
+    if kernel_min not in special_values and not KERNEL_VERSION.fullmatch(kernel_min):
+        _validate_per_arch_kernel(path, kernel_min, architectures)
+    if basis not in KERNEL_BASES:
+        raise ValueError(f"{path}: invalid kernel_min_basis={basis}")
+    if (kernel_min == "not-applicable") != (basis == "not-applicable"):
         raise ValueError(f"{path}: kernel_min and kernel_min_basis disagree")
-    if (kernel_min == "unknown") != (metadata["kernel_min_basis"] == "unverified"):
+    if (kernel_min == "unknown") != (basis == "unverified"):
         raise ValueError(f"{path}: unknown kernel_min must use an unverified basis")
-    if (
-        metadata["kernel_min_basis"] == "repository-baseline"
-        and kernel_min != REPOSITORY_BASELINE
-    ):
+    if basis == "repository-baseline" and kernel_min != REPOSITORY_BASELINE:
         raise ValueError(
             f"{path}: repository-baseline must be {REPOSITORY_BASELINE}, got {kernel_min}"
         )
 
-    if metadata["btf"] not in BTF_VALUES:
-        raise ValueError(f"{path}: invalid btf={metadata['btf']}")
-    if metadata["root"] not in ROOT_VALUES:
-        raise ValueError(f"{path}: invalid root={metadata['root']}")
-    if metadata["test_status"] not in TEST_STATUSES:
-        raise ValueError(f"{path}: invalid test_status={metadata['test_status']}")
-    if metadata["hardware"] not in HARDWARE_VALUES:
-        raise ValueError(f"{path}: invalid hardware={metadata['hardware']}")
 
-    configs = _csv(metadata["kernel_config"])
-    if metadata["kernel_config"] != "none" and (
+def _validate_choice(path: Path, field: str, value: str, allowed: set[str]) -> None:
+    if value not in allowed:
+        raise ValueError(f"{path}: invalid {field}={value}")
+
+
+def _validate_kernel_config(path: Path, metadata: dict[str, str]) -> None:
+    value = metadata["kernel_config"]
+    configs = _csv(value)
+    if value != "none" and (
         not configs
         or len(configs) != len(set(configs))
         or not all(KERNEL_CONFIG.fullmatch(item) for item in configs)
     ):
-        raise ValueError(f"{path}: invalid kernel_config={metadata['kernel_config']}")
+        raise ValueError(f"{path}: invalid kernel_config={value}")
     if metadata["btf"] == "required" and "CONFIG_DEBUG_INFO_BTF=y" not in configs:
         raise ValueError(f"{path}: btf=required needs CONFIG_DEBUG_INFO_BTF=y")
-    if kernel_min != "not-applicable" and not {
+    if metadata["kernel_min"] != "not-applicable" and not {
         "CONFIG_BPF=y",
         "CONFIG_BPF_SYSCALL=y",
     } <= set(configs):
         raise ValueError(f"{path}: runnable tutorials need CONFIG_BPF=y and CONFIG_BPF_SYSCALL=y")
-    if (kernel_min == "not-applicable") != (metadata["test_status"] == "docs-only"):
-        raise ValueError(f"{path}: docs-only status and not-applicable kernel must agree")
 
-    if kernel_min == "not-applicable" and (
-        metadata["kernel_min_basis"] != "not-applicable"
-        or
-        metadata["architectures"] != "all"
-        or metadata["btf"] != "not-required"
-        or metadata["kernel_config"] != "none"
-        or metadata["hardware"] != "none"
-        or metadata["root"] != "not-required"
-        or metadata["test_status"] != "docs-only"
-    ):
+
+def _validate_docs_only(path: Path, metadata: dict[str, str]) -> None:
+    is_not_applicable = metadata["kernel_min"] == "not-applicable"
+    if is_not_applicable != (metadata["test_status"] == "docs-only"):
+        raise ValueError(f"{path}: docs-only status and not-applicable kernel must agree")
+    defaults = {
+        "kernel_min_basis": "not-applicable",
+        "architectures": "all",
+        "btf": "not-required",
+        "kernel_config": "none",
+        "hardware": "none",
+        "root": "not-required",
+        "test_status": "docs-only",
+    }
+    if is_not_applicable and any(metadata[field] != value for field, value in defaults.items()):
         raise ValueError(f"{path}: not-applicable tutorials must use docs-only defaults")
+
+
+def validate_metadata(path: Path, metadata: dict[str, str]) -> None:
+    missing = [field for field in REQUIRED_FIELDS if not metadata.get(field)]
+    if missing:
+        raise ValueError(f"{path}: missing required fields: {', '.join(missing)}")
+
+    architectures = _validate_architectures(path, metadata["architectures"])
+    _validate_kernel(
+        path, metadata["kernel_min"], metadata["kernel_min_basis"], architectures
+    )
+    _validate_choice(path, "btf", metadata["btf"], BTF_VALUES)
+    _validate_choice(path, "root", metadata["root"], ROOT_VALUES)
+    _validate_choice(path, "test_status", metadata["test_status"], TEST_STATUSES)
+    _validate_choice(path, "hardware", metadata["hardware"], HARDWARE_VALUES)
+    _validate_kernel_config(path, metadata)
+    _validate_docs_only(path, metadata)
 
 
 def _title(path: Path) -> str:
