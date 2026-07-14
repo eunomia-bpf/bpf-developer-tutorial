@@ -43,27 +43,23 @@ Build and try to get the symbol:
 ```console
 $ cd helloworld
 $ cargo build
-$ nm helloworld/target/release/helloworld | grep hello
-0000000000008940 t _ZN10helloworld4main17h2dce92cb81426b91E
+$ nm -C target/debug/helloworld | grep 'helloworld::main'
+0000000000013ec0 t helloworld::main
 ```
 
-We find that the corresponding symbol has been converted to `_ZN10helloworld4main17h2dce92cb81426b91E`. This is because rustc uses [Symbol name mangling](https://en.wikipedia.org/wiki/Name_mangling) to encode a unique name for the symbols used in the code generation process. The encoded name will be used by the linker to associate the name with the content it points to. The -C symbol-mangling-version option can be used to control the handling of symbol names.
-
-We can use the [`rustfilt`](https://github.com/luser/rustfilt) tool to parse and obtain the corresponding symbol. This tool can be installed with `cargo install rustfilt`:
+Rustc uses [symbol name mangling](https://en.wikipedia.org/wiki/Name_mangling) to encode unique linker names. Rust 1.97 uses v0 mangling by default, while `nm -C` prints the stable demangled name. Resolve the raw symbol through its address before passing it to bpftrace:
 
 ```console
-$ cargo install rustfilt
-$ nm helloworld/target/release/helloworld > name.txt
-$ rustfilt _ZN10helloworld4main17h2dce92cb81426b91E
-helloworld::main
-$ rustfilt -i name.txt | grep hello
-0000000000008b60 t helloworld::main
+$ main_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 ~ /^helloworld::main(::h[[:xdigit:]]+)?$/ && !matched { found = $1; matched = 1 } END { if (matched) print found }')
+$ main_symbol=$(nm target/debug/helloworld | awk -v address="$main_address" '$1 == address && $2 ~ /^[tT]$/ && !matched { found = $3; matched = 1 } END { if (matched) print found }')
+$ echo "$main_symbol"
+_RNvCsiXtUZV4ocyZ_10helloworld4main
 ```
 
-Next we can try to use bpftrace to trace the corresponding function:
+The `-C symbol-mangling-version` rustc option can select a mangling scheme, but resolving the current binary avoids depending on a particular scheme. We can now trace `main`:
 
 ```console
-$ sudo bpftrace -e 'uprobe:helloworld/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
+$ sudo bpftrace -e "uprobe:target/debug/helloworld:${main_symbol} { printf(\"Function hello-world called\n\"); }"
 Attaching 1 probe...
 Function hello-world called
 ```
@@ -112,8 +108,8 @@ Note that in release mode (`cargo build --release`), only the `main` function sy
 Rust 1.97 uses v0 symbol mangling by default. bpftrace needs the raw symbol, so resolve it from the address of the stable demangled name:
 
 ```console
-$ hello_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 == "helloworld::hello" { print $1; exit }')
-$ hello_symbol=$(nm target/debug/helloworld | awk -v address="$hello_address" '$1 == address && $2 ~ /^[tT]$/ { print $3; exit }')
+$ hello_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 ~ /^helloworld::hello(::h[[:xdigit:]]+)?$/ && !matched { found = $1; matched = 1 } END { if (matched) print found }')
+$ hello_symbol=$(nm target/debug/helloworld | awk -v address="$hello_address" '$1 == address && $2 ~ /^[tT]$/ && !matched { found = $3; matched = 1 } END { if (matched) print found }')
 $ echo "$hello_symbol"
 _RNvCsiXtUZV4ocyZ_10helloworld5hello
 $ sudo bpftrace -e "uprobe:target/debug/helloworld:${hello_symbol} { printf(\"Function hello called\n\"); }"
