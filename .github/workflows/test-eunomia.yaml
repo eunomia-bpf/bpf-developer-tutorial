@@ -18,6 +18,10 @@ jobs:
     - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
+    - uses: actions/setup-go@v6
+      with:
+        go-version: '1.17.13'
+        cache: false
     - name: install deps
       run: sudo apt install clang llvm-14-dev llvm
     - name: install ecc and ecli
@@ -85,5 +89,7 @@ jobs:
         sudo timeout -s 2 3 ./ecli run src/25-signal/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 31 goroutine
       run: |
-          ./ecc src/31-goroutine/goroutine.bpf.c src/31-goroutine/goroutine.h
-          # todo
+        make -C src/31-goroutine/go-server-http
+        go tool nm src/31-goroutine/go-server-http/main | \
+          awk '$3 == "runtime.casgstatus" { found = 1 } END { exit !found }'
+        ./ecc src/31-goroutine/goroutine.bpf.c src/31-goroutine/goroutine.h

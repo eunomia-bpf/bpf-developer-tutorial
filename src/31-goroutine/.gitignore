@@ -6,3 +6,4 @@ package.json
 package.yaml
 ecli
 goroutine
+/go-server-http/main
