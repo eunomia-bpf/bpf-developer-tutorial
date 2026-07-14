@@ -315,7 +315,7 @@ static void print_stats(struct energy_monitor_bpf *skel)
 ### Prerequisites
 
 Before building, ensure you have:
-- Linux kernel 5.4 or newer with BTF support
+- Linux kernel 5.8 or newer with BTF support (the eBPF monitor uses a BPF ring buffer)
 - libbpf development files
 - clang and llvm for eBPF compilation
 - Basic build tools (make, gcc)
