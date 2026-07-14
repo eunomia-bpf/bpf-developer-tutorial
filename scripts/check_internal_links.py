@@ -68,28 +68,21 @@ def strip_code_spans(line: str) -> str:
     return "".join(result)
 
 
-def parse_destination(text: str, start: int = 0) -> str:
-    """Parse one CommonMark-style link destination from text."""
-    position = start
-    while position < len(text) and text[position] in " \t":
-        position += 1
-    if position >= len(text):
-        return ""
+def parse_angle_destination(text: str, position: int) -> str:
+    destination: list[str] = []
+    while position < len(text):
+        if text[position] == "\\" and position + 1 < len(text):
+            destination.extend(text[position : position + 2])
+            position += 2
+        elif text[position] == ">":
+            return "".join(destination)
+        else:
+            destination.append(text[position])
+            position += 1
+    return ""
 
-    if text[position] == "<":
-        position += 1
-        destination: list[str] = []
-        while position < len(text):
-            if text[position] == "\\" and position + 1 < len(text):
-                destination.extend(text[position : position + 2])
-                position += 2
-            elif text[position] == ">":
-                return "".join(destination)
-            else:
-                destination.append(text[position])
-                position += 1
-        return ""
 
+def parse_bare_destination(text: str, position: int) -> str:
     destination = []
     parentheses = 0
     while position < len(text):
@@ -109,6 +102,18 @@ def parse_destination(text: str, start: int = 0) -> str:
         destination.append(character)
         position += 1
     return "".join(destination) if parentheses == 0 else ""
+
+
+def parse_destination(text: str, start: int = 0) -> str:
+    """Parse one CommonMark-style link destination from text."""
+    position = start
+    while position < len(text) and text[position] in " \t":
+        position += 1
+    if position >= len(text):
+        return ""
+    if text[position] == "<":
+        return parse_angle_destination(text, position + 1)
+    return parse_bare_destination(text, position)
 
 
 def destinations_in_line(line: str) -> list[str]:
