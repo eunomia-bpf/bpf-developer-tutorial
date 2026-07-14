@@ -138,7 +138,7 @@ int xdp_pass(struct xdp_md *ctx)
     bpf_ringbuf_submit(event, 0);
 
     // 可选：打印调试信息
-    bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+    bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 
     return XDP_PASS;
 }
@@ -213,7 +213,7 @@ bpf_ringbuf_submit(event, 0);
 `bpf_printk` 函数将消息记录到内核的跟踪管道，对于调试非常有用。
 
 ```c
-bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 ```
 
 ## 用户空间代码分析

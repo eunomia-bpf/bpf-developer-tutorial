@@ -140,7 +140,7 @@ int xdp_pass(struct xdp_md *ctx)
     bpf_ringbuf_submit(event, 0);
 
     // Optional: Print a debug message
-    bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+    bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 
     return XDP_PASS;
 }
@@ -215,7 +215,7 @@ bpf_ringbuf_submit(event, 0);
 The `bpf_printk` function logs messages to the kernel's trace pipe, which can be invaluable for debugging.
 
 ```c
-bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 ```
 
 ## User-Space Code Analysis
