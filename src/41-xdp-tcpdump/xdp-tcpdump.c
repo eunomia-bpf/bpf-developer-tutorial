@@ -10,12 +10,19 @@
 #include <bpf/bpf.h>
 
 #include "xdp-tcpdump.skel.h"  // Generated skeleton header
+#include "xdp-tcpdump.h"
 
 // Callback function to handle events from the ring buffer
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    if (data_sz < 20) {  // Minimum TCP header size
-        fprintf(stderr, "Received incomplete TCP header\n");
+    if (data_sz < sizeof(struct tcp_event)) {
+        fprintf(stderr, "Received incomplete TCP event\n");
+        return 0;
+    }
+
+    struct tcp_event *event = data;
+    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
+        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
         return 0;
     }
 
@@ -41,12 +48,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
         // Options and padding may follow
     } __attribute__((packed));
 
-    if (data_sz < sizeof(struct tcphdr)) {
-        fprintf(stderr, "Data size (%zu) less than TCP header size\n", data_sz);
-        return 0;
-    }
-
-    struct tcphdr *tcp = (struct tcphdr *)data;
+    struct tcphdr *tcp = (struct tcphdr *)event->header;
 
     // Convert fields from network byte order to host byte order
     uint16_t source_port = ntohs(tcp->source);
