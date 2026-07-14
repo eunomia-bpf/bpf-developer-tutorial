@@ -7,27 +7,27 @@ on:
     branches: [ "main" ]
   schedule:
     - cron:  '0 0 * * 0'
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
     
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
+      uses: dtolnay/rust-toolchain@1.97.0
     
     - name: test 37 uprobe-rust helloworld
       run: |
         cd src/37-uprobe-rust/helloworld
         cargo build
         # Verify the hello function symbol exists in debug build
-        nm target/debug/helloworld | grep "_ZN10helloworld5hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
+        nm -C target/debug/helloworld | grep -F "helloworld::hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
         echo "✓ helloworld debug build has correct hello symbol"
         
     - name: test 37 uprobe-rust args
@@ -35,7 +35,7 @@ jobs:
         cd src/37-uprobe-rust/args
         cargo build
         # Verify the hello function symbol exists in debug build
-        nm target/debug/helloworld | grep "_ZN10helloworld5hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
+        nm -C target/debug/helloworld | grep -F "helloworld::hello" || (echo "Error: hello function symbol not found in debug build" && exit 1)
         echo "✓ args debug build has correct hello symbol"
         # Run the binary to ensure it works
         ./target/debug/helloworld 1 2 3 | grep -q "Hello, world!" || (echo "Error: binary execution failed" && exit 1)
@@ -44,12 +44,15 @@ jobs:
     - name: test 37 uprobe-rust bpftrace attach
       run: |
         cd src/37-uprobe-rust/args
-        # Test that bpftrace can attach to the hello function with wildcard pattern
-        # Run bpftrace with the binary and verify it can trace the function
-        sudo timeout 3 bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("traced\n"); exit(); }' -c "./target/debug/helloworld 1" > /tmp/bpftrace_output.txt 2>&1 || true
+        # Rust 1.97 uses v0 mangling by default, so resolve the raw symbol dynamically.
+        hello_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 ~ /^helloworld::hello(::h[[:xdigit:]]+)?$/ && !matched { found = $1; matched = 1 } END { if (matched) print found }')
+        test -n "$hello_address" || (echo "Error: demangled hello function symbol not found" && exit 1)
+        hello_symbol=$(nm target/debug/helloworld | awk -v address="$hello_address" '$1 == address && $2 ~ /^[tT]$/ && !matched { found = $3; matched = 1 } END { if (matched) print found }')
+        test -n "$hello_symbol" || (echo "Error: raw hello function symbol not found" && exit 1)
+        sudo timeout 3 bpftrace -e "uprobe:target/debug/helloworld:${hello_symbol} { printf(\"traced\\n\"); exit(); }" -c "./target/debug/helloworld 1" > /tmp/bpftrace_output.txt 2>&1 || true
         # Check if bpftrace successfully attached and traced the function
         if grep -q "traced" /tmp/bpftrace_output.txt && grep -q "Attaching 1 probe" /tmp/bpftrace_output.txt; then
-          echo "✓ bpftrace successfully attached to hello function with wildcard pattern"
+          echo "✓ bpftrace successfully attached to hello function"
         else
           echo "Error: bpftrace failed to attach or trace the hello function"
           cat /tmp/bpftrace_output.txt

@@ -41,27 +41,23 @@ fn main() {
 ```console
 $ cd helloworld
 $ cargo build
-$ nm helloworld/target/release/helloworld | grep hello
-0000000000008940 t _ZN10helloworld4main17h2dce92cb81426b91E
+$ nm -C target/debug/helloworld | grep 'helloworld::main'
+0000000000013ec0 t helloworld::main
 ```
 
-我们会发现，对应的符号被转换为了 `_ZN10helloworld4main17h2dce92cb81426b91E`，这是因为 rustc 使用 [Symbol name mangling](https://en.wikipedia.org/wiki/Name_mangling) 来为代码生成过程中使用的符号编码一个唯一的名称。编码后的名称会被链接器用于将名称与所指向的内容关联起来。可以使用 -C symbol-mangling-version 选项来控制符号名称的处理方法。
-
-我们可以使用 [`rustfilt`](https://github.com/luser/rustfilt) 工具来解析和获取对应的符号。这个工具可以通过 `cargo install rustfilt` 安装：
+rustc 使用 [符号名称修饰](https://en.wikipedia.org/wiki/Name_mangling) 为链接器编码唯一的符号名称。Rust 1.97 默认使用 v0 名称修饰，而 `nm -C` 会显示稳定的反修饰名称。将符号交给 bpftrace 之前，可以先通过地址解析原始符号：
 
 ```console
-$ cargo install rustfilt
-$ nm helloworld/target/release/helloworld > name.txt
-$ rustfilt _ZN10helloworld4main17h2dce92cb81426b91E
-helloworld::main
-$ rustfilt -i name.txt | grep hello
-0000000000008b60 t helloworld::main
+$ main_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 ~ /^helloworld::main(::h[[:xdigit:]]+)?$/ && !matched { found = $1; matched = 1 } END { if (matched) print found }')
+$ main_symbol=$(nm target/debug/helloworld | awk -v address="$main_address" '$1 == address && $2 ~ /^[tT]$/ && !matched { found = $3; matched = 1 } END { if (matched) print found }')
+$ echo "$main_symbol"
+_RNvCsiXtUZV4ocyZ_10helloworld4main
 ```
 
-接下来我们可以尝试使用 bpftrace 跟踪对应的函数：
+`-C symbol-mangling-version` rustc 选项可以选择名称修饰方案，但从当前二进制解析可以避免依赖某一种方案。现在可以追踪 `main`：
 
 ```console
-$ sudo bpftrace -e 'uprobe:helloworld/target/release/helloworld:_ZN10helloworld4main17h2dce92cb81426b91E { printf("Function hello-world called\n"); }'
+$ sudo bpftrace -e "uprobe:target/debug/helloworld:${main_symbol} { printf(\"Function hello-world called\n\"); }"
 Attaching 1 probe...
 Function hello-world called
 ```
@@ -101,17 +97,20 @@ fn main() {
 ```console
 $ cd args
 $ cargo build
-$ nm target/debug/helloworld | grep hello
-0000000000016250 t _ZN10helloworld4main17ha3594bca2af541f6E
-0000000000016540 t _ZN10helloworld5hello17h5f3a03dda56661e1E
+$ nm -C target/debug/helloworld | grep 'helloworld::hello'
+0000000000016f90 t helloworld::hello
 ```
 
 注意，在 release 模式（`cargo build --release`）下，只会出现 `main` 函数符号，因为 `hello` 在优化过程中被内联了。
 
-现在我们可以使用符号来追踪 `hello` 函数。由于 Rust 会对符号名称进行混淆并加入每次编译都会变化的哈希值，我们使用通配符模式来匹配任何版本的 `hello` 函数：
+Rust 1.97 默认使用 v0 符号名称修饰。bpftrace 需要原始符号，因此先通过稳定的反修饰名称找到地址，再解析对应的原始符号：
 
 ```console
-$ sudo bpftrace -e 'uprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello called\n"); }'
+$ hello_address=$(nm -C target/debug/helloworld | awk '$2 ~ /^[tT]$/ && $3 ~ /^helloworld::hello(::h[[:xdigit:]]+)?$/ && !matched { found = $1; matched = 1 } END { if (matched) print found }')
+$ hello_symbol=$(nm target/debug/helloworld | awk -v address="$hello_address" '$1 == address && $2 ~ /^[tT]$/ && !matched { found = $3; matched = 1 } END { if (matched) print found }')
+$ echo "$hello_symbol"
+_RNvCsiXtUZV4ocyZ_10helloworld5hello
+$ sudo bpftrace -e "uprobe:target/debug/helloworld:${hello_symbol} { printf(\"Function hello called\n\"); }"
 Attaching 1 probe...
 Function hello called
 Function hello called
@@ -133,10 +132,10 @@ Hello, world! 4 in 5
 return value: 9
 ```
 
-我们也可以使用 Uretprobe 来获取返回值。同样，我们使用通配符来匹配符号：
+我们也可以使用 Uretprobe 和同一个已解析的符号来获取返回值：
 
 ```console
-$ sudo bpftrace -e 'uretprobe:target/debug/helloworld:_ZN10helloworld5hello* { printf("Function hello returned: %d\n", retval); }'
+$ sudo bpftrace -e "uretprobe:target/debug/helloworld:${hello_symbol} { printf(\"Function hello returned: %d\n\", retval); }"
 Attaching 1 probe...
 Function hello returned: 6
 Function hello returned: 7
@@ -144,7 +143,7 @@ Function hello returned: 8
 Function hello returned: 9
 ```
 
-注意：通配符模式 `_ZN10helloworld5hello*` 可以匹配 `hello` 函数符号，无论 Rust 在编译时添加了什么哈希后缀。如果需要，你可以使用 `nm target/debug/helloworld | grep hello` 来查看确切的符号名称。
+通过反修饰名称解析原始符号的方式同时适用于 Rust 的 legacy 和 v0 名称修饰方案。
 
 ## 参考资料
 

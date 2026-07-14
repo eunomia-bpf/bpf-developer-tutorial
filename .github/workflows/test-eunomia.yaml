@@ -7,11 +7,15 @@ on:
     branches: [ "main" ]
   schedule:
     - cron:  '0 0 * * 0'
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
     - name: install deps
@@ -30,8 +34,8 @@ jobs:
         sudo timeout -s 2 3 ./ecli run src/2-kprobe-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 3 fentry
       run: |
-        ./ecc src/2-kprobe-unlink/kprobe-link.bpf.c
-        sudo timeout -s 2 3 ./ecli run src/2-kprobe-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
+        ./ecc src/3-fentry-unlink/fentry-link.bpf.c
+        sudo timeout -s 2 3 ./ecli run src/3-fentry-unlink/package.json || if [ $? = 124 ]; then exit 0; else exit $?; fi
     - name: test 4 opensnoop
       run: |
         ./ecc src/4-opensnoop/opensnoop.bpf.c

@@ -7,11 +7,15 @@ on:
     branches: [ "main" ]
   schedule:
     - cron:  '0 0 * * 0'
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
       with:
         submodules: 'recursive'
     - name: install deps
