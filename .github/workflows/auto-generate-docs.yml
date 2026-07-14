@@ -2,6 +2,7 @@ name: Auto Generate Documentation
 
 on:
   push:
+    branches: [main]
     paths:
       - 'src/**/README.md'
       - 'src/**/README.zh.md'
