@@ -1,6 +1,9 @@
 # Prerequisites
 *.d
 
+# Backup files
+*.bak
+
 # Object files
 *.o
 *.ko

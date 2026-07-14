@@ -73,21 +73,31 @@ char LICENSE[] SEC("license") = "GPL";
 
 ## 运行程序
 
-要运行此跟踪程序，请按照以下步骤操作：
+请从 `src/31-goroutine` 目录运行以下命令。eBPF 程序会附加到
+`./go-server-http/main`，因此目标二进制文件应在本地生成，不再存储在 Git
+中。请使用 Go 1.17.13 以匹配当前 `GOID_OFFSET`；如果使用其他 Go 版本构建，
+请先重新验证该偏移量。
 
-1. **编译 eBPF 代码**：使用类似 `ecc`（eBPF 编译集合）这样的编译器编译 eBPF 程序，并生成一个可以由 eBPF 加载器加载的包。
+1. **构建并启动目标程序**：保持 HTTP 服务运行，然后在另一个终端执行后续命令。
+
+    ```bash
+    make -C go-server-http
+    sudo ./go-server-http/main
+    ```
+
+2. **编译 eBPF 代码**：使用类似 `ecc`（eBPF 编译集合）这样的编译器编译 eBPF 程序，并生成一个可以由 eBPF 加载器加载的包。
 
     ```bash
     ecc goroutine.bpf.c goroutine.h
     ```
 
-2. **运行 eBPF 程序**：使用 eBPF 加载器运行编译后的 eBPF 程序。
+3. **运行 eBPF 程序**：使用 eBPF 加载器运行编译后的 eBPF 程序。
 
     ```bash
     ecli-rs run package.json
     ```
 
-3. **输出**：程序将输出协程的状态转换及其 `goid`、`pid` 和 `tgid`。以下是一个示例输出：
+4. **输出**：程序将输出协程的状态转换及其 `goid`、`pid` 和 `tgid`。以下是一个示例输出：
 
     ```console
     TIME     STATE       GOID   PID    TGID   

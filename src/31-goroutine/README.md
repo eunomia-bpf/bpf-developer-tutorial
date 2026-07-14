@@ -75,21 +75,31 @@ char LICENSE[] SEC("license") = "GPL";
 
 ## Running the Program
 
-To run this tracing program, follow these steps:
+Run the following commands from `src/31-goroutine`. The eBPF program attaches to
+`./go-server-http/main`, so the target binary is generated locally rather than
+stored in Git. Use Go 1.17.13 to match the checked-in `GOID_OFFSET` value; verify
+the offset before tracing a binary built with another Go version.
 
-1. **Compile the eBPF Code**: Compile the eBPF program using a compiler like `ecc` (eBPF Compiler Collection) and generate a package that can be loaded by an eBPF loader.
+1. **Build and start the target program**: Keep the HTTP server running, then use a second terminal for the remaining commands.
+
+    ```bash
+    make -C go-server-http
+    sudo ./go-server-http/main
+    ```
+
+2. **Compile the eBPF Code**: Compile the eBPF program using a compiler like `ecc` (eBPF Compiler Collection) and generate a package that can be loaded by an eBPF loader.
 
     ```bash
     ecc goroutine.bpf.c goroutine.h
     ```
 
-2. **Run the eBPF Program**: Use an eBPF loader to run the compiled eBPF program.
+3. **Run the eBPF Program**: Use an eBPF loader to run the compiled eBPF program.
 
     ```bash
     ecli-rs run package.json
     ```
 
-3. **Output**: The program will output the state transitions of goroutines along with their `goid`, `pid`, and `tgid`. Here’s an example of the output:
+4. **Output**: The program will output the state transitions of goroutines along with their `goid`, `pid`, and `tgid`. Here’s an example of the output:
 
     ```console
     TIME     STATE       GOID   PID    TGID   
