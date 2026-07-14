@@ -3,19 +3,7 @@ name: Check documentation
 on:
   push:
     branches: ["main"]
-    paths:
-      - "**/*.md"
-      - "src/**/.config"
-      - "scripts/*.py"
-      - "scripts/*.template"
-      - ".github/workflows/check-docs.yml"
   pull_request:
-    paths:
-      - "**/*.md"
-      - "src/**/.config"
-      - "scripts/*.py"
-      - "scripts/*.template"
-      - ".github/workflows/check-docs.yml"
 
 permissions:
   contents: read
