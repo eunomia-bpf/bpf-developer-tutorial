@@ -18,12 +18,24 @@ XDP is a high-performance data path within the Linux kernel that allows for prog
 
 Let's dive into the kernel-space eBPF code that captures TCP header information.
 
+The kernel and user-space programs share the event definition in `xdp-tcpdump.h`. A TCP header can contain 20 to 60 bytes, and `header_len` records the exact size derived from the packet's data-offset field.
+
+```c
+#define MAX_TCP_HEADER_BYTES 60
+
+struct tcp_event {
+    unsigned int header_len;
+    unsigned char header[MAX_TCP_HEADER_BYTES];
+};
+```
+
 ### Full Kernel Code
 
 ```c
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include "xdp-tcpdump.h"
 
 #define ETH_P_IP 0x0800
 
@@ -94,32 +106,41 @@ int xdp_pass(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-    // Define the number of bytes you want to capture from the TCP header
-    const int tcp_header_bytes = 32;
-
-    // Ensure that the desired number of bytes does not exceed packet bounds
-    if ((void *)tcp + tcp_header_bytes > data_end) {
+    // Derive the TCP header length from data offset (doff), measured in 32-bit words
+    __u32 tcp_header_bytes = tcp->doff * 4;
+    if (tcp_header_bytes < sizeof(*tcp) || tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
         return XDP_PASS;
     }
 
-    // Reserve space in the ring buffer
-    void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
-    if (!ringbuf_space) {
+    // Reserve a fixed-size event because bpf_ringbuf_reserve requires a constant size
+    struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
+    if (!event) {
         return XDP_PASS;  // If reservation fails, skip processing
     }
 
+    event->header_len = tcp_header_bytes;
+    __builtin_memset(event->header, 0, sizeof(event->header));
+
     // Copy the TCP header bytes into the ring buffer
     // Using a loop to ensure compliance with eBPF verifier
-    for (int i = 0; i < tcp_header_bytes; i++) {
+    for (int i = 0; i < MAX_TCP_HEADER_BYTES; i++) {
+        if (i >= tcp_header_bytes)
+            break;
+
+        if ((void *)tcp + i + 1 > data_end) {
+            bpf_ringbuf_discard(event, 0);
+            return XDP_PASS;
+        }
+
         unsigned char byte = *((unsigned char *)tcp + i);
-        ((unsigned char *)ringbuf_space)[i] = byte;
+        event->header[i] = byte;
     }
 
     // Submit the data to the ring buffer
-    bpf_ringbuf_submit(ringbuf_space, 0);
+    bpf_ringbuf_submit(event, 0);
 
     // Optional: Print a debug message
-    bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+    bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 
     return XDP_PASS;
 }
@@ -156,26 +177,37 @@ static bool is_tcp(struct ethhdr *eth, void *data_end)
 In the `xdp_pass` function, we:
 
 1. Parse the Ethernet, IP, and TCP headers.
-2. Ensure all headers are within the packet bounds to prevent invalid memory access.
-3. Reserve space in the ring buffer to store the TCP header.
-4. Copy the TCP header bytes into the ring buffer.
+2. Read and validate the TCP data-offset field, which gives the actual header length.
+3. Reserve a fixed-size event in the ring buffer because the helper requires a compile-time constant size.
+4. Copy only the validated header bytes into the event while checking each packet access.
 5. Submit the data to the ring buffer for user-space consumption.
 
 ```c
-// Reserve space in the ring buffer
-void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
-if (!ringbuf_space) {
+__u32 tcp_header_bytes = tcp->doff * 4;
+if (tcp_header_bytes < sizeof(*tcp) || tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
     return XDP_PASS;
 }
 
-// Copy the TCP header bytes
-for (int i = 0; i < tcp_header_bytes; i++) {
-    unsigned char byte = *((unsigned char *)tcp + i);
-    ((unsigned char *)ringbuf_space)[i] = byte;
+struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
+if (!event) {
+    return XDP_PASS;
 }
 
-// Submit to ring buffer
-bpf_ringbuf_submit(ringbuf_space, 0);
+event->header_len = tcp_header_bytes;
+__builtin_memset(event->header, 0, sizeof(event->header));
+
+for (int i = 0; i < MAX_TCP_HEADER_BYTES; i++) {
+    if (i >= tcp_header_bytes)
+        break;
+    if ((void *)tcp + i + 1 > data_end) {
+        bpf_ringbuf_discard(event, 0);
+        return XDP_PASS;
+    }
+    unsigned char byte = *((unsigned char *)tcp + i);
+    event->header[i] = byte;
+}
+
+bpf_ringbuf_submit(event, 0);
 ```
 
 #### Using bpf_printk for Debugging
@@ -183,7 +215,7 @@ bpf_ringbuf_submit(ringbuf_space, 0);
 The `bpf_printk` function logs messages to the kernel's trace pipe, which can be invaluable for debugging.
 
 ```c
-bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 ```
 
 ## User-Space Code Analysis
@@ -199,17 +231,25 @@ Let's examine the user-space program that reads the captured TCP headers from th
 #include <errno.h>
 #include <unistd.h>
 #include <net/if.h>
+#include <arpa/inet.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 
 #include "xdp-tcpdump.skel.h"  // Generated skeleton header
+#include "xdp-tcpdump.h"
 
 // Callback function to handle events from the ring buffer
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    if (data_sz < 20) {  // Minimum TCP header size
-        fprintf(stderr, "Received incomplete TCP header\n");
+    if (data_sz < sizeof(struct tcp_event)) {
+        fprintf(stderr, "Received incomplete TCP event\n");
+        return 0;
+    }
+
+    struct tcp_event *event = data;
+    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
+        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
         return 0;
     }
 
@@ -235,12 +275,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
         // Options and padding may follow
     } __attribute__((packed));
 
-    if (data_sz < sizeof(struct tcphdr)) {
-        fprintf(stderr, "Data size (%zu) less than TCP header size\n", data_sz);
-        return 0;
-    }
-
-    struct tcphdr *tcp = (struct tcphdr *)data;
+    struct tcphdr *tcp = (struct tcphdr *)event->header;
 
     // Convert fields from network byte order to host byte order
     uint16_t source_port = ntohs(tcp->source);
@@ -369,13 +404,17 @@ The `handle_event` function processes TCP header data received from the ring buf
 ```c
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    // Validate data size
-    if (data_sz < 20) {
-        fprintf(stderr, "Received incomplete TCP header\n");
+    if (data_sz < sizeof(struct tcp_event)) {
+        fprintf(stderr, "Received incomplete TCP event\n");
         return 0;
     }
 
-    // Parse the TCP header
+    struct tcp_event *event = data;
+    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
+        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
+        return 0;
+    }
+
     // ... (parsing code)
 }
 ```

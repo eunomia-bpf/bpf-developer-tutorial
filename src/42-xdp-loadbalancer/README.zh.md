@@ -446,9 +446,11 @@ sudo ./teardown.sh
 
 ### 运行负载均衡器
 
-要运行 XDP 负载均衡器，执行以下命令，指定接口和后端服务器的 IP 和 MAC 地址：
+要运行 XDP 负载均衡器，执行以下命令，指定接口和后端服务器的 IP 和 MAC 地址。为了让 XDP 在 veth 接口上工作，还需要在 veth 对的另一端挂载一个返回 `XDP_PASS` 的桩程序。
 
 ```console
+clang -target bpf -I/usr/include/$(gcc -print-multiarch) -o stub.bpf.o -c stub.bpf.c
+sudo ip l set dev veth7 xdp obj ./stub.bpf.o sec .xdp
 sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
 ```
 

@@ -1,6 +1,7 @@
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include "xdp-tcpdump.h"
 
 #define ETH_P_IP 0x0800
 
@@ -71,35 +72,42 @@ int xdp_pass(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-    // Define the number of bytes you want to capture from the TCP header
-    // Typically, the TCP header is 20 bytes, but with options, it can be longer
-    // Here, we'll capture the first 32 bytes to include possible options
-    const int tcp_header_bytes = 32;
-
-    // Ensure that the desired number of bytes does not exceed packet bounds
-    if ((void *)tcp + tcp_header_bytes > data_end) {
+    // Derive the TCP header length from data offset (doff), measured in 32-bit words
+    __u32 tcp_header_bytes = tcp->doff * 4;
+    if (tcp_header_bytes < sizeof(*tcp) || tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
         return XDP_PASS;
     }
 
-    // Reserve space in the ring buffer
-    void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
-    if (!ringbuf_space) {
+    // Reserve a fixed-size event because bpf_ringbuf_reserve requires a constant size
+    struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
+    if (!event) {
         return XDP_PASS;  // If reservation fails, skip processing
     }
 
+    event->header_len = tcp_header_bytes;
+    __builtin_memset(event->header, 0, sizeof(event->header));
+
     // Copy the TCP header bytes into the ring buffer
     // Using a loop to ensure compliance with eBPF verifier
-    for (int i = 0; i < tcp_header_bytes; i++) {
+    for (int i = 0; i < MAX_TCP_HEADER_BYTES; i++) {
+        if (i >= tcp_header_bytes)
+            break;
+
+        if ((void *)tcp + i + 1 > data_end) {
+            bpf_ringbuf_discard(event, 0);
+            return XDP_PASS;
+        }
+
         // Accessing each byte safely within bounds
         unsigned char byte = *((unsigned char *)tcp + i);
-        ((unsigned char *)ringbuf_space)[i] = byte;
+        event->header[i] = byte;
     }
 
     // Submit the data to the ring buffer
-    bpf_ringbuf_submit(ringbuf_space, 0);
+    bpf_ringbuf_submit(event, 0);
 
     // Optional: Print a debug message (will appear in kernel logs)
-    bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+    bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 
     return XDP_PASS;
 }

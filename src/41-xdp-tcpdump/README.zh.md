@@ -16,12 +16,24 @@ XDP 是 Linux 内核中一个高性能的数据路径，允许在网络栈的最
 
 让我们深入了解捕获 TCP 头信息的内核空间 eBPF 代码。
 
+内核程序与用户空间程序通过 `xdp-tcpdump.h` 共享事件定义。TCP 头的长度可以是 20 到 60 字节，`header_len` 保存根据数据偏移字段计算出的准确长度。
+
+```c
+#define MAX_TCP_HEADER_BYTES 60
+
+struct tcp_event {
+    unsigned int header_len;
+    unsigned char header[MAX_TCP_HEADER_BYTES];
+};
+```
+
 ### 完整的内核代码
 
 ```c
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include "xdp-tcpdump.h"
 
 #define ETH_P_IP 0x0800
 
@@ -92,32 +104,41 @@ int xdp_pass(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-    // 定义要捕获的 TCP 头字节数
-    const int tcp_header_bytes = 32;
-
-    // 确保所需字节数不超过数据包边界
-    if ((void *)tcp + tcp_header_bytes > data_end) {
+    // 根据以 32 位字为单位的数据偏移字段 doff 计算 TCP 头长度
+    __u32 tcp_header_bytes = tcp->doff * 4;
+    if (tcp_header_bytes < sizeof(*tcp) || tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
         return XDP_PASS;
     }
 
-    // 在环形缓冲区中预留空间
-    void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
-    if (!ringbuf_space) {
+    // bpf_ringbuf_reserve 要求大小为常量，因此预留固定大小的事件
+    struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
+    if (!event) {
         return XDP_PASS;  // 如果预留失败，跳过处理
     }
 
+    event->header_len = tcp_header_bytes;
+    __builtin_memset(event->header, 0, sizeof(event->header));
+
     // 将 TCP 头字节复制到环形缓冲区
     // 使用循环以确保符合 eBPF 验证器要求
-    for (int i = 0; i < tcp_header_bytes; i++) {
+    for (int i = 0; i < MAX_TCP_HEADER_BYTES; i++) {
+        if (i >= tcp_header_bytes)
+            break;
+
+        if ((void *)tcp + i + 1 > data_end) {
+            bpf_ringbuf_discard(event, 0);
+            return XDP_PASS;
+        }
+
         unsigned char byte = *((unsigned char *)tcp + i);
-        ((unsigned char *)ringbuf_space)[i] = byte;
+        event->header[i] = byte;
     }
 
     // 将数据提交到环形缓冲区
-    bpf_ringbuf_submit(ringbuf_space, 0);
+    bpf_ringbuf_submit(event, 0);
 
     // 可选：打印调试信息
-    bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+    bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 
     return XDP_PASS;
 }
@@ -154,26 +175,37 @@ static bool is_tcp(struct ethhdr *eth, void *data_end)
 在 `xdp_pass` 函数中，我们：
 
 1. 解析以太网、IP 和 TCP 头。
-2. 确保所有头信息在数据包边界内，以防止无效内存访问。
-3. 在环形缓冲区中预留空间以存储 TCP 头。
-4. 将 TCP 头字节复制到环形缓冲区。
+2. 读取并校验 TCP 数据偏移字段，得到实际的头长度。
+3. 由于辅助函数要求使用编译期常量大小，在环形缓冲区中预留固定大小的事件。
+4. 逐次检查数据包边界，只把经过校验的头字节复制到事件中。
 5. 提交数据到环形缓冲区，供用户空间使用。
 
 ```c
-// 在环形缓冲区中预留空间
-void *ringbuf_space = bpf_ringbuf_reserve(&rb, tcp_header_bytes, 0);
-if (!ringbuf_space) {
+__u32 tcp_header_bytes = tcp->doff * 4;
+if (tcp_header_bytes < sizeof(*tcp) || tcp_header_bytes > MAX_TCP_HEADER_BYTES) {
     return XDP_PASS;
 }
 
-// 复制 TCP 头字节
-for (int i = 0; i < tcp_header_bytes; i++) {
-    unsigned char byte = *((unsigned char *)tcp + i);
-    ((unsigned char *)ringbuf_space)[i] = byte;
+struct tcp_event *event = bpf_ringbuf_reserve(&rb, sizeof(*event), 0);
+if (!event) {
+    return XDP_PASS;
 }
 
-// 提交到环形缓冲区
-bpf_ringbuf_submit(ringbuf_space, 0);
+event->header_len = tcp_header_bytes;
+__builtin_memset(event->header, 0, sizeof(event->header));
+
+for (int i = 0; i < MAX_TCP_HEADER_BYTES; i++) {
+    if (i >= tcp_header_bytes)
+        break;
+    if ((void *)tcp + i + 1 > data_end) {
+        bpf_ringbuf_discard(event, 0);
+        return XDP_PASS;
+    }
+    unsigned char byte = *((unsigned char *)tcp + i);
+    event->header[i] = byte;
+}
+
+bpf_ringbuf_submit(event, 0);
 ```
 
 #### 使用 bpf_printk 进行调试
@@ -181,7 +213,7 @@ bpf_ringbuf_submit(ringbuf_space, 0);
 `bpf_printk` 函数将消息记录到内核的跟踪管道，对于调试非常有用。
 
 ```c
-bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
+bpf_printk("Captured TCP header (%u bytes)", tcp_header_bytes);
 ```
 
 ## 用户空间代码分析
@@ -197,17 +229,25 @@ bpf_printk("Captured TCP header (%d bytes)", tcp_header_bytes);
 #include <errno.h>
 #include <unistd.h>
 #include <net/if.h>
+#include <arpa/inet.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 
 #include "xdp-tcpdump.skel.h"  // 生成的骨架头文件
+#include "xdp-tcpdump.h"
 
 // 处理环形缓冲区事件的回调函数
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    if (data_sz < 20) {  // 最小 TCP 头大小
-        fprintf(stderr, "Received incomplete TCP header\n");
+    if (data_sz < sizeof(struct tcp_event)) {
+        fprintf(stderr, "Received incomplete TCP event\n");
+        return 0;
+    }
+
+    struct tcp_event *event = data;
+    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
+        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
         return 0;
     }
 
@@ -233,12 +273,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
         // 可能还有选项和填充
     } __attribute__((packed));
 
-    if (data_sz < sizeof(struct tcphdr)) {
-        fprintf(stderr, "Data size (%zu) less than TCP header size\n", data_sz);
-        return 0;
-    }
-
-    struct tcphdr *tcp = (struct tcphdr *)data;
+    struct tcphdr *tcp = (struct tcphdr *)event->header;
 
     // 将字段从网络字节序转换为主机字节序
     uint16_t source_port = ntohs(tcp->source);
@@ -367,13 +402,17 @@ cleanup:
 ```c
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
-    // 验证数据大小
-    if (data_sz < 20) {
-        fprintf(stderr, "Received incomplete TCP header\n");
+    if (data_sz < sizeof(struct tcp_event)) {
+        fprintf(stderr, "Received incomplete TCP event\n");
         return 0;
     }
 
-    // 解析 TCP 头
+    struct tcp_event *event = data;
+    if (event->header_len < 20 || event->header_len > MAX_TCP_HEADER_BYTES) {
+        fprintf(stderr, "Invalid TCP header length: %u\n", event->header_len);
+        return 0;
+    }
+
     // ...（解析代码）
 }
 ```

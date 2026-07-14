@@ -450,7 +450,7 @@ To run the XDP load balancer, execute the following command, specifying the inte
 To make XDP work with veth interfaces we need to add a stub eBPF program to the other end of the pair.
 
 ```console
-clang -target bpf -o stub.bpf.o -c stub.bpf.c
+clang -target bpf -I/usr/include/$(gcc -print-multiarch) -o stub.bpf.o -c stub.bpf.c
 sudo ip l set dev veth7 xdp obj ./stub.bpf.o sec .xdp # stub XDP_PASS on the receiving interface
 sudo ip netns exec lb ./xdp_lb veth6 10.0.0.2 de:ad:be:ef:00:02 10.0.0.3 de:ad:be:ef:00:03
 ```
