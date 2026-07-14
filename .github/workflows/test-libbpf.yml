@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v7
       with:
@@ -22,7 +22,8 @@ jobs:
       run: |
         sudo apt-get install -y --no-install-recommends \
         libelf1 libelf-dev zlib1g-dev \
-        make git clang llvm pkg-config build-essential dwarves linux-headers-generic
+        make git clang llvm pkg-config build-essential dwarves \
+        linux-headers-generic-hwe-24.04
     - name: test 11 bootstrap
       run: |
         make -C src/11-bootstrap
