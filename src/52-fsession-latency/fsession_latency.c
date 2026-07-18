@@ -145,6 +145,31 @@ static int handle_event(void *context, void *data, size_t size)
 	return 0;
 }
 
+static int poll_until_deadline(struct ring_buffer *ring, long long deadline)
+{
+	while (!exiting) {
+		long long now = monotonic_milliseconds();
+		int consumed;
+
+		if (now < 0)
+			return (int)now;
+		if (now >= deadline)
+			break;
+
+		consumed = ring_buffer__poll(ring,
+					     deadline - now > 100 ? 100 : deadline - now);
+		if (consumed == -EINTR)
+			continue;
+		if (consumed < 0) {
+			fprintf(stderr, "ring buffer poll failed: %s\n",
+				strerror(-consumed));
+			return consumed;
+		}
+	}
+
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct fsession_latency_bpf *skel = NULL;
@@ -206,27 +231,8 @@ int main(int argc, char **argv)
 	}
 	deadline = now + env.duration * 1000LL;
 
-	while (!exiting) {
-		now = monotonic_milliseconds();
-		if (now < 0) {
-			err = now;
-			break;
-		}
-		if (now >= deadline)
-			break;
-
-		err = ring_buffer__poll(ring, deadline - now > 100 ? 100 : deadline - now);
-		if (err == -EINTR) {
-			err = 0;
-			continue;
-		}
-		if (err < 0) {
-			fprintf(stderr, "ring buffer poll failed: %s\n", strerror(-err));
-			break;
-		}
-		err = 0;
-	}
-	if (err < 0)
+	err = poll_until_deadline(ring, deadline);
+	if (err)
 		goto cleanup;
 
 	fsession_latency_bpf__detach(skel);
