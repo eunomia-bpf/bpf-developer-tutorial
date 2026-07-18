@@ -172,7 +172,7 @@ The repository uses bpftool v7.7.0, whose nested libbpf is v1.7.0. libbpf 1.7.0 
 
 ## Running the Tests
 
-The integration test runs three scenarios against the built binary:
+The integration test runs four scenarios against the built binary:
 
 ```bash
 sudo make test
@@ -183,6 +183,7 @@ The test validates:
 1. An unmatched PID (2^32 - 1) produces zero calls, proving the TGID filter works.
 2. A 10-second threshold (10,000,000 us) produces no slow events even though reads complete, proving the threshold comparison works.
 3. A 10 ms threshold with a pipe read delayed by 50 ms produces at least one slow event, proving the end-to-end reporting path works.
+4. Threshold 0 with continuous target-TGID reads through the one-second deadline produces calls and events, and the CLI still exits successfully. This protects the normal-success exit path when the final `ring_buffer__poll()` call consumes events.
 
 ## Requirements
 
