@@ -63,7 +63,7 @@ static void usage(const char *program)
 }
 
 static int parse_u64(const char *value, unsigned long long maximum,
-		     unsigned long long *result)
+			     unsigned long long *result)
 {
 	char *end = NULL;
 	unsigned long long parsed;
@@ -74,6 +74,65 @@ static int parse_u64(const char *value, unsigned long long maximum,
 		return -EINVAL;
 	*result = parsed;
 	return 0;
+}
+
+static int parse_rate(const char *value)
+{
+	unsigned long long parsed;
+
+	if (parse_u64(value, 100000000, &parsed) || parsed < 8) {
+		fprintf(stderr, "invalid rate in Kbit/s: %s\n", value);
+		return -EINVAL;
+	}
+	env.rate_kbps = parsed;
+	return 0;
+}
+
+static int parse_queue_limit(const char *value)
+{
+	unsigned long long parsed;
+
+	if (parse_u64(value, 65535, &parsed) || parsed == 0) {
+		fprintf(stderr, "invalid queue limit: %s\n", value);
+		return -EINVAL;
+	}
+	env.queue_limit = parsed;
+	return 0;
+}
+
+static int parse_duration(const char *value)
+{
+	unsigned long long parsed;
+
+	if (parse_u64(value, 86400, &parsed) || parsed == 0) {
+		fprintf(stderr, "invalid duration in seconds: %s\n", value);
+		return -EINVAL;
+	}
+	env.duration = parsed;
+	return 0;
+}
+
+static int parse_option(int option, const char *program)
+{
+	switch (option) {
+	case 'i':
+		env.interface = optarg;
+		return 0;
+	case 'r':
+		return parse_rate(optarg);
+	case 'q':
+		return parse_queue_limit(optarg);
+	case 'd':
+		return parse_duration(optarg);
+	case 'v':
+		env.verbose = true;
+		return 0;
+	case 'h':
+		usage(program);
+		exit(0);
+	default:
+		return -EINVAL;
+	}
 }
 
 static int parse_args(int argc, char **argv)
@@ -87,44 +146,12 @@ static int parse_args(int argc, char **argv)
 		{ "help", no_argument, NULL, 'h' },
 		{},
 	};
-	unsigned long long parsed;
-	int option;
+	int error, option;
 
 	while ((option = getopt_long(argc, argv, "i:r:q:d:vh", options, NULL)) != -1) {
-		switch (option) {
-		case 'i':
-			env.interface = optarg;
-			break;
-		case 'r':
-			if (parse_u64(optarg, 100000000, &parsed) || parsed < 8) {
-				fprintf(stderr, "invalid rate in Kbit/s: %s\n", optarg);
-				return -EINVAL;
-			}
-			env.rate_kbps = parsed;
-			break;
-		case 'q':
-			if (parse_u64(optarg, 65535, &parsed) || parsed == 0) {
-				fprintf(stderr, "invalid queue limit: %s\n", optarg);
-				return -EINVAL;
-			}
-			env.queue_limit = parsed;
-			break;
-		case 'd':
-			if (parse_u64(optarg, 86400, &parsed) || parsed == 0) {
-				fprintf(stderr, "invalid duration in seconds: %s\n", optarg);
-				return -EINVAL;
-			}
-			env.duration = parsed;
-			break;
-		case 'v':
-			env.verbose = true;
-			break;
-		case 'h':
-			usage(argv[0]);
-			exit(0);
-		default:
-			return -EINVAL;
-		}
+		error = parse_option(option, argv[0]);
+		if (error)
+			return error;
 	}
 
 	if (!env.interface) {
