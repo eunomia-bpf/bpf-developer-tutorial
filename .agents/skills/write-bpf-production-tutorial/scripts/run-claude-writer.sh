@@ -7,11 +7,12 @@ readonly VERIFY="$SKILL_DIR/scripts/verify_claude_trace.py"
 readonly GUIDE="$SKILL_DIR/references/writing-guide.md"
 
 usage() {
-  echo "usage: $0 --repo ABSOLUTE_REPO_PATH --task ABSOLUTE_TASK_FILE" >&2
+  echo "usage: $0 --repo ABSOLUTE_REPO_PATH --task ABSOLUTE_TASK_FILE --readme ABSOLUTE_README_PATH --readme ABSOLUTE_README_PATH" >&2
 }
 
 repo=
 task=
+declare -a readmes=()
 while (($#)); do
   case "$1" in
     --repo)
@@ -20,6 +21,10 @@ while (($#)); do
       ;;
     --task)
       task=${2:-}
+      shift 2
+      ;;
+    --readme)
+      readmes+=("${2:-}")
       shift 2
       ;;
     --model|--fallback-model)
@@ -37,10 +42,43 @@ while (($#)); do
   esac
 done
 
-[[ $repo = /* && -d $repo/.git ]] || { echo "--repo must be an absolute Git checkout" >&2; exit 2; }
-[[ $task = /* && -f $task ]] || { echo "--task must be an absolute readable file" >&2; exit 2; }
 command -v claude >/dev/null || { echo "Claude Code is required" >&2; exit 127; }
+command -v git >/dev/null || { echo "git is required" >&2; exit 127; }
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 127; }
+command -v realpath >/dev/null || { echo "realpath is required" >&2; exit 127; }
+[[ $repo = /* && -d $repo ]] || { echo "--repo must be an absolute directory" >&2; exit 2; }
+repo=$(realpath -e -- "$repo")
+[[ $(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null) == true ]] || {
+  echo "--repo must be a Git worktree" >&2
+  exit 2
+}
+[[ $task = /* && -f $task ]] || { echo "--task must be an absolute readable file" >&2; exit 2; }
+task=$(realpath -e -- "$task")
+((${#readmes[@]} == 2)) || { echo "pass exactly two --readme paths" >&2; exit 2; }
+
+declare -a allowed_readmes=()
+english_readme=
+chinese_readme=
+for readme in "${readmes[@]}"; do
+  [[ $readme = /* ]] || { echo "--readme must be absolute: $readme" >&2; exit 2; }
+  readme=$(realpath -m -- "$readme")
+  case "$readme" in
+    "$repo"/src/*/README.md)
+      [[ -z $english_readme ]] || { echo "pass only one README.md" >&2; exit 2; }
+      english_readme=$readme
+      ;;
+    "$repo"/src/*/README.zh.md)
+      [[ -z $chinese_readme ]] || { echo "pass only one README.zh.md" >&2; exit 2; }
+      chinese_readme=$readme
+      ;;
+    *) echo "--readme must name a tutorial README inside $repo/src: $readme" >&2; exit 2 ;;
+  esac
+  allowed_readmes+=("$readme")
+done
+[[ -n $english_readme && -n $chinese_readme && $(dirname -- "$english_readme") == $(dirname -- "$chinese_readme") ]] || {
+  echo "--readme paths must be the English and Chinese pair from one lesson" >&2
+  exit 2
+}
 
 state_root=${XDG_STATE_HOME:-$HOME/.local/state}/bpf-tutorial-writer/runs
 mkdir -p "$state_root"
@@ -54,9 +92,11 @@ manifest="$run_dir/manifest.json"
 head_before=$(git -C "$repo" rev-parse HEAD)
 status_before=$(git -C "$repo" status --porcelain=v1)
 task_sha=$(sha256sum "$task" | awk '{print $1}')
+printf -v allowed_paths 'Allowed README path: %s\n' "${allowed_readmes[@]}"
 
-prompt=$(printf '%s\n\n%s\n\n%s\n' \
+prompt=$(printf '%s\n\n%s\n%s\n%s\n' \
   'You are the sole prose author for an eBPF production tutorial. Read the repository code and evidence named in the task. Edit only the README.md and README.zh.md paths explicitly allowed by the task. Do not edit code, build files, generated indexes, or tests. Do not invent output or claims. Finish by stating which README files you edited.' \
+  "$allowed_paths" \
   "$(<"$GUIDE")" \
   "$(<"$task")")
 
@@ -64,10 +104,11 @@ set +e
 (
   cd "$repo"
   claude -p \
+    --safe-mode \
     --model "$MODEL" \
     --effort high \
     --permission-mode acceptEdits \
-    --allowedTools Read Edit Write \
+    --tools "Read,Edit,Write" \
     --output-format stream-json \
     --verbose \
     "$prompt"
@@ -116,6 +157,14 @@ if ((claude_status != 0)); then
   echo "Claude exited with status $claude_status; preserved trace: $trace" >&2
   exit "$claude_status"
 fi
+if [[ $head_after != "$head_before" ]]; then
+  echo "Claude changed Git HEAD; preserved trace: $trace" >&2
+  exit 1
+fi
 
-python3 "$VERIFY" --trace "$trace" --model "$MODEL" --require-write
+verify_args=(--trace "$trace" --model "$MODEL" --repo "$repo" --require-write)
+for readme in "${allowed_readmes[@]}"; do
+  verify_args+=(--allowed-path "$readme")
+done
+python3 "$VERIFY" "${verify_args[@]}"
 echo "manifest=$manifest"

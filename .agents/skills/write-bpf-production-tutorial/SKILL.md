@@ -58,7 +58,9 @@ Then run:
 TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
 "$TUTORIAL_ROOT/.agents/skills/write-bpf-production-tutorial/scripts/run-claude-writer.sh" \
   --repo "$TUTORIAL_ROOT" \
-  --task /absolute/path/to/writer-task.md
+  --task /absolute/path/to/writer-task.md \
+  --readme "$TUTORIAL_ROOT/src/<lesson>/README.md" \
+  --readme "$TUTORIAL_ROOT/src/<lesson>/README.zh.md"
 ```
 
 The wrapper must finish with a verified exact-model trace. Inspect both READMEs for matching structure and technical meaning, then rerun build and documentation commands exactly as written.

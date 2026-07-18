@@ -33,8 +33,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--trace", required=True, type=Path)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--repo", required=True, type=Path)
+    parser.add_argument("--allowed-path", action="append", required=True, type=Path)
     parser.add_argument("--require-write", action="store_true")
     args = parser.parse_args()
+
+    repo = args.repo.resolve()
+    allowed_paths = {path.resolve() for path in args.allowed_path}
 
     events = load_events(args.trace)
     init_models = {
@@ -49,6 +54,7 @@ def main() -> int:
     authored_text = 0
     write_calls = 0
     assistant_models = set()
+    tool_names = set()
     for event in events:
         if event.get("type") != "assistant":
             continue
@@ -58,10 +64,23 @@ def main() -> int:
         if any(item.get("type") == "text" and item.get("text") for item in content):
             authored_text += 1
             assistant_models.add(model)
-        write_calls += sum(
-            item.get("type") == "tool_use" and item.get("name") in {"Edit", "Write"}
-            for item in content
-        )
+        for item in content:
+            if item.get("type") != "tool_use":
+                continue
+            tool_name = item.get("name")
+            tool_names.add(tool_name)
+            if tool_name not in {"Edit", "Write"}:
+                continue
+            write_calls += 1
+            raw_path = (item.get("input") or {}).get("file_path")
+            if not raw_path:
+                raise SystemExit(f"{tool_name} call has no file_path")
+            target = Path(raw_path)
+            if not target.is_absolute():
+                target = repo / target
+            target = target.resolve()
+            if target not in allowed_paths:
+                raise SystemExit(f"{tool_name} call targeted unauthorized path: {target}")
 
     if not authored_text:
         raise SystemExit("trace contains no authored assistant text")
@@ -71,6 +90,9 @@ def main() -> int:
         )
     if args.require_write and write_calls == 0:
         raise SystemExit("trace contains no Claude Edit or Write call")
+    unexpected_tools = tool_names - {"Read", "Edit", "Write"}
+    if unexpected_tools:
+        raise SystemExit(f"trace contains unauthorized tools: {sorted(unexpected_tools)!r}")
 
     results = [event for event in events if event.get("type") == "result"]
     if not results:
