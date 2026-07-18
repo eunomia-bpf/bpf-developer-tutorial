@@ -20,6 +20,7 @@ jobs:
         submodules: 'recursive'
     - name: install deps
       run: |
+        sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
         libelf1 libelf-dev zlib1g-dev \
         make git clang llvm pkg-config build-essential dwarves \
@@ -182,7 +183,7 @@ jobs:
     - name: test 51 TCP quarantine
       run: |
           make -C src/51-tcp-quarantine
-          sudo make -C src/51-tcp-quarantine test
+          sudo timeout 30 make -C src/51-tcp-quarantine test
 
     - name: test features bpf_token
       run: |
