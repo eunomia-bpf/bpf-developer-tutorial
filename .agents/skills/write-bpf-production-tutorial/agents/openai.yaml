@@ -1,4 +1,4 @@
 interface:
   display_name: "BPF Production Tutorial Writer"
-  short_description: "Build tested eBPF lessons with Claude Opus prose"
+  short_description: "Build and cross-review tested eBPF lessons"
   default_prompt: "Use $write-bpf-production-tutorial to turn this production eBPF scenario into a tested bilingual tutorial."
