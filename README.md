@@ -88,6 +88,7 @@ Tracing:
 - [lesson 39-nginx](src/39-nginx/README.md) Using eBPF to Trace Nginx Requests
 - [lesson 40-mysql](src/40-mysql/README.md) Using eBPF to Trace MySQL Queries
 - [lesson 48-energy](src/48-energy/README.md) Energy Monitoring for Process-Level Power Analysis
+- [lesson 52-fsession-latency](src/52-fsession-latency/README.md) Trace Slow vfs_read Calls with fsession
 
 
 Security:
