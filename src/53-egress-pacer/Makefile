@@ -51,6 +51,10 @@ clean:
 	$(Q)rm -rf $(OUTPUT) $(APPS)
 
 test: all
+	@if [ "$$(id -u)" -ne 0 ]; then \
+		echo "test requires root; run: sudo python3 tests/test_egress_pacer.py ./egress_pacer" >&2; \
+		exit 1; \
+	fi
 	python3 tests/test_egress_pacer.py ./egress_pacer
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
