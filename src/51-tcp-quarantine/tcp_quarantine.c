@@ -164,7 +164,7 @@ int main(int argc, char **argv)
 		fprintf(stderr,
 			"failed to load TCP quarantine program: %s\n"
 			"This tool requires Linux 6.5+ with BTF, TCP BPF iterators, "
-			"and the bpf_sock_destroy kfunc.\n",
+			"BPF JIT, and the bpf_sock_destroy kfunc.\n",
 			strerror(-err));
 		goto cleanup;
 	}

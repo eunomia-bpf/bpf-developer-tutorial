@@ -2,7 +2,7 @@
 
 你的威胁情报源刚刚把 `203.0.113.99` 标记为 C2 服务器。防火墙规则可以立即阻止新连接，但 `netstat` 显示三台生产节点已经和这个地址保持着活跃的 TCP 会话，数据仍在外泄。你需要立即切断这些连接，不重启服务，不杀死进程，也不影响无关流量。
 
-本教程构建一个小型 eBPF 工具：扫描主机上所有 TCP 套接字，找到目标远端 IPv4 地址和端口完全匹配的 `ESTABLISHED` 连接，用 `bpf_sock_destroy` 将其销毁。默认模式是 dry-run，确认影响范围后再执行销毁。
+本教程构建一个小型 eBPF 工具：扫描当前网络命名空间中的 TCP 套接字，找到目标远端 IPv4 地址和端口完全匹配的 `ESTABLISHED` 连接，用 `bpf_sock_destroy` 将其销毁。TCP BPF 迭代器只能看到加载它的进程所在网络命名空间中的套接字，而非主机上的全部套接字。默认模式是 dry-run，确认影响范围后再执行销毁。
 
 > 完整源码: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
@@ -38,13 +38,24 @@ PASS: dry-run preserved both connections; apply destroyed only the target
 
 请将目标 IP 和端口替换为你要隔离的实际地址。该工具执行一次扫描后退出，不会持续运行。
 
+### 在其他网络命名空间中使用
+
+TCP BPF 迭代器扫描的是加载 BPF 程序的进程所在的网络命名空间。要隔离容器或其他网络命名空间中的连接，先进入该命名空间：
+
+```bash
+sudo nsenter --net=/proc/<target-pid>/ns/net -- ./tcp_quarantine \
+  --destination 203.0.113.99 --port 443 --apply
+```
+
+`<target-pid>` 是目标网络命名空间中任意进程的 PID。这里只进入网络命名空间，二进制文件和当前工作目录仍来自调用者的 mount 命名空间。该工具不会自动扫描其他网络命名空间。
+
 ## 工作原理：端到端流程
 
 工具使用 BPF TCP iterator 遍历内核套接字表，流程如下：
 
 1. **用户态解析目标参数。** 加载器用 `inet_pton` 验证 IPv4 地址，转换端口号，在加载 BPF 程序之前写入只读数据段。
 
-2. **BPF 程序作为 TCP iterator 加载并挂载。** 内核对 TCP 哈希表中的每个套接字调用一次迭代器回调。
+2. **BPF 程序作为 TCP iterator 加载并挂载。** 内核对加载进程所在网络命名空间中的每个 TCP 套接字调用一次迭代器回调。
 
 3. **迭代器过滤。** 对每个套接字递增 `scanned` 计数器，跳过非 `AF_INET` 或非 `TCP_ESTABLISHED` 的条目，然后比较 `skc_daddr` 和 `skc_dport` 是否与目标匹配。
 
@@ -75,7 +86,7 @@ const volatile bool apply;
 
 struct quarantine_stats stats;
 
-extern int bpf_sock_destroy(struct sock_common *sock) __weak __ksym;
+extern int bpf_sock_destroy(struct sock_common *sock) __ksym;
 
 SEC("iter/tcp")
 int quarantine_tcp(struct bpf_iter__tcp *ctx)
@@ -120,7 +131,7 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 
 - **`const volatile` 用于参数传递。** 这些变量位于 `.rodata` 段，用户态在 `open()` 之后、`load()` 之前设置它们，验证器将其视为常量。这种方式比使用 map 更简洁。
 
-- **`bpf_sock_destroy` 作为 kfunc 声明。** 通过 `__weak __ksym` 标注，内核在加载时解析。如果当前内核不提供该 kfunc（版本过低），加载将明确失败。
+- **`bpf_sock_destroy` 作为 kfunc 声明。** 通过 `__ksym` 标注为必需（强）符号，内核在加载时解析。如果内核中缺少该符号（版本过低或 kfunc 不可用），BPF 加载会在重定位阶段失败。
 
 - **`BPF_CORE_READ` 保证可移植性。** CO-RE 重定位使同一编译产物能在不同 `sock_common` 布局的内核上运行，前提是有 BTF。
 
@@ -146,7 +157,7 @@ if (err) {
     fprintf(stderr,
         "failed to load TCP quarantine program: %s\n"
         "This tool requires Linux 6.5+ with BTF, TCP BPF iterators, "
-        "and the bpf_sock_destroy kfunc.\n",
+        "BPF JIT, and the bpf_sock_destroy kfunc.\n",
         strerror(-err));
     goto cleanup;
 }
@@ -198,11 +209,12 @@ sudo make test
 |---|---|
 | 内核版本 | Linux 6.5+（`bpf_sock_destroy` 首次出现的版本） |
 | BTF | 必须启用 (`CONFIG_DEBUG_INFO_BTF=y`) |
-| 内核配置 | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y` |
+| 内核配置 | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
+| BPF JIT 运行时 | 必须在运行时启用（例如 `net.core.bpf_jit_enable=1`）。调用 kfunc 的程序无法回退到 BPF 解释器。如果内核编译时启用了 `CONFIG_BPF_JIT_ALWAYS_ON`，该 sysctl 可能不存在，因为 JIT 已永久启用。 |
 | 架构 | 已在 x86_64 上测试 |
 | 权限 | 已在 root 下测试。最小权限部署需要根据具体内核版本和环境确定所需的 capabilities 和 LSM 策略。 |
 
-加载失败时，加载器会打印内核 errno 以及内核/BTF/迭代器/kfunc 的要求信息，帮助定位缺失的前置条件。
+加载失败时，加载器会打印内核 errno 以及内核/BTF/迭代器/JIT/kfunc 的要求信息，帮助定位缺失的前置条件。
 
 ## 局限性
 
@@ -211,7 +223,7 @@ sudo make test
 - **仅支持 IPv4。** 没有 IPv6 路径。
 - **单次扫描。** 工具执行一次后退出，不会监控新建连接。
 - **无进程归属信息。** 无法看到匹配套接字属于哪个进程。
-- **无 cgroup 范围限定。** 扫描覆盖主机上所有套接字，不限定容器或服务。
+- **网络命名空间范围，无 cgroup 筛选。** 扫描覆盖加载进程所在网络命名空间中的所有 TCP 套接字，但命名空间内部没有 cgroup 级别的过滤。管理多个命名空间的生产控制器需要分别进入每个目标命名空间运行，或显式编排。
 - **无授权和审计日志。** 生产版本应通过策略审批控制销毁操作并记录审计轨迹。
 - **不支持 UDP 或数据包检测。** 仅处理 TCP ESTABLISHED 套接字。
 

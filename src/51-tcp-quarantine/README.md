@@ -2,7 +2,7 @@
 
 Your threat-intel feed just flagged `203.0.113.99` as a command-and-control server. Firewall rules and iptables block new connections immediately, but `netstat` shows three production workers already holding established TCP sessions to that address. Those sessions will keep exfiltrating data until the process closes them or the machine reboots. You need to sever the active connections right now, without restarting services, without killing processes, and without dropping unrelated traffic.
 
-This tutorial builds a small eBPF tool that scans every TCP socket on the host, finds established IPv4 connections to an exact remote address and port, and destroys them with `bpf_sock_destroy`. A dry-run mode lets you verify what would be killed before you pull the trigger.
+This tutorial builds a small eBPF tool that scans the TCP sockets in the current network namespace, finds established IPv4 connections to an exact remote address and port, and destroys them with `bpf_sock_destroy`. The TCP BPF iterator sees only the sockets belonging to the network namespace of the process that loads it, not every socket on the host. A dry-run mode lets you verify what would be killed before you pull the trigger.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
@@ -38,13 +38,24 @@ PASS: dry-run preserved both connections; apply destroyed only the target
 
 Substitute your own destination IP and port. The tool exits after one scan; it does not run continuously.
 
+### Targeting a different network namespace
+
+The TCP BPF iterator scans the network namespace of the process that loads the BPF program. To quarantine connections inside a container or network namespace other than your own, enter that namespace first:
+
+```bash
+sudo nsenter --net=/proc/<target-pid>/ns/net -- ./tcp_quarantine \
+  --destination 203.0.113.99 --port 443 --apply
+```
+
+The `<target-pid>` identifies any process in the target network namespace. Only the network namespace is entered; the binary and current working directory remain available from the caller's mount namespace. The tool does not scan other network namespaces automatically.
+
 ## How it works: end-to-end flow
 
 The tool uses a BPF TCP iterator to walk the kernel's socket table. Here is the flow:
 
 1. **User space parses the target.** The loader validates the IPv4 address with `inet_pton`, converts the port, and stores both into the BPF program's read-only data section before loading.
 
-2. **BPF program loads and attaches as a TCP iterator.** The kernel calls the iterator callback once per socket in the TCP hash table.
+2. **BPF program loads and attaches as a TCP iterator.** The kernel calls the iterator callback once per TCP socket in the loading process's network namespace.
 
 3. **The iterator filters.** For each socket it increments `scanned`, skips anything that isn't `AF_INET` + `TCP_ESTABLISHED`, then compares `skc_daddr` and `skc_dport` against the target.
 
@@ -75,7 +86,7 @@ const volatile bool apply;
 
 struct quarantine_stats stats;
 
-extern int bpf_sock_destroy(struct sock_common *sock) __weak __ksym;
+extern int bpf_sock_destroy(struct sock_common *sock) __ksym;
 
 SEC("iter/tcp")
 int quarantine_tcp(struct bpf_iter__tcp *ctx)
@@ -120,7 +131,7 @@ Key points:
 
 - **`const volatile` for parameters.** These variables live in the `.rodata` section. User space sets them after `open()` but before `load()`, so the verifier sees them as constants. This avoids maps for simple configuration.
 
-- **`bpf_sock_destroy` as a kfunc.** Declared with `__weak __ksym`, the kernel resolves this at load time. If the kfunc is unavailable (kernel too old), loading fails with a clear error rather than silently doing nothing.
+- **`bpf_sock_destroy` as a kfunc.** Declared with `__ksym`, this is a required (strong) kfunc symbol. The kernel resolves it at load time. If the symbol is missing (kernel too old or kfunc not available), BPF loading fails at relocation.
 
 - **`BPF_CORE_READ` for portability.** CO-RE relocations let the same compiled object run on kernels with different `sock_common` layouts, as long as BTF is available.
 
@@ -146,7 +157,7 @@ if (err) {
     fprintf(stderr,
         "failed to load TCP quarantine program: %s\n"
         "This tool requires Linux 6.5+ with BTF, TCP BPF iterators, "
-        "and the bpf_sock_destroy kfunc.\n",
+        "BPF JIT, and the bpf_sock_destroy kfunc.\n",
         strerror(-err));
     goto cleanup;
 }
@@ -198,11 +209,12 @@ This runs `python3 tests/test_tcp_quarantine.py ./tcp_quarantine` which creates 
 |---|---|
 | Kernel | Linux 6.5+ (where `bpf_sock_destroy` first appeared) |
 | BTF | Required (`CONFIG_DEBUG_INFO_BTF=y`) |
-| Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y` |
+| Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
+| BPF JIT runtime | Must be enabled at runtime (e.g. `net.core.bpf_jit_enable=1`). Programs that call kfuncs cannot fall back to the BPF interpreter. On kernels built with `CONFIG_BPF_JIT_ALWAYS_ON`, the sysctl may not exist because JIT is permanently enabled. |
 | Architecture | Tested on x86_64 |
 | Privileges | Tested as root. A least-privilege deployment must determine the required capabilities and LSM policy for its kernel version and environment. |
 
-If loading fails, the loader prints the kernel errno followed by the kernel/BTF/iterator/kfunc requirement so you can identify which prerequisite is missing.
+If loading fails, the loader prints the kernel errno followed by the kernel/BTF/iterator/JIT/kfunc requirements so you can identify which prerequisite is missing.
 
 ## Limitations
 
@@ -211,7 +223,7 @@ This is a teaching tool, not a production agent. Specifically:
 - **IPv4 only.** There is no IPv6 path.
 - **One-shot scan.** The tool exits after a single pass. It does not monitor for new connections.
 - **No process attribution.** You cannot see which process owns the matched sockets.
-- **No cgroup scoping.** The scan covers all sockets on the host, not a specific container or service.
+- **Network-namespace scope, no cgroup selector.** The scan covers all TCP sockets in the loading process's network namespace, but there is no cgroup-level filter inside that namespace. A production controller that manages several namespaces must enter and run in each intended namespace or orchestrate them explicitly.
 - **No authorization or audit log.** A production version would gate destruction behind policy approval and record an audit trail.
 - **No UDP or packet inspection.** Only TCP established sockets are considered.
 

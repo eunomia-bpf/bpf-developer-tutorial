@@ -16,7 +16,7 @@ const volatile bool apply;
 
 struct quarantine_stats stats;
 
-extern int bpf_sock_destroy(struct sock_common *sock) __weak __ksym;
+extern int bpf_sock_destroy(struct sock_common *sock) __ksym;
 
 SEC("iter/tcp")
 int quarantine_tcp(struct bpf_iter__tcp *ctx)
