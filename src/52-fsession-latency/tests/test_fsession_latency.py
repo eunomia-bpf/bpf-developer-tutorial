@@ -101,6 +101,16 @@ def main() -> int:
     assert invalid.returncode != 0
     assert "invalid duration" in invalid.stdout
 
+    empty_threshold = subprocess.run(
+        [binary, "--threshold-us", ""],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    assert empty_threshold.returncode != 0
+    assert "invalid threshold" in empty_threshold.stdout
+
     pid = str(os.getpid())
     missed, _ = run_trace(
         binary,

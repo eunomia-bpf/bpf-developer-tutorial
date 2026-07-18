@@ -63,7 +63,7 @@ static int parse_u64(const char *value, unsigned long long maximum,
 
 	errno = 0;
 	parsed = strtoull(value, &end, 10);
-	if (errno || !end || *end || parsed > maximum)
+	if (errno || end == value || *end || parsed > maximum)
 		return -EINVAL;
 	*result = parsed;
 	return 0;
