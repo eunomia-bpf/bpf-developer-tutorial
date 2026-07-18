@@ -16,6 +16,11 @@ import time
 SUMMARY = re.compile(
     r"SUMMARY calls=(\d+) slow=(\d+) errors=(\d+) dropped=(\d+) events=(\d+)"
 )
+EVENT = re.compile(
+    r"^EVENT comm=.{16} tgid=(\d+) pid=(\d+) requested=(\d+) "
+    r"result=(-?\d+) latency_us=(\d+)$",
+    re.MULTILINE,
+)
 
 
 def wait_until_attached(process: subprocess.Popen[str]) -> list[str]:
@@ -169,7 +174,15 @@ def main() -> int:
     assert slow["calls"] >= 65, slow
     assert 1 <= slow["slow"] < slow["calls"], slow
     assert slow["events"] > 0, slow
-    assert "EVENT " in slow_output
+    event_records = [tuple(map(int, match.groups())) for match in EVENT.finditer(slow_output)]
+    assert any(
+        tgid == os.getpid()
+        and thread_pid == os.getpid()
+        and requested == 1
+        and result == 1
+        and latency_us >= 10000
+        for tgid, thread_pid, requested, result, latency_us in event_records
+    ), slow_output
 
     deadline, _ = run_trace(
         binary,
@@ -181,6 +194,7 @@ def main() -> int:
     )
     assert deadline["calls"] > 0, deadline
     assert deadline["events"] > 0, deadline
+    assert deadline["slow"] == deadline["events"] + deadline["dropped"], deadline
 
     tracing_line = next(line for line in slow_output.splitlines() if line.startswith("Tracing "))
     first_event = next(line for line in slow_output.splitlines() if line.startswith("EVENT "))

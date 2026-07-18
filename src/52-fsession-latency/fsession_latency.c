@@ -226,6 +226,17 @@ int main(int argc, char **argv)
 		}
 		err = 0;
 	}
+	if (err < 0)
+		goto cleanup;
+
+	fsession_latency_bpf__detach(skel);
+
+	err = ring_buffer__consume(ring);
+	if (err < 0) {
+		fprintf(stderr, "ring buffer drain failed: %s\n", strerror(-err));
+		goto cleanup;
+	}
+	err = 0;
 
 	printf("SUMMARY calls=%llu slow=%llu errors=%llu dropped=%llu events=%llu\n",
 	       skel->bss->stats.calls, skel->bss->stats.slow,
