@@ -29,6 +29,52 @@ def load_events(path: Path) -> list[dict[str, Any]]:
     return [event for event in values if isinstance(event, dict)]
 
 
+def inspect_tool(
+    item: dict[str, Any], repo: Path, allowed_paths: set[Path]
+) -> tuple[str | None, int]:
+    if item.get("type") != "tool_use":
+        return None, 0
+
+    tool_name = item.get("name")
+    if tool_name not in {"Edit", "Write"}:
+        return tool_name, 0
+
+    raw_path = (item.get("input") or {}).get("file_path")
+    if not raw_path:
+        raise SystemExit(f"{tool_name} call has no file_path")
+    target = Path(raw_path)
+    if not target.is_absolute():
+        target = repo / target
+    target = target.resolve()
+    if target not in allowed_paths:
+        raise SystemExit(f"{tool_name} call targeted unauthorized path: {target}")
+    return tool_name, 1
+
+
+def inspect_assistant_events(
+    events: list[dict[str, Any]], repo: Path, allowed_paths: set[Path]
+) -> tuple[int, int, set[Any], set[Any]]:
+    authored_text = 0
+    write_calls = 0
+    assistant_models = set()
+    tool_names = set()
+    for event in events:
+        if event.get("type") != "assistant":
+            continue
+        message = event.get("message") or {}
+        model = message.get("model")
+        content = message.get("content") or []
+        if any(item.get("type") == "text" and item.get("text") for item in content):
+            authored_text += 1
+            assistant_models.add(model)
+        for item in content:
+            tool_name, writes = inspect_tool(item, repo, allowed_paths)
+            write_calls += writes
+            if tool_name:
+                tool_names.add(tool_name)
+    return authored_text, write_calls, assistant_models, tool_names
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--trace", required=True, type=Path)
@@ -51,36 +97,9 @@ def main() -> int:
         raise SystemExit(f"expected init model {args.model!r}, found {sorted(init_models)!r}")
 
     base_model = args.model.split("[", 1)[0]
-    authored_text = 0
-    write_calls = 0
-    assistant_models = set()
-    tool_names = set()
-    for event in events:
-        if event.get("type") != "assistant":
-            continue
-        message = event.get("message") or {}
-        model = message.get("model")
-        content = message.get("content") or []
-        if any(item.get("type") == "text" and item.get("text") for item in content):
-            authored_text += 1
-            assistant_models.add(model)
-        for item in content:
-            if item.get("type") != "tool_use":
-                continue
-            tool_name = item.get("name")
-            tool_names.add(tool_name)
-            if tool_name not in {"Edit", "Write"}:
-                continue
-            write_calls += 1
-            raw_path = (item.get("input") or {}).get("file_path")
-            if not raw_path:
-                raise SystemExit(f"{tool_name} call has no file_path")
-            target = Path(raw_path)
-            if not target.is_absolute():
-                target = repo / target
-            target = target.resolve()
-            if target not in allowed_paths:
-                raise SystemExit(f"{tool_name} call targeted unauthorized path: {target}")
+    authored_text, write_calls, assistant_models, tool_names = inspect_assistant_events(
+        events, repo, allowed_paths
+    )
 
     if not authored_text:
         raise SystemExit("trace contains no authored assistant text")
