@@ -23,6 +23,8 @@ SERVICE_PID=$(pgrep -n my-service)
 sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
 ```
 
+`--pid` compares against the TGID returned by `bpf_get_current_pid_tgid()`, which is always the TGID in the host (initial) PID namespace. The `pgrep` example above works for a process running directly on the host. For a process inside a container or nested PID namespace, you must resolve and pass its host-namespace TGID; a namespace-local PID will silently match nothing.
+
 CLI usage:
 
 ```text
@@ -143,9 +145,10 @@ The user-space program in `fsession_latency.c` performs these steps:
 1. Parse CLI arguments (threshold, duration, PID filter).
 2. Open the BPF skeleton and set `rodata` constants (`threshold_ns`, `target_tgid`) before loading.
 3. Load and attach the fsession program to `vfs_read`.
-4. Create a ring buffer and poll it with a 100 ms timeout until the duration expires or a signal arrives.
-5. Print each event as it arrives (comm, tgid, pid, requested bytes, result, latency in microseconds).
-6. Print a summary line with aggregate counters from BSS.
+4. Create a ring buffer and poll it with a 100 ms timeout until the duration expires or a signal arrives. Print each event as it arrives (comm, tgid, pid, requested bytes, result, latency in microseconds).
+5. Detach the fsession program so BPF statistics stop changing.
+6. Call `ring_buffer__consume()` to drain events already submitted to the ring buffer before detach.
+7. Print the summary line with stable aggregate counters from BSS.
 
 The summary line exposes ring-buffer drops so the operator knows if events were lost under load.
 
@@ -183,7 +186,7 @@ The test validates:
 1. An unmatched PID (2^32 - 1) produces zero calls, proving the TGID filter works.
 2. A 10-second threshold (10,000,000 us) produces no slow events even though reads complete, proving the threshold comparison works.
 3. A 10 ms threshold with a pipe read delayed by 50 ms produces at least one slow event, proving the end-to-end reporting path works.
-4. Threshold 0 with continuous target-TGID reads through the one-second deadline produces calls and events, and the CLI still exits successfully. This protects the normal-success exit path when the final `ring_buffer__poll()` call consumes events.
+4. Threshold 0 with continuous target-TGID reads through the one-second deadline produces calls and events, and the CLI still exits successfully. The test also asserts `slow == events + dropped`, so every slow call at the window boundary is either delivered or explicitly counted as a ring-buffer reservation drop.
 
 ## Requirements
 
@@ -201,7 +204,7 @@ The test validates:
 
 - Measures time inside `vfs_read` only. This is not full request latency, storage-device service time, or application p99.
 - Covers only paths that invoke `vfs_read`. mmap and other paths that bypass it are invisible.
-- Exact TGID filter only. No cgroup, process-tree, path, inode, mount, or container selector.
+- Exact TGID filter only. No cgroup, process-tree, path, inode, mount, PID-namespace, or container selector. The filter operates on the host-namespace TGID; there is no way to pass a namespace-local PID or select by container runtime.
 - One-shot duration. Not a daemon, alerting system, or metrics exporter.
 - Ring buffer can drop matching events under load. The `dropped` counter exposes that condition; other counters remain aggregate observations.
 - Command names can repeat and PID reuse is possible outside the bounded tracing window.

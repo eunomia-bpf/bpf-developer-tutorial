@@ -23,6 +23,8 @@ SERVICE_PID=$(pgrep -n my-service)
 sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
 ```
 
+`--pid` 比较的是 `bpf_get_current_pid_tgid()` 返回的 TGID，即宿主机（初始）PID 命名空间中的 TGID。上面的 `pgrep` 示例适用于直接运行在宿主机上的进程。如果目标进程位于容器或嵌套 PID 命名空间内，必须解析并传入其宿主机命名空间的 TGID；传入命名空间内部的 PID 会静默匹配不到任何进程。
+
 命令行用法：
 
 ```text
@@ -143,9 +145,10 @@ struct latency_stats {
 1. 解析命令行参数（阈值、持续时间、PID 过滤器）。
 2. 打开 BPF skeleton，在加载前设置 `rodata` 常量（`threshold_ns`、`target_tgid`）。
 3. 加载并附加 fsession 程序到 `vfs_read`。
-4. 创建 ring buffer，以 100 ms 超时轮询，直到持续时间到期或收到信号。
-5. 每收到一个事件立即打印（comm、tgid、pid、请求字节数、结果、延迟微秒数）。
-6. 打印汇总行，包含从 BSS 读取的聚合计数器。
+4. 创建 ring buffer，以 100 ms 超时轮询，直到持续时间到期或收到信号。每收到一个事件立即打印（comm、tgid、pid、请求字节数、结果、延迟微秒数）。
+5. 解除 fsession 程序的附加，使 BPF 统计计数器不再变化。
+6. 调用 `ring_buffer__consume()` 排空解除附加前已提交到 ring buffer 的事件。
+7. 打印汇总行，此时聚合计数器已稳定。
 
 汇总行中的 `dropped` 字段暴露 ring buffer 丢失事件的情况，让运维人员知道是否有数据丢失。
 
@@ -183,7 +186,7 @@ sudo make test
 1. 不匹配的 PID (2^32 - 1) 产生零次调用，证明 TGID 过滤器有效。
 2. 10 秒阈值 (10,000,000 us) 即使有读操作完成也不产生慢事件，证明阈值比较逻辑正确。
 3. 10 ms 阈值加上延迟 50 ms 的管道读产生至少一个慢事件，证明端到端上报路径正常工作。
-4. 阈值为 0 时，持续对目标 TGID 执行读操作直到一秒截止时间结束，产生调用和事件，且 CLI 仍然成功退出。该场景保护最后一次 `ring_buffer__poll()` 消费事件后的正常退出路径。
+4. 阈值为 0 时，持续对目标 TGID 执行读操作直到一秒截止时间结束，产生调用和事件，且 CLI 仍然成功退出。该场景还断言 `slow == events + dropped`，确保窗口边界的每一个慢调用要么被投递为事件，要么被明确计入 ring buffer 预留失败。
 
 ## 环境要求
 
@@ -201,7 +204,7 @@ sudo make test
 
 - 仅测量 `vfs_read` 内部的时间，不等于完整请求延迟、存储设备服务时间或应用 p99。
 - 仅覆盖调用 `vfs_read` 的路径。mmap 和其他绕过 `vfs_read` 的路径不可见。
-- 仅支持精确 TGID 过滤，不支持 cgroup、进程树、路径、inode、挂载点或容器选择器。
+- 仅支持精确 TGID 过滤，不支持 cgroup、进程树、路径、inode、挂载点、PID 命名空间或容器选择器。过滤器在宿主机命名空间 TGID 上工作，无法传入命名空间内部的 PID 或按容器运行时选择。
 - 单次运行，不是守护进程、告警系统或指标导出器。
 - Ring buffer 在高负载下可能丢失匹配事件。`dropped` 计数器暴露该情况，其他计数器为聚合观察值。
 - 命令名称可能重复，PID 在有界追踪窗口外可能被复用。
