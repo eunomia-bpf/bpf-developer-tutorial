@@ -209,7 +209,7 @@ This runs `python3 tests/test_tcp_quarantine.py ./tcp_quarantine` which creates 
 |---|---|
 | Kernel | Linux 6.5+ (where `bpf_sock_destroy` first appeared) |
 | BTF | Required (`CONFIG_DEBUG_INFO_BTF=y`) |
-| Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
+| Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
 | BPF JIT runtime | Must be enabled at runtime (e.g. `net.core.bpf_jit_enable=1`). Programs that call kfuncs cannot fall back to the BPF interpreter. On kernels built with `CONFIG_BPF_JIT_ALWAYS_ON`, the sysctl may not exist because JIT is permanently enabled. |
 | Architecture | Tested on x86_64 |
 | Privileges | Tested as root. A least-privilege deployment must determine the required capabilities and LSM policy for its kernel version and environment. |

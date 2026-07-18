@@ -209,7 +209,7 @@ sudo make test
 |---|---|
 | 内核版本 | Linux 6.5+（`bpf_sock_destroy` 首次出现的版本） |
 | BTF | 必须启用 (`CONFIG_DEBUG_INFO_BTF=y`) |
-| 内核配置 | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
+| 内核配置 | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
 | BPF JIT 运行时 | 必须在运行时启用（例如 `net.core.bpf_jit_enable=1`）。调用 kfunc 的程序无法回退到 BPF 解释器。如果内核编译时启用了 `CONFIG_BPF_JIT_ALWAYS_ON`，该 sysctl 可能不存在，因为 JIT 已永久启用。 |
 | 架构 | 已在 x86_64 上测试 |
 | 权限 | 已在 root 下测试。最小权限部署需要根据具体内核版本和环境确定所需的 capabilities 和 LSM 策略。 |
