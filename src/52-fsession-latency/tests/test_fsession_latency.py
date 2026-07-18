@@ -65,7 +65,12 @@ def generate_reads() -> None:
         writer.join()
 
 
-def run_trace(binary: str, *arguments: str, workload: bool) -> tuple[dict[str, int], str]:
+def run_trace(
+    binary: str,
+    *arguments: str,
+    workload: bool,
+    continuous: bool = False,
+) -> tuple[dict[str, int], str]:
     process = subprocess.Popen(
         [binary, *arguments],
         stdout=subprocess.PIPE,
@@ -74,9 +79,31 @@ def run_trace(binary: str, *arguments: str, workload: bool) -> tuple[dict[str, i
         bufsize=1,
     )
     lines = wait_until_attached(process)
-    if workload:
+    stop_workload = threading.Event()
+    producer: threading.Thread | None = None
+    if continuous:
+        path = pathlib.Path(__file__)
+
+        def generate_continuous_reads() -> None:
+            descriptor = os.open(path, os.O_RDONLY)
+            try:
+                while not stop_workload.is_set():
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    os.read(descriptor, 1)
+                    time.sleep(0.001)
+            finally:
+                os.close(descriptor)
+
+        producer = threading.Thread(target=generate_continuous_reads)
+        producer.start()
+    elif workload:
         generate_reads()
-    remainder, _ = process.communicate(timeout=8)
+    try:
+        remainder, _ = process.communicate(timeout=8)
+    finally:
+        stop_workload.set()
+        if producer is not None:
+            producer.join()
     output = "".join(lines) + remainder
     if process.returncode != 0:
         raise AssertionError(f"tool failed with {process.returncode}:\n{output}")
@@ -143,6 +170,17 @@ def main() -> int:
     assert 1 <= slow["slow"] < slow["calls"], slow
     assert slow["events"] > 0, slow
     assert "EVENT " in slow_output
+
+    deadline, _ = run_trace(
+        binary,
+        "--duration", "1",
+        "--threshold-us", "0",
+        "--pid", pid,
+        workload=False,
+        continuous=True,
+    )
+    assert deadline["calls"] > 0, deadline
+    assert deadline["events"] > 0, deadline
 
     tracing_line = next(line for line in slow_output.splitlines() if line.startswith("Tracing "))
     first_event = next(line for line in slow_output.splitlines() if line.startswith("EVENT "))

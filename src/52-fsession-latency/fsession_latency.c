@@ -224,6 +224,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "ring buffer poll failed: %s\n", strerror(-err));
 			break;
 		}
+		err = 0;
 	}
 
 	printf("SUMMARY calls=%llu slow=%llu errors=%llu dropped=%llu events=%llu\n",
