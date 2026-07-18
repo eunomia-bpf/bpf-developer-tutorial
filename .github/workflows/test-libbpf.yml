@@ -179,6 +179,11 @@ jobs:
       run: |
           make -C src/50-tcx
 
+    - name: test 51 TCP quarantine
+      run: |
+          make -C src/51-tcp-quarantine
+          sudo make -C src/51-tcp-quarantine test
+
     - name: test features bpf_token
       run: |
           make -C src/features/bpf_token
