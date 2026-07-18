@@ -230,11 +230,17 @@ def main() -> int:
             bufsize=1,
         )
         signal_lines = wait_until_ready(process)
+        send_burst()
         process.terminate()
         signal_remainder, _ = process.communicate(timeout=4)
         signal_output = "".join(signal_lines) + signal_remainder
         assert process.returncode == 0, signal_output
-        parse_summary(signal_output)
+        signal_stats = parse_summary(signal_output)
+        assert signal_stats["enqueued"] + signal_stats["policy_dropped"] == ATTEMPTS, signal_stats
+        assert signal_stats["cleanup_dropped"] > 0, signal_stats
+        assert signal_stats["enqueued"] == (
+            signal_stats["dequeued"] + signal_stats["cleanup_dropped"]
+        ), signal_stats
         qdisc_after_signal = run("tc", "qdisc", "show", "dev", TX_INTERFACE).stdout
         assert "bpf_pacer" not in qdisc_after_signal, qdisc_after_signal
 
