@@ -29,6 +29,29 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 - Do not let provenance become the plot. Kernel commits, guest versions, CI details, and test matrices belong in a compact reproducibility note unless the lesson is specifically about them.
 - Match the scenario to the tool. A small fixture, lab command, or feature demonstration can be valuable without being described as a production service.
 
+## Positive and concrete sentences
+
+- Use a positive statement of behavior or scope. Write “The loader observes one child that it creates” instead of “The loader does not monitor every exec on the system.” Write “The example implements one aggregate FIFO” instead of opening with the scheduler policies it lacks.
+- Rewrite `not`, `do not`, `does not`, `cannot`, `will not`, `不要`, `不能`, `不会`, `并非` and `别` whenever an accurate positive form exists. Remove double negatives and paragraphs built from consecutive negative sentences.
+- Keep the supported scope exact while using positive wording. “The example focuses on one child” describes the implemented behavior without implying that system-wide monitoring already exists.
+- Collect failure conditions, unsupported behavior, limitations, and safety boundaries near the end in one paragraph of at most two sentences. The main narrative should stay with the working path.
+- Start important sentences with a concrete actor such as the hook, BPF program, map, callback, loader, fixture, kernel, or command. Keep that subject close to its verb and prefer active voice when ownership or sequencing matters.
+- Connect three or more short declarative sentences through cause, contrast, or sequence. A pair of short sentences can create emphasis, while a longer note-like run should become a causal paragraph.
+- Give vague referents a name. Replace an unclear `this`, `it`, `they`, `这`, `它` or `这种方式` with the component or mechanism it denotes.
+- Put the claim or practical meaning before a block of numbers, counters, or output. The reader should know what the evidence demonstrates before reading the evidence.
+- Prefer direct verbs over nominalizations and filler. Use “the callback reads,” “the loader attaches,” and “the test verifies” instead of “performs a read,” “conducts attachment,” or “provides verification.”
+- Place known context near the sentence opening and the new result near the end. This topic-to-stress order helps adjacent sentences form one path instead of a fact catalog.
+
+Treat this wording as a negative example:
+
+> 这个例子故意只做聚合 FIFO，没有 class、公平调度、ECN、burst 控制。用它做实验可以，但别往物理网卡上挂，也别当生产调度器。
+
+The paragraph defines the example through missing features and repeated warnings, so the useful mechanism disappears behind negation. Rewrite it around the implemented path and a concrete learning setting:
+
+> 这个例子用一条聚合 FIFO 展示 skb 所有权、发送时序和 qdisc 清理，适合在 veth、TAP 或 IFB 这类受控接口上观察完整流程，更完整的调度器可以在此基础上加入 class、公平调度、ECN 和 burst 控制。
+
+Apply the same repair in English. Replace a paragraph built from “no classes,” “not production,” and “do not attach” with the mechanism the reader can run, the controlled setting that fits it, and the natural extensions that follow.
+
 ## Paragraph and sentence checks
 
 - English paragraphs usually work best at 40–90 words. Inspect every paragraph above 110 words. Three consecutive paragraphs above 90 words are **Must fix**.
@@ -37,6 +60,7 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 - Keep a sentence's subject near its verb. Split long modifiers, dangling introductions, and sentences that make the reader hold several clauses before reaching the action.
 - Avoid weak openings such as “It is,” “There is,” and “This is” when a concrete subject is available.
 - Do not stack three or more short note-like sentences. Connect cause, mechanism, and consequence.
+- Avoid a pair of neighboring negative sentences when positive wording can carry the same facts. Reserve the compact final boundary paragraph for the remaining limits.
 - Cut filler such as “in order to,” “utilize,” “it is important to note that,” “due to the fact that,” “in terms of,” and “with respect to.” Prefer direct verbs.
 - Do not use spaced English em dashes (` — `) or Chinese em dashes (`——`) in prose.
 - Do not join independent clauses with semicolons. Use two sentences or a conjunction.

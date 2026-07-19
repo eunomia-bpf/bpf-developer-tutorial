@@ -13,7 +13,7 @@ Invoke `$bpf-tutorial-writing-style` before writing or reviewing README prose.
 
 Use the exact model ID `claude-opus-4-5-20251101` through Claude Code. Never use `opus`, `latest`, a default model, a fallback model, or another provider for tutorial prose. If this exact model is unavailable, stop and report the block instead of substituting another writer.
 
-Use exactly one non-interactive Claude invocation for one lesson. Require Opus to edit the existing README files in place, one paragraph at a time and in document order. It must not generate a replacement article and overwrite the file as a whole. It must preserve the existing code-block positions while revising the prose around each block, first completing natural Chinese and then matching English from the same facts.
+Use exactly one non-interactive Claude invocation for one lesson. Require Opus to edit the existing README files in place, one specific sentence or paragraph at a time and in document order. Each Edit operation must have a narrow target. It must not generate a replacement article and overwrite the file as a whole. It must preserve the existing code-block positions while revising the prose around each block, first completing natural Chinese and then matching English from the same facts.
 
 The initial prompt must contain the complete task, source-fidelity rules, style rules, and final audit checklist. Opus must not ask Codex or the user a question, pause for confirmation, return a partial progress report, or stop after one language or one section. It may return only after both README files have been rewritten from beginning to end and it has run its own baseline comparison and formatting checks. Do not split the main rewrite into planned paragraph batches, switch models, or let Codex fill in prose afterward.
 
@@ -62,7 +62,7 @@ Include the complete core source exactly as implemented, then walk through the i
 
 Follow the selected precedent's component rhythm. Introduce one component, present its complete source inline, and explain its important logic before moving to the next component. Do not hide source in `<details>` or collect every file into one uninterrupted source dump. The source must remain searchable, copyable, and byte-exact.
 
-Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, cleanup, limitations, summary, and primary references. State once what the evidence proves and once where the example stops.
+Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, summary, and primary references. Explain cleanup as part of the normal mechanism instead of turning it into a warning section. Compress failure conditions, limitations, and safety boundaries into one short paragraph of at most two sentences near the end.
 
 Use canonical GitHub absolute URLs for every Markdown link, including links to the current lesson's source, `Makefile`, and tests. Never publish a `./` or `../` target or a link to another host. If no stable GitHub URL exists, omit the link. This repository rule overrides link examples in older lessons and the advanced guideline's website call to action.
 
@@ -88,13 +88,13 @@ Read both files from top to bottom as an intermediate eBPF developer. Fix the te
 
 - the opening reads like an abstract, specification, PR description, or test report;
 - a large code wall arrives before the reader has a useful mental model;
-- setup, conflicts, signals, KVM provenance, or limitations repeat;
+- setup, conflicts, signals, KVM provenance, or limitations interrupt the main mechanism;
 - a section catalogs facts without explaining cause and effect;
 - the scenario promises a tool more capable than the implementation;
 - Chinese follows English word order or switches languages unnecessarily;
 - the reader reaches the end remembering only a feature name or validation transcript.
 
-For a rewrite, compare the finished pair with the entry version once. Confirm that code, commands, captured output, versions, requirements, failure behavior, cleanup, limitations, and primary references did not disappear or change. Every removed passage should be repetition, stale framing, or material that moved to a better place. Word counts, heading counts, and repeated-term counts can expose bloat, but they are diagnostics rather than targets.
+For a rewrite, compare the finished pair with the entry version once. Confirm that code, commands, captured output, versions, requirements, cleanup, the compact final boundary, and primary references remain accurate. Failure and limitation details may be condensed into the required two-sentence ending instead of surviving as a catalog. Every other removed passage should be repetition, stale framing, or material that moved to a better place. Word counts, heading counts, and repeated-term counts can expose bloat, but they are diagnostics rather than targets.
 
 This is the normal review gate. Keep the pinned Opus session as the only prose editor. Codex reports concrete defects and reruns deterministic checks; Opus revises the affected paragraphs. The exact model identity is required by the workflow, but it is not evidence of quality. Only the finished artifact and passing checks are evidence.
 

@@ -23,6 +23,10 @@ Treat the scene as a teaching device, not a license to write fiction. Do not inv
 
 Use oral English, familiar words, and connected sentences. Write natural Chinese independently from the same facts. Chinese punctuation should be restrained: prefer one or two connected sentences that carry one technical thought over a row of short, period-heavy statements. Prefer causal explanation over inventories. A paragraph should tell the reader what happens, why it happens, and what that enables.
 
+Prefer positive, concrete statements throughout the tutorial. Explain what the hook, program, loader, command, or test does and which scope it covers. Rewrite `not`, `do not`, `cannot`, `will not`, `不要`, `不能`, `不会`, `并非`, and `别` whenever the same fact has an accurate positive form, and remove every double negative. Keep at most one compact boundary paragraph near the end, limited to two sentences, instead of distributing failure, limitation, and safety warnings through the article.
+
+Keep the actor close to the action. Start important sentences with a concrete component, use active voice when ownership matters, connect short facts through cause and effect, and give `this`, `it`, `这` and `它` an unmistakable referent. Put the claim before detailed evidence, use verbs instead of abstract noun phrases, and end a sentence on the new fact the reader should remember.
+
 Do not write like a paper, specification, PR description, release note, test log, or compliance report. Build and KVM evidence belongs in compilation and execution, where it should support a claim instead of becoming the article's main plot.
 
 ## Keep the source readable
@@ -39,7 +43,7 @@ Keep local infrastructure private. Do not name workspace paths, shared lab repos
 
 Describe what the implementation actually provides. A bounded lab command is a bounded lab command. Do not inflate it into a daemon, controller, production scheduler, security product, or operational platform.
 
-State requirements, one meaningful failure path, cleanup behavior, and limitations. Say each important boundary once, at the point where the reader needs it. Move low-level kernel provenance into a compact requirements or reproducibility note.
+State requirements and explain cleanup through the normal lifecycle. Collect failure conditions, limitations, and safety boundaries into one compact paragraph of at most two sentences near the end. Move low-level kernel provenance into a compact requirements or reproducibility note.
 
 ## Final reader check
 
