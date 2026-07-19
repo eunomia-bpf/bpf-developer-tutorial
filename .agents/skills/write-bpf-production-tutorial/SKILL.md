@@ -45,7 +45,7 @@ Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) befo
 
 ## Draft from evidence
 
-First write a precedent brief that confirms the required `47-cuda-events` and `49-hid` bilingual pairs were read in full, then names one additional lesson with the closest subsystem or operational shape when useful. State which teaching patterns to reuse, which legacy weaknesses to avoid, and why the new lesson has a distinct operational job. Do not draft until this brief exists.
+First write a precedent brief that confirms the required `47-cuda-events` and `49-hid` bilingual pairs were read in full, then records any additional lesson pairs selected for a useful subsystem or operational pattern. State which teaching patterns to reuse, which legacy weaknesses to avoid, and why the new lesson has a distinct operational job. Do not draft until this brief exists.
 
 Create a task file outside the lesson with:
 

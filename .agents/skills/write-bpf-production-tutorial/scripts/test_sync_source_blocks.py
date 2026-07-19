@@ -87,15 +87,20 @@ class SyncSourceBlocksTest(unittest.TestCase):
 
         before = english.read_bytes()
         repeated = self.run_script(
-            "--readme", "src/lesson/README.md", "--write"
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
         )
         self.assertEqual(0, repeated.returncode, repeated.stderr)
         self.assertEqual(before, english.read_bytes())
 
     def test_check_rejects_stale_block(self) -> None:
         self.write_readme("src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md")
         checked = self.run_script(
-            "--readme", "src/lesson/README.md", "--check"
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--check",
         )
         self.assertEqual(1, checked.returncode)
         self.assertIn("stale complete-source block", checked.stderr)
@@ -116,30 +121,39 @@ class SyncSourceBlocksTest(unittest.TestCase):
 
     def test_rejects_source_outside_repository(self) -> None:
         self.write_readme("src/lesson/README.md", "../outside.c")
+        self.write_readme("src/lesson/README.zh.md", "../outside.c")
         result = self.run_script(
-            "--readme", "src/lesson/README.md", "--write", expected=("../outside.c",)
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write", expected=("../outside.c",)
         )
         self.assertEqual(1, result.returncode)
         self.assertIn("escapes repository root", result.stderr)
 
     def test_rejects_nested_markers(self) -> None:
         readme = self.write_readme("src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md")
         text = readme.read_text(encoding="utf-8").replace(
             "```c\nold\n```\n",
             "<!-- BEGIN FULL SOURCE: src/lesson/tool.c -->\n",
         )
         readme.write_text(text, encoding="utf-8")
         result = self.run_script(
-            "--readme", "src/lesson/README.md", "--write"
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
         )
         self.assertEqual(1, result.returncode)
-        self.assertIn("nested complete-source marker", result.stderr)
+        self.assertIn("missing generated code fence", result.stderr)
 
     def test_rejects_readme_as_source(self) -> None:
         self.write_readme("src/lesson/README.md", "src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md", "src/lesson/README.md")
         result = self.run_script(
             "--readme",
             "src/lesson/README.md",
+            "--readme",
+            "src/lesson/README.zh.md",
             "--write",
             expected=("src/lesson/README.md",),
         )
@@ -148,9 +162,12 @@ class SyncSourceBlocksTest(unittest.TestCase):
 
     def test_rejects_incomplete_inventory(self) -> None:
         self.write_readme("src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md")
         result = self.run_script(
             "--readme",
             "src/lesson/README.md",
+            "--readme",
+            "src/lesson/README.zh.md",
             "--check",
             expected=("src/lesson/tool.c", "src/lesson/contract.h"),
         )
@@ -161,14 +178,49 @@ class SyncSourceBlocksTest(unittest.TestCase):
         source = self.root / "src/lesson/source.txt"
         source.write_text("text\n", encoding="utf-8")
         self.write_readme("src/lesson/README.md", "src/lesson/source.txt")
+        self.write_readme("src/lesson/README.zh.md", "src/lesson/source.txt")
         result = self.run_script(
             "--readme",
             "src/lesson/README.md",
+            "--readme",
+            "src/lesson/README.zh.md",
             "--write",
             expected=("src/lesson/source.txt",),
         )
         self.assertEqual(1, result.returncode)
         self.assertIn("unsupported expected-source file type", result.stderr)
+
+    def test_source_marker_and_backtick_collisions_are_idempotent(self) -> None:
+        source = self.root / "src/lesson/tool.py"
+        source.write_text(
+            'payload = """\n<!-- END FULL SOURCE -->\n```\n"""\n\n',
+            encoding="utf-8",
+        )
+        english = self.write_readme("src/lesson/README.md", "src/lesson/tool.py")
+        chinese = self.write_readme("src/lesson/README.zh.md", "src/lesson/tool.py")
+        arguments = (
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
+        )
+        first = self.run_script(*arguments, expected=("src/lesson/tool.py",))
+        self.assertEqual(0, first.returncode, first.stderr)
+        first_english = english.read_bytes()
+        first_chinese = chinese.read_bytes()
+        self.assertIn(b"````python", first_english)
+
+        second = self.run_script(*arguments, expected=("src/lesson/tool.py",))
+        self.assertEqual(0, second.returncode, second.stderr)
+        self.assertEqual(first_english, english.read_bytes())
+        self.assertEqual(first_chinese, chinese.read_bytes())
+
+    def test_requires_bilingual_pair(self) -> None:
+        self.write_readme("src/lesson/README.md")
+        result = self.run_script(
+            "--readme", "src/lesson/README.md", "--check"
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("exactly the English and Chinese README pair", result.stderr)
 
 
 if __name__ == "__main__":

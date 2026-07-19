@@ -97,6 +97,8 @@ case "$reviewer" in
   glm)
     readonly model='zai-coding-plan/glm-5.2'
     command -v opencode >/dev/null || { echo "OpenCode is required" >&2; exit 127; }
+    readonly opencode_db=${OPENCODE_DB:-$HOME/.local/share/opencode/opencode.db}
+    [[ -r $opencode_db ]] || { echo "OpenCode metadata database is required: $opencode_db" >&2; exit 127; }
     ;;
 esac
 
@@ -152,15 +154,90 @@ mkdir -m 700 "$run_dir"
 prompt="$run_dir/review-prompt.md"
 trace="$run_dir/review-trace.jsonl"
 manifest="$run_dir/manifest.json"
+snapshot_dir="$run_dir/snapshot"
+task_snapshot="$snapshot_dir/task.md"
+model_proof="$run_dir/model-proof.json"
+
+initial_state=initializing
+write_initial_manifest() {
+  INITIAL_STATE_VALUE="$initial_state" \
+  REVIEWER_VALUE="$reviewer" \
+  MODEL_VALUE="$model" \
+  REPO_VALUE="$repo" \
+  TASK_VALUE="$task" \
+  PROMPT_VALUE="$prompt" \
+  TRACE_VALUE="$trace" \
+  SNAPSHOT_DIR_VALUE="$snapshot_dir" \
+  python3 - "$manifest" <<'PY'
+import json
+import os
+import pathlib
+
+path = pathlib.Path(__import__("sys").argv[1])
+temporary = path.with_name(path.name + ".tmp")
+temporary.write_text(json.dumps({
+    "state": os.environ["INITIAL_STATE_VALUE"],
+    "reviewer": os.environ["REVIEWER_VALUE"],
+    "model": os.environ["MODEL_VALUE"],
+    "repo": os.environ["REPO_VALUE"],
+    "task": os.environ["TASK_VALUE"],
+    "prompt": os.environ["PROMPT_VALUE"],
+    "trace": os.environ["TRACE_VALUE"],
+    "snapshot_dir": os.environ["SNAPSHOT_DIR_VALUE"],
+}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(temporary, path)
+PY
+  chmod 600 "$manifest"
+}
+initial_finalize() {
+  exit_status=$?
+  set +e
+  if ((exit_status != 0)) && [[ $initial_state == initializing ]]; then
+    initial_state=failed_or_interrupted_during_setup
+  fi
+  write_initial_manifest
+}
+initial_interrupted() {
+  initial_state=interrupted_during_setup
+  exit "$1"
+}
+trap initial_finalize EXIT
+trap 'initial_interrupted 129' HUP
+trap 'initial_interrupted 130' INT
+trap 'initial_interrupted 143' TERM
+write_initial_manifest
+
 touch "$trace"
 chmod 600 "$trace"
+mkdir -m 700 "$snapshot_dir"
 
 head_before=$(git -C "$repo" rev-parse HEAD)
 status_before=$(git -C "$repo" status --porcelain=v1)
-task_sha=$(sha256sum "$task" | awk '{print $1}')
+python3 - "$task" "$task_snapshot" <<'PY'
+import pathlib
+import sys
+
+source, destination = map(pathlib.Path, sys.argv[1:])
+destination.write_bytes(source.read_bytes())
+PY
+chmod 600 "$task_snapshot"
+task_sha=$(sha256sum "$task_snapshot" | awk '{print $1}')
+declare -a snapshot_paths=()
 declare -a file_hashes_before=()
+index=0
 for file in "${files[@]}"; do
-  file_hashes_before+=("$(sha256sum "$repo/$file" | awk '{print $1}')  $file")
+  index=$((index + 1))
+  snapshot_path="$snapshot_dir/$(printf '%04d' "$index").snapshot"
+  python3 - "$repo/$file" "$snapshot_path" <<'PY'
+import pathlib
+import sys
+
+source, destination = map(pathlib.Path, sys.argv[1:])
+destination.write_bytes(source.read_bytes())
+PY
+  chmod 600 "$snapshot_path"
+  snapshot_paths+=("$snapshot_path")
+  file_hashes_before+=("$(sha256sum "$snapshot_path" | awk '{print $1}')  $file")
 done
 
 {
@@ -173,17 +250,18 @@ done
   done
 
   task_boundary="UNTRUSTED_TASK_${run_id//[^A-Za-z0-9]/_}"
-  printf '\n<%s bytes="%s" sha256="%s">\n' "$task_boundary" "$(wc -c <"$task")" "$task_sha"
-  sed -n '1,$p' "$task"
+  printf '\n<%s bytes="%s" sha256="%s">\n' "$task_boundary" "$(wc -c <"$task_snapshot")" "$task_sha"
+  sed -n '1,$p' "$task_snapshot"
   printf '\n</%s>\n' "$task_boundary"
 
   index=0
   for file in "${files[@]}"; do
+    snapshot_path=${snapshot_paths[$index]}
     index=$((index + 1))
     file_boundary="UNTRUSTED_SNAPSHOT_${index}_${run_id//[^A-Za-z0-9]/_}"
     printf '\n<%s path="%s" bytes="%s" sha256="%s">\n' \
-      "$file_boundary" "$file" "$(wc -c <"$repo/$file")" "$(sha256sum "$repo/$file" | awk '{print $1}')"
-    sed -n '1,$p' "$repo/$file"
+      "$file_boundary" "$file" "$(wc -c <"$snapshot_path")" "$(sha256sum "$snapshot_path" | awk '{print $1}')"
+    sed -n '1,$p' "$snapshot_path"
     printf '\n</%s>\n' "$file_boundary"
   done
 
@@ -196,6 +274,7 @@ prompt_sha=$(sha256sum "$prompt" | awk '{print $1}')
 run_state=running
 review_status=-1
 trace_sha=
+model_proof_sha=
 gate=
 head_after=$head_before
 status_after=$status_before
@@ -208,11 +287,14 @@ write_manifest() {
   SCOPE_VALUE="$scope" \
   REPO_VALUE="$repo" \
   TASK_VALUE="$task" \
+  TASK_SNAPSHOT_VALUE="$task_snapshot" \
   TASK_SHA_VALUE="$task_sha" \
   PROMPT_VALUE="$prompt" \
   PROMPT_SHA_VALUE="$prompt_sha" \
   TRACE_VALUE="$trace" \
   TRACE_SHA_VALUE="$trace_sha" \
+  MODEL_PROOF_VALUE="$model_proof" \
+  MODEL_PROOF_SHA_VALUE="$model_proof_sha" \
   REVIEW_STATUS_VALUE="$review_status" \
   GATE_VALUE="$gate" \
   HEAD_BEFORE_VALUE="$head_before" \
@@ -228,18 +310,22 @@ import os
 import pathlib
 
 path = pathlib.Path(__import__("sys").argv[1])
-path.write_text(json.dumps({
+temporary = path.with_name(path.name + ".tmp")
+temporary.write_text(json.dumps({
     "state": os.environ["RUN_STATE_VALUE"],
     "reviewer": os.environ["REVIEWER_VALUE"],
     "model": os.environ["MODEL_VALUE"],
     "scope": os.environ["SCOPE_VALUE"],
     "repo": os.environ["REPO_VALUE"],
     "task": os.environ["TASK_VALUE"],
+    "task_snapshot": os.environ["TASK_SNAPSHOT_VALUE"],
     "task_sha256": os.environ["TASK_SHA_VALUE"],
     "prompt": os.environ["PROMPT_VALUE"],
     "prompt_sha256": os.environ["PROMPT_SHA_VALUE"],
     "trace": os.environ["TRACE_VALUE"],
     "trace_sha256": os.environ["TRACE_SHA_VALUE"],
+    "model_proof": os.environ["MODEL_PROOF_VALUE"],
+    "model_proof_sha256": os.environ["MODEL_PROOF_SHA_VALUE"],
     "review_exit_status": int(os.environ["REVIEW_STATUS_VALUE"]),
     "gate": os.environ["GATE_VALUE"] or None,
     "head_before": os.environ["HEAD_BEFORE_VALUE"],
@@ -251,6 +337,7 @@ path.write_text(json.dumps({
     "review_files_sha256_before": os.environ["FILES_BEFORE_VALUE"].splitlines(),
     "review_files_sha256_after": os.environ["FILES_AFTER_VALUE"].splitlines(),
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.replace(temporary, path)
 PY
   chmod 600 "$manifest"
 }
@@ -260,6 +347,9 @@ finalize() {
   set +e
   if [[ -f $trace ]]; then
     trace_sha=$(sha256sum "$trace" | awk '{print $1}')
+  fi
+  if [[ -f $model_proof ]]; then
+    model_proof_sha=$(sha256sum "$model_proof" | awk '{print $1}')
   fi
   head_after=$(git -C "$repo" rev-parse HEAD 2>/dev/null || printf '%s' "$head_before")
   status_after=$(git -C "$repo" status --porcelain=v1 2>/dev/null || true)
@@ -326,7 +416,14 @@ if ((review_status != 0)); then
 fi
 [[ -s $trace ]] || { echo "review trace is empty: $trace" >&2; exit 1; }
 
-verification=$(python3 "$VERIFY" --trace "$trace" --reviewer "$reviewer" --model "$model")
+verify_args=(--trace "$trace" --reviewer "$reviewer" --model "$model")
+if [[ $reviewer == glm ]]; then
+  verify_args+=(--opencode-db "$opencode_db" --model-proof "$model_proof")
+fi
+verification=$(python3 "$VERIFY" "${verify_args[@]}")
+if [[ -f $model_proof ]]; then
+  model_proof_sha=$(sha256sum "$model_proof" | awk '{print $1}')
+fi
 gate=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["gate"])' <<<"$verification")
 
 head_after=$(git -C "$repo" rev-parse HEAD)
@@ -340,7 +437,8 @@ if [[ $head_before != "$head_after" || $(printf '%s\n' "${file_hashes_before[@]}
   exit 1
 fi
 if [[ $status_before != "$status_after" ]]; then
-  echo "warning: unrelated repository status changed during review; recorded in manifest" >&2
+  echo "read-only review observed a repository status change; preserved trace: $trace" >&2
+  exit 1
 fi
 
 run_state=complete

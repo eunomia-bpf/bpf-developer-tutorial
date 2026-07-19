@@ -5,7 +5,7 @@ Read both required English/Chinese README pairs in full before drafting:
 - `src/47-cuda-events/README.md` and `src/47-cuda-events/README.zh.md`
 - `src/49-hid/README.md` and `src/49-hid/README.zh.md`
 
-Select one to three additional completed lesson pairs with the same operational shape, subsystem, attachment type, or reader task when they add a useful domain pattern. The lists below route common topics, but they are not an allowlist. An agent may select any better-matched finished tutorial after inspecting the repository index. Read every selected English/Chinese pair in full and record every exact path in the precedent brief.
+Select up to three additional completed lesson pairs with the same operational shape, subsystem, attachment type, or reader task when they add a useful domain pattern. The lists below route common topics, but they are not an allowlist. An agent may select any better-matched finished tutorial after inspecting the repository index. Read every selected English/Chinese pair in full and record every exact path in the precedent brief.
 
 ## Required advanced-tool precedents
 

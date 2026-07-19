@@ -12,6 +12,7 @@ import tempfile
 
 
 BEGIN_RE = re.compile(r"^<!-- BEGIN FULL SOURCE: ([^ ]+) -->$")
+FENCE_RE = re.compile(r"^(`{3,})([A-Za-z0-9_+.-]*)$")
 END = "<!-- END FULL SOURCE -->"
 LANGUAGES = {
     ".c": "c",
@@ -64,29 +65,37 @@ def render(
         if source in sources:
             raise ValueError(f"duplicate complete-source marker: {source_name}")
 
-        end = index + 1
-        while end < len(lines) and lines[end] != END:
-            if BEGIN_RE.match(lines[end]):
-                raise ValueError(
-                    f"nested complete-source marker before {END!r} after {source_name}"
-                )
+        if index + 1 >= len(lines):
+            raise ValueError(f"missing generated code fence after {source_name}")
+        opening_fence = FENCE_RE.match(lines[index + 1])
+        if not opening_fence:
+            raise ValueError(f"missing generated code fence after {source_name}")
+        closing_fence = opening_fence.group(1)
+        end = index + 2
+        while end < len(lines) and lines[end] != closing_fence:
             end += 1
-        if end == len(lines):
-            raise ValueError(f"missing {END!r} after {source_name}")
+        if end == len(lines) or end + 1 == len(lines) or lines[end + 1] != END:
+            raise ValueError(f"missing matching generated fence and {END!r} after {source_name}")
 
         language = LANGUAGES[source.suffix]
-        source_text = source.read_text(encoding="utf-8").rstrip("\n")
+        source_text = source.read_bytes().decode("utf-8")
+        if "\r" in source_text:
+            raise ValueError(f"complete source must use LF line endings: {source_name}")
+        max_backticks = max((len(run) for run in re.findall(r"`+", source_text)), default=0)
+        generated_fence = "`" * max(3, max_backticks + 1)
+        if source_text.endswith("\n"):
+            source_text = source_text[:-1]
         rendered.extend(
             [
                 lines[index],
-                f"```{language}",
+                f"{generated_fence}{language}",
                 source_text,
-                "```",
+                generated_fence,
                 END,
             ]
         )
         sources.add(source)
-        index = end + 1
+        index = end + 2
 
     return "\n".join(rendered) + "\n", sources
 
@@ -148,6 +157,12 @@ def resolve_readmes(
             raise ValueError(f"duplicate README path: {value}")
         readmes.append((value, readme))
         seen.add(readme)
+    if len(readmes) != 2:
+        raise ValueError("pass exactly the English and Chinese README pair")
+    names = {path.name for _, path in readmes}
+    parents = {path.parent for _, path in readmes}
+    if names != {"README.md", "README.zh.md"} or len(parents) != 1:
+        raise ValueError("README paths must be README.md and README.zh.md from one lesson")
     return readmes
 
 
