@@ -1,71 +1,46 @@
-# eBPF Tutorial by Example: Quarantine an Established TCP Connection
+# eBPF Tutorial by Example: Targeted TCP Connection Quarantine
 
-Your threat-intel feed just flagged `203.0.113.99` as a command-and-control server. Firewall rules and iptables block new connections immediately, but `netstat` shows three production workers already holding established TCP sessions to that address. Those sessions will keep exfiltrating data until the process closes them or the machine reboots. You need to sever the active connections right now, without restarting services, without killing processes, and without dropping unrelated traffic.
+Suppose an egress destination has just been added to a policy or threat-intelligence blocklist. A firewall blocks future connects, but `netstat` shows the server already has an active TCP session to that address. You want to preview and close that exact established session while preserving the process and unrelated connections.
 
-This tutorial builds a small eBPF tool that scans the TCP sockets in the current network namespace, finds established IPv4 connections to an exact remote address and port, and destroys them with `bpf_sock_destroy`. The TCP BPF iterator sees only the sockets belonging to the network namespace of the process that loads it, not every socket on the host. A dry-run mode lets you verify what would be killed before you pull the trigger.
+This tutorial builds `tcp_quarantine`, a one-shot CLI that matches an exact IPv4 destination address and port, finds all `ESTABLISHED` TCP connections matching that tuple, and counts or destroys them. The default mode is dry-run, which reports matches. The `--apply` flag directs the BPF program to call the kernel's `bpf_sock_destroy` kfunc on each match. The TCP BPF iterator's scan scope is the network namespace of the loading process.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
-## Quick demo
+## End-to-End Flow
 
-Build the tool and run it against a target destination:
+The tool uses a BPF TCP iterator to walk the kernel's TCP socket table. User space first validates the IPv4 address with `inet_pton` and parses the port number, then writes both parameters into the skeleton's read-only data section `.rodata` before loading the BPF program. The `destination.s_addr` stored by `inet_pton` is already in network byte order; the host-order port and apply boolean are written alongside it.
 
-```bash
-cd src/51-tcp-quarantine
-make clean
-make -j2
+The BPF program attaches as a TCP iterator via `SEC("iter/tcp")`. When user space reads the iterator file descriptor, the kernel invokes the callback once per TCP socket in the loading process's network namespace. The callback first increments `scanned` for each non-null `sk`, then selects `AF_INET` plus `TCP_ESTABLISHED` sockets into `established`. It reads `skc_daddr`, `skc_dport`, `skc_family`, and `skc_state` through `BPF_CORE_READ`, and CO-RE relocations allow the same compiled object to run on kernels with different layouts. Destination-address comparison uses the network-order value from `inet_pton`. Port comparison uses `bpf_htons(target_port)` because `skc_dport` is stored in network byte order.
+
+Exact matches increment `matched`; dry-run mode returns after counting. Apply mode calls `bpf_sock_destroy(sk)`, incrementing `destroyed` on zero return or `failed` on nonzero. `bpf_sock_destroy` is declared as a strong `__ksym`, and the kernel resolves this required kfunc at load time.
+
+The shared `quarantine_stats` object lives in BSS as the result channel. The loader attaches the program with `bpf_program__attach_iter`, creates an iterator fd with `bpf_iter_create`, and reads that fd to EOF to drive traversal; the read buffer serves only to drive traversal, while counters pass through BSS. User space reads the five counters after consuming the iterator. The loader destroys the iterator link and skeleton on cleanup. It returns nonzero when loading or iteration fails, or when any `bpf_sock_destroy` call increments `failed`. The `--verbose` option enables libbpf debug messages.
+
+## The Shared Header
+
+Both the BPF program and user-space loader include this header to ensure the BSS layout of `quarantine_stats` stays consistent.
+
+```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+#ifndef __TCP_QUARANTINE_H
+#define __TCP_QUARANTINE_H
+
+struct quarantine_stats {
+	unsigned long long scanned;
+	unsigned long long established;
+	unsigned long long matched;
+	unsigned long long destroyed;
+	unsigned long long failed;
+};
+
+#endif /* __TCP_QUARANTINE_H */
 ```
 
-Dry-run (safe, nothing is destroyed):
+The five counters record: total sockets scanned, IPv4 sockets in `ESTABLISHED` state, exact destination-and-port matches, sockets successfully destroyed in apply mode, and `bpf_sock_destroy` calls that returned nonzero. User space reads these counters after iteration completes and prints a single summary line.
 
-```bash
-sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063
-```
+## The BPF Program
 
-Apply (destroys matching sockets):
-
-```bash
-sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063 --apply
-```
-
-Real output from the test environment:
-
-```console
-mode=dry-run destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=0 failed=0
-mode=apply destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=1 failed=0
-PASS: dry-run preserved both connections; apply destroyed only the target
-```
-
-Substitute your own destination IP and port. The tool exits after one scan; it does not run continuously.
-
-### Targeting a different network namespace
-
-The TCP BPF iterator scans the network namespace of the process that loads the BPF program. To quarantine connections inside a container or network namespace other than your own, enter that namespace first:
-
-```bash
-sudo nsenter --net=/proc/<target-pid>/ns/net -- ./tcp_quarantine \
-  --destination 203.0.113.99 --port 443 --apply
-```
-
-The `<target-pid>` identifies any process in the target network namespace. Only the network namespace is entered; the binary and current working directory remain available from the caller's mount namespace. The tool does not scan other network namespaces automatically.
-
-## How it works: end-to-end flow
-
-The tool uses a BPF TCP iterator to walk the kernel's socket table. Here is the flow:
-
-1. **User space parses the target.** The loader validates the IPv4 address with `inet_pton`, converts the port, and stores both into the BPF program's read-only data section before loading.
-
-2. **BPF program loads and attaches as a TCP iterator.** The kernel calls the iterator callback once per TCP socket in the loading process's network namespace.
-
-3. **The iterator filters.** For each socket it increments `scanned`, skips anything that isn't `AF_INET` + `TCP_ESTABLISHED`, then compares `skc_daddr` and `skc_dport` against the target.
-
-4. **Dry-run vs. apply.** If `apply` is false (the default), matched sockets are counted but left alone. If true, the program calls `bpf_sock_destroy` on each match.
-
-5. **User space reads statistics.** After consuming the iterator to completion, the loader reads counters from BSS and prints the single summary line.
-
-## The BPF program
-
-The complete BPF side fits in under 60 lines:
+The complete BPF program source follows.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -127,81 +102,261 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 }
 ```
 
-Key points:
+The program declares itself as a TCP iterator with `SEC("iter/tcp")`. The iterator context `bpf_iter__tcp` is provided by the kernel, with `sk_common` pointing to successive TCP sockets as the table is traversed. The three `const volatile` variables live in `.rodata`, passing the small fixed configuration directly through read-only global data; user space writes the target address, port, and apply flag after `open()` but before `load()`, and the verifier treats them as compile-time constants.
 
-- **`const volatile` for parameters.** These variables live in the `.rodata` section. User space sets them after `open()` but before `load()`, so the verifier sees them as constants. This avoids maps for simple configuration.
+`bpf_sock_destroy` is declared via `extern ... __ksym` as a strong kfunc symbol. Strong-symbol resolution makes Linux 6.5+ kfunc availability a load-time prerequisite and completes relocation before traversal begins. Load diagnostics report errno plus the prerequisite set. The `BPF_CORE_READ` macro uses BTF to read `sock_common` fields, and CO-RE relocations ensure the same compiled object runs across kernel versions with differing layouts. Port comparison uses `bpf_htons(target_port)` because `skc_dport` is stored in network byte order.
 
-- **`bpf_sock_destroy` as a kfunc.** Declared with `__ksym`, this is a required (strong) kfunc symbol. The kernel resolves it at load time. If the symbol is missing (kernel too old or kfunc not available), BPF loading fails at relocation.
+## The User-Space Loader
 
-- **`BPF_CORE_READ` for portability.** CO-RE relocations let the same compiled object run on kernels with different `sock_common` layouts, as long as BTF is available.
-
-- **Network byte order for the port.** `skc_dport` is stored in network order, so the comparison uses `bpf_htons(target_port)`.
-
-## The user-space loader
-
-The loader handles argument parsing, BPF lifecycle, and iterator execution. The critical section:
+The complete user-space loader source follows.
 
 ```c
-skel = tcp_quarantine_bpf__open();
-if (!skel) {
-    fprintf(stderr, "failed to open BPF skeleton\n");
-    return 1;
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+#include <arpa/inet.h>
+#include <errno.h>
+#include <getopt.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <bpf/bpf.h>
+#include <bpf/libbpf.h>
+#include "tcp_quarantine.h"
+#include "tcp_quarantine.skel.h"
+
+static struct env {
+	const char *destination;
+	unsigned int port;
+	bool apply;
+	bool verbose;
+} env;
+
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
+			   va_list args)
+{
+	if (level == LIBBPF_DEBUG && !env.verbose)
+		return 0;
+	return vfprintf(stderr, format, args);
 }
 
-skel->rodata->target_addr = destination.s_addr;
-skel->rodata->target_port = env.port;
-skel->rodata->apply = env.apply;
+static void usage(const char *program)
+{
+	fprintf(stderr,
+		"Usage: %s --destination IPv4 --port PORT [--apply] [--verbose]\n"
+		"\n"
+		"Find established TCP client connections to an exact destination.\n"
+		"The default is a safe dry run; --apply destroys matching sockets.\n"
+		"\n"
+		"Options:\n"
+		"  -d, --destination IPv4  exact remote IPv4 address\n"
+		"  -p, --port PORT         exact remote TCP port (1-65535)\n"
+		"  -a, --apply             destroy matching sockets\n"
+		"  -v, --verbose           print libbpf diagnostics\n"
+		"  -h, --help              show this help\n",
+		program);
+}
 
-err = tcp_quarantine_bpf__load(skel);
-if (err) {
-    fprintf(stderr,
-        "failed to load TCP quarantine program: %s\n"
-        "This tool requires Linux 6.5+ with BTF, TCP BPF iterators, "
-        "BPF JIT, and the bpf_sock_destroy kfunc.\n",
-        strerror(-err));
-    goto cleanup;
+static int parse_port(const char *value, unsigned int *port)
+{
+	char *end = NULL;
+	unsigned long parsed;
+
+	errno = 0;
+	parsed = strtoul(value, &end, 10);
+	if (errno || !end || *end || parsed == 0 || parsed > 65535)
+		return -EINVAL;
+	*port = parsed;
+	return 0;
+}
+
+static int parse_args(int argc, char **argv)
+{
+	static const struct option options[] = {
+		{ "destination", required_argument, NULL, 'd' },
+		{ "port", required_argument, NULL, 'p' },
+		{ "apply", no_argument, NULL, 'a' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{},
+	};
+	int option;
+
+	while ((option = getopt_long(argc, argv, "d:p:avh", options, NULL)) != -1) {
+		switch (option) {
+		case 'd':
+			env.destination = optarg;
+			break;
+		case 'p':
+			if (parse_port(optarg, &env.port)) {
+				fprintf(stderr, "invalid TCP port: %s\n", optarg);
+				return -EINVAL;
+			}
+			break;
+		case 'a':
+			env.apply = true;
+			break;
+		case 'v':
+			env.verbose = true;
+			break;
+		case 'h':
+			usage(argv[0]);
+			exit(0);
+		default:
+			return -EINVAL;
+		}
+	}
+
+	if (!env.destination || !env.port || optind != argc)
+		return -EINVAL;
+	return 0;
+}
+
+static int run_iterator(struct bpf_program *program)
+{
+	struct bpf_link *link;
+	char buffer[256];
+	int iter_fd, length, err;
+
+	link = bpf_program__attach_iter(program, NULL);
+	err = libbpf_get_error(link);
+	if (err) {
+		fprintf(stderr, "failed to attach TCP iterator: %s\n", strerror(-err));
+		return err;
+	}
+
+	iter_fd = bpf_iter_create(bpf_link__fd(link));
+	if (iter_fd < 0) {
+		err = iter_fd;
+		fprintf(stderr, "failed to create TCP iterator: %s\n", strerror(-err));
+		goto cleanup;
+	}
+
+	while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0)
+		;
+	if (length < 0) {
+		err = -errno;
+		fprintf(stderr, "failed while scanning TCP sockets: %s\n", strerror(errno));
+	}
+	close(iter_fd);
+
+cleanup:
+	bpf_link__destroy(link);
+	return err;
+}
+
+int main(int argc, char **argv)
+{
+	struct tcp_quarantine_bpf *skel = NULL;
+	struct in_addr destination;
+	int err;
+
+	err = parse_args(argc, argv);
+	if (err) {
+		usage(argv[0]);
+		return 1;
+	}
+	if (inet_pton(AF_INET, env.destination, &destination) != 1) {
+		fprintf(stderr, "invalid IPv4 destination: %s\n", env.destination);
+		return 1;
+	}
+
+	libbpf_set_print(libbpf_print_fn);
+	skel = tcp_quarantine_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "failed to open BPF skeleton\n");
+		return 1;
+	}
+
+	skel->rodata->target_addr = destination.s_addr;
+	skel->rodata->target_port = env.port;
+	skel->rodata->apply = env.apply;
+
+	err = tcp_quarantine_bpf__load(skel);
+	if (err) {
+		fprintf(stderr,
+			"failed to load TCP quarantine program: %s\n"
+			"This tool requires Linux 6.5+ with BTF, TCP BPF iterators, "
+			"BPF JIT, and the bpf_sock_destroy kfunc.\n",
+			strerror(-err));
+		goto cleanup;
+	}
+
+	err = run_iterator(skel->progs.quarantine_tcp);
+	if (err)
+		goto cleanup;
+
+	printf("mode=%s destination=%s:%u scanned=%llu established=%llu "
+	       "matched=%llu destroyed=%llu failed=%llu\n",
+	       env.apply ? "apply" : "dry-run", env.destination, env.port,
+	       skel->bss->stats.scanned, skel->bss->stats.established,
+	       skel->bss->stats.matched, skel->bss->stats.destroyed,
+	       skel->bss->stats.failed);
+	if (skel->bss->stats.failed)
+		err = -EIO;
+
+cleanup:
+	tcp_quarantine_bpf__destroy(skel);
+	return err != 0;
 }
 ```
 
-After loading, the iterator is attached and consumed:
+The loader's `main` entry parses command-line arguments. The port must be a decimal number from 1 to 65535, and the address is validated and converted to network byte order with `inet_pton`. After opening the skeleton, the three parameters are written to `.rodata`, and `load` completes BPF program loading. Load diagnostics include the kernel errno plus the prerequisite set: Linux 6.5+, BTF, TCP iterators, JIT, and the kfunc.
 
-```c
-link = bpf_program__attach_iter(program, NULL);
-iter_fd = bpf_iter_create(bpf_link__fd(link));
-while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0)
-    ;
+The `run_iterator` function attaches the BPF program with `bpf_program__attach_iter` and creates an iterator fd with `bpf_iter_create`. The loop reads that fd until EOF; each `read` drives the kernel to invoke the BPF callback for a batch of TCP sockets. The read buffer serves only to drive traversal, while counters pass through BSS. After iteration, the loader reads `skel->bss->stats` and prints a single summary line. If any `bpf_sock_destroy` call failed, the program exits nonzero.
+
+## Compilation and Execution
+
+Build the tool:
+
+```bash
+cd src/51-tcp-quarantine
+make clean
+make -j2
 ```
 
-Reading the iterator fd to EOF drives the kernel to call the BPF callback for every TCP socket. The read buffer content is unused here because the program communicates results through BSS counters rather than seq_file output.
+Dry-run mode reports matches; matching connections remain established:
 
-## The shared header
-
-```c
-struct quarantine_stats {
-    unsigned long long scanned;
-    unsigned long long established;
-    unsigned long long matched;
-    unsigned long long destroyed;
-    unsigned long long failed;
-};
+```bash
+sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063
 ```
 
-Both the BPF program and user-space loader include this header so the BSS layout is consistent.
+Apply mode destroys matching sockets:
 
-## Running the automated test
+```bash
+sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063 --apply
+```
 
-The Python test (`tests/test_tcp_quarantine.py`) exercises four scenarios:
+Sample output from the automated test:
 
-1. Invalid IPv4 address is rejected.
-2. Dry-run finds and reports the target but leaves it alive.
-3. Apply mode destroys the target socket (verified by `send()` failing with `ECONNABORTED`, `ECONNRESET`, or `EPIPE`, matching `BROKEN_ERRORS` in the test).
-4. A control connection to a different port survives both runs.
+```console
+mode=dry-run destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=0 failed=0
+mode=apply destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=1 failed=0
+PASS: dry-run preserved both connections; apply destroyed only the target
+```
+
+Socket-table counts and ephemeral port values vary by run. The assertions focus on: one exact match, dry-run preservation, targeted destruction, zero destroy failures, and control-connection survival.
+
+Run the test:
 
 ```bash
 sudo make test
 ```
 
-This runs `python3 tests/test_tcp_quarantine.py ./tcp_quarantine` which creates ephemeral loopback connections, exercises the tool, and asserts the expected behavior.
+This runs `python3 tests/test_tcp_quarantine.py ./tcp_quarantine`. The test creates two loopback TCP connection pairs: a target port and an unrelated control port. It performs request/response round trips before running the tool. The test verifies: invalid destination `not-an-ip` returns nonzero and prints `invalid IPv4 destination`; dry-run output contains `mode=dry-run`, `matched=1`, and `destroyed=0`, and both connections still complete round trips; apply output contains `mode=apply`, `matched=1`, `destroyed=1`, and `failed=0`; the target client's `send()` or `getsockopt(SO_ERROR)` returns `ECONNABORTED`, `ECONNRESET`, or `EPIPE`; and the control connection continues to survive.
+
+Runtime behavior was functionally tested on x86_64 with Linux 7.0.0-rc2+.
+
+## Network Namespace
+
+The TCP BPF iterator scans the network namespace of the process that loads the BPF program. To quarantine connections inside a container or another network namespace, enter that namespace first with `nsenter`:
+
+```bash
+sudo nsenter --net=/proc/<target-pid>/ns/net -- ./tcp_quarantine \
+  --destination 203.0.113.99 --port 443 --apply
+```
+
+`<target-pid>` is any process in the target network namespace. `nsenter --net` changes only the network namespace; the caller's mount namespace is retained, so the binary and working directory remain reachable. Namespace-boundary validation found `matched=0` from the caller namespace and `matched=1` after entering the isolated target namespace.
 
 ## Requirements
 
@@ -210,50 +365,27 @@ This runs `python3 tests/test_tcp_quarantine.py ./tcp_quarantine` which creates 
 | Kernel | Linux 6.5+ (where `bpf_sock_destroy` first appeared) |
 | BTF | Required (`CONFIG_DEBUG_INFO_BTF=y`) |
 | Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_INET=y`, `CONFIG_PROC_FS=y` |
-| BPF JIT runtime | Must be enabled at runtime (e.g. `net.core.bpf_jit_enable=1`). Programs that call kfuncs cannot fall back to the BPF interpreter. On kernels built with `CONFIG_BPF_JIT_ALWAYS_ON`, the sysctl may not exist because JIT is permanently enabled. |
+| BPF JIT | Must be enabled at runtime. Programs calling kfuncs use the JIT path; `CONFIG_BPF_JIT_ALWAYS_ON` kernels may omit the sysctl because JIT is permanently active. |
 | Architecture | Tested on x86_64 |
-| Privileges | Tested as root. A least-privilege deployment must determine the required capabilities and LSM policy for its kernel version and environment. |
+| Privileges | Tested as root |
+| Hardware | None |
 
-If loading fails, the loader prints the kernel errno followed by the kernel/BTF/iterator/JIT/kfunc requirements so you can identify which prerequisite is missing.
+Load diagnostics report the kernel errno plus the prerequisite set: Linux 6.5+, BTF, TCP BPF iterators, BPF JIT, and the kfunc.
 
-## Limitations
+## bpf_sock_destroy Semantics
 
-This is a teaching tool, not a production agent. Specifically:
+The `bpf_sock_destroy` kfunc was introduced in Linux commit `4ddbcb886268af8d12a23e6640b39d1d9c652b1b` to let BPF programs forcibly close a socket from an iterator context. The kernel invokes the protocol-specific destroy path, and the error the application sees depends on which endpoint is destroyed and what operation it attempts next. The upstream TCP selftest expects `ECONNABORTED` on the client side and `ECONNRESET` on the server side; this lesson's test also accepts `EPIPE` as a send-side result.
 
-- **IPv4 only.** There is no IPv6 path.
-- **One-shot scan.** The tool exits after a single pass. It does not monitor for new connections.
-- **No process attribution.** You cannot see which process owns the matched sockets.
-- **Network-namespace scope, no cgroup selector.** The scan covers all TCP sockets in the loading process's network namespace, but there is no cgroup-level filter inside that namespace. A production controller that manages several namespaces must enter and run in each intended namespace or orchestrate them explicitly.
-- **No authorization or audit log.** A production version would gate destruction behind policy approval and record an audit trail.
-- **No UDP or packet inspection.** Only TCP established sockets are considered.
+## Scope and Extensions
 
-A real deployment would source targets from threat intelligence or policy, add RBAC controls, and integrate with an incident management system.
+This example performs one pass through the caller-selected network namespace, handling every established connection that matches one exact IPv4 destination tuple. Extensions can add IPv6, continuous policy input, process/cgroup attribution, multi-namespace orchestration, authorization, and audit records.
 
-## How bpf_sock_destroy works
+## Summary
 
-The `bpf_sock_destroy` kfunc was introduced in Linux 6.5 to give BPF programs the ability to forcibly close a socket from within an iterator context. The original motivation was allowing network policy enforcement to terminate connections that violate updated rules without requiring cooperation from user space.
-
-When called on a TCP socket, the kernel invokes the protocol-specific destroy path. The exact error the owning application sees depends on which endpoint is destroyed and what operation it attempts next. The upstream TCP selftest expects `ECONNABORTED` on the client side and `ECONNRESET` on the server side; this lesson's test also accepts `EPIPE` as a send-side result. Do not assume a specific TCP state transition or packet-level behavior from these observations alone.
-
-The kernel commit introducing this functionality: <https://github.com/torvalds/linux/commit/4ddbcb886268af8d12a23e6640b39d1d9c652b1b>
-
-Upstream BPF selftests provide additional reference:
-- BPF program: <https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/sock_destroy_prog.c>
-- Userspace test: <https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/sock_destroy.c>
-
-## What you can do now
-
-After completing this tutorial, you can:
-
-- Identify and terminate specific TCP connections by destination without killing processes.
-- Safely preview the blast radius with dry-run before taking action.
-- Understand how BPF iterators walk kernel data structures and how kfuncs extend BPF capabilities.
-- Build on this pattern to create policy-driven connection enforcement tools.
+After completing this tutorial, you can terminate all TCP connections matching a destination tuple while preserving the process and unrelated traffic. Dry-run mode previews the impact; apply mode destroys the matches. You understand how BPF iterators traverse the kernel's socket table, how kfuncs expose kernel functionality to BPF programs, and how CO-RE ensures cross-kernel compatibility. For more eBPF tutorials and examples, see <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
 
 ## References
 
-- Tutorial repository: <https://github.com/eunomia-bpf/bpf-developer-tutorial>
-- Tutorial website: <https://eunomia.dev/tutorials/>
 - `bpf_sock_destroy` kernel commit: <https://github.com/torvalds/linux/commit/4ddbcb886268af8d12a23e6640b39d1d9c652b1b>
-- Upstream sock_destroy selftest (BPF): <https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/sock_destroy_prog.c>
-- Upstream sock_destroy selftest (userspace): <https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/sock_destroy.c>
+- Upstream sock_destroy selftest (BPF program): <https://github.com/torvalds/linux/blob/master/tools/testing/selftests/bpf/progs/sock_destroy_prog.c>
+- Upstream sock_destroy selftest (userspace test): <https://github.com/torvalds/linux/blob/master/tools/testing/selftests/bpf/prog_tests/sock_destroy.c>
