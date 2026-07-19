@@ -1,0 +1,4 @@
+interface:
+  display_name: "BPF Tutorial Writing Style"
+  short_description: "Check advanced eBPF tutorial prose and structure"
+  default_prompt: "Use $bpf-tutorial-writing-style to draft or review this advanced eBPF tutorial in the repository house style."

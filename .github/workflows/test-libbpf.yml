@@ -20,6 +20,7 @@ jobs:
         submodules: 'recursive'
     - name: install deps
       run: |
+        sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
         libelf1 libelf-dev zlib1g-dev \
         make git clang llvm pkg-config build-essential dwarves \
