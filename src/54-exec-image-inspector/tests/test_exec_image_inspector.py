@@ -113,6 +113,31 @@ def test_timeout_cleanup(inspector: str) -> dict[str, int]:
     return stats
 
 
+def test_reexec_chain(inspector: str) -> tuple[dict[str, int], str]:
+    final_path = os.path.realpath("/bin/true")
+    result = run(
+        inspector,
+        "--timeout-ms", "1000",
+        "--",
+        "/bin/sh", "-c", "exec /bin/true",
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
+    exec_lines = [
+        line for line in result.stdout.splitlines() if line.startswith("EXEC ")
+    ]
+    assert len(exec_lines) == 2, result.stdout
+    assert f"path={final_path}" in exec_lines[-1], exec_lines[-1]
+
+    stats = parse_summary(result.stdout)
+    assert stats["matched"] == 2, stats
+    assert stats["scheduled"] == 2, stats
+    assert stats["callbacks"] == 2, stats
+    assert stats["events"] == 2, stats
+    assert stats["command_exit"] == 0, stats
+    return stats, final_path
+
+
 def test_deferred_probe(inspector: str, fixture: str) -> str:
     with tempfile.TemporaryDirectory(prefix="exec-image-inspector-") as directory:
         image, probe_offset = create_probe_image(fixture, directory)
@@ -181,6 +206,7 @@ def main() -> int:
 
     missing_stats = test_missing_command(inspector)
     timeout_stats = test_timeout_cleanup(inspector)
+    reexec_stats, final_path = test_reexec_chain(inspector)
     output = test_deferred_probe(inspector, fixture)
     print(
         "TEST-MISSING "
@@ -192,8 +218,17 @@ def main() -> int:
         f"matched={timeout_stats['matched']} callbacks={timeout_stats['callbacks']} "
         f"events={timeout_stats['events']} command_exit={timeout_stats['command_exit']}"
     )
+    print(
+        "TEST-REEXEC "
+        f"matched={reexec_stats['matched']} callbacks={reexec_stats['callbacks']} "
+        f"events={reexec_stats['events']} command_exit={reexec_stats['command_exit']} "
+        f"final_path={final_path}"
+    )
     print(output, end="")
-    print("PASS: missing-command, timeout cleanup, ELF decode, and deferred file read succeeded")
+    print(
+        "PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, "
+        "and deferred file read succeeded"
+    )
     return 0
 
 

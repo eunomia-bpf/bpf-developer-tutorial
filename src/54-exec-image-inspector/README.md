@@ -33,12 +33,13 @@ guest_kernel=7.0.0-rc2+
 guest_identity=uid=0(root) gid=0(root) groups=0(root)
 TEST-MISSING matched=0 events=0 command_exit=127
 TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
-READY target_tgid=1264 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-qo0ucl88/exec_fixture_image
-EXEC pid=1264 tgid=1264 comm=exec_fixture_im path=/tmp/exec-image-inspector-qo0ucl88/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=48
+TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
+READY target_tgid=1266 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-an6ws_fz/exec_fixture_image
+EXEC pid=1266 tgid=1266 comm=exec_fixture_im path=/tmp/exec-image-inspector-an6ws_fz/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=39
 PROBE offset=4214784 direct_error=-14 deferred_error=0 bytes=454950524f424521
 exec fixture completed
 SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path_errors=0 direct_probes=1 direct_probe_errors=1 deferred_probes=1 deferred_probe_errors=0 dropped=0 events=1 command_exit=0
-PASS: missing-command, timeout cleanup, ELF decode, and deferred file read succeeded
+PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
 ```
 
 PID, temporary path, and callback latency vary between runs. The probe offset depends on the built fixture's size and may change after a rebuild. These fields are functional evidence, not performance measurements.
@@ -47,7 +48,7 @@ The reused KVM kernel came from source commit `a03114efd0720dff230388f7e160e427e
 
 The `EXEC` line identifies the final executable image and its ELF header. The `PROBE` line is the important file-I/O comparison. The fixture made an appended marker cold before `exec`. Reading that location directly from the LSM program returned `-EFAULT` (`-14`), while the task-work callback read `454950524f424521`, the hex encoding of `EIPROBE!`.
 
-The two lines before `READY` cover negative behavior. A missing command exits with status 127 and never reaches the committed-exec hook. A sleeping command produces its exec event, exceeds the 200 ms test deadline, and is reaped after `SIGKILL` with status 137.
+The three lines before `READY` cover boundaries. A missing command exits with status 127 and never reaches the committed-exec hook. Because no event arrives, the loader waits only until its 500 ms test deadline. A sleeping command produces its exec event, exceeds the 200 ms test deadline, and is reaped after `SIGKILL` with status 137. The re-exec case observes `/bin/sh` and its later `/bin/true` image, drains both events after reaping, and reports `/usr/bin/true` last.
 
 To inspect another command in a suitable test guest, omit the fixture-only probe offset:
 
@@ -55,8 +56,7 @@ To inspect another command in a suitable test guest, omit the fixture-only probe
 sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
 ```
 
-The tool observes exactly the command after `--`. It is not a system-wide daemon.
-Without `--probe-offset`, an ordinary run prints `READY`, `EXEC`, and `SUMMARY`, but no `PROBE` line.
+The first argument after inspector options names the observed command. The synopsis uses `--` to end option parsing explicitly. The tool is not a system-wide daemon, and an ordinary run without `--probe-offset` prints `READY`, `EXEC`, and `SUMMARY`, but no `PROBE` line.
 
 ### Command-line options
 
@@ -78,7 +78,7 @@ The loader and BPF program cooperate so the hook cannot miss a short-lived comma
 3. User space releases the pipe. The child calls `execvp`, and `lsm/bprm_committed_creds` matches that TGID after the new executable credentials have been committed.
 4. The hook records an optional direct-read result and schedules `bpf_task_work_schedule_signal()` for the current task.
 5. The callback obtains the task's installed executable file, resolves its path, reads the file through a dynptr, decodes the ELF header, and sends one event through the ring buffer.
-6. User space formats the event, waits for the command, enforces the deadline, and destroys the ring buffer and BPF skeleton.
+6. User space polls until the child is reaped and one event arrives, or until the deadline. It drains queued events before destroying the ring buffer and BPF skeleton.
 
 The pipe handshake is important. Loading first and launching later would also avoid a race, but then the loader would need a separate command protocol. The blocked child keeps this tutorial self-contained while guaranteeing that its TGID is known before attachment.
 
@@ -123,7 +123,7 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 
 The direct probe exists to make the context boundary visible. A file-backed dynptr created in this non-sleepable program cannot fault missing file pages into memory. The integration fixture deliberately evicts its marker pages so this attempt returns `-EFAULT`. Cached data may succeed, so `-EFAULT` is not a universal result for every executable or offset. The reproducible comparison belongs to `sudo make test`. [`create_probe_image()`](./tests/test_exec_image_inspector.py) appends the marker, calculates the offset, flushes the file, and requests page-cache eviction before passing that offset to the CLI.
 
-`bpf_task_work_schedule_signal()` associates a BPF callback with the current task. The callback uses the same task-work storage embedded in the map value. The kernel holds the required references until the callback finishes, so the hook does not pass a raw `struct file *` across the deferred boundary.
+`bpf_task_work_schedule_signal()` associates a BPF callback with the current task. The hook probes `bprm->file`, while the callback reacquires the installed image with `bpf_get_task_exe_file()`. It therefore does not defer a raw `struct file *`. The callback uses the task-work storage embedded in the map value, and the kernel holds the required references until it finishes.
 
 ## Read the installed image in the callback
 
@@ -161,7 +161,11 @@ if (err) {
 	}
 	goto put_file;
 }
+```
 
+Once the file dynptr exists, the callback reads the header and optional probe. It then discards the dynptr, decodes valid ELF fields, releases the file reference, and emits the event:
+
+```c
 err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
 if (err) {
 	event.header_error = err;
@@ -222,7 +226,7 @@ ring_buffer__free(ring_buffer);
 exec_image_inspector_bpf__destroy(skel);
 ```
 
-If BPF setup fails, cleanup closes the unreleased pipe and reaps the child without executing the target. If a released command exceeds `--timeout-ms`, `stop_child()` sends `SIGKILL` and waits for it. Normal completion and every error path free the ring buffer and destroy the skeleton, which detaches the LSM link.
+If BPF setup fails, cleanup closes the unreleased pipe and reaps the child without executing the target. If a released command exceeds `--timeout-ms`, `wait_for_command()` sends `SIGKILL` and waits for it. Normal completion and every error path free the ring buffer and destroy the skeleton, which detaches the LSM link.
 
 The process exit status remains visible. A successful event does not hide a failed command, and a command failure does not become an inspection success. The tool creates no bpffs pin or persistent link, so process teardown is the complete cleanup procedure.
 
@@ -235,7 +239,7 @@ The process exit status remains visible. A successful event does not hide a fail
 | Active LSM list | `bpf` appears in `/sys/kernel/security/lsm` | `CONFIG_BPF_LSM=y` alone does not make BPF LSM active at boot |
 | Privilege | root | Loads and attaches the BPF LSM program |
 | Tested architecture | x86_64 | The deterministic ELF assertions currently expect x86-64 |
-| Tested tooling | bpftool v7.7.0 with libbpf v1.7.0 | Builds the object and generated skeleton used by this lesson |
+| Tested tooling | Repository-pinned bpftool `3be8ac3` with libbpf `fc064eb` | Builds the object and generated skeleton used by this lesson |
 | Hardware | none | The fixture needs no accelerator or special device |
 
 The repository's generated `vmlinux.h` and UAPI headers predate these kfuncs. [`bpf_experimental.h`](./bpf_experimental.h) therefore keeps the required declarations local to this lesson until those vendored headers are regenerated.
@@ -245,12 +249,14 @@ Check the active list inside the guest with `cat /sys/kernel/security/lsm`. If `
 ## Scope and limitations
 
 - This tool observes one child created by its own loader. It does not monitor every exec on the system.
+- If that child calls `exec` again, the tool emits another `EXEC` line and drains queued events after reaping. The last `EXEC` line identifies the image installed before the child exits.
 - It reports an executable image and a compact ELF header. It does not verify signatures, classify malware, or enforce an allowlist.
 - For a script, the installed executable image may be the interpreter rather than the script path. The output answers what image the task installed, not every input file consumed by the launch chain.
 - The cold-page fixture demonstrates why deferred file I/O matters. It does not prove that every direct file read fails.
 - The single map slot is correct for the one-child CLI. A concurrent service would need per-task state, admission limits, and a recovery policy for tasks that never execute the callback.
 - The KVM run is a functional test. Its callback latency is not a benchmark or an overhead estimate.
 - Runtime behavior was exercised on x86_64. Other architectures need their own fixture assertions and KVM coverage.
+- The loader has no external `SIGINT` or `SIGTERM` handler. Its BPF link closes if the loader is terminated, but an already released child may continue and must be managed by the caller.
 
 ## References
 

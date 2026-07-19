@@ -181,7 +181,8 @@ static int start_blocked_child(struct child_process *child)
 		if (count != sizeof(release))
 			_exit(126);
 
-		execvp(env.command[0], env.command);
+		/* Intentional argv execution; no shell parses the supplied arguments. */
+		execvp(env.command[0], env.command); /* Flawfinder: ignore */
 		fprintf(stderr, "failed to execute %s: %s\n", env.command[0],
 			strerror(errno));
 		_exit(127);
@@ -233,6 +234,24 @@ static int reap_child(struct child_process *child, int options)
 		return 0;
 	child->reaped = true;
 	return 1;
+}
+
+static int drain_events(struct ring_buffer *ring_buffer)
+{
+	int error;
+
+	for (;;) {
+		error = ring_buffer__poll(ring_buffer, 0);
+		if (error == -EINTR)
+			continue;
+		if (error < 0) {
+			fprintf(stderr, "ring-buffer drain failed: %s\n",
+				strerror(-error));
+			return error;
+		}
+		if (!error)
+			return 0;
+	}
 }
 
 static const char *elf_class_name(unsigned char value)
@@ -434,6 +453,9 @@ static int wait_for_command(struct ring_buffer *ring_buffer,
 			return error;
 		}
 	}
+	error = drain_events(ring_buffer);
+	if (error)
+		return error;
 	return child_exit_code(child->status);
 }
 
