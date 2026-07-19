@@ -1,23 +1,48 @@
 ---
 name: write-bpf-production-tutorial
-description: Create or revise a tested bilingual bpf-developer-tutorial lesson from the implementation and real runtime evidence. Use for tutorial scope, README drafting, exact source inclusion, host builds, benchmark-kernel KVM tests, self-review, and PR preparation. Pair with bpf-tutorial-writing-style for prose decisions. External models are optional, never a required gate.
+description: Create or revise a tested bilingual bpf-developer-tutorial lesson from the implementation and real runtime evidence. Use for tutorial scope, pinned Claude Opus 4.5 authorship, README drafting, exact source inclusion, host builds, KVM tests, supervised completion, and PR preparation. Pair with bpf-tutorial-writing-style for prose decisions.
 ---
 
 # Write a BPF Tutorial
 
-Keep the workflow small. The normal path has one author, one reader-focused self-review, and the relevant build and runtime checks. Do not create task ledgers, reviewer databases, mandatory model rounds, or extra process files for an ordinary lesson.
+Keep the workflow small. Claude Opus 4.5 writes all tutorial prose. Codex supervises source fidelity, actual completion, bilingual consistency, validation, and publication. Do not add other writers, reviewer panels, task ledgers, reviewer databases, or extra process files.
 
 Invoke `$bpf-tutorial-writing-style` before writing or reviewing README prose.
 
-## 1. Understand the lesson
+## Pinned writer
 
-Read the implementation, tests, Makefile, captured output, and primary upstream references. Read these bilingual precedents in full:
+Use the exact model ID `claude-opus-4-5-20251101` through Claude Code. Never use `opus`, `latest`, a default model, a fallback model, or another provider for tutorial prose. If this exact model is unavailable, stop and report the block instead of substituting another writer.
+
+Use exactly one non-interactive Claude invocation for one lesson. Require Opus to edit the existing README files in place, one paragraph at a time and in document order. It must not generate a replacement article and overwrite the file as a whole. It must preserve the existing code-block positions while revising the prose around each block, first completing natural Chinese and then matching English from the same facts.
+
+The initial prompt must contain the complete task, source-fidelity rules, style rules, and final audit checklist. Opus must not ask Codex or the user a question, pause for confirmation, return a partial progress report, or stop after one language or one section. It may return only after both README files have been rewritten from beginning to end and it has run its own baseline comparison and formatting checks. Do not split the main rewrite into planned paragraph batches, switch models, or let Codex fill in prose afterward.
+
+A typical non-interactive invocation is:
+
+```bash
+claude -p \
+  --model claude-opus-4-5-20251101 \
+  --effort high \
+  --permission-mode acceptEdits \
+  --allowedTools 'Read,Edit,Grep,Glob,Bash(git show *),Bash(git diff *),Bash(git status *)' \
+  --output-format json
+```
+
+Give Opus access only to the lesson, its implementation and tests, the selected precedents, these repository-local Skills, and read-only baseline inspection through `git show` and `git diff`. Tell it to edit only the English and Chinese README pair and never commit, push, or publish.
+
+## 1. Prepare the fact pack and technical draft
+
+Codex prepares the complete input before invoking Opus. Read the entry README pair, implementation, tests, Makefile, captured output, and primary upstream references. Read these bilingual precedents in full:
 
 - <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events> for end-to-end depth;
 - <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/49-hid> for an approachable teaching voice;
 - at most one closer completed lesson when it contributes a subsystem-specific pattern.
 
-Write down only two private working sentences: who the reader is, and what they should be able to explain or run at the end. Do not add this planning material to the repository.
+Build a private fact pack that accounts for every mechanism, number, version, requirement, failure path, cleanup behavior, limitation, output field, and reference that the final lesson must retain. Include useful verified background from source code and primary upstream material. More context is helpful only when it is source-grounded; do not pad the pack with plausible but unverified history, adoption, performance, or production claims.
+
+Prepare a complete technical draft before Opus writes. For an existing lesson, the entry README pair is the initial draft: repair factual gaps and add verified missing context without polishing the voice. For a new lesson, write a direct, comprehensive bilingual technical draft from the fact pack. Completeness and traceability matter more than style at this stage. Keep the fact pack private and do not add planning files to the repository.
+
+Write down two private working sentences as part of the fact pack: who the reader is, and what they should be able to explain or run at the end.
 
 Choose an honest scope. A lesson may teach a small operational tool or a focused kernel feature. Do not call a lab demo production-ready, and do not invent a production story that the CLI, output, and tests cannot support.
 
@@ -27,9 +52,13 @@ Build on the host. Use `$test-bpf-tutorial-kvm` for load, attach, and runtime be
 
 Do not turn the README into a validation transcript. Runtime provenance supports the tutorial, but the reader-facing mechanism remains the story.
 
-## 3. Draft the English lesson
+## 3. Give the complete pack to Opus
 
-Follow the project-provided advanced tutorial guidelines through `$bpf-tutorial-writing-style`. Start with one concrete situation, explain the whole kernel/user-space path, include the complete core source exactly as implemented, then walk through the important mechanisms.
+Give pinned Opus the entry pair, the complete technical draft, the fact pack, implementation and evidence, and the project-provided advanced tutorial guidelines through `$bpf-tutorial-writing-style`. The initial prompt must explicitly separate authoritative lesson facts from voice-only examples. Opus may reorganize and rewrite the supplied facts, but it must not introduce technical content from a style sample or precedent unless that content already appears in the fact pack.
+
+The lesson must start from one short, truthful scene that the implementation can reproduce, then follow one packet, event, task, device interaction, or failure through the whole kernel/user-space path. Use the scene to raise the technical question before naming every mechanism, requirement, counter, and limitation. Never invent a customer, outage, production deployment, performance result, or tool capability to make the opening sound important.
+
+Include the complete core source exactly as implemented, then walk through the important mechanisms. Tell Opus explicitly to use repeated local edits in document order and to continue without returning until the last paragraph of the second language is complete. Replacing the complete README in one write is a workflow failure even when the final prose looks acceptable.
 
 Follow the selected precedent's component rhythm. Introduce one component, present its complete source inline, and explain its important logic before moving to the next component. Do not hide source in `<details>` or collect every file into one uninterrupted source dump. The source must remain searchable, copyable, and byte-exact.
 
@@ -39,9 +68,19 @@ Use canonical GitHub absolute URLs for every Markdown link, including links to t
 
 Do not publish local infrastructure details. Keep workspace paths, shared lab repository names, VM names, host-to-guest copy steps, cache locations, and agent trace paths out of the README and PR description. Public reproducibility text may state the architecture, kernel version and commit, required configuration, commands, and captured output.
 
-## 4. Write Chinese from the same facts
+Opus must write Chinese as Chinese, using the voice sample and rules in `$bpf-tutorial-writing-style`, then write natural English with the same promise, structure, source, commands, evidence, and limits. It must not translate sentence by sentence. It must finish both files in the same lesson session.
 
-Write `README.zh.md` from the implementation and the paragraph's purpose, not by translating English sentence by sentence. Keep the same section progression, code, commands, output, claims, limitations, and references. Allow natural Chinese sentence and paragraph boundaries.
+## 4. Supervise actual completion
+
+Do not accept Opus's final message as evidence that the work is complete. Inspect the files and diff. Confirm that both README files changed, every requested prose paragraph was actually rewritten, every source file still appears exactly once, and code, commands, captured output, versions, requirements, failure behavior, cleanup, limitations, and references remain intact.
+
+For a full rewrite, compare prose outside fenced blocks with the entry version. Unchanged titles, tables, commands, output, and reference entries may be intentional. Unchanged explanatory paragraphs are evidence that the rewrite is incomplete unless the user explicitly exempted them. Inspect diff hunk distribution as well: changes concentrated only at the opening or ending do not satisfy a paragraph-by-paragraph rewrite.
+
+Codex performs this postcondition check after the one complete rewrite. If it finds a concrete defect, reject Opus's self-report and send one exact defect list back to the same pinned-model session. Opus must fix every listed issue without asking questions and rerun the final checks. This supervised correction is not permission to draft the lesson in batches: the first invocation must still attempt the entire Chinese and English pair before returning.
+
+Codex may point out omissions, contradictions, awkward passages, broken links, or failed checks, but Opus must make every reader-facing prose revision. After the supervised Opus correction, Codex may apply a deterministic non-prose correction such as canonicalizing a verified link target, normalizing line endings, or restoring a source block byte-for-byte from its real file. It must not use this exception to rewrite wording, repair missing explanation, or introduce facts.
+
+Preserve the model response, failed run, partial diff, prompt, and session history. Never delete, truncate, overwrite, or clean real conversation history, agent traces, prompts, partial runs, or failed runs.
 
 ## 5. Run one reader review
 
@@ -57,9 +96,7 @@ Read both files from top to bottom as an intermediate eBPF developer. Fix the te
 
 For a rewrite, compare the finished pair with the entry version once. Confirm that code, commands, captured output, versions, requirements, failure behavior, cleanup, limitations, and primary references did not disappear or change. Every removed passage should be repetition, stale framing, or material that moved to a better place. Word counts, heading counts, and repeated-term counts can expose bloat, but they are diagnostics rather than targets.
 
-This is the normal review gate. A different model is optional when the user asks for one or when the author is stuck on a concrete passage. Use at most one model for one focused pass, inspect its diff, and keep Codex or the human author as final editor. Model identity is never evidence of quality.
-
-Never delete, truncate, overwrite, or clean real conversation history, agent traces, prompts, partial runs, or failed runs. This preservation rule applies whether or not an external model is used.
+This is the normal review gate. Keep the pinned Opus session as the only prose editor. Codex reports concrete defects and reruns deterministic checks; Opus revises the affected paragraphs. The exact model identity is required by the workflow, but it is not evidence of quality. Only the finished artifact and passing checks are evidence.
 
 ## 6. Validate and publish
 

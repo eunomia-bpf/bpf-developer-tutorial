@@ -17,9 +17,11 @@ Also read the English and Chinese versions of `47-cuda-events` and `49-hid` in f
 
 ## Write for a reader
 
-Start with a problem the reader can picture. Give the reader a small mental model before the full source. Keep one example, packet, event, or failure as the thread through the article.
+Start with a short, truthful scene the reader can picture. Show one observable problem or useful action, then raise the technical question that the lesson will answer. Keep one example, packet, event, task, device interaction, or failure as the thread through the article, so the opening scene returns naturally when the code and output are explained.
 
-Use oral English, familiar words, and connected sentences. Write natural Chinese independently from the same facts. Prefer causal explanation over inventories. A paragraph should tell the reader what happens, why it happens, and what that enables.
+Treat the scene as a teaching device, not a license to write fiction. Do not invent a named operator, customer, outage, deployment, benchmark, urgency, or result. If the implementation is a bounded lab tool, make the scene a bounded lab situation and let the real mechanism make it interesting.
+
+Use oral English, familiar words, and connected sentences. Write natural Chinese independently from the same facts. Chinese punctuation should be restrained: prefer one or two connected sentences that carry one technical thought over a row of short, period-heavy statements. Prefer causal explanation over inventories. A paragraph should tell the reader what happens, why it happens, and what that enables.
 
 Do not write like a paper, specification, PR description, release note, test log, or compliance report. Build and KVM evidence belongs in compilation and execution, where it should support a claim instead of becoming the article's main plot.
 

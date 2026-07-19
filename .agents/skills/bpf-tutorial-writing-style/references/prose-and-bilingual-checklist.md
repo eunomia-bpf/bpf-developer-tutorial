@@ -17,7 +17,9 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 ## Voice and argument
 
 - Use oral, direct English with familiar words and short connected sentences. Write as an experienced developer explaining a working tool, not as a paper, merge report, release note, or test log.
-- Open with the real problem or a concrete scenario. Avoid “In this tutorial, we will explore,” generic eBPF history, product promotion, and an abstract-style contribution list.
+- Open with a short, truthful story or concrete scenario that the implementation can reproduce. Show an observable symptom, action, packet, event, task, device interaction, or failure, then raise the technical question instead of answering everything in the first paragraph.
+- Carry the same concrete thread into the mechanism, code, and output sections. The opening should pay off when the reader sees where the event goes and how the result is produced.
+- Do not fabricate a persona, customer, production incident, deployment, benchmark, urgency, or result. Avoid “In this tutorial, we will explore,” generic eBPF history, product promotion, and an abstract-style contribution list.
 - Let each section answer the question raised by the previous one. A useful progression is problem, background, whole-system flow, complete code, focused walkthrough, deeper concept, compilation and execution, limits, summary, and references.
 - Give each paragraph one primary job. If a paragraph establishes context, explains a mechanism, reports evidence, and states a limitation at once, split it.
 - Prefer active voice and concrete actors. Name the hook, BPF program, map, callback, loader, fixture, command, or kernel rather than using “it,” “this,” “the approach,” or “the result.”
@@ -54,11 +56,20 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 ## Natural Chinese
 
 - Compose Chinese from the facts and paragraph role, not from English sentence order. The two languages may use different sentence and paragraph boundaries.
+- Keep punctuation restrained. When several clauses explain one subject, mechanism, or consequence, connect them naturally with commas instead of turning each clause into a separate short sentence. Prefer one or two complete sentences per ordinary paragraph; do not create a choppy sequence of periods.
+- Do not imitate “short English sentences” mechanically in Chinese. A cohesive Chinese sentence may carry the concept, mechanism, compatibility boundary, and motivation together when they belong to one thought.
+- Still split a sentence when its subject drifts, the causal relation becomes unclear, or the reader must hold unrelated facts at once. Fewer periods are a voice preference, not permission for an unreadable run-on sentence.
 - Translate ordinary concept nouns consistently. Keep proper nouns, product names, code, commands, file names, function names, and genuine terms of art in English.
 - Do not begin a Chinese prose sentence with an English common noun. Avoid English clause splicing and glossary-style prose where every other concept stays in English.
 - Use full-width Chinese punctuation. Put a half-width space between CJK text and Latin letters or digits, such as “64 个事件” and “eBPF 程序.”
 - Write table headings in Chinese. Translate ordinary prose inside comments only when the code block is illustrative; when the block claims to be complete source, preserve it byte-for-byte in both languages.
 - Read every Chinese paragraph aloud. Rewrite literal translations, English word order, and stiff phrases that a developer would not use in conversation.
+
+Use this paragraph as a compact Chinese voice reference. Learn its connected rhythm, restrained symbols, technical density, and direct statement of motivation; do not copy its subject matter into unrelated lessons:
+
+> libbpf 是一个 C/C++ 的 eBPF 用户态加载和控制库，随着内核一起分发，几乎已经成为 eBPF 用户态事实上的 API 标准，libbpf 也支持 CO-RE(Compile Once – Run Everywhere) 的解决方案，即预编译的 bpf 代码可以在不同内核版本上正常工作，而无需为每个特定内核重新编译。我们希望尽可能的保持与 libbpf 的用户态 API 以及行为一致，尽可能减少应用迁移到 Wasm （如果需要的话）的成本。
+
+The sample is not a factual source. Do not copy `libbpf`, CO-RE, Wasm, API claims, compatibility claims, or any other technical content from it unless the lesson's fact pack independently requires that content. Leakage from the sample into an unrelated lesson is a **Must fix** failure.
 
 ## Bilingual consistency
 
