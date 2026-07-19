@@ -117,7 +117,7 @@ def atomic_write(path: pathlib.Path, content: str) -> None:
             pathlib.Path(temporary_name).unlink(missing_ok=True)
 
 
-def main() -> int:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True, help="absolute repository root")
     parser.add_argument(
@@ -132,77 +132,88 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="replace marked blocks")
     mode.add_argument("--check", action="store_true", help="fail when blocks differ")
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    root = pathlib.Path(args.repo).resolve()
-    if not (root / ".git").exists() and not (root / ".git").is_file():
-        print(f"not a Git worktree: {root}", file=sys.stderr)
-        return 2
 
-    failed = False
+def resolve_readmes(
+    root: pathlib.Path, values: list[str]
+) -> list[tuple[str, pathlib.Path]]:
     readmes: list[tuple[str, pathlib.Path]] = []
-    for value in args.readme:
-        try:
-            readme = contained_path(root, value, "README path")
-            if not readme.is_file():
-                raise ValueError(f"README does not exist: {value}")
-            if readme in {path for _, path in readmes}:
-                raise ValueError(f"duplicate README path: {value}")
-            readmes.append((value, readme))
-        except (OSError, ValueError) as error:
-            print(error, file=sys.stderr)
-            failed = True
+    seen: set[pathlib.Path] = set()
+    for value in values:
+        readme = contained_path(root, value, "README path")
+        if not readme.is_file():
+            raise ValueError(f"README does not exist: {value}")
+        if readme in seen:
+            raise ValueError(f"duplicate README path: {value}")
+        readmes.append((value, readme))
+        seen.add(readme)
+    return readmes
 
-    if failed:
-        return 1
 
-    readme_paths = {path for _, path in readmes}
+def resolve_expected_sources(
+    root: pathlib.Path,
+    values: list[str],
+    readme_paths: set[pathlib.Path],
+) -> set[pathlib.Path]:
     expected_sources: set[pathlib.Path] = set()
-    for value in args.expected_source:
-        try:
-            source = contained_path(root, value, "expected source path")
-            if not source.is_file():
-                raise ValueError(f"expected source file does not exist: {value}")
-            if source in readme_paths:
-                raise ValueError(f"expected source cannot be a tutorial README: {value}")
-            if source.suffix not in LANGUAGES:
-                raise ValueError(f"unsupported expected-source file type: {value}")
-            if source in expected_sources:
-                raise ValueError(f"duplicate expected source: {value}")
-            expected_sources.add(source)
-        except (OSError, ValueError) as error:
-            print(error, file=sys.stderr)
-            failed = True
+    for value in values:
+        source = contained_path(root, value, "expected source path")
+        if not source.is_file():
+            raise ValueError(f"expected source file does not exist: {value}")
+        if source in readme_paths:
+            raise ValueError(f"expected source cannot be a tutorial README: {value}")
+        if source.suffix not in LANGUAGES:
+            raise ValueError(f"unsupported expected-source file type: {value}")
+        if source in expected_sources:
+            raise ValueError(f"duplicate expected source: {value}")
+        expected_sources.add(source)
+    return expected_sources
 
-    if failed:
-        return 1
 
+def inventory_mismatch(
+    value: str,
+    root: pathlib.Path,
+    expected_sources: set[pathlib.Path],
+    sources: set[pathlib.Path],
+) -> ValueError | None:
+    missing = expected_sources - sources
+    extra = sources - expected_sources
+    if not missing and not extra:
+        return None
+    details = []
+    if missing:
+        details.append(f"missing: {display_paths(missing, root)}")
+    if extra:
+        details.append(f"unexpected: {display_paths(extra, root)}")
+    return ValueError(
+        f"complete-source inventory mismatch in {value} ({'; '.join(details)})"
+    )
+
+
+def plan_updates(
+    root: pathlib.Path,
+    readmes: list[tuple[str, pathlib.Path]],
+    expected_sources: set[pathlib.Path],
+) -> list[tuple[str, pathlib.Path, str, str, int]]:
+    readme_paths = {path for _, path in readmes}
     planned: list[tuple[str, pathlib.Path, str, str, int]] = []
     for value, readme in readmes:
-        try:
-            before = readme.read_text(encoding="utf-8")
-            after, sources = render(readme, root, readme_paths)
-            missing = expected_sources - sources
-            extra = sources - expected_sources
-            if missing or extra:
-                details = []
-                if missing:
-                    details.append(f"missing: {display_paths(missing, root)}")
-                if extra:
-                    details.append(f"unexpected: {display_paths(extra, root)}")
-                raise ValueError(
-                    f"complete-source inventory mismatch in {value} ({'; '.join(details)})"
-                )
-            planned.append((value, readme, before, after, len(sources)))
-        except (OSError, ValueError) as error:
-            print(error, file=sys.stderr)
-            failed = True
+        before = readme.read_text(encoding="utf-8")
+        after, sources = render(readme, root, readme_paths)
+        mismatch = inventory_mismatch(value, root, expected_sources, sources)
+        if mismatch:
+            raise mismatch
+        planned.append((value, readme, before, after, len(sources)))
+    return planned
 
-    if failed:
-        return 1
 
+def execute_plan(
+    planned: list[tuple[str, pathlib.Path, str, str, int]], write: bool
+) -> int:
+    failed = False
     for value, readme, before, after, blocks in planned:
-        if args.write:
+        if write:
             if before != after:
                 atomic_write(readme, after)
             print(f"synced {blocks} source blocks in {value}")
@@ -213,6 +224,26 @@ def main() -> int:
             print(f"checked {blocks} source blocks in {value}")
 
     return 1 if failed else 0
+
+
+def main() -> int:
+    args = parse_arguments()
+    root = pathlib.Path(args.repo).resolve()
+    if not (root / ".git").exists():
+        print(f"not a Git worktree: {root}", file=sys.stderr)
+        return 2
+
+    try:
+        readmes = resolve_readmes(root, args.readme)
+        readme_paths = {path for _, path in readmes}
+        expected_sources = resolve_expected_sources(
+            root, args.expected_source, readme_paths
+        )
+        planned = plan_updates(root, readmes, expected_sources)
+    except (OSError, ValueError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    return execute_plan(planned, args.write)
 
 
 if __name__ == "__main__":
