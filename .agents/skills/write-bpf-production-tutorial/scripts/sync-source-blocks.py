@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""Synchronize inventoried complete-source blocks in tutorial READMEs."""
+"""Check exact source files embedded in standard Markdown code fences."""
 
 from __future__ import annotations
 
 import argparse
-import os
+import collections
 import pathlib
 import re
 import sys
-import tempfile
 
 
-BEGIN_RE = re.compile(r"^<!-- BEGIN FULL SOURCE: ([^ ]+) -->$")
-FENCE_RE = re.compile(r"^(`{3,})([A-Za-z0-9_+.-]*)$")
-END = "<!-- END FULL SOURCE -->"
+FENCE_RE = re.compile(r"^(`{3,})([A-Za-z0-9_+.-]*)[ \t]*$")
+LEGACY_MARKERS = ("<!-- BEGIN FULL SOURCE:", "<!-- END FULL SOURCE -->")
 LANGUAGES = {
     ".c": "c",
     ".cc": "cpp",
@@ -35,101 +33,33 @@ def contained_path(root: pathlib.Path, value: str, label: str) -> pathlib.Path:
     return path
 
 
-def render(
-    readme: pathlib.Path,
-    root: pathlib.Path,
-    forbidden_sources: set[pathlib.Path],
-) -> tuple[str, set[pathlib.Path]]:
-    lines = readme.read_text(encoding="utf-8").splitlines()
-    rendered: list[str] = []
-    sources: set[pathlib.Path] = set()
-    index = 0
+def parse_fenced_blocks(readme: pathlib.Path) -> list[tuple[str, str]]:
+    text = readme.read_text(encoding="utf-8")
+    for marker in LEGACY_MARKERS:
+        if marker in text:
+            raise ValueError(
+                f"legacy complete-source HTML marker is not allowed in {readme.name}"
+            )
 
+    lines = text.splitlines(keepends=True)
+    blocks: list[tuple[str, str]] = []
+    index = 0
     while index < len(lines):
-        match = BEGIN_RE.match(lines[index])
-        if not match:
-            rendered.append(lines[index])
+        opening = FENCE_RE.match(lines[index].rstrip("\r\n"))
+        if not opening:
             index += 1
             continue
 
-        source_name = match.group(1)
-        source = contained_path(root, source_name, "source path")
-        if not source.is_file():
-            raise ValueError(f"source file does not exist: {source_name}")
-        if source in forbidden_sources:
-            raise ValueError(
-                f"complete-source marker cannot name a tutorial README: {source_name}"
-            )
-        if source.suffix not in LANGUAGES:
-            raise ValueError(f"unsupported complete-source file type: {source_name}")
-        if source in sources:
-            raise ValueError(f"duplicate complete-source marker: {source_name}")
-
-        if index + 1 >= len(lines):
-            raise ValueError(f"missing generated code fence after {source_name}")
-        opening_fence = FENCE_RE.match(lines[index + 1])
-        if not opening_fence:
-            raise ValueError(f"missing generated code fence after {source_name}")
-        closing_fence = opening_fence.group(1)
-        end = index + 2
-        while end < len(lines) and lines[end] != closing_fence:
+        fence, language = opening.groups()
+        end = index + 1
+        while end < len(lines) and lines[end].rstrip("\r\n") != fence:
             end += 1
-        if end == len(lines) or end + 1 == len(lines) or lines[end + 1] != END:
-            raise ValueError(f"missing matching generated fence and {END!r} after {source_name}")
+        if end == len(lines):
+            raise ValueError(f"unclosed Markdown code fence in {readme.name}")
+        blocks.append((language, "".join(lines[index + 1 : end])))
+        index = end + 1
 
-        language = LANGUAGES[source.suffix]
-        source_bytes = source.read_bytes()
-        if not source_bytes:
-            raise ValueError(f"complete source cannot be empty: {source_name}")
-        if not source_bytes.endswith(b"\n"):
-            raise ValueError(
-                f"complete source must end with an LF byte for exact fenced inclusion: {source_name}"
-            )
-        source_text = source_bytes.decode("utf-8")
-        if "\r" in source_text:
-            raise ValueError(f"complete source must use LF line endings: {source_name}")
-        max_backticks = max((len(run) for run in re.findall(r"`+", source_text)), default=0)
-        generated_fence = "`" * max(3, max_backticks + 1)
-        source_text = source_text[:-1]
-        rendered.extend(
-            [
-                lines[index],
-                f"{generated_fence}{language}",
-                source_text,
-                generated_fence,
-                END,
-            ]
-        )
-        sources.add(source)
-        index = end + 2
-
-    return "\n".join(rendered) + "\n", sources
-
-
-def display_paths(paths: set[pathlib.Path], root: pathlib.Path) -> str:
-    return ", ".join(sorted(str(path.relative_to(root)) for path in paths))
-
-
-def atomic_write(path: pathlib.Path, content: str) -> None:
-    temporary_name: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            delete=False,
-        ) as temporary:
-            temporary_name = temporary.name
-            temporary.write(content)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-        os.chmod(temporary_name, path.stat().st_mode)
-        os.replace(temporary_name, path)
-        temporary_name = None
-    finally:
-        if temporary_name is not None:
-            pathlib.Path(temporary_name).unlink(missing_ok=True)
+    return blocks
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -144,9 +74,9 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         help="repository-relative complete core source; repeat for the full inventory",
     )
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--write", action="store_true", help="replace marked blocks")
-    mode.add_argument("--check", action="store_true", help="fail when blocks differ")
+    parser.add_argument(
+        "--check", action="store_true", required=True, help="check exact fenced source"
+    )
     return parser.parse_args()
 
 
@@ -172,79 +102,42 @@ def resolve_readmes(
     return readmes
 
 
-def resolve_expected_sources(
-    root: pathlib.Path,
-    values: list[str],
-    readme_paths: set[pathlib.Path],
-) -> set[pathlib.Path]:
-    expected_sources: set[pathlib.Path] = set()
-    for value in values:
-        source = contained_path(root, value, "expected source path")
-        if not source.is_file():
-            raise ValueError(f"expected source file does not exist: {value}")
-        if source in readme_paths:
-            raise ValueError(f"expected source cannot be a tutorial README: {value}")
-        if source.suffix not in LANGUAGES:
-            raise ValueError(f"unsupported expected-source file type: {value}")
-        if source in expected_sources:
-            raise ValueError(f"duplicate expected source: {value}")
-        expected_sources.add(source)
-    return expected_sources
+def source_payload(
+    root: pathlib.Path, value: str, readme_paths: set[pathlib.Path]
+) -> tuple[str, str]:
+    source = contained_path(root, value, "expected source path")
+    if not source.is_file():
+        raise ValueError(f"expected source file does not exist: {value}")
+    if source in readme_paths:
+        raise ValueError(f"expected source cannot be a tutorial README: {value}")
+    if source.suffix not in LANGUAGES:
+        raise ValueError(f"unsupported expected-source file type: {value}")
+
+    source_bytes = source.read_bytes()
+    if not source_bytes:
+        raise ValueError(f"complete source cannot be empty: {value}")
+    if not source_bytes.endswith(b"\n"):
+        raise ValueError(f"complete source must end with an LF byte: {value}")
+    source_text = source_bytes.decode("utf-8")
+    if "\r" in source_text:
+        raise ValueError(f"complete source must use LF line endings: {value}")
+    return LANGUAGES[source.suffix], source_text
 
 
-def inventory_mismatch(
+def check_readme(
     value: str,
-    root: pathlib.Path,
-    expected_sources: set[pathlib.Path],
-    sources: set[pathlib.Path],
-) -> ValueError | None:
-    missing = expected_sources - sources
-    extra = sources - expected_sources
-    if not missing and not extra:
-        return None
-    details = []
-    if missing:
-        details.append(f"missing: {display_paths(missing, root)}")
-    if extra:
-        details.append(f"unexpected: {display_paths(extra, root)}")
-    return ValueError(
-        f"complete-source inventory mismatch in {value} ({'; '.join(details)})"
-    )
-
-
-def plan_updates(
-    root: pathlib.Path,
-    readmes: list[tuple[str, pathlib.Path]],
-    expected_sources: set[pathlib.Path],
-) -> list[tuple[str, pathlib.Path, str, str, int]]:
-    readme_paths = {path for _, path in readmes}
-    planned: list[tuple[str, pathlib.Path, str, str, int]] = []
-    for value, readme in readmes:
-        before = readme.read_text(encoding="utf-8")
-        after, sources = render(readme, root, readme_paths)
-        mismatch = inventory_mismatch(value, root, expected_sources, sources)
-        if mismatch:
-            raise mismatch
-        planned.append((value, readme, before, after, len(sources)))
-    return planned
-
-
-def execute_plan(
-    planned: list[tuple[str, pathlib.Path, str, str, int]], write: bool
-) -> int:
-    failed = False
-    for value, readme, before, after, blocks in planned:
-        if write:
-            if before != after:
-                atomic_write(readme, after)
-            print(f"synced {blocks} source blocks in {value}")
-        elif before != after:
-            print(f"stale complete-source block in {value}", file=sys.stderr)
-            failed = True
-        else:
-            print(f"checked {blocks} source blocks in {value}")
-
-    return 1 if failed else 0
+    readme: pathlib.Path,
+    expected: collections.Counter[tuple[str, str]],
+    labels: dict[tuple[str, str], list[str]],
+) -> None:
+    actual = collections.Counter(parse_fenced_blocks(readme))
+    for payload, count in expected.items():
+        found = actual[payload]
+        names = ", ".join(labels[payload])
+        if found < count:
+            raise ValueError(f"missing exact fenced source in {value}: {names}")
+        if found > count:
+            raise ValueError(f"duplicate exact fenced source in {value}: {names}")
 
 
 def main() -> int:
@@ -257,14 +150,24 @@ def main() -> int:
     try:
         readmes = resolve_readmes(root, args.readme)
         readme_paths = {path for _, path in readmes}
-        expected_sources = resolve_expected_sources(
-            root, args.expected_source, readme_paths
-        )
-        planned = plan_updates(root, readmes, expected_sources)
-    except (OSError, ValueError) as error:
+        labels: dict[tuple[str, str], list[str]] = collections.defaultdict(list)
+        expected: collections.Counter[tuple[str, str]] = collections.Counter()
+        seen_values: set[str] = set()
+        for value in args.expected_source:
+            if value in seen_values:
+                raise ValueError(f"duplicate expected source: {value}")
+            payload = source_payload(root, value, readme_paths)
+            expected[payload] += 1
+            labels[payload].append(value)
+            seen_values.add(value)
+
+        for value, readme in readmes:
+            check_readme(value, readme, expected, labels)
+            print(f"checked {sum(expected.values())} fenced source blocks in {value}")
+    except (OSError, UnicodeError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
-    return execute_plan(planned, args.write)
+    return 0
 
 
 if __name__ == "__main__":

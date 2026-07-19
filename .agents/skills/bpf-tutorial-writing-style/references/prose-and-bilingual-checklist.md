@@ -42,13 +42,14 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 
 ## Code and evidence presentation
 
-- Present full core source exactly as it exists before excerpting it again for explanation. Mark complete-source blocks for the workflow Skill's synchronizer, then require its `--check` mode to pass against the complete source inventory. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
+- Present full core source exactly as it exists before excerpting it again for explanation. Use ordinary Markdown fenced code blocks with no HTML markers, then require the workflow Skill's read-only `--check` mode to pass against the complete source inventory. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
 - Teach one component at a time. Introduce the file's role, present its complete source inline, and immediately explain the parts that matter before starting the next component.
 - Never hide source in `<details>` and never place several complete files in one uninterrupted dump followed by a distant walkthrough. Long examples need stronger component boundaries and local explanations, not collapsed code.
 - Explain what advanced developers need to know: program type, attach point, context restrictions, helper or kfunc semantics, map ownership, state lifetime, concurrency, verifier constraints, event/control path, error handling, and cleanup.
 - Keep build and run commands copyable. Explain prerequisites before the command and interpret real output after it.
 - Label volatile fields and distinguish demonstrations, functional tests, and benchmarks.
-- Use canonical absolute URLs for every link to another tutorial. Reject `../<lesson>/README.md` and `../<lesson>/README.zh.md`; reserve relative links for files inside the current lesson.
+- Use canonical GitHub absolute URLs for every Markdown link, including links to the current lesson. Reject every `./`, `../`, or non-GitHub target. If no stable GitHub URL exists, do not add a link. This repository rule overrides link examples in precedents and the advanced guideline's website call to action.
+- Keep local infrastructure and agent state private. Never publish workspace paths, shared lab repository or VM names, host-to-guest copy routes, cache locations, prompt stores, or trace paths. Public reproducibility may include architecture, kernel version and commit, configuration, commands, and captured output.
 
 ## Natural Chinese
 

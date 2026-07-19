@@ -16,7 +16,7 @@ Present complete core source exactly as required by the advanced tutorial guidel
 
 After the source, explain the BPF structure, attach point, state and ownership, relevant helpers or kfuncs, kernel interaction, user-space lifecycle, error handling, and cleanup. Spend words on advanced constraints and surprising behavior. Do not explain ordinary C syntax.
 
-Compilation and execution should show copyable commands, representative real output, and what that output means. Put detailed KVM provenance, commit IDs, and compatibility data in a compact requirements or reproducibility paragraph. Do not narrate the PR's validation history.
+Compilation and execution should show copyable commands, representative real output, and what that output means. Put public kernel provenance, commit IDs, and compatibility data in a compact requirements or reproducibility paragraph. Do not name local workspaces, shared lab repositories, VM instances, copy routes, caches, agent traces, or the PR's validation history.
 
 End with an honest boundary, a short summary, the required invitation, and primary references.
 

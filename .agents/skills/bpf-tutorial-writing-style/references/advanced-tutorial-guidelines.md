@@ -58,13 +58,12 @@ Provide instructions on compiling and running the eBPF programs, noting any adva
 Include links to complete source code and resources:
 
 - **Repository:** <https://github.com/eunomia-bpf/bpf-developer-tutorial>
-- **Website:** <https://eunomia.dev/tutorials/>
 
 ## 6. Summary and Call to Action
 
 Wrap up by summarizing the key points. Emphasize the advanced concepts covered and encourage readers to apply this knowledge. Invite them to explore more examples and tutorials, as one paragraph:
 
-> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
+> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
 
 ## reference
 

@@ -15,6 +15,7 @@ Compile tutorial code on the host, but run every command that loads, attaches, o
 - Treat the tutorial directory as read-only in the guest by default. Use `--rwdir` only for a path that must return guest-generated files to the host.
 - Use bounded commands. The wrapper applies a host-side timeout; add a shorter guest-side `timeout` to long-running loaders when useful.
 - Report a KVM run as a functional smoke test, not as benchmark-quality evidence.
+- Keep this infrastructure private in public prose. A tutorial or PR description may state the architecture, kernel version and commit, configuration, commands, and captured output, but must not name `bpf-benchmark`, local paths, VM instances, mount routes, caches, or agent-state locations.
 
 ## Default locations
 
@@ -82,7 +83,7 @@ The wrapper boots the built benchmark `bzImage` with KVM, verifies the guest rel
 
 Use `--network user` only when the test needs an external/userspace-backed interface. Use `--network loop` for a guest-local loop network. Prefer `BPF_PROG_TEST_RUN` or deterministic guest-local traffic when either is sufficient.
 
-Read [references/tutorial-patterns.md](references/tutorial-patterns.md) for tracer, network, writable-output, and failure-diagnosis patterns.
+Read [the tutorial test patterns](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/.agents/skills/test-bpf-tutorial-kvm/references/tutorial-patterns.md) for tracer, network, writable-output, and failure-diagnosis patterns.
 
 ### 5. Verify the behavior, not only the exit code
 

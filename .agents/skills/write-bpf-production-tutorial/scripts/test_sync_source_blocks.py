@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the tutorial workflow's source-block synchronizer."""
+"""Tests for marker-free tutorial source-block checks."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import unittest
 SCRIPT = pathlib.Path(__file__).with_name("sync-source-blocks.py")
 
 
-class SyncSourceBlocksTest(unittest.TestCase):
+class SourceBlocksTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temporary.name)
@@ -28,16 +28,24 @@ class SyncSourceBlocksTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def write_readme(self, name: str, source: str = "src/lesson/tool.c") -> pathlib.Path:
+    def write_readme(
+        self,
+        name: str,
+        payload: str | None = None,
+        language: str = "c",
+        fence: str = "```",
+    ) -> pathlib.Path:
+        if payload is None:
+            payload = (self.root / "src/lesson/tool.c").read_text(encoding="utf-8")
         path = self.root / name
         path.write_text(
-            "# Lesson\n\n"
-            f"<!-- BEGIN FULL SOURCE: {source} -->\n"
-            "```c\nold\n```\n"
-            "<!-- END FULL SOURCE -->\n",
-            encoding="utf-8",
+            f"# Lesson\n\n{fence}{language}\n{payload}{fence}\n", encoding="utf-8"
         )
         return path
+
+    def write_pair(self, **kwargs: str) -> None:
+        self.write_readme("src/lesson/README.md", **kwargs)
+        self.write_readme("src/lesson/README.zh.md", **kwargs)
 
     def run_script(
         self,
@@ -45,9 +53,7 @@ class SyncSourceBlocksTest(unittest.TestCase):
         expected: tuple[str, ...] = ("src/lesson/tool.c",),
     ) -> subprocess.CompletedProcess[str]:
         expected_arguments = [
-            item
-            for source in expected
-            for item in ("--expected-source", source)
+            item for source in expected for item in ("--expected-source", source)
         ]
         return subprocess.run(
             [
@@ -63,200 +69,97 @@ class SyncSourceBlocksTest(unittest.TestCase):
             check=False,
         )
 
-    def test_write_then_check_bilingual_pair(self) -> None:
-        english = self.write_readme("src/lesson/README.md")
-        chinese = self.write_readme("src/lesson/README.zh.md")
-
-        written = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        self.assertEqual(0, written.returncode, written.stderr)
-        self.assertIn("int main(void)", english.read_text(encoding="utf-8"))
-        self.assertEqual(
-            english.read_text(encoding="utf-8"), chinese.read_text(encoding="utf-8")
-        )
-
-        checked = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--check",
-        )
-        self.assertEqual(0, checked.returncode, checked.stderr)
-
-        before = english.read_bytes()
-        repeated = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        self.assertEqual(0, repeated.returncode, repeated.stderr)
-        self.assertEqual(before, english.read_bytes())
-
-    def test_check_rejects_stale_block(self) -> None:
-        self.write_readme("src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md")
-        checked = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--check",
-        )
-        self.assertEqual(1, checked.returncode)
-        self.assertIn("stale complete-source block", checked.stderr)
-
-    def test_write_validates_every_readme_before_changing_any(self) -> None:
-        english = self.write_readme("src/lesson/README.md")
-        original = english.read_text(encoding="utf-8")
-        invalid = self.root / "src/lesson/README.zh.md"
-        invalid.write_text("# No markers\n", encoding="utf-8")
-
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        self.assertEqual(1, result.returncode)
-        self.assertEqual(original, english.read_text(encoding="utf-8"))
-
-    def test_rejects_source_outside_repository(self) -> None:
-        self.write_readme("src/lesson/README.md", "../outside.c")
-        self.write_readme("src/lesson/README.zh.md", "../outside.c")
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write", expected=("../outside.c",)
-        )
-        self.assertEqual(1, result.returncode)
-        self.assertIn("escapes repository root", result.stderr)
-
-    def test_rejects_nested_markers(self) -> None:
-        readme = self.write_readme("src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md")
-        text = readme.read_text(encoding="utf-8").replace(
-            "```c\nold\n```\n",
-            "<!-- BEGIN FULL SOURCE: src/lesson/tool.c -->\n",
-        )
-        readme.write_text(text, encoding="utf-8")
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        self.assertEqual(1, result.returncode)
-        self.assertIn("missing generated code fence", result.stderr)
-
-    def test_rejects_readme_as_source(self) -> None:
-        self.write_readme("src/lesson/README.md", "src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md", "src/lesson/README.md")
-        result = self.run_script(
+    def check_pair(self, expected: tuple[str, ...] = ("src/lesson/tool.c",)):
+        return self.run_script(
             "--readme",
             "src/lesson/README.md",
             "--readme",
             "src/lesson/README.zh.md",
-            "--write",
-            expected=("src/lesson/README.md",),
+            "--check",
+            expected=expected,
         )
+
+    def test_accepts_exact_standard_markdown_fences(self) -> None:
+        self.write_pair()
+        result = self.check_pair()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("checked 1 fenced source blocks", result.stdout)
+
+    def test_rejects_stale_source_block(self) -> None:
+        self.write_pair(payload="int stale;\n")
+        result = self.check_pair()
+        self.assertEqual(1, result.returncode)
+        self.assertIn("missing exact fenced source", result.stderr)
+
+    def test_rejects_duplicate_exact_source_block(self) -> None:
+        source = (self.root / "src/lesson/tool.c").read_text(encoding="utf-8")
+        payload = f"{source}```\n\n```c\n{source}"
+        self.write_pair(payload=payload)
+        result = self.check_pair()
+        self.assertEqual(1, result.returncode)
+        self.assertIn("duplicate exact fenced source", result.stderr)
+
+    def test_rejects_legacy_html_markers(self) -> None:
+        self.write_pair()
+        readme = self.root / "src/lesson/README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8")
+            + "<!-- END FULL SOURCE -->\n",
+            encoding="utf-8",
+        )
+        result = self.check_pair()
+        self.assertEqual(1, result.returncode)
+        self.assertIn("HTML marker is not allowed", result.stderr)
+
+    def test_rejects_source_outside_repository(self) -> None:
+        self.write_pair()
+        result = self.check_pair(expected=("../outside.c",))
+        self.assertEqual(1, result.returncode)
+        self.assertIn("escapes repository root", result.stderr)
+
+    def test_rejects_readme_as_source(self) -> None:
+        self.write_pair()
+        result = self.check_pair(expected=("src/lesson/README.md",))
         self.assertEqual(1, result.returncode)
         self.assertIn("expected source cannot be a tutorial README", result.stderr)
 
     def test_rejects_incomplete_inventory(self) -> None:
-        self.write_readme("src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md")
-        result = self.run_script(
-            "--readme",
-            "src/lesson/README.md",
-            "--readme",
-            "src/lesson/README.zh.md",
-            "--check",
-            expected=("src/lesson/tool.c", "src/lesson/contract.h"),
+        self.write_pair()
+        result = self.check_pair(
+            expected=("src/lesson/tool.c", "src/lesson/contract.h")
         )
         self.assertEqual(1, result.returncode)
-        self.assertIn("missing: src/lesson/contract.h", result.stderr)
+        self.assertIn("src/lesson/contract.h", result.stderr)
 
     def test_rejects_unsupported_source_type(self) -> None:
         source = self.root / "src/lesson/source.txt"
         source.write_text("text\n", encoding="utf-8")
-        self.write_readme("src/lesson/README.md", "src/lesson/source.txt")
-        self.write_readme("src/lesson/README.zh.md", "src/lesson/source.txt")
-        result = self.run_script(
-            "--readme",
-            "src/lesson/README.md",
-            "--readme",
-            "src/lesson/README.zh.md",
-            "--write",
-            expected=("src/lesson/source.txt",),
-        )
+        self.write_pair(payload="text\n", language="text")
+        result = self.check_pair(expected=("src/lesson/source.txt",))
         self.assertEqual(1, result.returncode)
         self.assertIn("unsupported expected-source file type", result.stderr)
 
-    def test_source_marker_and_backtick_collisions_are_idempotent(self) -> None:
+    def test_accepts_longer_fence_for_source_with_backticks(self) -> None:
         source = self.root / "src/lesson/tool.py"
-        source.write_text(
-            'payload = """\n<!-- END FULL SOURCE -->\n```\n"""\n\n',
-            encoding="utf-8",
-        )
-        english = self.write_readme("src/lesson/README.md", "src/lesson/tool.py")
-        chinese = self.write_readme("src/lesson/README.zh.md", "src/lesson/tool.py")
-        arguments = (
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        first = self.run_script(*arguments, expected=("src/lesson/tool.py",))
-        self.assertEqual(0, first.returncode, first.stderr)
-        first_english = english.read_bytes()
-        first_chinese = chinese.read_bytes()
-        self.assertIn(b"````python", first_english)
+        payload = 'value = """\n```\n"""\n'
+        source.write_text(payload, encoding="utf-8")
+        self.write_pair(payload=payload, language="python", fence="````")
+        result = self.check_pair(expected=("src/lesson/tool.py",))
+        self.assertEqual(0, result.returncode, result.stderr)
 
-        second = self.run_script(*arguments, expected=("src/lesson/tool.py",))
-        self.assertEqual(0, second.returncode, second.stderr)
-        self.assertEqual(first_english, english.read_bytes())
-        self.assertEqual(first_chinese, chinese.read_bytes())
-
-    def test_rejects_empty_source_without_changing_either_readme(self) -> None:
-        source = self.root / "src/lesson/tool.c"
-        source.write_bytes(b"")
-        english = self.write_readme("src/lesson/README.md")
-        chinese = self.write_readme("src/lesson/README.zh.md")
-        before = (english.read_bytes(), chinese.read_bytes())
-
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
+    def test_rejects_empty_source(self) -> None:
+        (self.root / "src/lesson/tool.c").write_bytes(b"")
+        self.write_pair(payload="")
+        result = self.check_pair()
         self.assertEqual(1, result.returncode)
         self.assertIn("complete source cannot be empty", result.stderr)
-        self.assertEqual(before, (english.read_bytes(), chinese.read_bytes()))
 
     def test_rejects_source_without_final_lf(self) -> None:
-        source = self.root / "src/lesson/tool.c"
-        source.write_bytes(b"int value = 1;")
-        self.write_readme("src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md")
-
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
+        (self.root / "src/lesson/tool.c").write_bytes(b"int value = 1;")
+        self.write_pair(payload="int value = 1;\n")
+        result = self.check_pair()
         self.assertEqual(1, result.returncode)
         self.assertIn("must end with an LF byte", result.stderr)
-
-    def test_preserves_multiple_trailing_lfs(self) -> None:
-        source = self.root / "src/lesson/tool.c"
-        source.write_bytes(b"int value = 1;\n\n\n")
-        english = self.write_readme("src/lesson/README.md")
-        self.write_readme("src/lesson/README.zh.md")
-
-        result = self.run_script(
-            "--readme", "src/lesson/README.md",
-            "--readme", "src/lesson/README.zh.md",
-            "--write",
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("int value = 1;\n\n\n```", english.read_text(encoding="utf-8"))
 
     def test_requires_bilingual_pair(self) -> None:
         self.write_readme("src/lesson/README.md")
@@ -265,6 +168,14 @@ class SyncSourceBlocksTest(unittest.TestCase):
         )
         self.assertEqual(1, result.returncode)
         self.assertIn("exactly the English and Chinese README pair", result.stderr)
+
+    def test_rejects_unclosed_fence(self) -> None:
+        self.write_pair()
+        readme = self.root / "src/lesson/README.zh.md"
+        readme.write_text("# Lesson\n\n```c\nint value;\n", encoding="utf-8")
+        result = self.check_pair()
+        self.assertEqual(1, result.returncode)
+        self.assertIn("unclosed Markdown code fence", result.stderr)
 
 
 if __name__ == "__main__":

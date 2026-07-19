@@ -13,8 +13,8 @@ Invoke `$bpf-tutorial-writing-style` before writing or reviewing README prose.
 
 Read the implementation, tests, Makefile, captured output, and primary upstream references. Read these bilingual precedents in full:
 
-- `src/47-cuda-events/README.md` and `README.zh.md` for end-to-end depth;
-- `src/49-hid/README.md` and `README.zh.md` for an approachable teaching voice;
+- <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/47-cuda-events> for end-to-end depth;
+- <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/49-hid> for an approachable teaching voice;
 - at most one closer completed lesson when it contributes a subsystem-specific pattern.
 
 Write down only two private working sentences: who the reader is, and what they should be able to explain or run at the end. Do not add this planning material to the repository.
@@ -35,7 +35,9 @@ Follow the selected precedent's component rhythm. Introduce one component, prese
 
 Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, cleanup, limitations, summary, and primary references. State once what the evidence proves and once where the example stops.
 
-Use canonical absolute URLs when linking to another tutorial. Never publish cross-tutorial links such as `../20-tc/README.md` or `../20-tc/README.zh.md`. Relative links are allowed only for files that belong to the current lesson, such as its `Makefile`, source files, and tests.
+Use canonical GitHub absolute URLs for every Markdown link, including links to the current lesson's source, `Makefile`, and tests. Never publish a `./` or `../` target or a link to another host. If no stable GitHub URL exists, omit the link. This repository rule overrides link examples in older lessons and the advanced guideline's website call to action.
+
+Do not publish local infrastructure details. Keep workspace paths, shared lab repository names, VM names, host-to-guest copy steps, cache locations, and agent trace paths out of the README and PR description. Public reproducibility text may state the architecture, kernel version and commit, required configuration, commands, and captured output.
 
 ## 4. Write Chinese from the same facts
 
@@ -61,7 +63,7 @@ Never delete, truncate, overwrite, or clean real conversation history, agent tra
 
 ## 6. Validate and publish
 
-Synchronize and check every complete-source block in the English and Chinese pair:
+Check every complete-source block in the English and Chinese pair:
 
 ```bash
 python3 .agents/skills/write-bpf-production-tutorial/scripts/sync-source-blocks.py \
@@ -73,6 +75,6 @@ python3 .agents/skills/write-bpf-production-tutorial/scripts/sync-source-blocks.
   --check
 ```
 
-Repeat `--expected-source` for each complete shared header. Use `--write` only to restore source blocks from their real files; never hand-edit generated payloads.
+Repeat `--expected-source` for each complete shared header. Use ordinary Markdown fenced code blocks without HTML markers. Copy complete source from the real file, then run the checker; it is deliberately read-only.
 
 Run `git diff --check`, the lesson build, the relevant host tests, the KVM runtime test, and repository documentation checks. Inspect the final diff for unintended files. Commit and push the repository-local Skills and tutorial changes only after these checks pass. Do not merge unless the user asks.
