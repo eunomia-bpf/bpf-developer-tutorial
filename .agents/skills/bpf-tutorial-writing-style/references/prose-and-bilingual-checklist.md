@@ -18,6 +18,9 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 
 - Use oral, direct English with familiar words and short connected sentences. Write as an experienced developer explaining a working tool, not as a paper, merge report, release note, or test log.
 - Open with a short, truthful story or concrete scenario that the implementation can reproduce. Show an observable symptom, action, packet, event, task, device interaction, or failure, then raise the technical question instead of answering everything in the first paragraph.
+- Identify the lesson once as part of the **eBPF Tutorial by Example** series, then give the reader the eBPF background needed to follow this particular program.
+- State the first Linux release that contains the enabling feature, describe the capability it added, and connect that capability to the exact hook, callback, iterator, kfunc, `struct_ops`, dynptr, or data path used in the example. Cover every release boundary when the lesson combines multiple new features.
+- Keep opening provenance compact. Use the release number and capability in the narrative, then place commit IDs, configuration matrices, and extended compatibility evidence in requirements and references.
 - Carry the same concrete thread into the mechanism, code, and output sections. The opening should pay off when the reader sees where the event goes and how the result is produced.
 - Do not fabricate a persona, customer, production incident, deployment, benchmark, urgency, or result. Avoid “In this tutorial, we will explore,” generic eBPF history, product promotion, and an abstract-style contribution list.
 - Let each section answer the question raised by the previous one. A useful progression is problem, background, whole-system flow, complete code, focused walkthrough, deeper concept, compilation and execution, limits, summary, and references.
@@ -117,3 +120,5 @@ The sample is not a factual source. Do not copy `libbpf`, CO-RE, Wasm, API claim
 ## Final reader check
 
 After reading in order, an intermediate or advanced eBPF developer should be able to explain the real problem, the kernel/user-space flow, why the advanced capability is needed, how the core code works, how to build and run it, what the captured output proves, and where the example stops. If the reader remembers only a feature name, a code wall, repeated caveats, or a validation transcript, revise the narrative.
+
+The opening passes only when the reader can also answer four questions: which tutorial series this lesson belongs to, which general eBPF execution model matters, which Linux release introduced the enabling feature, and what that feature enables in this exact example.

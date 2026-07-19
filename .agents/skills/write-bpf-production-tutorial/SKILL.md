@@ -44,6 +44,10 @@ Prepare a complete technical draft before Opus writes. For an existing lesson, t
 
 Write down two private working sentences as part of the fact pack: who the reader is, and what they should be able to explain or run at the end.
 
+Prepare an opening background ladder from primary sources. Identify the lesson once as part of the **eBPF Tutorial by Example** series, explain the small amount of general eBPF context needed for this example, then name the enabling feature, the first Linux release that contains it, and the capability that release added. End the ladder by connecting that capability directly to the program the reader will build. When the example combines features introduced in different releases, account for each version boundary and explain why the combination matters.
+
+Keep this background specific to the lesson. Useful context includes where the verified BPF program runs, how user space loads or attaches it, which hook, iterator, map, kfunc, `struct_ops`, dynptr, or callback carries the work, and how data returns to user space. Support version and capability claims with a primary kernel commit, documentation page, or selftest already included in the fact pack.
+
 Choose an honest scope. A lesson may teach a small operational tool or a focused kernel feature. Do not call a lab demo production-ready, and do not invent a production story that the CLI, output, and tests cannot support.
 
 Decide once whether a technical diagram materially improves the lesson. A diagram earns its place when the reader must track at least three dependent state changes, a branch or retry loop, ownership across kernel and user space, or one source that affects several downstream components. A short linear filter or one-step attachment usually reads better as prose.
@@ -63,6 +67,8 @@ Do not turn the README into a validation transcript. Runtime provenance supports
 Give pinned Opus the entry pair, the complete technical draft, the fact pack, implementation and evidence, and the project-provided advanced tutorial guidelines through `$bpf-tutorial-writing-style`. The initial prompt must explicitly separate authoritative lesson facts from voice-only examples. Opus may reorganize and rewrite the supplied facts, but it must not introduce technical content from a style sample or precedent unless that content already appears in the fact pack.
 
 The lesson must start from one short, truthful scene that the implementation can reproduce, then follow one packet, event, task, device interaction, or failure through the whole kernel/user-space path. Use the scene to raise the technical question before naming every mechanism, requirement, counter, and limitation. Never invent a customer, outage, production deployment, performance result, or tool capability to make the opening sound important.
+
+Immediately after the scene, use one or two compact paragraphs for the opening background ladder. The reader should learn that this is one lesson in the **eBPF Tutorial by Example** series, which eBPF execution and attachment model matters here, when the enabling feature entered Linux, what new operation it made possible, and why this example depends on it. Keep detailed commit IDs and compatibility tables in the later requirements or references sections.
 
 Include the complete core source exactly as implemented, then walk through the important mechanisms. Tell Opus explicitly to use repeated local edits in document order and to continue without returning until the last paragraph of the second language is complete. Replacing the complete README in one write is a workflow failure even when the final prose looks acceptable.
 

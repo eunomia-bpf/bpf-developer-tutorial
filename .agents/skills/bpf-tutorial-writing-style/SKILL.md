@@ -21,6 +21,12 @@ Start with a short, truthful scene the reader can picture. Show one observable p
 
 Treat the scene as a teaching device, not a license to write fiction. Do not invent a named operator, customer, outage, deployment, benchmark, urgency, or result. If the implementation is a bounded lab tool, make the scene a bounded lab situation and let the real mechanism make it interesting.
 
+## Give the feature a place in the series
+
+After the scene, identify the lesson once as part of the **eBPF Tutorial by Example** series. Give the reader a short ladder from eBPF to the example: explain the relevant verified-program and user-space attachment model, introduce the specific hook or subsystem, state the first Linux release that added the enabling feature, and say what became possible in that release. Close the background by pointing to the exact operation performed by this lesson.
+
+Keep the ladder to one or two compact paragraphs and select only concepts the later code uses. A lesson built from several new capabilities should name each release boundary and show why the capabilities work together. Put commit hashes, full configuration lists, and detailed compatibility evidence in the later requirements and references sections, while the opening keeps the version, capability, and causal link readers need before the code.
+
 Use oral English, familiar words, and connected sentences. Write natural Chinese independently from the same facts. Chinese punctuation should be restrained: prefer one or two connected sentences that carry one technical thought over a row of short, period-heavy statements. Prefer causal explanation over inventories. A paragraph should tell the reader what happens, why it happens, and what that enables.
 
 Prefer positive, concrete statements throughout the tutorial. Explain what the hook, program, loader, command, or test does and which scope it covers. Rewrite `not`, `do not`, `cannot`, `will not`, `不要`, `不能`, `不会`, `并非`, and `别` whenever the same fact has an accurate positive form, and remove every double negative. Keep at most one compact boundary paragraph near the end, limited to two sentences, instead of distributing failure, limitation, and safety warnings through the article.
