@@ -20,7 +20,6 @@ We will build the pacer one component at a time. The first component is the smal
 
 ### Sharing Statistics with User Space
 
-<!-- BEGIN FULL SOURCE: src/53-egress-pacer/egress_pacer.h -->
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #ifndef __EGRESS_PACER_H
@@ -37,7 +36,6 @@ struct pacer_stats {
 
 #endif /* __EGRESS_PACER_H */
 ```
-<!-- END FULL SOURCE -->
 
 The BPF program updates these six counters while packets move through the queue. `enqueued` and `dequeued` cover the normal path. `policy_dropped` counts packets rejected because the queue is full or a node cannot be allocated. `cleanup_dropped` counts packets still waiting when the qdisc is reset. The last two fields record the number of bytes sent and the largest queue depth seen during the run.
 
@@ -47,7 +45,6 @@ The loader reads the same structure from `skel->bss->stats` after it removes the
 
 The repository's generated headers predate a few BPF qdisc definitions. This local compatibility header supplies those declarations without changing the vendored global headers.
 
-<!-- BEGIN FULL SOURCE: src/53-egress-pacer/bpf_experimental.h -->
 ```c
 /* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __EGRESS_PACER_BPF_EXPERIMENTAL_H
@@ -82,7 +79,6 @@ bpf_list_pop_front(struct bpf_list_head *head) __ksym;
 
 #endif /* __EGRESS_PACER_BPF_EXPERIMENTAL_H */
 ```
-<!-- END FULL SOURCE -->
 
 This file does not implement pacing. It exposes the graph-object kfuncs used by the real qdisc: `bpf_obj_new` and `bpf_obj_drop` manage packet nodes, while `bpf_list_push_back` and `bpf_list_pop_front` manage the FIFO. The `__contains` BTF tag tells the verifier which node type belongs to the list head.
 
@@ -92,7 +88,6 @@ Keeping these declarations local matters because they are compatibility glue for
 
 Now we can look at the kernel-mode program. It implements the qdisc operations, packet queue, pacing clock, and counters.
 
-<!-- BEGIN FULL SOURCE: src/53-egress-pacer/egress_pacer.bpf.c -->
 ```c
 // SPDX-License-Identifier: GPL-2.0
 #include "vmlinux.h"
@@ -292,7 +287,6 @@ struct Qdisc_ops pacer = {
 	.id = "bpf_pacer",
 };
 ```
-<!-- END FULL SOURCE -->
 
 #### Taking Ownership of an skb
 
@@ -335,7 +329,6 @@ Together, the BPF callbacks update the six counters we saw in the shared header:
 
 The user-space loader validates the command line, registers the BPF qdisc, installs it on one interface, waits for the requested duration, and removes it.
 
-<!-- BEGIN FULL SOURCE: src/53-egress-pacer/egress_pacer.c -->
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 #include <errno.h>
@@ -634,7 +627,6 @@ cleanup:
 	return err != 0;
 }
 ```
-<!-- END FULL SOURCE -->
 
 #### Keeping the Experiment on One Interface
 
@@ -646,7 +638,7 @@ After `READY`, the loader waits in 100 ms intervals until the duration expires o
 
 ## Compilation and execution
 
-Build the BPF object and loader with the lesson's [`Makefile`](./Makefile). Compilation does not need root:
+Build the BPF object and loader with the lesson's [`Makefile`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/Makefile). Compilation does not need root:
 
 ```bash
 cd src/53-egress-pacer
@@ -654,13 +646,13 @@ make clean
 make -j2
 ```
 
-The safest first run uses the [integration fixture](./tests/test_egress_pacer.py). It creates and removes a disposable `epac_tx`/`epac_rx` veth pair, so the runtime step needs root:
+The safest first run uses the [integration fixture](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/tests/test_egress_pacer.py). It creates and removes a disposable `epac_tx`/`epac_rx` veth pair, so the runtime step needs root:
 
 ```bash
 sudo python3 tests/test_egress_pacer.py ./egress_pacer
 ```
 
-The final binary was built cleanly on the host and run in the reused `bpf-benchmark` KVM guest. That guest used an x86_64 `7.0.0-rc2+` kernel built from commit `a03114efd0720dff230388f7e160e427e54ea31b`. The fixture produced:
+The example was tested on x86_64 with a `7.0.0-rc2+` kernel built from commit `a03114efd0720dff230388f7e160e427e54ea31b`. The fixture produced:
 
 ```console
 READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
@@ -743,7 +735,7 @@ Deleting a qdisc changes traffic scheduling, so never run this recovery command 
 
 This lesson used a small FIFO to expose the full BPF qdisc lifecycle. `enqueue` takes ownership of an skb and assigns its departure time, the watchdog wakes `dequeue` without a busy loop, and `reset` accounts for packets still queued during removal. Those mechanics are the reusable part. Fairness, concurrent state, dynamic policy, persistence, and stronger recovery would require a larger scheduler.
 
-> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
+> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
 
 ## References
 
