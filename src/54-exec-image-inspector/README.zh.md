@@ -1,92 +1,292 @@
-# eBPF 实例教程：在 `exec` 后检查可执行镜像
+# eBPF 教程：在 `exec` 后检查真正安装的可执行镜像
 
-应用启动器收到的命令不一定等于内核最终安装的可执行镜像。用 shell 启动的脚本会拉起解释器，包装程序可能选择另一个二进制文件，运行时也可能通过多层进程准备隐藏最终镜像。排查问题时，如果需要确认实际执行了什么，原始命令字符串并不足够。
+启动器收到一个命令，内核最后安装的却可能是另一个可执行镜像。shell 脚本会启动解释器，包装程序可能选择不同的二进制文件，运行时还可能连续调用多次 `exec`。排查问题时，原始命令字符串不一定能回答最后究竟运行了什么。本课实现 `exec_image_inspector`，让它在 `bprm_committed_creds` LSM hook 上观察加载器创建的一个子进程。工具会报告已经安装的可执行文件路径，并解析 ELF class、字节序、类型和机器架构。这个例子还会展示为什么可能触发缺页的文件读取不能留在不可睡眠的 hook 中。
 
-本课实现 `exec_image_inspector`。这个小型命令运行器在 `bprm_committed_creds` LSM hook 上观察一个子进程，报告内核安装的可执行文件路径，并解析 ELF class、字节序、类型和机器架构。它还展示如何用 BPF task work 把可能触发缺页的文件读取移出不可睡眠的 hook。
+解决办法是 BPF task work。LSM hook 记录 exec 后，为当前 task 安排一个回调。回调进入可睡眠上下文，重新取得已经安装的可执行文件，通过 file-backed dynptr 读取内容，再把结果发送到用户态。读完后，你将得到一条完整路径，把小规模文件检查安全地移过这条上下文边界。
 
 完整实现位于 [`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c)、[`exec_image_inspector.c`](./exec_image_inspector.c) 和 [`tests/test_exec_image_inspector.py`](./tests/test_exec_image_inspector.py)。
 
-## 构建并运行已验证场景
+## 为什么不能在 LSM hook 中读取任意文件页
 
-宿主机只负责编译，不加载 BPF。先在仓库根目录初始化第三方 submodule 并构建本课：
+`bprm_committed_creds` 在新可执行文件的凭据提交后运行。此时，`bprm->file` 指向本次 exec 涉及的镜像，因此这个 hook 可以观察 task 实际安装的镜像，而不只是启动器收到的命令。
 
-```bash
-git submodule update --init --recursive
-make -C src/54-exec-image-inspector clean
-make -C src/54-exec-image-inspector -j2
-```
+这个 hook 不可睡眠。file-backed dynptr 可以读取已经可用的数据，但程序不能在这里把缺失的文件页 fault 进内存。数据已经缓存时，直接读取也可能成功，所以不能认为每个文件或偏移都会失败。测试 fixture 会主动制造冷页，让这条边界能够稳定复现。
 
-集成测试只能在 Linux 6.19 或更新版本的一次性测试虚拟机中运行。虚拟机可以访问仓库目录后，执行：
+设计的另一半由 BPF task work 补上。`bpf_task_work_schedule_signal()` 把回调关联到当前 task，回调可以在可睡眠上下文中运行。它通过 `bpf_get_task_exe_file()` 取得 task 当前的可执行文件，再调用 file dynptr helper 完成读取。
 
-```bash
-cd src/54-exec-image-inspector
-sudo make test
-```
+工具只观察自身创建的一个子进程，不会形成全系统 exec daemon。这个范围让加载器能够在挂载前知道目标 TGID，也让单个 task-work slot 足以支撑本例。
 
-不要把 `make test` 或直接运行 `exec_image_inspector` 当作宿主机验证。这两个命令都会加载并挂载 BPF LSM 程序。
-仓库 CI 只编译本课，运行时证据由 KVM 测试提供。
+## 一次 exec 如何变成用户态事件
 
-仓库测试复用了 `bpf-benchmark` 的 KVM 虚拟机和干净的 `7.0.0-rc2+` 内核，得到如下输出：
+完整路径包含六步：
 
-```text
-guest_kernel=7.0.0-rc2+
-guest_identity=uid=0(root) gid=0(root) groups=0(root)
-TEST-MISSING matched=0 events=0 command_exit=127
-TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
-TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
-READY target_tgid=1265 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image
-EXEC pid=1265 tgid=1265 comm=exec_fixture_im path=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=37
-PROBE offset=4214784 direct_error=-14 deferred_error=0 bytes=454950524f424521
-exec fixture completed
-SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path_errors=0 direct_probes=1 direct_probe_errors=1 deferred_probes=1 deferred_probe_errors=0 dropped=0 events=1 command_exit=0
-PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
-```
+1. 用户态 fork 目标命令，但子进程在调用 `execvp` 前等待 pipe。
+2. 加载器把子进程 TGID 和可选的 probe offset 写入 BPF 只读数据，加载 skeleton，挂载 LSM 程序，并创建 ring-buffer reader。
+3. 父进程释放 pipe。子进程调用 `execvp`，新凭据提交后，`lsm/bprm_committed_creds` 匹配选定的 TGID。
+4. hook 可以先尝试一次直接文件读取，保存结果，再通过 BPF task work 安排 `inspect_executable`。
+5. 回调重新取得 task 已安装的可执行文件，解析路径，通过 file dynptr 读取 ELF header 和可选 marker，并发送一条 ring-buffer event。
+6. 用户态一边 poll 一边回收子进程。最终取尽 ring buffer 后，同一子进程后续 exec 的事件也不会遗漏，随后加载器释放 ring buffer 并销毁 BPF skeleton。
 
-进程号（PID）、临时路径和回调延迟会随运行变化。探测偏移取决于 fixture 构建后的大小，重新构建后可能改变。这些字段只证明功能正确，不是性能测量结果。
+让子进程先阻塞可以消除短命命令带来的 attach 竞态。先加载 BPF 再 fork 也能避免漏掉 exec，但那样还需要单独的启动协议来发现和控制目标。pipe 让整个示例保持自包含。
 
-本次复用的 KVM 内核来自源码 commit `a03114efd0720dff230388f7e160e427e54ea31b`。内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，config SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
+## 完整源码
 
-输出中的 `EXEC` 行给出了最终可执行镜像及其 ELF header。随后的 `PROBE` 行展示了两种文件读取上下文的差异。测试 fixture 在 `exec` 前把追加的 marker 变成冷页。在 LSM 程序中直接读取该位置会返回 `-EFAULT`（`-14`），task-work 回调则成功读取 `454950524f424521`，也就是 `EIPROBE!` 的十六进制编码。
+共享头文件定义了内核态与用户态共同使用的 ring-buffer event 和最终统计。
 
-输出中位于 `READY` 之前的三行覆盖了边界行为。不存在的命令以状态码 127 退出，不会到达已提交 exec 的 hook。由于没有事件到达，加载器只等待到测试设置的 500 ms 时限。另一个命令先产生 exec 事件，随后超过 200 ms 时限，父进程发送 `SIGKILL` 并回收它，最终状态码为 137。最后的 re-exec 用例先观察 `/bin/sh`，再观察它安装的 `/bin/true`，回收子进程后取尽两个事件，并把 `/usr/bin/true` 放在最后。
-
-在满足要求的测试虚拟机中，可以省略 fixture 专用的探测偏移，检查其他命令：
-
-```bash
-sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
-```
-
-在工具选项之后，第一个参数指定被观察命令，命令用法使用 `--` 明确结束选项解析。工具不是全系统 daemon。普通运行不设置 `--probe-offset` 时，只输出 `READY`、`EXEC` 和 `SUMMARY`，不会出现 `PROBE` 行。
-
-### 命令行选项
-
-```text
-exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COMMAND [ARG...]
-```
-
-- `--timeout-ms` 接受 100 至 60000 ms，默认值为 5000 ms。超过时限后，加载器会终止并回收命令。
-- `--probe-offset` 在指定文件偏移比较 8-byte 直接读取与延迟读取。普通镜像检查不需要这个选项。自动化 fixture 会计算有效的 marker 偏移并创建冷页条件。
-- `--verbose` 在排查加载或挂载问题时输出 libbpf 诊断信息。
-- `--` 结束 inspector 自身的选项，后面的所有参数都属于被观察命令。
-
-## 端到端流程
-
-用户态加载器和 BPF 程序通过以下步骤协作，避免漏掉生命周期很短的命令：
-
-1. 用户态先 fork 命令，但让子进程在调用 `execvp` 前阻塞于 pipe。
-2. 加载器把子进程 TGID 写入 BPF 只读数据，加载 skeleton，挂载 LSM 程序并创建 ring buffer reader。
-3. 用户态释放 pipe。子进程调用 `execvp`，新可执行文件的凭据提交后，`lsm/bprm_committed_creds` 匹配这个 TGID。
-4. 该 hook 记录可选的直接读取结果，再为当前 task 调用 `bpf_task_work_schedule_signal()`。
-5. 回调在 task work 中取得该 task 已安装的可执行文件，解析路径，通过 dynptr 读取文件，解析 ELF header，并向 ring buffer 发送一个事件。
-6. 用户态持续 poll，直到子进程已经回收并至少收到一个事件，或者到达时限。最终取尽 ring buffer 中的事件时，还可能收到同一子进程后续 exec 产生的记录，随后才销毁 ring buffer 和 BPF skeleton。
-
-这次 pipe 握手保证加载器在挂载 BPF 程序前就知道目标 TGID。先加载再通过单独协议启动命令也能避免竞态，但会引入额外控制接口。阻塞子进程让本课保持自包含，同时不会漏掉目标的 exec。
-
-## 从 exec hook 调度文件读取
-
-这个 LSM 程序只处理用户态指定的子进程。每次工具调用只观察一个命令，因此 map 中只需要一个 `exec_work` 值。
-
+<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.h -->
 ```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+#ifndef __EXEC_IMAGE_INSPECTOR_H
+#define __EXEC_IMAGE_INSPECTOR_H
+
+#define EXEC_COMM_LEN 16
+#define EXEC_PATH_LEN 256
+#define EXEC_PROBE_LEN 8
+
+struct exec_event {
+	unsigned int pid;
+	unsigned int tgid;
+	unsigned char is_elf;
+	unsigned char elf_class;
+	unsigned char elf_data;
+	unsigned char reserved;
+	unsigned short elf_type;
+	unsigned short elf_machine;
+	int header_error;
+	int path_error;
+	int direct_probe_error;
+	int deferred_probe_error;
+	unsigned long long latency_ns;
+	unsigned long long probe_offset;
+	char comm[EXEC_COMM_LEN];
+	char path[EXEC_PATH_LEN];
+	unsigned char probe_bytes[EXEC_PROBE_LEN];
+};
+
+struct inspector_stats {
+	unsigned long long matched;
+	unsigned long long scheduled;
+	unsigned long long schedule_errors;
+	unsigned long long callbacks;
+	unsigned long long header_errors;
+	unsigned long long path_errors;
+	unsigned long long direct_probes;
+	unsigned long long direct_probe_errors;
+	unsigned long long deferred_probes;
+	unsigned long long deferred_probe_errors;
+	unsigned long long dropped;
+};
+
+#endif /* __EXEC_IMAGE_INSPECTOR_H */
+```
+<!-- END FULL SOURCE -->
+
+Linux 6.18 与 6.19 分别加入了这里使用的 task-work 和 file-dynptr 接口。仓库当前生成的 UAPI 与 BTF header 早于这些功能，因此本课把缺失声明放在一个局部头文件中。
+
+<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/bpf_experimental.h -->
+```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+#ifndef __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H
+#define __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H
+
+/*
+ * These Linux 6.18/6.19 declarations are not present in the repository's
+ * older generated UAPI and vmlinux headers. Keep them local until those
+ * vendored headers are regenerated.
+ */
+struct bpf_task_work {
+	__u64 opaque;
+} __attribute__((aligned(8)));
+
+typedef int (*bpf_task_work_callback_t)(struct bpf_map *map, void *key,
+					void *value);
+
+extern int bpf_task_work_schedule_signal(struct task_struct *task,
+					 struct bpf_task_work *work,
+					 void *map__map,
+					 bpf_task_work_callback_t callback) __ksym;
+extern struct file *bpf_get_task_exe_file(struct task_struct *task) __ksym;
+extern void bpf_put_file(struct file *file) __ksym;
+extern int bpf_path_d_path(const struct path *path, char *buf,
+			   __u64 buf__sz) __ksym;
+extern int bpf_dynptr_from_file(struct file *file, __u32 flags,
+				struct bpf_dynptr *ptr__uninit) __ksym;
+extern int bpf_dynptr_file_discard(struct bpf_dynptr *dynptr) __ksym;
+
+#endif /* __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H */
+```
+<!-- END FULL SOURCE -->
+
+内核态程序过滤一个 TGID，安排 task work，读取已安装镜像，解析 ELF header，再发送事件。
+
+<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.bpf.c -->
+```c
+// SPDX-License-Identifier: GPL-2.0
+#include "vmlinux.h"
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "bpf_experimental.h"
+#include "exec_image_inspector.h"
+
+char LICENSE[] SEC("license") = "GPL";
+
+#define ENOENT 2
+
+#define EI_CLASS 4
+#define EI_DATA 5
+#define ELFCLASS32 1
+#define ELFCLASS64 2
+#define ELFDATA2LSB 1
+#define ELFDATA2MSB 2
+
+const volatile __u32 target_tgid;
+const volatile __u32 probe_offset;
+
+struct inspector_stats stats;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+} events SEC(".maps");
+
+struct exec_work {
+	__u64 scheduled_ns;
+	int direct_probe_error;
+	struct bpf_task_work work;
+};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, __u32);
+	__type(value, struct exec_work);
+} pending SEC(".maps");
+
+static __u16 read_elf_u16(const unsigned char *header, int offset, __u8 data)
+{
+	if (data == ELFDATA2MSB)
+		return ((__u16)header[offset] << 8) | header[offset + 1];
+	return header[offset] | ((__u16)header[offset + 1] << 8);
+}
+
+static int probe_file_without_sleep(struct file *file)
+{
+	unsigned char sample[EXEC_PROBE_LEN];
+	struct bpf_dynptr dynptr;
+	int err;
+
+	if (!probe_offset)
+		return 0;
+
+	__sync_fetch_and_add(&stats.direct_probes, 1);
+	if (!file) {
+		err = -ENOENT;
+		goto record;
+	}
+
+	err = bpf_dynptr_from_file(file, 0, &dynptr);
+	if (err) {
+		bpf_dynptr_file_discard(&dynptr);
+		goto record;
+	}
+
+	err = bpf_dynptr_read(sample, sizeof(sample), &dynptr, probe_offset, 0);
+	bpf_dynptr_file_discard(&dynptr);
+
+record:
+	if (err)
+		__sync_fetch_and_add(&stats.direct_probe_errors, 1);
+	return err;
+}
+
+static int inspect_executable(struct bpf_map *map, void *key, void *value)
+{
+	unsigned char header[64] = {};
+	struct exec_work *work = value;
+	struct exec_event event = {};
+	struct task_struct *task;
+	struct bpf_dynptr dynptr;
+	struct file *file;
+	__u64 pid_tgid;
+	int err;
+
+	(void)map;
+	(void)key;
+	__sync_fetch_and_add(&stats.callbacks, 1);
+
+	pid_tgid = bpf_get_current_pid_tgid();
+	event.pid = (__u32)pid_tgid;
+	event.tgid = pid_tgid >> 32;
+	event.latency_ns = bpf_ktime_get_ns() - work->scheduled_ns;
+	event.direct_probe_error = work->direct_probe_error;
+	event.probe_offset = probe_offset;
+	bpf_get_current_comm(event.comm, sizeof(event.comm));
+
+	task = bpf_get_current_task_btf();
+	file = bpf_get_task_exe_file(task);
+	if (!file) {
+		event.header_error = -ENOENT;
+		__sync_fetch_and_add(&stats.header_errors, 1);
+		if (probe_offset) {
+			event.deferred_probe_error = -ENOENT;
+			__sync_fetch_and_add(&stats.deferred_probes, 1);
+			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+		}
+		goto emit;
+	}
+
+	err = bpf_path_d_path(&file->f_path, event.path, sizeof(event.path));
+	if (err < 0) {
+		event.path_error = err;
+		__sync_fetch_and_add(&stats.path_errors, 1);
+	}
+
+	err = bpf_dynptr_from_file(file, 0, &dynptr);
+	if (err) {
+		bpf_dynptr_file_discard(&dynptr);
+		event.header_error = err;
+		__sync_fetch_and_add(&stats.header_errors, 1);
+		if (probe_offset) {
+			event.deferred_probe_error = err;
+			__sync_fetch_and_add(&stats.deferred_probes, 1);
+			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+		}
+		goto put_file;
+	}
+
+	err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
+	if (err) {
+		event.header_error = err;
+		__sync_fetch_and_add(&stats.header_errors, 1);
+	}
+
+	if (probe_offset) {
+		__sync_fetch_and_add(&stats.deferred_probes, 1);
+		err = bpf_dynptr_read(event.probe_bytes, sizeof(event.probe_bytes),
+				      &dynptr, probe_offset, 0);
+		event.deferred_probe_error = err;
+		if (err)
+			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+	}
+	bpf_dynptr_file_discard(&dynptr);
+
+	if (!event.header_error && header[0] == 0x7f && header[1] == 'E' &&
+	    header[2] == 'L' && header[3] == 'F') {
+		event.is_elf = 1;
+		event.elf_class = header[EI_CLASS];
+		event.elf_data = header[EI_DATA];
+		event.elf_type = read_elf_u16(header, 16, event.elf_data);
+		event.elf_machine = read_elf_u16(header, 18, event.elf_data);
+	}
+
+put_file:
+	bpf_put_file(file);
+emit:
+	if (bpf_ringbuf_output(&events, &event, sizeof(event), 0))
+		__sync_fetch_and_add(&stats.dropped, 1);
+	return 0;
+}
+
 SEC("lsm/bprm_committed_creds")
 void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 {
@@ -120,115 +320,642 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 	__sync_fetch_and_add(&stats.scheduled, 1);
 }
 ```
+<!-- END FULL SOURCE -->
 
-直接探测用于明确展示执行上下文的边界。不可睡眠的 BPF 程序创建 file-backed dynptr 后，不能为缺失的文件页触发 page fault。集成测试会主动驱逐 marker 所在的页，使这次读取返回 `-EFAULT`。如果数据已经缓存，直接读取也可能成功，因此不能认为每个可执行文件或偏移都会返回 `-EFAULT`。这项可复现比较由 `sudo make test` 完成。[`create_probe_image()`](./tests/test_exec_image_inspector.py) 会追加 marker、计算偏移、刷新文件并请求驱逐 page cache，随后把该偏移传给 CLI。
+用户态程序负责解析命令、协调阻塞子进程、加载 BPF、格式化事件、执行超时策略并清理资源。
 
-调用 `bpf_task_work_schedule_signal()` 可以为当前 task 关联 BPF 回调。在 hook 中使用 `bprm->file` 探测，回调则通过 `bpf_get_task_exe_file()` 重新取得已安装镜像，因此不会延迟传递裸 `struct file *`。回调复用 map value 中嵌入的 task-work 存储，内核会持有所需引用直至回调结束。
-
-## 在回调中读取已安装镜像
-
-这个 task-work 回调运行在可睡眠上下文中。它重新取得当前 task 的可执行文件，创建 file-backed dynptr，并在所有路径上释放这两项资源。
-
+<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.c -->
 ```c
-task = bpf_get_current_task_btf();
-file = bpf_get_task_exe_file(task);
-if (!file) {
-	event.header_error = -ENOENT;
-	__sync_fetch_and_add(&stats.header_errors, 1);
-	if (probe_offset) {
-		event.deferred_probe_error = -ENOENT;
-		__sync_fetch_and_add(&stats.deferred_probes, 1);
-		__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+#include <errno.h>
+#include <getopt.h>
+#include <limits.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+#include <bpf/libbpf.h>
+#include "exec_image_inspector.h"
+#include "exec_image_inspector.skel.h"
+
+struct environment {
+	unsigned long long probe_offset;
+	unsigned int timeout_ms;
+	bool verbose;
+	char **command;
+};
+
+struct child_process {
+	pid_t pid;
+	int release_fd;
+	bool released;
+	bool reaped;
+	int status;
+};
+
+struct event_context {
+	unsigned int seen;
+};
+
+static struct environment env = {
+	.timeout_ms = 5000,
+};
+
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
+			   va_list args)
+{
+	if (level == LIBBPF_DEBUG && !env.verbose)
+		return 0;
+	return vfprintf(stderr, format, args);
+}
+
+static void usage(const char *program)
+{
+	fprintf(stderr,
+		"Usage: %s [--probe-offset BYTES] [--timeout-ms MS] [--verbose] "
+		"-- COMMAND [ARG...]\n\n"
+		"Inspect the executable image installed by one command.\n\n"
+		"Options:\n"
+		"  -p, --probe-offset BYTES  also compare direct/deferred file reads\n"
+		"  -t, --timeout-ms MS       bound the command, 100-60000 "
+		"(default: 5000)\n"
+		"  -v, --verbose             print libbpf diagnostics\n"
+		"  -h, --help                show this help\n",
+		program);
+}
+
+static int parse_u64(const char *value, unsigned long long maximum,
+			     unsigned long long *result)
+{
+	char *end = NULL;
+	unsigned long long parsed;
+
+	errno = 0;
+	parsed = strtoull(value, &end, 10);
+	if (errno || end == value || *end || parsed > maximum)
+		return -EINVAL;
+	*result = parsed;
+	return 0;
+}
+
+static int parse_probe_offset(const char *value)
+{
+	unsigned long long parsed;
+
+	if (parse_u64(value, UINT_MAX - EXEC_PROBE_LEN, &parsed)) {
+		fprintf(stderr, "invalid probe offset: %s\n", value);
+		return -EINVAL;
 	}
-	goto emit;
+	env.probe_offset = parsed;
+	return 0;
 }
 
-err = bpf_path_d_path(&file->f_path, event.path, sizeof(event.path));
-if (err < 0) {
-	event.path_error = err;
-	__sync_fetch_and_add(&stats.path_errors, 1);
-}
+static int parse_timeout(const char *value)
+{
+	unsigned long long parsed;
 
-err = bpf_dynptr_from_file(file, 0, &dynptr);
-if (err) {
-	bpf_dynptr_file_discard(&dynptr);
-	event.header_error = err;
-	__sync_fetch_and_add(&stats.header_errors, 1);
-	if (probe_offset) {
-		event.deferred_probe_error = err;
-		__sync_fetch_and_add(&stats.deferred_probes, 1);
-		__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+	if (parse_u64(value, 60000, &parsed) || parsed < 100) {
+		fprintf(stderr, "invalid timeout in milliseconds: %s\n", value);
+		return -EINVAL;
 	}
-	goto put_file;
-}
-```
-
-成功创建文件 dynptr 后，回调读取 header 和可选 probe，随后释放 dynptr、解析有效的 ELF 字段、释放 file 引用并发送事件：
-
-```c
-err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
-if (err) {
-	event.header_error = err;
-	__sync_fetch_and_add(&stats.header_errors, 1);
+	env.timeout_ms = parsed;
+	return 0;
 }
 
-if (probe_offset) {
-	__sync_fetch_and_add(&stats.deferred_probes, 1);
-	err = bpf_dynptr_read(event.probe_bytes, sizeof(event.probe_bytes),
-			      &dynptr, probe_offset, 0);
-	event.deferred_probe_error = err;
-	if (err)
-		__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+static int parse_option(int option, const char *program)
+{
+	switch (option) {
+	case 'p':
+		return parse_probe_offset(optarg);
+	case 't':
+		return parse_timeout(optarg);
+	case 'v':
+		env.verbose = true;
+		return 0;
+	case 'h':
+		usage(program);
+		exit(0);
+	default:
+		return -EINVAL;
+	}
 }
-bpf_dynptr_file_discard(&dynptr);
 
-if (!event.header_error && header[0] == 0x7f && header[1] == 'E' &&
-    header[2] == 'L' && header[3] == 'F') {
-	event.is_elf = 1;
-	event.elf_class = header[EI_CLASS];
-	event.elf_data = header[EI_DATA];
-	event.elf_type = read_elf_u16(header, 16, event.elf_data);
-	event.elf_machine = read_elf_u16(header, 18, event.elf_data);
+static int parse_args(int argc, char **argv)
+{
+	static const struct option options[] = {
+		{ "probe-offset", required_argument, NULL, 'p' },
+		{ "timeout-ms", required_argument, NULL, 't' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{},
+	};
+	int error, option;
+
+	while ((option = getopt_long(argc, argv, "+p:t:vh", options, NULL)) != -1) {
+		error = parse_option(option, argv[0]);
+		if (error)
+			return error;
+	}
+
+	if (optind == argc) {
+		fprintf(stderr, "COMMAND is required\n");
+		return -EINVAL;
+	}
+	env.command = &argv[optind];
+	return 0;
 }
 
-put_file:
-bpf_put_file(file);
-emit:
-if (bpf_ringbuf_output(&events, &event, sizeof(event), 0))
-	__sync_fetch_and_add(&stats.dropped, 1);
-```
+static long long monotonic_milliseconds(void)
+{
+	struct timespec timestamp;
 
-通过 `bpf_get_task_exe_file()` 取得的 `struct file` 对象带有引用，必须与 `bpf_put_file()` 配对释放。文件 dynptr 也拥有内部状态，因此即使创建失败，也要调用 `bpf_dynptr_file_discard()`。回调只读取 64-byte ELF header 和可选的 8-byte 测试 marker，不会扫描整个文件。
+	if (clock_gettime(CLOCK_MONOTONIC, &timestamp))
+		return -errno;
+	return timestamp.tv_sec * 1000LL + timestamp.tv_nsec / 1000000;
+}
 
-成功读取 header 后，程序先检查四个 ELF magic byte，再解析 `EI_CLASS`、`EI_DATA`、`e_type` 和 `e_machine`。用户态把常见数值格式化为 `ELF64`、`ET_DYN` 和 `EM_X86_64` 等名称，同时保留原始数值，便于检查未知类型。
+static int start_blocked_child(struct child_process *child)
+{
+	int pipe_fds[2];
+	pid_t pid;
 
-## 限制命令运行时间并完成清理
+	if (pipe(pipe_fds))
+		return -errno;
 
-父进程只在 BPF 设置完成后才释放目标命令：
+	pid = fork();
+	if (pid < 0) {
+		int error = -errno;
 
-```c
-error = start_blocked_child(&child);
-if (error)
+		close(pipe_fds[0]);
+		close(pipe_fds[1]);
+		return error;
+	}
+
+	if (pid == 0) {
+		char release;
+		ssize_t count;
+
+		close(pipe_fds[1]);
+		do {
+			count = read(pipe_fds[0], &release, sizeof(release));
+		} while (count < 0 && errno == EINTR);
+		close(pipe_fds[0]);
+		if (count != sizeof(release))
+			_exit(126);
+
+		/* Intentional argv execution; no shell parses the supplied arguments. */
+		execvp(env.command[0], env.command); /* Flawfinder: ignore */
+		fprintf(stderr, "failed to execute %s: %s\n", env.command[0],
+			strerror(errno));
+		_exit(127);
+	}
+
+	close(pipe_fds[0]);
+	child->pid = pid;
+	child->release_fd = pipe_fds[1];
+	return 0;
+}
+
+static int release_child(struct child_process *child)
+{
+	char release = 1;
+	ssize_t count;
+
+	do {
+		count = write(child->release_fd, &release, sizeof(release));
+	} while (count < 0 && errno == EINTR);
+	close(child->release_fd);
+	child->release_fd = -1;
+	if (count != sizeof(release))
+		return count < 0 ? -errno : -EIO;
+	child->released = true;
+	return 0;
+}
+
+static int child_exit_code(int status)
+{
+	if (WIFEXITED(status))
+		return WEXITSTATUS(status);
+	if (WIFSIGNALED(status))
+		return 128 + WTERMSIG(status);
+	return 125;
+}
+
+static int reap_child(struct child_process *child, int options)
+{
+	pid_t result;
+
+	if (child->reaped)
+		return 1;
+	do {
+		result = waitpid(child->pid, &child->status, options);
+	} while (result < 0 && errno == EINTR);
+	if (result < 0)
+		return -errno;
+	if (result == 0)
+		return 0;
+	child->reaped = true;
 	return 1;
+}
 
-error = setup_inspector(&child, &events, &skel, &ring_buffer);
-if (error)
-	goto cleanup;
+static int drain_events(struct ring_buffer *ring_buffer)
+{
+	int error;
 
-command_exit = wait_for_command(ring_buffer, &child, &events);
-if (command_exit < 0)
-	goto cleanup;
-result = report_result(skel, &events, command_exit);
+	for (;;) {
+		error = ring_buffer__poll(ring_buffer, 0);
+		if (error == -EINTR)
+			continue;
+		if (error < 0) {
+			fprintf(stderr, "ring-buffer drain failed: %s\n",
+				strerror(-error));
+			return error;
+		}
+		if (!error)
+			return 0;
+	}
+}
+
+static const char *elf_class_name(unsigned char value)
+{
+	switch (value) {
+	case 1:
+		return "ELF32";
+	case 2:
+		return "ELF64";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static const char *elf_data_name(unsigned char value)
+{
+	switch (value) {
+	case 1:
+		return "LSB";
+	case 2:
+		return "MSB";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+static const char *elf_type_name(unsigned short value)
+{
+	switch (value) {
+	case 2:
+		return "ET_EXEC";
+	case 3:
+		return "ET_DYN";
+	default:
+		return "OTHER";
+	}
+}
+
+static const char *elf_machine_name(unsigned short value)
+{
+	switch (value) {
+	case 3:
+		return "EM_386";
+	case 62:
+		return "EM_X86_64";
+	case 183:
+		return "EM_AARCH64";
+	default:
+		return "OTHER";
+	}
+}
+
+static int handle_event(void *context, void *data, size_t size)
+{
+	const struct exec_event *event = data;
+	struct event_context *events = context;
+	unsigned int index;
+
+	if (size < sizeof(*event)) {
+		fprintf(stderr, "short ring-buffer event: %zu bytes\n", size);
+		return 0;
+	}
+
+	events->seen++;
+	printf("EXEC pid=%u tgid=%u comm=%.*s path=%.*s is_elf=%u "
+	       "class=%s endian=%s type=%s(%u) machine=%s(%u) "
+	       "header_error=%d path_error=%d latency_us=%llu\n",
+	       event->pid, event->tgid, EXEC_COMM_LEN, event->comm,
+	       EXEC_PATH_LEN, event->path, event->is_elf,
+	       elf_class_name(event->elf_class), elf_data_name(event->elf_data),
+	       elf_type_name(event->elf_type), event->elf_type,
+	       elf_machine_name(event->elf_machine), event->elf_machine,
+	       event->header_error, event->path_error,
+	       event->latency_ns / 1000);
+
+	if (event->probe_offset) {
+		printf("PROBE offset=%llu direct_error=%d deferred_error=%d bytes=",
+		       event->probe_offset, event->direct_probe_error,
+		       event->deferred_probe_error);
+		for (index = 0; index < EXEC_PROBE_LEN; index++)
+			printf("%02x", event->probe_bytes[index]);
+		putchar('\n');
+	}
+	fflush(stdout);
+	return 0;
+}
+
+static void stop_child(struct child_process *child)
+{
+	if (child->reaped || child->pid <= 0)
+		return;
+	if (!child->released && child->release_fd >= 0) {
+		close(child->release_fd);
+		child->release_fd = -1;
+	} else {
+		kill(child->pid, SIGKILL);
+	}
+	(void)reap_child(child, 0);
+}
+
+static int setup_inspector(const struct child_process *child,
+			   struct event_context *events,
+			   struct exec_image_inspector_bpf **skeleton,
+			   struct ring_buffer **ring_buffer)
+{
+	struct exec_image_inspector_bpf *skel;
+	struct ring_buffer *ring;
+	int error;
+
+	skel = exec_image_inspector_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "failed to open BPF skeleton\n");
+		return -ENOMEM;
+	}
+	*skeleton = skel;
+	skel->rodata->target_tgid = child->pid;
+	skel->rodata->probe_offset = env.probe_offset;
+
+	error = exec_image_inspector_bpf__load(skel);
+	if (error) {
+		fprintf(stderr, "failed to load BPF object: %s\n", strerror(-error));
+		return error;
+	}
+	error = exec_image_inspector_bpf__attach(skel);
+	if (error) {
+		fprintf(stderr, "failed to attach bprm_committed_creds LSM hook: %s\n",
+			strerror(-error));
+		return error;
+	}
+
+	ring = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event,
+				events, NULL);
+	if (!ring) {
+		fprintf(stderr, "failed to create ring buffer: %s\n", strerror(errno));
+		return errno ? -errno : -ENOMEM;
+	}
+	*ring_buffer = ring;
+	return 0;
+}
+
+static int reap_timed_out_child(struct child_process *child)
+{
+	int error;
+
+	if (child->reaped)
+		return 0;
+
+	fprintf(stderr, "command exceeded timeout; sending SIGKILL\n");
+	kill(child->pid, SIGKILL);
+	error = reap_child(child, 0);
+	if (error < 0) {
+		fprintf(stderr, "waitpid after timeout failed: %s\n",
+			strerror(-error));
+		return error;
+	}
+	return 0;
+}
+
+static int wait_for_command(struct ring_buffer *ring_buffer,
+			    struct child_process *child,
+			    const struct event_context *events)
+{
+	long long deadline, now;
+	int error;
+
+	printf("READY target_tgid=%d probe_offset=%llu timeout_ms=%u command=%s\n",
+	       child->pid, env.probe_offset, env.timeout_ms, env.command[0]);
+	fflush(stdout);
+	error = release_child(child);
+	if (error) {
+		fprintf(stderr, "failed to release command process: %s\n",
+			strerror(-error));
+		return error;
+	}
+
+	now = monotonic_milliseconds();
+	if (now < 0) {
+		fprintf(stderr, "failed to read monotonic clock: %s\n",
+			strerror((int)-now));
+		return (int)now;
+	}
+	deadline = now + env.timeout_ms;
+
+	for (;;) {
+		error = ring_buffer__poll(ring_buffer, 50);
+		if (error == -EINTR)
+			continue;
+		if (error < 0) {
+			fprintf(stderr, "ring-buffer poll failed: %s\n", strerror(-error));
+			return error;
+		}
+
+		error = reap_child(child, WNOHANG);
+		if (error < 0) {
+			fprintf(stderr, "waitpid failed: %s\n", strerror(-error));
+			return error;
+		}
+		if (child->reaped && events->seen)
+			break;
+
+		now = monotonic_milliseconds();
+		if (now < 0)
+			return (int)now;
+		if (now >= deadline)
+			break;
+		if (child->reaped && !events->seen)
+			continue;
+	}
+
+	error = reap_timed_out_child(child);
+	if (error)
+		return error;
+	error = drain_events(ring_buffer);
+	if (error)
+		return error;
+	return child_exit_code(child->status);
+}
+
+static int report_result(const struct exec_image_inspector_bpf *skel,
+			 const struct event_context *events, int command_exit)
+{
+	struct inspector_stats final_stats = skel->bss->stats;
+
+	printf("SUMMARY matched=%llu scheduled=%llu schedule_errors=%llu "
+	       "callbacks=%llu header_errors=%llu path_errors=%llu "
+	       "direct_probes=%llu direct_probe_errors=%llu "
+	       "deferred_probes=%llu deferred_probe_errors=%llu dropped=%llu "
+	       "events=%u command_exit=%d\n",
+	       final_stats.matched, final_stats.scheduled,
+	       final_stats.schedule_errors, final_stats.callbacks,
+	       final_stats.header_errors, final_stats.path_errors,
+	       final_stats.direct_probes, final_stats.direct_probe_errors,
+	       final_stats.deferred_probes, final_stats.deferred_probe_errors,
+	       final_stats.dropped, events->seen, command_exit);
+
+	if (!events->seen) {
+		fprintf(stderr, "no executable image event was observed\n");
+		return 1;
+	}
+	if (command_exit) {
+		fprintf(stderr, "command exited with status %d\n", command_exit);
+		return command_exit;
+	}
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	struct exec_image_inspector_bpf *skel = NULL;
+	struct child_process child = { .release_fd = -1 };
+	struct event_context events = {};
+	struct ring_buffer *ring_buffer = NULL;
+	int command_exit, error, result = 1;
+
+	error = parse_args(argc, argv);
+	if (error) {
+		usage(argv[0]);
+		return 2;
+	}
+
+	libbpf_set_print(libbpf_print_fn);
+	error = start_blocked_child(&child);
+	if (error) {
+		fprintf(stderr, "failed to create command process: %s\n",
+			strerror(-error));
+		return 1;
+	}
+
+	error = setup_inspector(&child, &events, &skel, &ring_buffer);
+	if (error)
+		goto cleanup;
+	command_exit = wait_for_command(ring_buffer, &child, &events);
+	if (command_exit < 0)
+		goto cleanup;
+	result = report_result(skel, &events, command_exit);
 
 cleanup:
-stop_child(&child);
-ring_buffer__free(ring_buffer);
-exec_image_inspector_bpf__destroy(skel);
+	stop_child(&child);
+	ring_buffer__free(ring_buffer);
+	exec_image_inspector_bpf__destroy(skel);
+	return result;
+}
+```
+<!-- END FULL SOURCE -->
+
+## 从不可睡眠 hook 安排文件读取
+
+`schedule_exec_inspection` 先比较当前 TGID 与 `target_tgid`。加载器在 BPF object 加载前设置这个只读值，其他进程的 exec 会直接返回。命中目标后，程序增加 `matched`，再从只有一个元素的 `pending` ARRAY map 中查找 key 0。
+
+这个 map value 是 `struct exec_work`，其中保存 `scheduled_ns`、直接探测结果和 `struct bpf_task_work` 所需存储。一次工具调用只观察一个子进程，因此一个 slot 已经足够。同一子进程的多次 exec 按顺序发生，因为 task-work 回调会在该 task 返回用户态并再次调用 exec 之前运行。并发服务需要 per-task storage、准入上限，还要处理 task 永远没有执行回调的情况。
+
+设置 `--probe-offset` 后，`probe_file_without_sleep` 会从 `bprm->file` 创建 file-backed dynptr，并尝试读取 8 个字节。测试 fixture 中的 [`create_probe_image()`](./tests/test_exec_image_inspector.py) 把 `EIPROBE!` 放到复制后可执行文件中超过 4 MiB 的位置，再驱逐 marker 所在页面。验证运行中的直接读取返回了 `-EFAULT`。普通检查不会设置这个选项，因为缓存中的数据也可能直接读取成功。
+
+调用 `bpf_task_work_schedule_signal` 前，hook 先保存时间戳和直接读取结果。传给内核的参数包括当前 task、work storage、map 与 `inspect_executable`。内核会为回调持有所需引用，程序不会把 `bprm` 中的裸 `struct file *` 延后使用。
+
+## 在回调中重新取得并读取镜像
+
+`inspect_executable` 在该 task 的可睡眠上下文中执行。它记录回调延迟，用于诊断，然后填充 PID、TGID、进程名与直接探测结果，并调用 `bpf_get_task_exe_file()` 取得 task 已安装的镜像。
+
+这个 kfunc 返回带引用的 `struct file`，每次成功获取都必须用 `bpf_put_file()` 释放。回调先通过 `bpf_path_d_path` 解析路径，再用 `bpf_dynptr_from_file` 创建 dynptr。file dynptr 也持有内部状态，因此所有创建路径都要调用 `bpf_dynptr_file_discard()`，包括这个 API 规定的 helper 失败路径。
+
+回调只读取 64 字节 ELF header 和可选的 8 字节 marker，不会扫描整个可执行文件。header 读取成功后，程序先检查四个 ELF magic byte，再解析 `EI_CLASS`、`EI_DATA`、`e_type` 与 `e_machine`。`read_elf_u16` 同时处理大端和小端的 16 位字段。
+
+用户态把常见值转换成 `ELF64`、`LSB`、`ET_DYN` 和 `EM_X86_64` 等名称，同时保留原始 type 与 machine 数值。header、路径、直接探测和延迟探测的错误都会保留在 event 中，不会被格式化逻辑隐藏。
+
+## 加载器如何消除 exec 与清理竞态
+
+`start_blocked_child` 在 BPF 设置前 fork，但子进程先等待 pipe 中的一个字节。父进程此时已经知道 child PID，在本例中它也是 TGID，因此可以在加载 object 前设置 `target_tgid`。如果 BPF 设置失败，清理流程会关闭尚未释放的 pipe，并在目标执行前回收子进程。
+
+挂载完成后，`release_child` 才允许 `execvp` 运行。程序把 argv vector 直接传入这个函数，没有 shell 解析参数。`wait_for_command()` 轮询 ring buffer、调用 `waitpid(WNOHANG)`，并在子进程已经回收且至少收到一条事件时结束，或者等到 deadline。
+
+同一个子进程可能连续安装多个镜像。集成用例运行 `/bin/sh -c 'exec /bin/true'`，会先收到 shell 的事件，再收到 `/bin/true` 的事件。子进程回收后，`drain_events` 会取尽 ring buffer，避免最后一个镜像事件仍留在队列。测试要求出现两次 match、两次 callback、两条 event，并确认最后路径为 `/usr/bin/true`。
+
+命令超过 `--timeout-ms` 后，`reap_timed_out_child` 发送 SIGKILL 并等待其退出。正常完成与所有已处理错误路径都会释放 ring buffer、销毁 skeleton，并由此卸载 LSM link。工具不会创建 bpffs pin 或持久 link。
+
+命令自身的退出状态也不会丢失。收到 exec event 不会把失败命令变成成功，命令成功也不会掩盖检查错误。加载器没有安装外部 SIGINT 或 SIGTERM handler，因此外部信号终止加载器后，已经释放的子进程可能继续运行。
+
+## 编译和运行
+
+宿主机只负责构建，不加载 BPF：
+
+```bash
+git submodule update --init --recursive
+make -C src/54-exec-image-inspector clean
+make -C src/54-exec-image-inspector -j2
 ```
 
-如果 BPF 设置失败，清理逻辑会关闭尚未释放的 pipe，并在目标执行前回收子进程。已经释放的命令如果超过 `--timeout-ms`，`wait_for_command()` 会发送 `SIGKILL` 并等待它退出。正常结束和所有错误路径都会释放 ring buffer，并销毁 skeleton，由此卸载 LSM link。
+集成测试只能在 Linux 6.19 或更新版本的一次性客户机中运行。`make test` 与直接运行工具都会挂载 BPF LSM 程序，不能把它们当作宿主机验证命令。
 
-工具保留命令本身的退出状态。收到事件不会掩盖命令失败，命令失败也不会被错误地报告成检查成功。工具不会创建 bpffs pin 或持久 link，因此进程退出已经完成全部清理。
+```bash
+cd src/54-exec-image-inspector
+sudo make test
+```
+
+仓库 CI 只编译本课，不加载程序。运行时证据来自复用的 `bpf-benchmark` KVM 客户机。内核源码 worktree 保持干净，客户机运行 `7.0.0-rc2+`，源码 commit 为 `a03114efd0720dff230388f7e160e427e54ea31b`。内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，config SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
+
+最终运行得到下面的输出：
+
+```text
+guest_kernel=7.0.0-rc2+
+guest_identity=uid=0(root) gid=0(root) groups=0(root)
+TEST-MISSING matched=0 events=0 command_exit=127
+TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
+TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
+READY target_tgid=1265 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image
+EXEC pid=1265 tgid=1265 comm=exec_fixture_im path=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=37
+PROBE offset=4214784 direct_error=-14 deferred_error=0 bytes=454950524f424521
+exec fixture completed
+SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path_errors=0 direct_probes=1 direct_probe_errors=1 deferred_probes=1 deferred_probe_errors=0 dropped=0 events=1 command_exit=0
+PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
+```
+
+PID、TGID、临时路径、回调延迟和 fixture 的 probe offset 都可能在重新构建或运行后改变。这里的延迟只用于诊断，不是 benchmark 或开销测量。
+
+主要的 `EXEC` 行给出已经安装的镜像和 ELF header。exec 前，fixture 会刷新并驱逐追加 marker 所在的页面。hook 中直接读取返回 `-EFAULT`（`-14`），task-work 回调则返回 `454950524f424521`，也就是 `EIPROBE!` 的十六进制字节。
+
+`READY` 之前的三条测试记录覆盖了重要边界。不存在的命令以状态 127 退出，无法到达 committed-exec hook，因此测试只等待 500 ms deadline，没有收到事件。超时用例先产生 exec event，再超过 200 ms 测试 deadline，最后由 SIGKILL 终止并以状态 137 回收。re-exec 用例取尽两个镜像事件，并确认 `/usr/bin/true` 最后出现。
+
+在满足要求的客户机中检查其他命令时，可以省略 fixture 专用的 probe offset：
+
+```bash
+sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
+```
+
+命令行格式如下：
+
+```text
+exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COMMAND [ARG...]
+```
+
+- `--timeout-ms` 接受 100 至 60000 ms，默认值为 5000 ms。超过 deadline 后，加载器会终止并回收命令。
+- `--probe-offset` 比较指定位置的 8 字节直接读取与延迟读取。普通镜像检查不需要它，fixture 会计算有效 marker offset 并创建冷页条件。
+- `--verbose` 输出 libbpf 诊断，便于排查 load 或 attach 问题。
+- `--` 明确结束 inspector 选项解析，后面的参数全部属于被观察命令。
+
+普通运行不设置 `--probe-offset` 时，会打印 `READY`、一条或多条 `EXEC` 与 `SUMMARY`，不会出现 `PROBE` 行。
 
 ## 运行要求
 
@@ -236,27 +963,39 @@ exec_image_inspector_bpf__destroy(skel);
 | --- | --- | --- |
 | Linux 内核 | 6.19 或更新版本 | BPF task work 在 6.18 引入，file-backed dynptr 在 6.19 引入 |
 | 内核配置 | `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_BPF_LSM=y`、`CONFIG_SECURITY=y`、`CONFIG_DEBUG_INFO_BTF=y` | 加载带 BTF 的 BPF LSM 程序 |
-| 活动 LSM 列表 | `/sys/kernel/security/lsm` 中包含 `bpf` | 只有 `CONFIG_BPF_LSM=y` 并不保证启动时启用 BPF LSM |
+| 活动 LSM 列表 | `/sys/kernel/security/lsm` 中包含 `bpf` | `CONFIG_BPF_LSM=y` 本身不会在启动时启用 BPF LSM |
 | 权限 | root | 加载并挂载 BPF LSM 程序 |
 | 已测试架构 | x86_64 | 确定性 ELF 断言当前按 x86-64 编写 |
-| 已测试工具链 | 仓库固定的 bpftool `3be8ac3` 与 libbpf `fc064eb` | 构建本课使用的 BPF object 和 skeleton |
+| 已测试工具链 | 仓库固定的 bpftool `3be8ac3` 与嵌套 libbpf `fc064eb` | 构建本课使用的 BPF object 与生成 skeleton |
 | 硬件 | 无特殊要求 | Fixture 不依赖加速器或特殊设备 |
 
-仓库生成的 `vmlinux.h` 和 UAPI header 早于这些 kfunc。[`bpf_experimental.h`](./bpf_experimental.h) 因此把所需声明限制在本课目录，待仓库更新 vendored header 后再移除。
+局部 [`bpf_experimental.h`](./bpf_experimental.h) 只是对仓库旧生成 `vmlinux.h` 与 UAPI header 的临时兼容。vendored header 包含这些 kfunc 声明后，就可以移除这个文件。
 
-在虚拟机中执行 `cat /sys/kernel/security/lsm` 可以检查 active list。如果其中没有 `bpf`，需要把它追加到虚拟机现有的逗号分隔 `lsm=` kernel command-line 值中。例如，把 `lsm=<existing-list>` 改为 `lsm=<existing-list>,bpf`，不要删除虚拟机的其他 LSM，否则 attach 会失败。这个启动配置修改也应限制在一次性测试虚拟机内。
+在客户机中执行下面的命令，检查活动 LSM 列表：
 
-## 范围与限制
+```bash
+cat /sys/kernel/security/lsm
+```
 
-- 工具只观察加载器创建的一个子进程，不会监控系统中的所有 exec。
-- 如果这个子进程再次调用 `exec`，工具会输出另一条 `EXEC`，并在回收子进程后取尽已排队的事件。最后一条 `EXEC` 表示子进程退出前安装的镜像。
-- 它报告可执行镜像和少量 ELF header 信息，不验证签名，不判断恶意软件，也不执行 allowlist 策略。
-- 对于脚本，已安装的可执行镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
-- 冷页 fixture 用于证明延迟文件读取的必要性，不能据此认为所有直接文件读取都会失败。
+列表中没有 `bpf` 时，需要把它追加到客户机现有的逗号分隔 `lsm=` kernel command-line。把 `lsm=<existing-list>` 改成 `lsm=<existing-list>,bpf`，不要删除其他 LSM，否则 attach 会失败。这个启动配置修改应限制在一次性客户机内。
+
+## 适用范围与限制
+
+- 加载器只观察自己创建的一个子进程，不会监控系统中的所有 exec。
+- 同一子进程再次 exec 时，工具会输出另一条 `EXEC`。回收子进程后还会取尽已排队事件，最后一条表示退出前最后观察到的镜像。
+- 工具报告可执行镜像和少量 ELF header 信息，不验证签名，不判断恶意软件，也不执行 allowlist 策略。
+- 对于脚本，已安装镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
+- 冷页 fixture 用于展示延迟文件读取的意义，不能证明所有直接文件读取都会失败。
 - 单个 map slot 适用于单子进程 CLI。并发服务需要 per-task 状态、准入上限，以及 task 未执行回调时的恢复策略。
-- KVM 运行只做功能测试。输出中的回调延迟不能作为 benchmark 或开销估算。
-- 运行行为只在 x86_64 上验证。其他架构需要对应的 fixture 断言和 KVM 覆盖。
-- 加载器没有安装外部 `SIGINT` 或 `SIGTERM` handler。加载器被终止时 BPF link 会关闭，但已经释放的子进程可能继续运行，需要由调用方管理。
+- KVM 运行只做功能测试，回调延迟不能作为 benchmark 或开销估算。
+- 运行行为只在 x86_64 上验证。其他架构需要自己的 fixture 断言与 KVM 覆盖。
+- 加载器没有外部 SIGINT 或 SIGTERM handler。加载器被终止时 BPF link 会关闭，但已经释放的子进程可能继续运行，需要由调用方管理。
+
+## 总结
+
+这个例子把 exec 工具经常混在一起的两个时刻分开了。LSM hook 能识别已经提交的 exec，却不能 fault 任意文件页。BPF task work 则提供可睡眠回调，让程序重新取得并检查已经安装的镜像。阻塞子进程握手、有界命令运行、最终 ring-buffer drain 和显式资源释放把这些内核功能组合成了可复现的小工具，同时没有把它包装成完整审计服务。
+
+> 如果你想继续深入学习 eBPF，可以查看我们的[教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
 
 ## 参考资料
 
@@ -264,11 +1003,7 @@ exec_image_inspector_bpf__destroy(skel);
 - [`bpf_task_work_schedule_signal()` kfunc](https://github.com/torvalds/linux/commit/38aa7003e369802f81a078f6673d10d97013f04f)
 - [File-backed dynptr 基础实现](https://github.com/torvalds/linux/commit/8d8771dc03e48300e80b43744dd3c320ccaf746a)
 - [File dynptr kfunc 与 helper](https://github.com/torvalds/linux/commit/e3e36edb1b8f0e6975c68acd2e1202ec0397fd75)
-- [可睡眠 file-dynptr 调度](https://github.com/torvalds/linux/commit/2c52e8943a437af6093d8b0f0920f1764f0e5f64)
+- [可睡眠 file-dynptr dispatch](https://github.com/torvalds/linux/commit/2c52e8943a437af6093d8b0f0920f1764f0e5f64)
 - [Kernel kfunc 文档](https://github.com/torvalds/linux/blob/v7.1/Documentation/bpf/kfuncs.rst)
 - [File-reader BPF selftest](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/file_reader.c)
 - [BPF task-work selftest](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/task_work.c)
-
-现在可以区分启动请求和内核最终安装的可执行镜像，也可以复用一条有边界的路径，把可能触发 page fault 的文件检查移动到 task work。本课故意保持单进程、小读取范围，后续可以在不把示例变成 daemon 的前提下扩展其他元数据或策略输入。
-
-继续阅读 [bpf-developer-tutorial 仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial) 和 [eunomia 教程索引](https://eunomia.dev/tutorials/)。
