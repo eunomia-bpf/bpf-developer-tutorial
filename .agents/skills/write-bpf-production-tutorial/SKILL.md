@@ -17,7 +17,7 @@ This Skill owns the writing process, not writing style. Invoke `$bpf-tutorial-wr
 - Resolve every valid **Must fix** finding. Record a concrete disposition for every **Should fix** and **Consider** finding, then run an external re-review of the final diff.
 - Do not call the prose finished while any valid Must-fix remains. If no different model family is available, report `cross-model review unavailable`.
 - Use `scripts/run-external-review.sh` for Grok 4.5 or OpenCode GLM 5.2 reviews. Choose one reviewer for a normal pass and at most two when the first review finds factual uncertainty or substantial bilingual problems. Do not run every available model by default. The wrapper is read-only and preserves the complete prompt, trace, and manifest under `~/.local/state/bpf-tutorial-reviews/runs/`.
-- Keep `scripts/run-claude-writer.sh` only as an optional, trace-verified `claude-opus-4-6[1m]` authoring channel.
+- Keep `scripts/run-claude-writer.sh` only as an optional, trace-verified `claude-opus-4-6[1m]` authoring channel. It requires a clean checkout, authors inside a bubblewrap-protected isolated worktree, verifies the exact two-file diff, preserves a prompt, trace, manifest, and patch, then applies that patch to the real checkout.
 - Never delete, truncate, rewrite, or clean any writer or reviewer trace directory. Preserve failed and partial runs too.
 
 ## Establish the tutorial contract
@@ -81,6 +81,7 @@ Run a different model family read-only over the final files, implementation evid
 TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
 "$TUTORIAL_ROOT/.agents/skills/write-bpf-production-tutorial/scripts/run-external-review.sh" \
   --reviewer grok \
+  --scope tutorial \
   --repo "$TUTORIAL_ROOT" \
   --task /absolute/path/to/review-task.md \
   --file src/<lesson>/README.md \

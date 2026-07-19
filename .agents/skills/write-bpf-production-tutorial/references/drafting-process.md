@@ -22,4 +22,17 @@ Draft English and Chinese from the same evidence ledger. Keep code, commands, an
 
 After the rewrite, compare each README with its entry version from the end backwards. Mark every removed paragraph as moved, rephrased with all facts intact, or intentionally excluded for a reason already authorized by the task. Restore any unaccounted technical content.
 
-Run `$bpf-tutorial-writing-style/scripts/sync-source-blocks.py --check` to verify that every complete-source block matches its repository file exactly. Then run the repository documentation generators, link checks, tests, and external review workflow.
+Use the exact marker form documented in `$bpf-tutorial-writing-style/SKILL.md`; never hand-edit the generated content between the markers. From the repository root, synchronize the English and Chinese pair together after drafting. Repeat `--expected-source` once for every core source named in the task inventory:
+
+```bash
+python3 .agents/skills/write-bpf-production-tutorial/scripts/sync-source-blocks.py \
+  --repo "$(git rev-parse --show-toplevel)" \
+  --readme src/<lesson>/README.md \
+  --readme src/<lesson>/README.zh.md \
+  --expected-source src/<lesson>/<shared-header>.h \
+  --expected-source src/<lesson>/<tool>.bpf.c \
+  --expected-source src/<lesson>/<tool>.c \
+  --write
+```
+
+Before acceptance, rerun the same command with `--check` in place of `--write`. Then run the repository documentation generators, link checks, tests, and external review workflow.
