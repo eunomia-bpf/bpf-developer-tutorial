@@ -5,7 +5,8 @@ readonly SKILL_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PROCESS_SKILL="$SKILL_DIR/SKILL.md"
 readonly ACCEPTANCE="$SKILL_DIR/references/tutorial-acceptance.md"
 readonly WRITING_GUIDE="$SKILL_DIR/references/drafting-process.md"
-readonly REVIEW_GUIDE="$SKILL_DIR/references/review-checklist.md"
+readonly TUTORIAL_REVIEW_GUIDE="$SKILL_DIR/references/review-checklist.md"
+readonly SKILL_REVIEW_GUIDE="$SKILL_DIR/references/skill-review-checklist.md"
 readonly PRECEDENT_GUIDE="$SKILL_DIR/references/repository-precedents.md"
 readonly VERIFY="$SKILL_DIR/scripts/verify_external_review.py"
 readonly STYLE_DIR="$SKILL_DIR/../bpf-tutorial-writing-style"
@@ -75,13 +76,20 @@ declare -a policy_files=(
   "$PROCESS_SKILL"
   "$ACCEPTANCE"
   "$WRITING_GUIDE"
-  "$REVIEW_GUIDE"
   "$PRECEDENT_GUIDE"
   "$STYLE_SKILL"
   "$STYLE_GUIDELINES"
   "$STYLE_REPOSITORY"
   "$STYLE_PROSE"
 )
+case "$scope" in
+  tutorial)
+    policy_files+=("$TUTORIAL_REVIEW_GUIDE")
+    ;;
+  skill)
+    policy_files+=("$SKILL_REVIEW_GUIDE")
+    ;;
+esac
 for required_file in "${policy_files[@]}" "$VERIFY"; do
   [[ -r $required_file ]] || {
     echo "repository-local Skill dependency is missing: $required_file" >&2
@@ -365,7 +373,7 @@ finalize() {
     run_state=failed_or_interrupted
   fi
   write_manifest
-  if ((exit_status != 0)); then
+  if ((exit_status != 0)) && [[ $run_state != complete ]]; then
     echo "review did not complete; prompt, trace, and manifest were preserved under $run_dir" >&2
   fi
 }
@@ -444,3 +452,7 @@ fi
 run_state=complete
 echo "gate=$gate"
 echo "manifest=$manifest"
+if [[ $gate == FAIL ]]; then
+  echo "review completed with GATE: FAIL; prompt, trace, snapshot, and manifest were preserved under $run_dir" >&2
+  exit 3
+fi

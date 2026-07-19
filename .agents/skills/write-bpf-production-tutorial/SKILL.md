@@ -17,7 +17,7 @@ This Skill owns the writing process, not writing style. Invoke `$bpf-tutorial-wr
 - Resolve every valid **Must fix** finding. Record a concrete disposition for every **Should fix** and **Consider** finding, then run an external re-review of the final diff.
 - Do not call the prose finished while any valid Must-fix remains. If no different model family is available, report `cross-model review unavailable`.
 - Use `scripts/run-external-review.sh` for Grok 4.5 or OpenCode GLM 5.2 reviews. Choose one reviewer for a normal pass and at most two when the first review finds factual uncertainty or substantial bilingual problems. Do not run every available model by default. The wrapper is read-only and preserves the complete prompt, trace, and manifest under `~/.local/state/bpf-tutorial-reviews/runs/`.
-- Keep `scripts/run-claude-writer.sh` only as an optional, trace-verified `claude-opus-4-6[1m]` authoring channel. It requires a clean checkout, authors inside a bubblewrap-protected isolated worktree, verifies the exact two-file diff, preserves a prompt, trace, manifest, and patch, then applies that patch to the real checkout.
+- Keep `scripts/run-claude-writer.sh` only as an optional, trace-verified `claude-opus-4-6[1m]` authoring channel. It requires a clean checkout, authors inside a bubblewrap-protected isolated worktree, verifies the exact two-file diff, preserves the worktree, prompt, trace, manifest, and patch, then applies that patch to the real checkout.
 - Never delete, truncate, rewrite, or clean any writer or reviewer trace directory. Preserve failed and partial runs too.
 
 ## Establish the tutorial contract
@@ -31,7 +31,7 @@ Before coding, write one sentence naming:
 
 Reject proposals whose only result is “the program loaded,” “the helper returned success,” or “the upstream selftest passed.”
 
-Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) before selecting scope or placement. Read [references/repository-precedents.md](references/repository-precedents.md) and the required precedent lessons in full before drafting. Read [references/drafting-process.md](references/drafting-process.md) before creating the task file. Read [references/review-checklist.md](references/review-checklist.md) before external review. Read every reference required by `$bpf-tutorial-writing-style` before drafting and again before final review.
+Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) before selecting scope or placement. Read [references/repository-precedents.md](references/repository-precedents.md) and the required precedent lessons in full before drafting. Read [references/drafting-process.md](references/drafting-process.md) before creating the task file. Read [references/review-checklist.md](references/review-checklist.md) before a tutorial review and [references/skill-review-checklist.md](references/skill-review-checklist.md) before a repository-local Skill review. Read every reference required by `$bpf-tutorial-writing-style` before drafting and again before final review.
 
 ## Implement and verify
 

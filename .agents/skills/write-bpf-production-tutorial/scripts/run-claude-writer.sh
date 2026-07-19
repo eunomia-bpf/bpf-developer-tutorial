@@ -426,7 +426,5 @@ git -C "$repo" apply --check "$patch_file"
 git -C "$repo" apply "$patch_file"
 applied=true
 
-git -C "$repo" worktree remove --force "$author_repo"
-worktree_preserved=false
 run_state=complete
 echo "manifest=$manifest"
