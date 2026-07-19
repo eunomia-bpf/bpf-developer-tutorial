@@ -1,106 +1,76 @@
 ---
 name: write-bpf-production-tutorial
-description: Run the repository-local workflow for proposing, implementing, verifying, documenting, reviewing, and preparing PRs for bilingual bpf-developer-tutorial lessons. Use for scope selection, host builds, benchmark-kernel KVM tests, reproducible evidence, author/reviewer provenance, and CI closure. Pair it with bpf-tutorial-writing-style for prose and bilingual style decisions.
+description: Create or revise a tested bilingual bpf-developer-tutorial lesson from the implementation and real runtime evidence. Use for tutorial scope, README drafting, exact source inclusion, host builds, benchmark-kernel KVM tests, self-review, and PR preparation. Pair with bpf-tutorial-writing-style for prose decisions. External models are optional, never a required gate.
 ---
 
-# Write BPF Production Tutorials
+# Write a BPF Tutorial
 
-Build a useful tool around a kernel capability. Do not publish a wrapper around an upstream selftest or a feature-only API tour.
+Keep the workflow small. The normal path has one author, one reader-focused self-review, and the relevant build and runtime checks. Do not create task ledgers, reviewer databases, mandatory model rounds, or extra process files for an ordinary lesson.
 
-This Skill owns the writing process, not writing style. Invoke `$bpf-tutorial-writing-style` before drafting, rewriting, translating, or reviewing README prose. Never substitute a global Skill for the repository-local style Skill.
+Invoke `$bpf-tutorial-writing-style` before writing or reviewing README prose.
 
-## Separate authorship from acceptance
+## 1. Understand the lesson
 
-- Let Codex, a human, or another capable model author and revise the lesson. Treat model identity as provenance, not proof of quality.
-- Require a read-only review by a different model family after every completed writing or substantial editing pass.
-- Give the reviewer the finished English and Chinese files, implementation, tests, real output, primary sources, and the repository rulebooks. Do not give it the author's diagnosis or a list of expected defects.
-- Resolve every valid **Must fix** finding. Record a concrete disposition for every **Should fix** and **Consider** finding, then run an external re-review of the final diff.
-- Do not call the prose finished while any valid Must-fix remains. If no different model family is available, report `cross-model review unavailable`.
-- Use `scripts/run-external-review.sh` for Grok 4.5 or OpenCode GLM 5.2 reviews. Choose one reviewer for a normal pass and at most two when the first review finds factual uncertainty or substantial bilingual problems. Do not run every available model by default. The wrapper is read-only and preserves the complete prompt, trace, and manifest under `~/.local/state/bpf-tutorial-reviews/runs/`.
-- Keep `scripts/run-claude-writer.sh` only as an optional, trace-verified `claude-opus-4-6[1m]` authoring channel. It requires a clean checkout, authors inside a bubblewrap-protected isolated worktree, verifies the exact two-file diff, preserves the worktree, prompt, trace, manifest, and patch, then applies that patch to the real checkout.
-- Never delete, truncate, rewrite, or clean any writer or reviewer trace directory. Preserve failed and partial runs too.
+Read the implementation, tests, Makefile, captured output, and primary upstream references. Read these bilingual precedents in full:
 
-## Establish the tutorial contract
+- `src/47-cuda-events/README.md` and `README.zh.md` for end-to-end depth;
+- `src/49-hid/README.md` and `README.zh.md` for an approachable teaching voice;
+- at most one closer completed lesson when it contributes a subsystem-specific pattern.
 
-Before coding, write one sentence naming:
+Write down only two private working sentences: who the reader is, and what they should be able to explain or run at the end. Do not add this planning material to the repository.
 
-1. the production failure or operational need;
-2. the user-visible command and result;
-3. the kernel capability that makes it possible;
-4. the positive and negative paths that prove it works.
+Choose an honest scope. A lesson may teach a small operational tool or a focused kernel feature. Do not call a lab demo production-ready, and do not invent a production story that the CLI, output, and tests cannot support.
 
-Reject proposals whose only result is “the program loaded,” “the helper returned success,” or “the upstream selftest passed.”
+## 2. Verify the implementation
 
-Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) before selecting scope or placement. Read [references/repository-precedents.md](references/repository-precedents.md) and the required precedent lessons in full before drafting. Read [references/drafting-process.md](references/drafting-process.md) before creating the task file. Read [references/review-checklist.md](references/review-checklist.md) before a tutorial review and [references/skill-review-checklist.md](references/skill-review-checklist.md) before a repository-local Skill review. Read every reference required by `$bpf-tutorial-writing-style` before drafting and again before final review.
+Build on the host. Use `$test-bpf-tutorial-kvm` for load, attach, and runtime behavior when the host kernel cannot run the feature safely. Exercise the normal path, one meaningful failure or boundary path, and cleanup. Record the commands, guest kernel version and commit, and real output needed by the README.
 
-## Implement and verify
+Do not turn the README into a validation transcript. Runtime provenance supports the tutorial, but the reader-facing mechanism remains the story.
 
-1. Read the repository contract, nearby lesson code, Makefiles, documentation generators, and CI workflows.
-2. Keep one production scenario per PR. Start from the remote default branch for every PR.
-3. Follow existing libbpf and CO-RE patterns. Add a deterministic workload, observable result, cleanup, and a relevant failure path.
-4. Build on the host without loading BPF there.
-5. Use `$test-bpf-tutorial-kvm` for every load, attach, and runtime test. Record guest kernel provenance and real output.
-6. Add a compile CI step. Add a runtime feature probe or an explicit skip when ordinary CI lacks the required kernel.
-7. Run documentation generators and link/unit tests.
+## 3. Draft the English lesson
 
-## Draft from evidence
+Follow the project-provided advanced tutorial guidelines through `$bpf-tutorial-writing-style`. Start with one concrete situation, explain the whole kernel/user-space path, include the complete core source exactly as implemented, then walk through the important mechanisms.
 
-First write a precedent brief that confirms the required `47-cuda-events` and `49-hid` bilingual pairs were read in full, then records any additional lesson pairs selected for a useful subsystem or operational pattern. State which teaching patterns to reuse, which legacy weaknesses to avoid, and why the new lesson has a distinct operational job. Do not draft until this brief exists.
+When the complete source would dominate the page, keep it in the README but wrap each file in a collapsed `<details>` block. The source must remain searchable, copyable, byte-exact, and placed before the detailed walkthrough.
 
-Create a task file outside the lesson with:
+Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, cleanup, limitations, summary, and primary references. State once what the evidence proves and once where the example stops.
 
-- the exact README paths the author may edit;
-- the production scenario and intended audience;
-- the final code paths and CLI;
-- verified build and guest commands;
-- real captured output with private paths and identities removed;
-- minimum kernel, libbpf, config, privilege, and hardware requirements;
-- primary upstream references;
-- the precedent brief and exact sibling README paths;
-- a source-fidelity ledger covering every fact, command, code file, captured-output block, requirement, failure path, cleanup behavior, limitation, and reference that must survive a rewrite;
-- facts or claims the author must not add.
+## 4. Write Chinese from the same facts
 
-Draft or revise both README files from that evidence and the repository-local style Skill. Present the complete core BPF and user-space source before the detailed walkthrough as required by the advanced tutorial guidelines. The optional exact-Claude authoring path is:
+Write `README.zh.md` from the implementation and the paragraph's purpose, not by translating English sentence by sentence. Keep the same section progression, code, commands, output, claims, limitations, and references. Allow natural Chinese sentence and paragraph boundaries.
 
-```bash
-TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
-"$TUTORIAL_ROOT/.agents/skills/write-bpf-production-tutorial/scripts/run-claude-writer.sh" \
-  --repo "$TUTORIAL_ROOT" \
-  --task /absolute/path/to/writer-task.md \
-  --readme "$TUTORIAL_ROOT/src/<lesson>/README.md" \
-  --readme "$TUTORIAL_ROOT/src/<lesson>/README.zh.md"
-```
+## 5. Run one reader review
 
-The wrapper must finish with a verified exact-model trace. When another author writes the files, record the author identity in the PR evidence instead.
+Read both files from top to bottom as an intermediate eBPF developer. Fix the text when:
 
-## Run independent prose review
+- the opening reads like an abstract, specification, PR description, or test report;
+- a large code wall arrives before the reader has a useful mental model;
+- setup, conflicts, signals, KVM provenance, or limitations repeat;
+- a section catalogs facts without explaining cause and effect;
+- the scenario promises a tool more capable than the implementation;
+- Chinese follows English word order or switches languages unnecessarily;
+- the reader reaches the end remembering only a feature name or validation transcript.
 
-Run a different model family read-only over the final files, implementation evidence, the two required style precedents, and any additional precedent named in the brief. The wrapper embeds both repository-local Skills and their rulebooks. Pass repository-relative paths with repeated `--file` arguments:
+For a rewrite, compare the finished pair with the entry version once. Confirm that code, commands, captured output, versions, requirements, failure behavior, cleanup, limitations, and primary references did not disappear or change. Every removed passage should be repetition, stale framing, or material that moved to a better place. Word counts, heading counts, and repeated-term counts can expose bloat, but they are diagnostics rather than targets.
+
+This is the normal review gate. A different model is optional when the user asks for one or when the author is stuck on a concrete passage. Use at most one model for one focused pass, inspect its diff, and keep Codex or the human author as final editor. Model identity is never evidence of quality.
+
+Never delete, truncate, overwrite, or clean real conversation history, agent traces, prompts, partial runs, or failed runs. This preservation rule applies whether or not an external model is used.
+
+## 6. Validate and publish
+
+Synchronize and check every complete-source block in the English and Chinese pair:
 
 ```bash
-TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
-"$TUTORIAL_ROOT/.agents/skills/write-bpf-production-tutorial/scripts/run-external-review.sh" \
-  --reviewer grok \
-  --scope tutorial \
-  --repo "$TUTORIAL_ROOT" \
-  --task /absolute/path/to/review-task.md \
-  --file src/<lesson>/README.md \
-  --file src/<lesson>/README.zh.md \
-  --file src/<lesson>/<tool>.bpf.c \
-  --file src/<lesson>/<tool>.c \
-  --file src/<lesson>/tests/<test>.py \
-  --file src/47-cuda-events/README.md \
-  --file src/47-cuda-events/README.zh.md \
-  --file src/49-hid/README.md \
-  --file src/49-hid/README.zh.md
+python3 .agents/skills/write-bpf-production-tutorial/scripts/sync-source-blocks.py \
+  --repo "$(git rev-parse --show-toplevel)" \
+  --readme src/<lesson>/README.md \
+  --readme src/<lesson>/README.zh.md \
+  --expected-source src/<lesson>/<tool>.bpf.c \
+  --expected-source src/<lesson>/<tool>.c \
+  --check
 ```
 
-Use `--reviewer glm` for the fixed OpenCode model `zai-coding-plan/glm-5.2`. Apply valid findings with targeted edits, diff-check both languages, rerun documented commands, and invoke an external reviewer again. The gate passes only when the final trace reports no valid Must-fix item.
+Repeat `--expected-source` for each complete shared header. Use `--write` only to restore source blocks from their real files; never hand-edit generated payloads.
 
-## Prepare the PR
-
-- Include only one lesson and the minimal generated index/compatibility changes.
-- Explain the production problem before the kernel feature in the PR body.
-- Report the host build, KVM positive test, negative/cleanup test, guest kernel provenance, documentation tests, author identity, review manifests, and finding dispositions.
-- Account for every item in the source-fidelity ledger and state that complete core source appears unchanged in both languages.
-- Follow the repository's review, Copilot, and monitored CI gates. Do not merge unless the user asks.
+Run `git diff --check`, the lesson build, the relevant host tests, the KVM runtime test, and repository documentation checks. Inspect the final diff for unintended files. Commit and push the repository-local Skills and tutorial changes only after these checks pass. Do not merge unless the user asks.

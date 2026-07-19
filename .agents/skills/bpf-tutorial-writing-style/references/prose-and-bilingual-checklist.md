@@ -2,6 +2,8 @@
 
 This checklist carries the relevant eunomia.dev writing discipline into advanced eBPF tutorials. It is self-contained and does not depend on a global or external Skill.
 
+Use it as a reader-focused editing guide, not as a reason to add review rounds. Technical fidelity is mandatory. Numeric paragraph ranges and stylistic labels are diagnostic signals that still require judgment.
+
 ## Fidelity is the first gate
 
 - **Must fix:** Any code, command, captured output, number, version, requirement, limitation, negative result, cleanup behavior, reference, or scope-bearing qualifier from the supplied material is missing or changed.
@@ -10,6 +12,7 @@ This checklist carries the relevant eunomia.dev writing discipline into advanced
 - Avoid absolute words such as “always,” “never,” “cannot,” and “impossible” unless the implementation or a primary source proves the boundary.
 - Do not invent output, benchmark numbers, PIDs, paths, errors, production uses, or performance conclusions.
 - Reorganize for teaching, but do not simplify away technical information. During a rewrite, compare the final text against the entry version from the end backwards and account for every removed paragraph.
+- Preserving a fact does not require repeating it. Put each requirement, failure behavior, cleanup rule, and limitation at the one point where it helps the reader most.
 
 ## Voice and argument
 
@@ -21,6 +24,8 @@ This checklist carries the relevant eunomia.dev writing discipline into advanced
 - Replace spec-sheet prose with causal explanation. If three neighboring sentences can be reordered without changing the paragraph, connect each fact to what it enables or why it matters.
 - Avoid fancy or promotional words, clickbait, exclamation marks, vague superlatives, hollow calls to action, and self-praise. Attraction should come from a concrete problem and a mechanism the reader can reuse.
 - Do not overuse lists. Use prose for the implementation story and lists only when parallel items become easier to scan.
+- Do not let provenance become the plot. Kernel commits, guest versions, CI details, and test matrices belong in a compact reproducibility note unless the lesson is specifically about them.
+- Match the scenario to the tool. A small fixture, lab command, or feature demonstration can be valuable without being described as a production service.
 
 ## Paragraph and sentence checks
 
@@ -39,6 +44,7 @@ This checklist carries the relevant eunomia.dev writing discipline into advanced
 
 - Present full core source exactly as it exists before excerpting it again for explanation. Mark complete-source blocks for the workflow Skill's synchronizer, then require its `--check` mode to pass against the complete source inventory. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
 - Introduce each complete file with its role in the kernel/user-space flow. After the file, select only the parts that need deeper explanation.
+- When full source spans several files or hundreds of lines, place each exact file in a collapsed `<details>` block. The code still appears before the walkthrough, but it does not become a wall that hides the article.
 - Explain what advanced developers need to know: program type, attach point, context restrictions, helper or kfunc semantics, map ownership, state lifetime, concurrency, verifier constraints, event/control path, error handling, and cleanup.
 - Keep build and run commands copyable. Explain prerequisites before the command and interpret real output after it.
 - Label volatile fields and distinguish demonstrations, functional tests, and benchmarks.
@@ -61,4 +67,4 @@ This checklist carries the relevant eunomia.dev writing discipline into advanced
 
 ## Final reader check
 
-After reading in order, an intermediate or advanced eBPF developer should be able to explain the real problem, the kernel/user-space flow, why the advanced capability is needed, how the core code works, how to build and run it, what the captured output proves, and where the example stops. If the reader remembers only a feature name or a validation transcript, revise the narrative.
+After reading in order, an intermediate or advanced eBPF developer should be able to explain the real problem, the kernel/user-space flow, why the advanced capability is needed, how the core code works, how to build and run it, what the captured output proves, and where the example stops. If the reader remembers only a feature name, a code wall, repeated caveats, or a validation transcript, revise the narrative.

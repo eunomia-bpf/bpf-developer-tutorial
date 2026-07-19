@@ -1,37 +1,48 @@
 # Repository house style
 
-New advanced lessons must feel like they belong beside `src/47-cuda-events/` and `src/49-hid/`. Read both English/Chinese README pairs in full before drafting. Use `47-cuda-events` as the depth baseline for an end-to-end tool and `49-hid` as the voice and code-first teaching baseline.
+New advanced lessons should feel at home beside `src/47-cuda-events/` and `src/49-hid/`. Read both English/Chinese README pairs in full. Use `47-cuda-events` as a depth reference for an end-to-end tool and `49-hid` as the stronger reference for voice, pacing, and teaching through a concrete device problem.
 
-After those two anchors, inspect the repository index and nearby lesson directories. Select one to three additional finished bilingual tutorials when they offer a closer domain pattern. Networking work may use `20-tc`, `41-xdp-tcpdump`, `42-xdp-loadbalancer`, or `50-tcx`. Process and security work may use `7-execsnoop`, `19-lsm-connect`, `26-sudo`, or `34-syscall`. Tracing work may use `9-runqlat`, `17-biopattern`, or `33-funclatency`. Accelerator work may use `47-cuda-events` and the closest lesson under `src/xpu/`. A reusable primitive may use the closest `src/features/` pair plus one numbered end-to-end lesson.
+These lessons are precedents, not perfect templates. Do not copy their unsupported claims, stale version language, inconsistent punctuation, or unnecessary feature catalogs. Verified implementation facts and current project rules win whenever a precedent differs.
 
-These examples are routing guidance, not an allowlist. The agent may choose another completed lesson when it is a better match. It must read each selected English/Chinese pair in full, name the concrete pattern being reused, and explain why that pattern fits. Do not copy a section skeleton simply because another lesson has it.
+Read at most one additional completed bilingual lesson when it offers a closer subsystem pattern. For networking, good candidates include `20-tc`, `41-xdp-tcpdump`, `42-xdp-loadbalancer`, and `50-tcx`. Choose by teaching need, not by directory number.
 
-## Match the useful patterns
+## Build one continuous story
 
-- Start with a concrete situation the reader can picture. Address the reader directly when it sounds natural, then name the tool and what the reader will learn.
-- Give enough subsystem background to make the advanced mechanism understandable. Assume basic eBPF knowledge, so skip generic definitions of maps, CO-RE, or the verifier unless the lesson depends on a non-obvious property.
-- Introduce the whole kernel/user-space path before walking through individual functions. Keep returning to the same example so the lesson reads as one story.
-- Present the complete kernel-mode eBPF source and complete user-space source exactly as implemented before the detailed walkthrough. Include a shared header when understanding the event or control contract depends on it. Link test fixtures and build files instead of reproducing them unless they are part of the teaching mechanism.
-- After the complete source, explain the important BPF structure, helpers, maps, callbacks or hooks, kernel event interaction, user-space load/attach path, output processing, error handling, and cleanup. Explain basic C syntax only when it hides an eBPF-specific constraint.
-- Put compilation and execution after the concept and implementation walkthrough. Show exact commands, real output, prerequisites, and what the output means.
-- End with a compact summary and one invitation to the repository and tutorial website. Keep primary references in a dedicated final section.
+Open with a concrete situation the reader can picture. Name the small tool or example and the useful result, but do not preview every version, counter, failure case, and test in the opening.
+
+Give enough background to explain why the hook or kernel subsystem matters. Then introduce the whole kernel/user-space path before individual functions. Keep returning to the same packet, event, device, or failure so adjacent sections feel causally connected.
+
+Present complete core source before the detailed walkthrough, as required by the advanced tutorial guidelines. A small program can stay inline. When several files or hundreds of source lines would bury the story, wrap each complete file in a collapsed `<details>` block. The code remains present and exact, while the reader can continue to the explanation.
+
+After the source, explain the BPF structure, attach point, state and ownership, relevant helpers or kfuncs, kernel interaction, user-space lifecycle, error handling, and cleanup. Spend words on advanced constraints and surprising behavior. Do not explain ordinary C syntax.
+
+Compilation and execution should show copyable commands, representative real output, and what that output means. Put detailed KVM provenance, commit IDs, and compatibility data in a compact requirements or reproducibility paragraph. Do not narrate the PR's validation history.
+
+End with an honest boundary, a short summary, the required invitation, and primary references.
+
+## Lessons from the 53-egress-pacer rewrite
+
+The first `53-egress-pacer` draft was technically accurate but still failed as a tutorial. It:
+
+- packed the scenario, kernel version, algorithm, counters, conflict behavior, and test result into the opening;
+- gave the reader only a few setup paragraphs before several hundred lines of source;
+- repeated the same conflict, signal, cleanup, KVM, or safety caveat in the introduction, implementation, run section, and limitations;
+- read like an artifact report because validation details received more emphasis than the mechanism;
+- called a fixed-duration lab demo a production or operational tool without matching CLI capabilities;
+- wrote Chinese by following English sentence order.
+
+The successful rewrite kept all four complete source files, commands, output, versions, failure paths, and limits. It replaced the invented production story with an honest lab scope, followed one skb through ownership and timing, collapsed the long source listings, reduced 12 main sections to 9, and moved KVM evidence into compilation and execution. Repeated `EEXIST` discussion fell from six mentions to two without losing the behavior.
+
+Reuse the method, not those exact counts. Shrink overloaded openings, give the reader one useful mental model, collapse long full-source listings, and make the walkthrough answer the questions raised by the scenario. Keep each technical fact, but place it once where the reader is ready for it.
 
 ## Preserve modern correctness
 
-Use the precedents for voice and teaching order, not as permission to copy their weaknesses. New lessons must:
+- Use captured output and identify fields that vary across runs.
+- Source version, performance, deployment, adoption, and upstream-history claims.
+- State the minimum kernel, config, privilege, architecture, and hardware requirements.
+- Explain at least one meaningful failure or boundary path and relevant cleanup.
+- Distinguish a functional KVM run from a benchmark.
+- Avoid unsupported claims such as “production-ready,” “safe,” “negligible,” or “complete visibility.”
+- Keep Markdown consistent. Use full-width Chinese punctuation and spaces between CJK text and Latin letters or digits.
 
-- use only captured output and identify fields that vary across runs;
-- source version, performance, deployment, adoption, and upstream-history claims;
-- state minimum kernel, config, privilege, architecture, and hardware requirements;
-- explain at least one meaningful failure or boundary path and all relevant cleanup behavior;
-- distinguish a functional KVM run from a benchmark;
-- avoid unsupported claims such as “production-ready,” “safe,” “negligible,” or “complete visibility”;
-- use consistent Markdown, full-width Chinese punctuation, and spaces between CJK text and Latin letters or digits.
-
-## Keep the teaching narrative
-
-Prefer paragraphs over inventories. Use lists for CLI options, requirements, byte layouts, or genuinely parallel items. Do not turn the mechanism into an acceptance report with headings such as “Verified output,” “Test evidence,” or “Statistics” unless the result itself is the topic. Runtime proof should appear naturally in the compilation and execution section, followed by an explanation of what it proves.
-
-Keep exact operational details, but move low-level provenance such as commit and image hashes into the runtime-requirements or reproducibility discussion. Lead with what the tool does, not how its PR was validated.
-
-The English and Chinese versions must share the same title promise, section progression, complete code, commands, output, facts, caveats, summary, and references. Natural Chinese takes priority over sentence-for-sentence symmetry.
+English and Chinese must share the same promise, section progression, source, commands, output, facts, caveats, summary, and references. Natural expression matters more than sentence-for-sentence symmetry.

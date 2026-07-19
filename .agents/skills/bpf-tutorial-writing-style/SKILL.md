@@ -1,38 +1,50 @@
 ---
 name: bpf-tutorial-writing-style
-description: Repository-local writing-style and bilingual review checklist for advanced bpf-developer-tutorial lessons. Use when drafting, rewriting, translating, or reviewing tutorial README.md and README.zh.md files, especially when matching the voice and code-first structure of lessons 47-cuda-events and 49-hid without losing technical facts, code, commands, evidence, caveats, or references.
+description: Repository-local prose and bilingual checklist for drafting, rewriting, or reviewing advanced bpf-developer-tutorial README.md and README.zh.md files. Use to match the readable voice of 49-hid and the useful depth of 47-cuda-events while preserving implementation facts, complete source, commands, evidence, caveats, and references.
 ---
 
 # BPF Tutorial Writing Style
 
-Apply this Skill as the single source of truth for tutorial prose and presentation. It contains style rules only. Use `$write-bpf-production-tutorial` for implementation, evidence, model review, KVM, PR, and CI workflow.
+Use this Skill for writing quality only. Use `$write-bpf-production-tutorial` for build, KVM, source synchronization, and PR steps.
 
-## Read the rulebooks
+Read all three references before drafting or reviewing:
 
-Read all three references before drafting or reviewing an advanced lesson:
+1. [Advanced tutorial guidelines](references/advanced-tutorial-guidelines.md) contains the complete project-provided requirements and must remain intact.
+2. [Repository house style](references/repository-house-style.md) explains how to learn from existing tutorials without copying their defects.
+3. [Prose and bilingual checklist](references/prose-and-bilingual-checklist.md) carries the relevant eunomia.dev writing discipline into this repository.
 
-1. [Advanced tutorial guidelines](references/advanced-tutorial-guidelines.md) preserves the complete project-provided requirements.
-2. [Repository house style](references/repository-house-style.md) defines how new lessons should match `47-cuda-events` and `49-hid` while avoiding their legacy defects.
-3. [Prose and bilingual checklist](references/prose-and-bilingual-checklist.md) carries the applicable eunomia.dev prose discipline into this repository.
+Also read the English and Chinese versions of `47-cuda-events` and `49-hid` in full. Existing lessons are examples of rhythm, depth, and teaching order, not templates. Verified code, real output, primary sources, and the user's requirements remain authoritative.
 
-Use existing tutorials as living examples, not as a fixed template. Always read the `47-cuda-events` and `49-hid` English/Chinese pairs. The agent may select up to three additional completed tutorial pairs when their subsystem, attachment type, tool shape, or target reader adds a useful pattern. Read every selected file in full and record why it was chosen. Never infer house style from headings alone.
+## Write for a reader
 
-Treat verified implementation facts, real runtime evidence, and the user's current requirements as authoritative. Never change code, commands, output, versions, claims, qualifiers, failure behavior, or limitations to make prose smoother. When an older precedent conflicts with verified facts or the current rulebooks, preserve the facts and use only the precedent's useful teaching style.
+Start with a problem the reader can picture. Give the reader a small mental model before the full source. Keep one example, packet, event, or failure as the thread through the article.
 
-## Apply the final gate
+Use oral English, familiar words, and connected sentences. Write natural Chinese independently from the same facts. Prefer causal explanation over inventories. A paragraph should tell the reader what happens, why it happens, and what that enables.
 
-Treat every unmarked rule in the three references as blocking unless the rule explicitly calls itself diagnostic or advisory. A **Must fix** label highlights a common hard failure; it is not the only kind of blocking rule. Report each failure with the file, heading, smallest useful excerpt, reason, and a targeted correction. Never rewrite a whole section during review when a paragraph-level fix is enough.
+Do not write like a paper, specification, PR description, release note, test log, or compliance report. Build and KVM evidence belongs in compilation and execution, where it should support a claim instead of becoming the article's main plot.
 
-Paragraph length ranges are diagnostics, not quotas. A rule marked **Must fix** blocks acceptance. Preserve English and Chinese macro structure, facts, code, commands, output, examples, limitations, and references, but compose each language naturally rather than translating line by line.
+## Keep the source readable
 
-The workflow Skill synchronizes every complete-source block. Mark each block with a repository-relative source path:
+Include complete core source before the detailed walkthrough, exactly as implemented. Introduce each file with one sentence explaining its role. If the full source is long enough to interrupt the lesson, place each file in a collapsed `<details>` block, then reopen only the important excerpts in the walkthrough.
 
-````markdown
-<!-- BEGIN FULL SOURCE: src/<lesson>/<tool>.bpf.c -->
-```c
-placeholder replaced by the script
-```
-<!-- END FULL SOURCE -->
-````
+Do not simplify code, insert ellipses, rewrite comments, or hand-edit synchronized source blocks. Link tests and build boilerplate unless they are part of the mechanism being taught.
 
-Never hand-edit content between these markers. `$write-bpf-production-tutorial` owns the expected-source inventory, synchronization commands, verification order, and acceptance workflow.
+## Keep scope honest
+
+Describe what the implementation actually provides. A bounded lab command is a bounded lab command. Do not inflate it into a daemon, controller, production scheduler, security product, or operational platform.
+
+State requirements, one meaningful failure path, cleanup behavior, and limitations. Say each important boundary once, at the point where the reader needs it. Move low-level kernel provenance into a compact requirements or reproducibility note.
+
+## Final reader check
+
+Read the finished lesson in order once. The reader should be able to answer:
+
+- What concrete problem does this lesson solve?
+- How does one packet or event move through kernel and user space?
+- Which eBPF mechanism makes that possible?
+- Which code deserves close attention?
+- How do I build, run, and recognize success?
+- What does the captured output prove?
+- Where does the example stop?
+
+Revise if the reader instead encounters a code wall, repeated disclaimers, a validation transcript, dense spec-sheet paragraphs, literal Chinese translation, or a scenario larger than the tool. This reader check is a judgment pass, not a reason to add reviewers or models.
