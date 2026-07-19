@@ -2,7 +2,9 @@
 
 Suppose a file-backed service shows read-latency spikes. Application timing tells you that requests slowed down, but it cannot distinguish a blocked kernel read path from user-space work. The useful question is: which thread made the read, how many bytes did it request, what did the call return, and how long did that one `vfs_read` invocation take?
 
-This tutorial demonstrates `fsession_latency`, which attaches a single BPF program at `SEC("fsession/vfs_read")`. The program timestamps entry, computes latency at return, and reports only calls that reach or exceed a threshold. Linux 7.0 fsession runs that same BPF program once at function entry and once at function return, providing an 8-byte per-invocation scratch slot via `bpf_session_cookie(ctx)` that replaces the per-thread hash-map insert, lookup, and cleanup commonly used by a separate fentry/fexit pair.
+This tutorial is part of the eBPF Tutorial by Example series. The basic model is that user space loads and attaches a verifier-checked tracing program to a kernel function, and the BPF side measures kernel execution and sends selected events back to user space.
+
+When a tracing scenario needs to observe both function entry and return, the common approach is to write separate fentry and fexit programs and carry the timestamp from entry to return through a per-thread map. Linux 7.0 introduced fsession, which executes one BPF program at both function entry and return and supplies an 8-byte per-invocation session cookie via `bpf_session_cookie(ctx)`. The `fsession_latency` tool in this tutorial uses that capability to timestamp `vfs_read` entry, compute latency at return, filter by TGID and threshold, and report slow reads.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 
