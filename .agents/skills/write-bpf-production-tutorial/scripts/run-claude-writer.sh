@@ -4,8 +4,12 @@ set -euo pipefail
 readonly MODEL='claude-opus-4-6[1m]'
 readonly SKILL_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly VERIFY="$SKILL_DIR/scripts/verify_claude_trace.py"
-readonly GUIDE="$SKILL_DIR/references/writing-guide.md"
+readonly GUIDE="$SKILL_DIR/references/drafting-process.md"
 readonly PRECEDENTS="$SKILL_DIR/references/repository-precedents.md"
+readonly STYLE_DIR="$SKILL_DIR/../bpf-tutorial-writing-style"
+readonly STYLE_GUIDELINES="$STYLE_DIR/references/advanced-tutorial-guidelines.md"
+readonly STYLE_REPOSITORY="$STYLE_DIR/references/repository-house-style.md"
+readonly STYLE_PROSE="$STYLE_DIR/references/prose-and-bilingual-checklist.md"
 
 usage() {
   echo "usage: $0 --repo ABSOLUTE_REPO_PATH --task ABSOLUTE_TASK_FILE --readme ABSOLUTE_README_PATH --readme ABSOLUTE_README_PATH" >&2
@@ -95,11 +99,14 @@ status_before=$(git -C "$repo" status --porcelain=v1)
 task_sha=$(sha256sum "$task" | awk '{print $1}')
 printf -v allowed_paths 'Allowed README path: %s\n' "${allowed_readmes[@]}"
 
-prompt=$(printf '%s\n\n%s\n%s\n%s\n%s\n' \
+prompt=$(printf '%s\n\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
   'You are the prose author for this eBPF production tutorial pass. Read the repository code and evidence named in the task. Edit only the README.md and README.zh.md paths explicitly allowed by the task. Do not edit code, build files, generated indexes, or tests. Do not invent output or claims. Finish by stating which README files you edited.' \
   "$allowed_paths" \
   "$(<"$GUIDE")" \
   "$(<"$PRECEDENTS")" \
+  "$(<"$STYLE_GUIDELINES")" \
+  "$(<"$STYLE_REPOSITORY")" \
+  "$(<"$STYLE_PROSE")" \
   "$(<"$task")")
 
 set +e

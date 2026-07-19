@@ -1,17 +1,30 @@
 # Repository tutorial precedents
 
-Read two or three existing English/Chinese README pairs in full before drafting. Select one lesson with the same operational shape and one with the same eBPF attachment or subsystem. Record the exact paths in a precedent brief.
+Read both required English/Chinese README pairs in full before drafting:
 
-## Default production-tool precedent
+- `src/47-cuda-events/README.md` and `src/47-cuda-events/README.zh.md`
+- `src/49-hid/README.md` and `src/49-hid/README.zh.md`
 
-Use `src/47-cuda-events/README.md` and `src/47-cuda-events/README.zh.md` as a default precedent for tracers and accelerator-facing tools. Reuse its useful scope:
+Select one additional lesson with the same operational shape or eBPF attachment when it adds a useful domain pattern. Record every exact path in a precedent brief.
+
+## Required advanced-tool precedents
+
+Use `47-cuda-events` as the end-to-end depth baseline. Reuse its useful scope:
 
 - identify a real workload and the operator-visible events;
 - connect the BPF hooks, shared event structure, ring buffer, user-space formatter, CLI, and fixture end to end;
 - include build and run commands, representative output, limitations, extension points, and primary references;
 - keep the complete source easy to find while explaining only the important excerpts.
 
-Do not inherit its legacy weaknesses. New lessons must show commands and verified evidence early, avoid generic eBPF or subsystem introductions, use only captured output, qualify volatile IDs and addresses, source every benchmark claim, keep English and Chinese macro structure aligned, and state requirements, negative behavior, and cleanup explicitly.
+Use `49-hid` as the approachable, code-first teaching baseline. Reuse its useful scope:
+
+- open with a concrete problem that gives the advanced feature a reason to exist;
+- explain enough subsystem background before implementation;
+- present complete source before walking through the important mechanisms;
+- explain kernel-mode code in depth and user-space orchestration more briefly;
+- put compilation, execution, expected output, experiments, summary, and references after the implementation story.
+
+Do not inherit either lesson's legacy weaknesses. New lessons must avoid generic eBPF history, excessive marketing language, stale or unsupported counts, invented output, unqualified volatile IDs and addresses, unsourced benchmark claims, inconsistent Chinese punctuation, exhaustive feature inventories, and missing requirements or cleanup. The repository-local style Skill defines the current house style when the precedents differ.
 
 ## Domain selection
 
@@ -25,10 +38,11 @@ Do not inherit its legacy weaknesses. New lessons must show commands and verifie
 
 Before prose, record:
 
-1. the exact README pairs read in full;
+1. confirmation that both required README pairs and any additional pair were read in full;
 2. two to four structural patterns to reuse;
 3. old weaknesses or irrelevant sections to avoid;
 4. the new lesson's distinct operational question;
-5. why the chosen depth fits this tool rather than copying a fixed template.
+5. the complete core source files that will appear before the walkthrough;
+6. why the chosen depth fits this tool rather than copying a fixed template.
 
 Give this brief to both the author and external reviewer. Repository continuity is a requirement, but an older lesson never overrides verified code, runtime evidence, or the current writing rules.

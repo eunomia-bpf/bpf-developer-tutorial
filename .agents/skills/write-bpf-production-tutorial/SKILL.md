@@ -1,11 +1,13 @@
 ---
 name: write-bpf-production-tutorial
-description: Create or revise bilingual bpf-developer-tutorial lessons as small, production-realistic eBPF tools with host builds, benchmark-kernel KVM tests, reproducible evidence, and mandatory independent cross-model prose review. Use when proposing, implementing, documenting, reviewing, or preparing a PR for a new eBPF tutorial, especially when deciding between numbered lessons, features, networking, security, or xpu/gpu placement.
+description: Run the repository-local workflow for proposing, implementing, verifying, documenting, reviewing, and preparing PRs for bilingual bpf-developer-tutorial lessons. Use for scope selection, host builds, benchmark-kernel KVM tests, reproducible evidence, author/reviewer provenance, and CI closure. Pair it with bpf-tutorial-writing-style for prose and bilingual style decisions.
 ---
 
 # Write BPF Production Tutorials
 
 Build a useful tool around a kernel capability. Do not publish a wrapper around an upstream selftest or a feature-only API tour.
+
+This Skill owns the writing process, not writing style. Invoke `$bpf-tutorial-writing-style` before drafting, rewriting, translating, or reviewing README prose. Never substitute a global Skill for the repository-local style Skill.
 
 ## Separate authorship from acceptance
 
@@ -29,7 +31,7 @@ Before coding, write one sentence naming:
 
 Reject proposals whose only result is “the program loaded,” “the helper returned success,” or “the upstream selftest passed.”
 
-Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) before selecting scope or placement. Read [references/repository-precedents.md](references/repository-precedents.md) and the selected precedent lessons in full before drafting. Read [references/writing-guide.md](references/writing-guide.md) before drafting. Read [references/review-checklist.md](references/review-checklist.md) before external review.
+Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) before selecting scope or placement. Read [references/repository-precedents.md](references/repository-precedents.md) and the required precedent lessons in full before drafting. Read [references/drafting-process.md](references/drafting-process.md) before creating the task file. Read [references/review-checklist.md](references/review-checklist.md) before external review. Read every reference required by `$bpf-tutorial-writing-style` before drafting and again before final review.
 
 ## Implement and verify
 
@@ -43,7 +45,7 @@ Read [references/tutorial-acceptance.md](references/tutorial-acceptance.md) befo
 
 ## Draft from evidence
 
-First write a precedent brief that names two or three existing bilingual lessons read in full, including one with the same operational shape. Use `src/47-cuda-events/README.md` and `README.zh.md` as a default precedent for a production tracer or accelerator tool. State which structural patterns to reuse, which legacy weaknesses to avoid, and why the new lesson has a distinct operational job. Do not draft until this brief exists.
+First write a precedent brief that confirms the required `47-cuda-events` and `49-hid` bilingual pairs were read in full, then names one additional lesson with the closest subsystem or operational shape when useful. State which teaching patterns to reuse, which legacy weaknesses to avoid, and why the new lesson has a distinct operational job. Do not draft until this brief exists.
 
 Create a task file outside the lesson with:
 
@@ -55,9 +57,10 @@ Create a task file outside the lesson with:
 - minimum kernel, libbpf, config, privilege, and hardware requirements;
 - primary upstream references;
 - the precedent brief and exact sibling README paths;
+- a source-fidelity ledger covering every fact, command, code file, captured-output block, requirement, failure path, cleanup behavior, limitation, and reference that must survive a rewrite;
 - facts or claims the author must not add.
 
-Draft or revise both README files from that evidence. The optional exact-Claude authoring path is:
+Draft or revise both README files from that evidence and the repository-local style Skill. Present the complete core BPF and user-space source before the detailed walkthrough as required by the advanced tutorial guidelines. The optional exact-Claude authoring path is:
 
 ```bash
 TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
@@ -72,7 +75,7 @@ The wrapper must finish with a verified exact-model trace. When another author w
 
 ## Run independent prose review
 
-Run a different model family read-only over the final files, implementation evidence, and the precedent READMEs named in the brief. Pass repository-relative paths with repeated `--file` arguments:
+Run a different model family read-only over the final files, implementation evidence, the two required style precedents, and any additional precedent named in the brief. The wrapper embeds both repository-local Skills and their rulebooks. Pass repository-relative paths with repeated `--file` arguments:
 
 ```bash
 TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
@@ -86,7 +89,9 @@ TUTORIAL_ROOT="$(git rev-parse --show-toplevel)"
   --file src/<lesson>/<tool>.c \
   --file src/<lesson>/tests/<test>.py \
   --file src/47-cuda-events/README.md \
-  --file src/47-cuda-events/README.zh.md
+  --file src/47-cuda-events/README.zh.md \
+  --file src/49-hid/README.md \
+  --file src/49-hid/README.zh.md
 ```
 
 Use `--reviewer glm` for the fixed OpenCode model `zai-coding-plan/glm-5.2`. Apply valid findings with targeted edits, diff-check both languages, rerun documented commands, and invoke an external reviewer again. The gate passes only when the final trace reports no valid Must-fix item.
@@ -96,4 +101,5 @@ Use `--reviewer glm` for the fixed OpenCode model `zai-coding-plan/glm-5.2`. App
 - Include only one lesson and the minimal generated index/compatibility changes.
 - Explain the production problem before the kernel feature in the PR body.
 - Report the host build, KVM positive test, negative/cleanup test, guest kernel provenance, documentation tests, author identity, review manifests, and finding dispositions.
+- Account for every item in the source-fidelity ledger and state that complete core source appears unchanged in both languages.
 - Follow the repository's review, Copilot, and monitored CI gates. Do not merge unless the user asks.

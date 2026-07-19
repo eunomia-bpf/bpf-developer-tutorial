@@ -2,9 +2,13 @@
 set -euo pipefail
 
 readonly SKILL_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly WRITING_GUIDE="$SKILL_DIR/references/writing-guide.md"
+readonly WRITING_GUIDE="$SKILL_DIR/references/drafting-process.md"
 readonly REVIEW_GUIDE="$SKILL_DIR/references/review-checklist.md"
 readonly PRECEDENT_GUIDE="$SKILL_DIR/references/repository-precedents.md"
+readonly STYLE_DIR="$SKILL_DIR/../bpf-tutorial-writing-style"
+readonly STYLE_GUIDELINES="$STYLE_DIR/references/advanced-tutorial-guidelines.md"
+readonly STYLE_REPOSITORY="$STYLE_DIR/references/repository-house-style.md"
+readonly STYLE_PROSE="$STYLE_DIR/references/prose-and-bilingual-checklist.md"
 
 usage() {
   echo "usage: $0 --reviewer grok|glm --repo ABSOLUTE_REPO_PATH --task ABSOLUTE_TASK_FILE --file REPO_RELATIVE_PATH [--file ...]" >&2
@@ -92,6 +96,12 @@ manifest="$run_dir/manifest.json"
   sed -n '1,$p' "$REVIEW_GUIDE"
   printf '\n## Repository precedent rulebook\n\n'
   sed -n '1,$p' "$PRECEDENT_GUIDE"
+  printf '\n## Project-provided advanced tutorial guidelines\n\n'
+  sed -n '1,$p' "$STYLE_GUIDELINES"
+  printf '\n## Repository house style\n\n'
+  sed -n '1,$p' "$STYLE_REPOSITORY"
+  printf '\n## Prose and bilingual checklist\n\n'
+  sed -n '1,$p' "$STYLE_PROSE"
   printf '\n## Review task and evidence\n\n'
   sed -n '1,$p' "$task"
   for file in "${files[@]}"; do
