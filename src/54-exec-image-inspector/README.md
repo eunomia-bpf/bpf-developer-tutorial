@@ -24,6 +24,10 @@ User space polls the ring buffer and checks `waitpid(WNOHANG)` in a loop. The lo
 
 Blocking the child closes a short-lived-command race, and the pipe handshake keeps the example self-contained.
 
+![Exec image inspector data flow](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/54-exec-image-inspector/exec-image-flow.png)
+
+Blue nodes cover the user-space blocked-child handshake, target TGID and probe offset configuration, attach, exec release, the poll/waitpid loop, and the final drain, while orange nodes trace the non-sleepable `bprm_committed_creds` path with its optional direct probe and the `pending[0]` scheduled/direct-result state. Purple nodes begin with scheduling task work, and the sleepable callback reacquires the executable file, resolves the path, reads through a file-backed dynptr, and releases the dynptr and file state before the green ring-buffer event returns the path, ELF fields, probe result, and callback latency to user space. Each later committed exec by the same child follows the same hook-to-event path, so the loader performs a final drain after reaping.
+
 ## Shared event and statistics structures
 
 The shared header defines the ring-buffer event and final statistics used on both sides.

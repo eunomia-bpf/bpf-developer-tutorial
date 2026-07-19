@@ -1,0 +1,121 @@
+digraph exec_image_flow {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.25",
+    nodesep="0.34",
+    ranksep="0.46",
+    splines=spline,
+    size="10,7.5",
+    ratio=compress,
+    newrank=true,
+    fontname="DejaVu Sans"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#F7FAFC",
+    color="#4A5568",
+    fontcolor="#1A202C",
+    fontname="DejaVu Sans",
+    fontsize=12,
+    margin="0.16,0.10"
+  ];
+  edge [
+    color="#4A5568",
+    fontcolor="#2D3748",
+    fontname="DejaVu Sans",
+    fontsize=10,
+    arrowsize=0.75
+  ];
+
+  fork [
+    label="User space\nfork child\nchild waits on pipe",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  prepare [
+    label="target_tgid + probe_offset\nload LSM + ring buffer",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  exec [
+    label="release pipe\nchild calls execvp",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  hook [
+    label="bprm_committed_creds\nmatch target_tgid",
+    fillcolor="#FFFAF0",
+    color="#DD6B20"
+  ];
+  probe [
+    label="probe_offset set?",
+    shape=diamond,
+    style="filled",
+    fillcolor="#FFFAF0",
+    color="#DD6B20",
+    margin="0.10,0.05"
+  ];
+  direct [
+    label="non-sleepable direct probe\nstore result",
+    fillcolor="#FFFAF0",
+    color="#DD6B20"
+  ];
+  pending [
+    label="pending[0]\nscheduled_ns + direct result",
+    shape=cylinder,
+    fillcolor="#FFF5F5",
+    color="#C05621"
+  ];
+  schedule [
+    label="bpf_task_work_schedule_signal\ninspect_executable",
+    fillcolor="#FAF5FF",
+    color="#805AD5"
+  ];
+  callback [
+    label="sleepable task-work callback\nrecord callback latency",
+    fillcolor="#FAF5FF",
+    color="#805AD5"
+  ];
+  file [
+    label="bpf_get_task_exe_file\nresolve path",
+    fillcolor="#FAF5FF",
+    color="#805AD5"
+  ];
+  read [
+    label="file-backed dynptr\nread ELF header + marker\ndiscard dynptr + put file",
+    fillcolor="#FAF5FF",
+    color="#805AD5"
+  ];
+  event [
+    label="ring buffer event\npath + ELF + probe + latency",
+    fillcolor="#F0FFF4",
+    color="#38A169"
+  ];
+  collect [
+    label="User space\npoll + waitpid\nfinal drain + stats",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+
+  { rank=same; fork; prepare; exec; }
+  { rank=same; hook; probe; direct; }
+  { rank=same; pending; schedule; }
+  { rank=same; callback; file; read; }
+  { rank=same; event; collect; }
+
+  fork -> prepare [label="parent knows child TGID"];
+  prepare -> exec [label="attach completes"];
+  exec -> hook [label="each committed exec"];
+  hook -> probe;
+  probe -> direct [label="yes"];
+  probe -> pending [label="no"];
+  direct -> pending;
+  pending -> schedule;
+  schedule -> callback [label="task work runs"];
+  callback -> file;
+  file -> read;
+  read -> event;
+  event -> collect;
+}
