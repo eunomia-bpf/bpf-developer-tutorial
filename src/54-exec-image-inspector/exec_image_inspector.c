@@ -136,7 +136,7 @@ static int parse_args(int argc, char **argv)
 	}
 
 	if (optind == argc) {
-		fprintf(stderr, "COMMAND is required after --\n");
+		fprintf(stderr, "COMMAND is required\n");
 		return -EINVAL;
 	}
 	env.command = &argv[optind];

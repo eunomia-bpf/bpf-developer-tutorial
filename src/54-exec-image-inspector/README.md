@@ -78,7 +78,7 @@ The loader and BPF program cooperate so the hook cannot miss a short-lived comma
 3. User space releases the pipe. The child calls `execvp`, and `lsm/bprm_committed_creds` matches that TGID after the new executable credentials have been committed.
 4. The hook records an optional direct-read result and schedules `bpf_task_work_schedule_signal()` for the current task.
 5. The callback obtains the task's installed executable file, resolves its path, reads the file through a dynptr, decodes the ELF header, and sends one event through the ring buffer.
-6. User space polls until the child is reaped and one event arrives, or until the deadline. It drains queued events before destroying the ring buffer and BPF skeleton.
+6. User space polls until the child is reaped and at least one event has arrived, or until the deadline. A final drain can deliver later exec events from the same child before user space destroys the ring buffer and BPF skeleton.
 
 The pipe handshake is important. Loading first and launching later would also avoid a race, but then the loader would need a separate command protocol. The blocked child keeps this tutorial self-contained while guaranteeing that its TGID is known before attachment.
 

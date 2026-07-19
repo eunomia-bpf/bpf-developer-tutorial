@@ -48,7 +48,7 @@ PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred 
 
 输出中的 `EXEC` 行给出了最终可执行镜像及其 ELF header。随后的 `PROBE` 行展示了两种文件读取上下文的差异。测试 fixture 在 `exec` 前把追加的 marker 变成冷页。在 LSM 程序中直接读取该位置会返回 `-EFAULT`（`-14`），task-work 回调则成功读取 `454950524f424521`，也就是 `EIPROBE!` 的十六进制编码。
 
-输出中位于 `READY` 之前的三行覆盖了边界行为。不存在的命令以状态码 127 退出，不会到达已提交 exec 的 hook。由于没有事件到达，加载器只等待到测试设置的 500 ms 时限。另一个命令先产生 exec 事件，随后超过 200 ms 时限，父进程发送 `SIGKILL` 并回收它，最终状态码为 137。最后的 re-exec 用例先观察 `/bin/sh`，再观察它安装的 `/bin/true`，回收子进程后 drain 两个事件，并把 `/usr/bin/true` 放在最后。
+输出中位于 `READY` 之前的三行覆盖了边界行为。不存在的命令以状态码 127 退出，不会到达已提交 exec 的 hook。由于没有事件到达，加载器只等待到测试设置的 500 ms 时限。另一个命令先产生 exec 事件，随后超过 200 ms 时限，父进程发送 `SIGKILL` 并回收它，最终状态码为 137。最后的 re-exec 用例先观察 `/bin/sh`，再观察它安装的 `/bin/true`，回收子进程后取尽两个事件，并把 `/usr/bin/true` 放在最后。
 
 在满足要求的测试虚拟机中，可以省略 fixture 专用的探测偏移，检查其他命令：
 
@@ -56,7 +56,7 @@ PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred 
 sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
 ```
 
-在 inspector 选项之后，第一个参数指定被观察命令，synopsis 使用 `--` 明确结束选项解析。工具不是全系统 daemon。普通运行不设置 `--probe-offset` 时，只输出 `READY`、`EXEC` 和 `SUMMARY`，不会出现 `PROBE` 行。
+在工具选项之后，第一个参数指定被观察命令，命令用法使用 `--` 明确结束选项解析。工具不是全系统 daemon。普通运行不设置 `--probe-offset` 时，只输出 `READY`、`EXEC` 和 `SUMMARY`，不会出现 `PROBE` 行。
 
 ### 命令行选项
 
@@ -78,7 +78,7 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 3. 用户态释放 pipe。子进程调用 `execvp`，新可执行文件的凭据提交后，`lsm/bprm_committed_creds` 匹配这个 TGID。
 4. 该 hook 记录可选的直接读取结果，再为当前 task 调用 `bpf_task_work_schedule_signal()`。
 5. 回调在 task work 中取得该 task 已安装的可执行文件，解析路径，通过 dynptr 读取文件，解析 ELF header，并向 ring buffer 发送一个事件。
-6. 用户态持续 poll，直到子进程已经回收并收到一个事件，或者到达时限。销毁 ring buffer 和 BPF skeleton 前，还会 drain 已排队的事件。
+6. 用户态持续 poll，直到子进程已经回收并至少收到一个事件，或者到达时限。最终取尽 ring buffer 中的事件时，还可能收到同一子进程后续 exec 产生的记录，随后才销毁 ring buffer 和 BPF skeleton。
 
 这次 pipe 握手保证加载器在挂载 BPF 程序前就知道目标 TGID。先加载再通过单独协议启动命令也能避免竞态，但会引入额外控制接口。阻塞子进程让本课保持自包含，同时不会漏掉目标的 exec。
 
@@ -249,7 +249,7 @@ exec_image_inspector_bpf__destroy(skel);
 ## 范围与限制
 
 - 工具只观察加载器创建的一个子进程，不会监控系统中的所有 exec。
-- 如果这个子进程再次调用 `exec`，工具会输出另一条 `EXEC`，并在回收子进程后 drain 已排队的事件。最后一条 `EXEC` 表示子进程退出前安装的镜像。
+- 如果这个子进程再次调用 `exec`，工具会输出另一条 `EXEC`，并在回收子进程后取尽已排队的事件。最后一条 `EXEC` 表示子进程退出前安装的镜像。
 - 它报告可执行镜像和少量 ELF header 信息，不验证签名，不判断恶意软件，也不执行 allowlist 策略。
 - 对于脚本，已安装的可执行镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
 - 冷页 fixture 用于证明延迟文件读取的必要性，不能据此认为所有直接文件读取都会失败。
