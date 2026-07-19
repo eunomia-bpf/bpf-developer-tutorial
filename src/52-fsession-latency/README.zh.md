@@ -1,14 +1,14 @@
-# eBPF 实践教程: 使用 fsession 追踪慢速 vfs_read 调用
+# eBPF 实践教程：使用 fsession 追踪慢速 vfs_read 调用
 
-一个文件服务出现了读延迟尖峰，但应用层指标无法区分是内核读操作阻塞还是系统调用之上的业务逻辑耗时。运维人员需要确定：哪些具体的 `vfs_read` 调用慢了、发生在哪个线程、慢了多少。
+假设一个文件服务出现了读延迟尖峰，应用层计时只能告诉你请求变慢了，却无法区分是内核读路径阻塞还是用户态逻辑耗时。有用的问题是：哪个线程发起了读操作、请求了多少字节、调用返回了什么、这一次 `vfs_read` 花了多长时间。
 
-`fsession_latency` 将一个 BPF 程序附加到 `vfs_read`，在进入时记录时间戳、返回时计算延迟，只上报达到或超过阈值的调用。它使用 Linux 7.0 引入的 fsession 机制，免去了传统 fentry/fexit 需要的哈希表关联。
+本教程演示 `fsession_latency`，它将一个 BPF 程序附加到 `SEC("fsession/vfs_read")`，在函数进入时记录时间戳、返回时计算延迟，只上报达到或超过阈值的调用。Linux 7.0 引入的 fsession 让同一个 BPF 程序在被追踪函数的进入和返回阶段各执行一次，通过 `bpf_session_cookie(ctx)` 提供一个 8 字节的调用级暂存区，替代了传统 fentry/fexit 所需的每线程哈希表插入、查找和清理。
 
-> 完整源代码: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
+> 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 
-## 快速开始
+## 构建与运行
 
-从源码构建（需要 libbpf 1.7.0 和 bpftool v7.7.0，均已在仓库中内置）：
+从源码构建（仓库内置 libbpf 1.7.0 和 bpftool v7.7.0）：
 
 ```bash
 cd src/52-fsession-latency
@@ -16,26 +16,26 @@ make clean
 make -j2
 ```
 
-追踪指定服务进程 30 秒，上报 10 ms 以上的读操作：
+追踪指定服务进程 30 秒，上报 10 ms 及以上的读操作：
 
 ```bash
 SERVICE_PID=$(pgrep -n my-service)
 sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
 ```
 
-`--pid` 比较的是 `bpf_get_current_pid_tgid()` 返回的 TGID，即宿主机（初始）PID 命名空间中的 TGID。上面的 `pgrep` 示例适用于直接运行在宿主机上的进程。如果目标进程位于容器或嵌套 PID 命名空间内，必须解析并传入其宿主机命名空间的 TGID；传入命名空间内部的 PID 会静默匹配不到任何进程。
+`--pid` 比较的是 `bpf_get_current_pid_tgid()` 返回的 TGID，即宿主机（初始）PID 命名空间中的 TGID。上面的 `pgrep` 适用于直接在宿主机上运行的进程，容器或嵌套 PID 命名空间内的目标需要解析并传入其宿主机可见的 TGID。
 
-命令行用法：
+命令行参数：
 
 ```text
 Usage: ./fsession_latency [--threshold-us USEC] [--duration SEC] [--pid TGID] [--verbose]
 ```
 
-默认值：阈值 1000 微秒，持续时间 10 秒，追踪所有进程。
+默认阈值 1000 微秒、持续 10 秒、追踪所有进程。`--duration` 接受 1 到 86400 秒，`--pid` 接受 1 到 2^32−1，`--threshold-us` 接受 0 到 `UINT64_MAX / 1000` 微秒（用户空间在加载前转换为纳秒）。空值和尾随字符都会被 `parse_u64` 拒绝。
 
-## 验证测试输出
+## 示例输出
 
-集成测试执行 64 次普通文件读取加一次延迟 50 ms 的管道读取。管道读超过 10 ms 阈值，出现在事件输出中。此输出在运行内核 `7.0.0-rc2+` 的 KVM 虚拟机中采集：
+以下输出在运行内核 `7.0.0-rc2+` 的 x86_64 环境中采集。集成测试执行 64 次普通文件读取加一次延迟 50 ms 的管道读取，管道读超过 10 ms 阈值后出现在事件流中：
 
 ```console
 Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
@@ -45,24 +45,79 @@ TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshol
 PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
 ```
 
-具体的调用次数和延迟数值取决于测试环境，你的结果会有所不同。
+具体调用次数、PID 值和延迟数值因运行环境而异。
 
-## 工作原理
+## 实现详解
 
-### fsession 机制
+本工具由三个文件组成：共享头文件定义事件和统计结构、BPF 程序测量延迟并提交事件、用户空间加载器管理生命周期并打印结果。
 
-传统的 fentry/fexit 追踪需要附加两个独立的 BPF 程序，通过每线程哈希表在进入和返回之间关联数据。fsession 程序类型（Linux 7.0 引入）让同一个 BPF 程序在被追踪函数的进入和返回阶段都执行，通过两个 kfunc 实现：
+### 共享头文件
 
-- `bpf_session_cookie(ctx)` 返回一个 8 字节暂存区的指针，从函数进入到返回期间持续有效。无需分配 map、无需查找、无需清理。
-- `bpf_session_is_return(ctx)` 在返回阶段返回 true。
+`fsession_latency.h` 定义了 BPF 和用户空间共享的事件与统计结构。`latency_event` 包含 32 位 PID 和 TGID、64 位请求字节数、有符号 64 位返回值、纳秒精度延迟和进程名。`latency_stats` 包含 `calls`（总调用数）、`slow`（达到阈值的调用数）、`errors`（返回负值的调用数）和 `dropped`（ring buffer 预留失败计数）。
 
-返回时，程序接收到原始函数参数加上返回值。因此工具可以直接报告 `count`（请求字节数）和 `ret`（实际结果或错误），不需要将它们存入 map。
+```c
+/* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
+#ifndef __FSESSION_LATENCY_H
+#define __FSESSION_LATENCY_H
+
+#define FSESSION_COMM_LEN 16
+
+struct latency_event {
+	unsigned int pid;
+	unsigned int tgid;
+	unsigned long long requested;
+	long long result;
+	unsigned long long latency_ns;
+	char comm[FSESSION_COMM_LEN];
+};
+
+struct latency_stats {
+	unsigned long long calls;
+	unsigned long long slow;
+	unsigned long long errors;
+	unsigned long long dropped;
+};
+
+#endif /* __FSESSION_LATENCY_H */
+```
+
+`FSESSION_COMM_LEN` 设为 16，与内核 `TASK_COMM_LEN` 一致。
 
 ### BPF 程序
 
-整个 BPF 程序在 `fsession_latency.bpf.c` 中是一个函数：
+`fsession_latency.bpf.c` 附加一个程序到 `SEC("fsession/vfs_read")`。Linux 7.0 的 fsession 让这个程序在 `vfs_read` 的进入和返回阶段各执行一次。程序用 `bpf_session_is_return(ctx)` 区分两个阶段，用 `bpf_session_cookie(ctx)` 获取一个 8 字节的调用级暂存区，从进入到返回期间持续有效，替代了外部哈希表。
 
 ```c
+// SPDX-License-Identifier: GPL-2.0
+#define bpf_session_is_return bpf_session_is_return_vmlinux_snapshot
+#define bpf_session_cookie bpf_session_cookie_vmlinux_snapshot
+#include "vmlinux.h"
+#undef bpf_session_is_return
+#undef bpf_session_cookie
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "fsession_latency.h"
+
+char LICENSE[] SEC("license") = "GPL";
+
+const volatile __u64 threshold_ns;
+const volatile __u32 target_tgid;
+
+struct latency_stats stats;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+} events SEC(".maps");
+
+/*
+ * The repository vmlinux.h snapshot predates the ctx argument on these
+ * kfunc prototypes. Rename those stale declarations while including the
+ * snapshot, then provide the Linux 7.0 signatures below.
+ */
+extern bool bpf_session_is_return(void *ctx) __ksym;
+extern __u64 *bpf_session_cookie(void *ctx) __ksym;
+
 SEC("fsession/vfs_read")
 int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 	     loff_t *pos, ssize_t ret)
@@ -109,115 +164,323 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 }
 ```
 
-执行流程：
+进入阶段，`bpf_get_current_pid_tgid()` 提供 PID 和 TGID。如果设置了 `target_tgid` 且调用来自其他 TGID，程序在 cookie 中写入 0 以便返回阶段跳过，匹配的调用则存入 `bpf_ktime_get_ns()` 时间戳。
 
-1. 进入时检查 TGID 过滤器。如果不匹配，在 session cookie 中存 0，返回时跳过。匹配则存入当前纳秒时间戳。
-2. 返回时，如果 cookie 为 0 则表示该调用已被过滤。否则用当前时间减去存储的时间戳得到延迟。
-3. 原子递增 `calls` 计数器。如果返回值为负数，递增 `errors`。
-4. 如果延迟低于阈值，结束。否则递增 `slow`，在 ring buffer 中预留空间，填充事件并提交。
+返回阶段，cookie 为 0 表示已过滤的调用。否则程序用当前单调纳秒时间戳减去保存的时间戳计算延迟，递增 `calls`，如果 `ret < 0` 递增 `errors`。延迟低于 `threshold_ns` 的调用只更新聚合计数器，达到阈值的调用递增 `slow`，预留固定大小的 ring buffer 记录，填入 PID、TGID、请求字节数、返回值、延迟和进程名后提交。预留失败时递增 `dropped`，使最终统计暴露事件路径的压力。返回阶段的 fsession 上下文包含原始函数参数和返回值，因此 `count` 和 `ret` 无需保存到 map。
 
-### 共享数据结构
-
-头文件 `fsession_latency.h` 定义了 BPF 和用户空间共享的事件和统计结构：
-
-```c
-struct latency_event {
-	unsigned int pid;
-	unsigned int tgid;
-	unsigned long long requested;
-	long long result;
-	unsigned long long latency_ns;
-	char comm[FSESSION_COMM_LEN];
-};
-
-struct latency_stats {
-	unsigned long long calls;
-	unsigned long long slow;
-	unsigned long long errors;
-	unsigned long long dropped;
-};
-```
+文件开头的宏处理仓库 `vmlinux.h` 快照中旧版本的 `bpf_session_is_return` 和 `bpf_session_cookie` 声明。这是一个本地兼容桥接，用于绕过生成头文件的版本差异，从 7.0 以上内核重新生成的 `vmlinux.h` 可以直接携带当前签名。
 
 ### 用户空间加载器
 
-`fsession_latency.c` 中的用户空间程序执行以下步骤：
-
-1. 解析命令行参数（阈值、持续时间、PID 过滤器）。
-2. 打开 BPF skeleton，在加载前设置 `rodata` 常量（`threshold_ns`、`target_tgid`）。
-3. 加载并附加 fsession 程序到 `vfs_read`。
-4. 创建 ring buffer，以 100 ms 超时轮询，直到持续时间到期或收到信号。每收到一个事件立即打印（comm、tgid、pid、请求字节数、结果、延迟微秒数）。
-5. 解除 fsession 程序的附加，使 BPF 统计计数器不再变化。
-6. 调用 `ring_buffer__consume()` 排空解除附加前已提交到 ring buffer 的事件。
-7. 打印汇总行，此时聚合计数器已稳定。
-
-汇总行中的 `dropped` 字段暴露 ring buffer 丢失事件的情况，让运维人员知道是否有数据丢失。
-
-### vmlinux.h 兼容性处理
-
-仓库的 `vmlinux.h` 快照中 `bpf_session_is_return` 和 `bpf_session_cookie` 的声明早于 ctx 参数版本。BPF 源码通过在 include 时重命名这些旧声明来解决，然后声明正确的 Linux 7.0 签名：
+`fsession_latency.c` 解析命令行、配置 BPF 常量、管理观察窗口并打印结果。
 
 ```c
-#define bpf_session_is_return bpf_session_is_return_vmlinux_snapshot
-#define bpf_session_cookie bpf_session_cookie_vmlinux_snapshot
-#include "vmlinux.h"
-#undef bpf_session_is_return
-#undef bpf_session_cookie
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+#include <errno.h>
+#include <getopt.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <bpf/libbpf.h>
+#include "fsession_latency.h"
+#include "fsession_latency.skel.h"
 
-extern bool bpf_session_is_return(void *ctx) __ksym;
-extern __u64 *bpf_session_cookie(void *ctx) __ksym;
+static volatile sig_atomic_t exiting;
+
+static struct env {
+	unsigned long long threshold_us;
+	unsigned int duration;
+	unsigned int pid;
+	bool verbose;
+} env = {
+	.threshold_us = 1000,
+	.duration = 10,
+};
+
+static unsigned long long events_printed;
+
+static void handle_signal(int signal)
+{
+	(void)signal;
+	exiting = 1;
+}
+
+static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
+			   va_list args)
+{
+	if (level == LIBBPF_DEBUG && !env.verbose)
+		return 0;
+	return vfprintf(stderr, format, args);
+}
+
+static void usage(const char *program)
+{
+	fprintf(stderr,
+		"Usage: %s [--threshold-us USEC] [--duration SEC] [--pid TGID] "
+		"[--verbose]\n\n"
+		"Report vfs_read calls at or above a latency threshold.\n\n"
+		"Options:\n"
+		"  -t, --threshold-us USEC  slow-read threshold (default: 1000)\n"
+		"  -d, --duration SEC       trace duration, 1-86400 (default: 10)\n"
+		"  -p, --pid TGID           trace one process ID (default: all)\n"
+		"  -v, --verbose            print libbpf diagnostics\n"
+		"  -h, --help               show this help\n",
+		program);
+}
+
+static int parse_u64(const char *value, unsigned long long maximum,
+		     unsigned long long *result)
+{
+	char *end = NULL;
+	unsigned long long parsed;
+
+	errno = 0;
+	parsed = strtoull(value, &end, 10);
+	if (errno || end == value || *end || parsed > maximum)
+		return -EINVAL;
+	*result = parsed;
+	return 0;
+}
+
+static int parse_args(int argc, char **argv)
+{
+	static const struct option options[] = {
+		{ "threshold-us", required_argument, NULL, 't' },
+		{ "duration", required_argument, NULL, 'd' },
+		{ "pid", required_argument, NULL, 'p' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{},
+	};
+	unsigned long long parsed;
+	int option;
+
+	while ((option = getopt_long(argc, argv, "t:d:p:vh", options, NULL)) != -1) {
+		switch (option) {
+		case 't':
+			if (parse_u64(optarg, UINT64_MAX / 1000, &env.threshold_us)) {
+				fprintf(stderr, "invalid threshold in microseconds: %s\n", optarg);
+				return -EINVAL;
+			}
+			break;
+		case 'd':
+			if (parse_u64(optarg, 86400, &parsed) || parsed == 0) {
+				fprintf(stderr, "invalid duration in seconds: %s\n", optarg);
+				return -EINVAL;
+			}
+			env.duration = parsed;
+			break;
+		case 'p':
+			if (parse_u64(optarg, UINT32_MAX, &parsed) || parsed == 0) {
+				fprintf(stderr, "invalid process ID: %s\n", optarg);
+				return -EINVAL;
+			}
+			env.pid = parsed;
+			break;
+		case 'v':
+			env.verbose = true;
+			break;
+		case 'h':
+			usage(argv[0]);
+			exit(0);
+		default:
+			return -EINVAL;
+		}
+	}
+
+	if (optind != argc)
+		return -EINVAL;
+	return 0;
+}
+
+static long long monotonic_milliseconds(void)
+{
+	struct timespec timestamp;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &timestamp))
+		return -errno;
+	return timestamp.tv_sec * 1000LL + timestamp.tv_nsec / 1000000;
+}
+
+static int handle_event(void *context, void *data, size_t size)
+{
+	const struct latency_event *event = data;
+
+	(void)context;
+	if (size < sizeof(*event))
+		return 0;
+
+	printf("EVENT comm=%-16s tgid=%u pid=%u requested=%llu result=%lld "
+	       "latency_us=%llu\n",
+	       event->comm, event->tgid, event->pid, event->requested,
+	       event->result, event->latency_ns / 1000);
+	events_printed++;
+	return 0;
+}
+
+static int poll_until_deadline(struct ring_buffer *ring, long long deadline)
+{
+	while (!exiting) {
+		long long now = monotonic_milliseconds();
+		int consumed;
+
+		if (now < 0)
+			return (int)now;
+		if (now >= deadline)
+			break;
+
+		consumed = ring_buffer__poll(ring,
+					     deadline - now > 100 ? 100 : deadline - now);
+		if (consumed == -EINTR)
+			continue;
+		if (consumed < 0) {
+			fprintf(stderr, "ring buffer poll failed: %s\n",
+				strerror(-consumed));
+			return consumed;
+		}
+	}
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	struct fsession_latency_bpf *skel = NULL;
+	struct ring_buffer *ring = NULL;
+	long long deadline, now;
+	int err;
+
+	err = parse_args(argc, argv);
+	if (err) {
+		usage(argv[0]);
+		return 1;
+	}
+
+	libbpf_set_print(libbpf_print_fn);
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
+
+	skel = fsession_latency_bpf__open();
+	if (!skel) {
+		fprintf(stderr, "failed to open BPF skeleton\n");
+		return 1;
+	}
+
+	skel->rodata->threshold_ns = env.threshold_us * 1000;
+	skel->rodata->target_tgid = env.pid;
+
+	err = fsession_latency_bpf__load(skel);
+	if (err) {
+		fprintf(stderr,
+			"failed to load fsession program: %s\n"
+			"This tool requires Linux 7.0+, BTF, BPF JIT, and x86_64 "
+			"fsession support.\n",
+			strerror(-err));
+		goto cleanup;
+	}
+
+	err = fsession_latency_bpf__attach(skel);
+	if (err) {
+		fprintf(stderr, "failed to attach to vfs_read: %s\n", strerror(-err));
+		goto cleanup;
+	}
+
+	ring = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
+	err = libbpf_get_error(ring);
+	if (err) {
+		ring = NULL;
+		fprintf(stderr, "failed to create ring buffer: %s\n", strerror(-err));
+		goto cleanup;
+	}
+
+	printf("Tracing vfs_read for %u seconds; threshold=%llu us; pid=%s\n",
+	       env.duration, env.threshold_us, env.pid ? "selected" : "all");
+	fflush(stdout);
+
+	now = monotonic_milliseconds();
+	if (now < 0) {
+		err = now;
+		goto cleanup;
+	}
+	deadline = now + env.duration * 1000LL;
+
+	err = poll_until_deadline(ring, deadline);
+	if (err)
+		goto cleanup;
+
+	fsession_latency_bpf__detach(skel);
+
+	err = ring_buffer__consume(ring);
+	if (err < 0) {
+		fprintf(stderr, "ring buffer drain failed: %s\n", strerror(-err));
+		goto cleanup;
+	}
+	err = 0;
+
+	printf("SUMMARY calls=%llu slow=%llu errors=%llu dropped=%llu events=%llu\n",
+	       skel->bss->stats.calls, skel->bss->stats.slow,
+	       skel->bss->stats.errors, skel->bss->stats.dropped, events_printed);
+
+cleanup:
+	ring_buffer__free(ring);
+	fsession_latency_bpf__destroy(skel);
+	return err != 0;
+}
 ```
 
-这样避免了手动编辑生成的头文件。如果从 7.0+ 内核重新生成 `vmlinux.h`，则不需要这个处理。
+加载前，用户空间将 `threshold_ns` 和 `target_tgid` 写入只读 BPF 配置。它打开、加载并附加 skeleton，创建 ring buffer 消费者，计算单调时间截止点，每次迭代最多轮询 100 ms 直到截止或收到 SIGINT/SIGTERM。每个事件打印 comm、TGID、PID、请求字节数、结果和延迟微秒数。
 
-### libbpf 段名识别
+轮询结束后，加载器先解除 fsession 程序的附加以使聚合计数器停止变化，再调用 `ring_buffer__consume()` 投递解除附加前已提交的记录，最后打印稳定的 `SUMMARY` 计数器。这个顺序是观察窗口边界正确性的一部分。退出时释放 ring buffer 并销毁 skeleton。
 
-仓库使用 bpftool v7.7.0，其内置的 libbpf 版本为 v1.7.0。libbpf 1.7.0 能识别 `fsession/` 作为有效的程序段名，因此不需要私有的数字 attach-type 变通方案。
+仓库使用 bpftool v7.7.0，其内置 libbpf v1.7.0。libbpf 1.7.0 通过公开接口识别 `fsession/` 段名。
 
 ## 运行测试
 
-集成测试对构建产物运行四个场景：
+集成测试对构建产物运行四个场景加上 CLI 解析测试：
 
 ```bash
 sudo make test
 ```
 
-测试验证：
+测试验证四个运行时路径：
 
-1. 不匹配的 PID (2^32 - 1) 产生零次调用，证明 TGID 过滤器有效。
-2. 10 秒阈值 (10,000,000 us) 即使有读操作完成也不产生慢事件，证明阈值比较逻辑正确。
-3. 10 ms 阈值加上延迟 50 ms 的管道读产生至少一个慢事件，证明端到端上报路径正常工作。
-4. 阈值为 0 时，持续对目标 TGID 执行读操作直到一秒截止时间结束，产生调用和事件，且 CLI 仍然成功退出。该场景还断言 `slow == events + dropped`，确保窗口边界的每一个慢调用要么被投递为事件，要么被明确计入 ring buffer 预留失败。
+1. 目标 TGID 为 `UINT32_MAX` 产生零调用和事件。
+2. 10,000,000 微秒阈值使普通读完成后仍产生零慢事件。
+3. 64 次普通文件读加一次延迟 50 ms 的管道读、阈值 10,000 微秒时产生慢事件并验证其 TGID、PID、请求大小、结果和延迟。
+4. 阈值为 0 时持续读到一秒截止后成功退出，且 `slow == events + dropped`，证明窗口边界的每个阈值匹配调用要么被投递要么被明确计入 ring buffer 预留失败。
+
+CLI 测试覆盖无效 duration、空 duration、空 threshold 和空 PID。
 
 ## 环境要求
 
 | 要求 | 值 |
 |---|---|
-| 最低内核版本 | Linux 7.0 |
-| 最低 libbpf | 1.7.0 |
-| 架构 | x86_64（已测试） |
+| 内核 | Linux 7.0 |
+| libbpf | 1.7.0 |
+| 架构 | x86_64（当前已测试配置） |
 | BTF | 必须 |
 | 权限 | root |
 | 内核配置 | `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_BPF_EVENTS=y`、`CONFIG_DEBUG_INFO_BTF=y`、`CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y` |
-| 运行时 | BPF JIT 已启用；`vfs_read` 在内核 BTF 中存在且可追踪 |
+| 运行时 | BPF JIT 已启用、`vfs_read` 在内核 BTF 中存在且可追踪 |
 
-## 局限性
+运行时行为在 x86_64 内核 `7.0.0-rc2+` 上测试。上游合并提交为 `f17b474e36647c23801ef8fdaf2255ab66dd2973`。
 
-- 仅测量 `vfs_read` 内部的时间，不等于完整请求延迟、存储设备服务时间或应用 p99。
-- 仅覆盖调用 `vfs_read` 的路径。mmap 和其他绕过 `vfs_read` 的路径不可见。
-- 仅支持精确 TGID 过滤，不支持 cgroup、进程树、路径、inode、挂载点、PID 命名空间或容器选择器。过滤器在宿主机命名空间 TGID 上工作，无法传入命名空间内部的 PID 或按容器运行时选择。
-- 单次运行，不是守护进程、告警系统或指标导出器。
-- Ring buffer 在高负载下可能丢失匹配事件。`dropped` 计数器暴露该情况，其他计数器为聚合观察值。
-- 命令名称可能重复，PID 在有界追踪窗口外可能被复用。
-- 不采集用户/内核栈，不解析文件名或路径。
+## 观察范围
+
+本工具测量 `vfs_read` 内部的时间，覆盖到达该函数的读路径并按精确的宿主机可见 TGID 筛选。更完整的追踪器可以在保持相同 fsession 关联模式的基础上加入 cgroup、路径、inode、挂载点、栈或长时运行指标维度，现有的 `dropped` 计数器在负载下仍是事件丢失信号。
+
+## 总结
+
+一个 `fsession/vfs_read` 程序同时看到进入和返回，8 字节的调用级 session cookie 替代外部关联 map 携带时间戳，TGID 过滤和阈值筛选出有用事件，聚合计数器在选定范围内保留调用数、阈值匹配数、错误数和丢弃数，解除附加、排空 ring buffer 再读取汇总的顺序干净地关闭观察窗口。如果想深入了解 eBPF，请查看教程仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial>。
 
 ## 参考资料
 
 - [Linux fsession 合并提交](https://github.com/torvalds/linux/commit/f17b474e36647c23801ef8fdaf2255ab66dd2973)
-- [上游 fsession BPF 自测试 (prog)](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/fsession_test.c)
-- [上游 fsession BPF 自测试 (runner)](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/fsession_test.c)
-- [libbpf 1.7.0 发布](https://github.com/libbpf/libbpf/releases/tag/v1.7.0)
-
-## 更多 eBPF 教程
-
-- 教程仓库: <https://github.com/eunomia-bpf/bpf-developer-tutorial>
-- 教程网站: <https://eunomia.dev/tutorials/>
+- [上游 fsession 程序自测试](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/fsession_test.c)
+- [上游 fsession 运行器自测试](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/fsession_test.c)
+- [libbpf 1.7.0](https://github.com/libbpf/libbpf/releases/tag/v1.7.0)
+- [bpftool v7.7.0](https://github.com/libbpf/bpftool/releases/tag/v7.7.0)
