@@ -76,7 +76,7 @@ GPU:
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.zh.md) eBPF 开发者教程： 简单的 XDP 负载均衡器
 - [lesson 46-xdp-test](src/46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
 - [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
-- [lesson 53-egress-pacer](src/53-egress-pacer/README.zh.md) eBPF 教程：用 BPF Qdisc 控制出口流量
+- [lesson 53-egress-pacer](src/53-egress-pacer/README.zh.md) eBPF 教程：用 BPF Qdisc 实现出口限速
 
 
 追踪:

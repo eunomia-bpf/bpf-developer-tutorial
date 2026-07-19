@@ -77,7 +77,7 @@ Networking:
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.md) XDP Load Balancer
 - [lesson 46-xdp-test](src/46-xdp-test/README.md) Building a High-Performance XDP Packet Generator
 - [lesson 50-tcx](src/50-tcx/README.md) Composable Traffic Control with TCX Links
-- [lesson 53-egress-pacer](src/53-egress-pacer/README.md) Pace Egress Traffic with a BPF Qdisc
+- [lesson 53-egress-pacer](src/53-egress-pacer/README.md) Build an Egress Pacer with a BPF Qdisc
 
 
 Tracing:
