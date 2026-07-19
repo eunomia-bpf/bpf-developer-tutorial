@@ -4,7 +4,7 @@
 
 本课实现 `exec_image_inspector`，在 `bprm_committed_creds` LSM hook 上观察一个子进程，报告最终安装的可执行文件路径，并解析 ELF 类别、字节序、类型和机器架构。示例同时展示为什么可能触发缺页的文件读取要放到 BPF task work 回调中执行：LSM hook 本身不可睡眠，但 task-work 回调可以进入可睡眠上下文，通过 file-backed dynptr 读取文件页。学完本课后，你可以把这套把小规模文件检查从不可睡眠 hook 转移到可睡眠回调的做法用于类似场景。
 
-完整实现位于 [`exec_image_inspector.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.h)、[`bpf_experimental.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/bpf_experimental.h)、[`exec_image_inspector.bpf.c`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.bpf.c) 和 [`exec_image_inspector.c`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.c)。本课的 [`Makefile`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/Makefile)、[exec 测试程序](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/tests/exec_fixture.c)和[集成测试](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/tests/test_exec_image_inspector.py)提供了构建流程与可复现的冷页用例。
+> 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 
 ## 为什么文件读取需要可睡眠上下文
 
