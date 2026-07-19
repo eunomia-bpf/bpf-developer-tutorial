@@ -893,7 +893,7 @@ User space turns common values into names such as `ELF64`, `LSB`, `ET_DYN`, and 
 
 After attachment, `release_child` lets `execvp` run. The call receives an argv vector directly, and no shell parses those arguments. `wait_for_command()` polls the ring buffer, checks `waitpid(WNOHANG)`, and stops when the child is reaped with at least one event or the deadline arrives.
 
-A child may install more than one image. The integration case runs `/bin/sh -c 'exec /bin/true'`, which produces one event for the shell and another for `/bin/true`. After reaping, `drain_events` empties the ring buffer so the final image event is not lost. The test requires two matches, two callbacks, two events, and `/usr/bin/true` as the last resolved path.
+A child may install more than one image. The integration case runs `/bin/sh -c 'exec /bin/true'`, which produces one event for the shell and another for `/bin/true`. After reaping, `drain_events` empties the ring buffer so the final image event is not lost. The test requires two matches, two scheduled callbacks, two completed callbacks, two events, and `/usr/bin/true` as the last resolved path.
 
 When a command exceeds `--timeout-ms`, `reap_timed_out_child` sends SIGKILL and waits for it. Normal completion and every handled error path free the ring buffer and destroy the skeleton, which detaches the LSM link. The tool creates no bpffs pin or persistent link.
 
