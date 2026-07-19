@@ -1,24 +1,24 @@
 # eBPF Tutorial by Example: Build an Egress Pacer with a BPF Qdisc
 
-Have you ever wanted to slow down traffic from one test interface and see exactly when each packet becomes ready to leave? Most TC BPF examples cannot show that part. They inspect an skb and return an action, but a separate queueing discipline still owns the packet queue and the send time.
+Want to throttle a virtual link in your test environment? Say, squeeze a veth down to 64 Kbit/s and watch how many packets queue up before they start dropping. Ordinary TC BPF examples cannot do this. They inspect packets and return actions, but a separate qdisc still decides when packets actually leave.
 
-Linux 6.16 lets BPF go one step further. A `struct_ops` program can implement the qdisc itself. In this tutorial, we will build `egress_pacer`, a small FIFO pacer for a disposable veth, TAP, or IFB interface. You give it a rate and a queue limit. It holds each skb until its departure time arrives, then reports how many packets were queued, sent, or dropped.
+Linux 6.16 hands that layer to BPF as well. You write a set of `struct_ops` callbacks and the kernel treats them as a real root qdisc. This tutorial builds `egress_pacer`, a small FIFO pacer that runs on a veth, TAP, or IFB. Give it a rate and a queue limit. It holds packets, releases them on schedule, and reports enqueue, dequeue, and drop statistics at the end.
 
-We keep the design intentionally small. There are no classes, fairness rules, ECN, or burst controls. That makes it easier to follow the parts a qdisc must get right: skb ownership, queue accounting, pacing time, watchdog wakeups, and cleanup. Treat it as a lab tool, not as a production scheduler for a physical NIC.
+We keep the design deliberately minimal: no classes, no fairness, no ECN, no burst controls. The goal is to pull out the few things a qdisc must get right: skb ownership, queue accounting, departure time, watchdog wakeups, and teardown cleanup. Treat this as a lab tool. Do not attach it to a physical NIC or use it for production scheduling.
 
 > The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer>
 
-## What Changes When BPF Becomes the Qdisc?
+## Why Ordinary TC BPF Cannot Control Send Time
 
-In an ordinary TC example, the BPF program sees a packet while another qdisc owns the queue. [Lesson 20](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/20-tc) uses that familiar model. `egress_pacer` goes one layer deeper. Its `struct_ops` object implements `struct Qdisc_ops`, so the BPF program becomes the root qdisc and takes responsibility for every skb it accepts.
+An ordinary TC BPF program stands beside the queue. It can inspect a packet and decide whether to pass or drop it, but another qdisc still owns that packet. [Lesson 20](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/20-tc) shows this familiar path. `egress_pacer` takes a different position. It implements `struct Qdisc_ops` through `struct_ops` and registers itself as the root qdisc. Once the kernel hands it an skb, the BPF program owns both queueing and release.
 
-Follow one packet through the example. User space loads the BPF object with a rate and queue limit, registers `bpf_pacer`, and attaches it at `TC_H_ROOT`. The `enqueue` callback moves the skb into a BPF-owned node and assigns a departure time. The `dequeue` callback either returns the packet or asks the qdisc watchdog to wake up when the packet is ready. When user space removes the qdisc, `reset` releases anything still waiting.
+Follow one packet and the design becomes easier to see. User space sets the rate and queue limit, loads `bpf_pacer`, and attaches it at `TC_H_ROOT`. On arrival, `enqueue` puts the skb into a BPF-managed node and computes the earliest time it may leave. When `dequeue` runs, it returns an eligible skb or sets the watchdog so the kernel comes back later. User space eventually removes the qdisc, and `reset` disposes of packets that are still waiting. Every piece of code below belongs to this path.
 
-## Building the Pacer
+## Start the Pacer with Shared Data
 
-We will build the pacer one component at a time. The first component is the small statistics contract shared by BPF and user space.
+Before looking at callbacks, we need one contract between the two halves. BPF manages the queue. User space installs it and reports the result. Both sides must agree on the exact layout of the counters.
 
-### Sharing Statistics with User Space
+### Define the Statistics Once
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -37,13 +37,13 @@ struct pacer_stats {
 #endif /* __EGRESS_PACER_H */
 ```
 
-The BPF program updates these six counters while packets move through the queue. `enqueued` and `dequeued` cover the normal path. `policy_dropped` counts packets rejected because the queue is full or a node cannot be allocated. `cleanup_dropped` counts packets still waiting when the qdisc is reset. The last two fields record the number of bytes sent and the largest queue depth seen during the run.
+These six fields cover the possible outcomes for a packet. `enqueued` and `dequeued` count successful entry and exit. A full queue or failed node allocation increases `policy_dropped`. A packet that is still waiting when the qdisc is removed increases `cleanup_dropped`. `bytes_dequeued` adds up the bytes returned to the transmit path, while `max_qlen` remembers the deepest point reached by the queue.
 
-The loader reads the same structure from `skel->bss->stats` after it removes the qdisc. Keeping this definition in one header prevents the BPF program and the loader from disagreeing about the layout.
+The counters live in BSS. After removing the qdisc, the loader reads them through `skel->bss->stats`. Including one header on both sides prevents a field-order or size mismatch from turning valid counters into nonsense.
 
-### Adding the Missing BPF Declarations
+### Supply the Qdisc Declarations Missing from Older Headers
 
-The repository's generated headers predate a few BPF qdisc definitions. This local compatibility header supplies those declarations without changing the vendored global headers.
+This example needs graph-object kfuncs that are absent from the repository's current generated headers. The compatibility header below adds only the BPF qdisc declarations used by this lesson. It leaves the shared vendored headers alone.
 
 ```c
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -80,13 +80,13 @@ bpf_list_pop_front(struct bpf_list_head *head) __ksym;
 #endif /* __EGRESS_PACER_BPF_EXPERIMENTAL_H */
 ```
 
-This file does not implement pacing. It exposes the graph-object kfuncs used by the real qdisc: `bpf_obj_new` and `bpf_obj_drop` manage packet nodes, while `bpf_list_push_back` and `bpf_list_pop_front` manage the FIFO. The `__contains` BTF tag tells the verifier which node type belongs to the list head.
+There is no pacing policy in this file. It only provides the tools needed to build the queue. `bpf_obj_new` creates a packet node, and `bpf_obj_drop` releases that node when it is empty. `bpf_list_push_back` and `bpf_list_pop_front` arrange the nodes as a FIFO. The BTF tag produced by `__contains` tells the verifier which node type belongs inside the list head, so it can track the graph safely.
 
-Keeping these declarations local matters because they are compatibility glue for this example, not a replacement for the repository's generated libbpf headers. Once those headers provide the same definitions, this file can disappear without changing the pacing algorithm.
+Keeping the compatibility layer inside this lesson also separates it from the scheduler itself. Once the generated libbpf headers expose the same declarations, this file can be removed without touching the qdisc algorithm.
 
-### Implementing the Qdisc Callbacks
+### Implement the Complete Qdisc Lifecycle in BPF
 
-Now we can look at the kernel-mode program. It implements the qdisc operations, packet queue, pacing clock, and counters.
+Now we can read the complete kernel-side program. One file contains the qdisc callbacks, FIFO, pacing clock, and counter updates. The main path has only three stages: `enqueue` takes an skb, `dequeue` returns it at the right time, and `reset` handles anything that never left.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -288,13 +288,15 @@ struct Qdisc_ops pacer = {
 };
 ```
 
-#### Taking Ownership of an skb
+The full source is long, but ownership makes it manageable. We will follow the skb across each callback.
 
-The `init` callback first copies `queue_limit` into `sch->limit`. From then on, `egress_pacer_enqueue` must either take ownership of each skb or reject it. It reads `qdisc_skb_cb(skb)->pkt_len`, checks the packet limit, and allocates a `packet_node` with `bpf_obj_new`. A full queue and an allocation failure use the same drop path, so both increase `policy_dropped`.
+#### `enqueue`: Own the skb and Schedule Its Departure
 
-For an accepted packet, `bpf_kptr_xchg` moves the skb into the node's `__kptr` field. The node now owns the packet and stores its qdisc length and `eligible_ns` timestamp. While holding `queue_lock`, the program adds the node to the FIFO and updates qlen, backlog, `enqueued`, and `max_qlen` together.
+During initialization, `init` copies the selected `queue_limit` into `sch->limit`. Every later call to `egress_pacer_enqueue` must give the incoming skb a definite outcome. The callback reads the qdisc-visible length from `qdisc_skb_cb(skb)->pkt_len`, checks for space, and creates a `packet_node` with `bpf_obj_new`. A full queue and a failed allocation both mean that the program cannot accept ownership, so they share one drop path and increment `policy_dropped`.
 
-The departure time comes from the serialization time of this packet at the requested rate:
+The actual ownership transfer happens through `bpf_kptr_xchg`. After it succeeds, the node's `__kptr` field holds the skb and the node is responsible for it. The node also stores the packet length and its `eligible_ns` timestamp. Under `queue_lock`, the program pushes that node to the FIFO tail and updates qlen, backlog, `enqueued`, and `max_qlen` in the same critical section. The list and its accounting therefore move together.
+
+The delay is not a fixed interval. It comes from the time this packet would occupy the link at the selected rate:
 
 ```text
 interval_ns = packet_len * 8 * 1,000,000 / rate_kbps
@@ -302,32 +304,32 @@ eligible_ns = max(next_departure_ns, now)
 next_departure_ns = eligible_ns + interval_ns
 ```
 
-If the queue was idle, `next_departure_ns` is already in the past, so the first packet can leave immediately. Every later packet advances the clock by its own length. This creates one aggregate FIFO schedule. It is not a token bucket and does not have a separate burst budget.
+After an idle period, `next_departure_ns` is behind the current time, so the next packet can leave at once. While the FIFO stays busy, every following packet advances the clock by its own length. The result is one aggregate FIFO schedule. It is not a token bucket, and there is no separate burst allowance.
 
-#### Waiting Without Busy Looping
+#### `dequeue`: Hand Early Packets to the Watchdog
 
-`egress_pacer_dequeue` pops the first node and compares its `eligible_ns` with `bpf_ktime_get_ns()`. If the time has arrived, `bpf_kptr_xchg` moves the skb out of the node. The callback reduces qlen and backlog, frees the empty node, updates the qdisc byte statistics, and increases `dequeued` and `bytes_dequeued`.
+`egress_pacer_dequeue` only needs to examine the front node. It pops that node and compares `eligible_ns` with the current value from `bpf_ktime_get_ns()`. If the packet is ready, a second `bpf_kptr_xchg` returns the skb to the qdisc. The callback then reduces qlen and backlog, drops the empty node, updates the qdisc's byte counters, and increments `dequeued` and `bytes_dequeued`.
 
-If the packet is early, the callback puts the node back at the front and calls `bpf_qdisc_watchdog_schedule(sch, expire, 0)`. Returning `NULL` tells the qdisc core that nothing is ready. The core wakes the qdisc at `eligible_ns`, so the BPF program never spins while it waits.
+An early packet cannot leave, but the callback must not wait in a loop. It puts the node back at the front, schedules `bpf_qdisc_watchdog_schedule(sch, expire, 0)`, and returns `NULL`. The qdisc core now knows there is nothing ready and calls dequeue again around `eligible_ns`. No BPF code runs while the queue waits.
 
-#### Releasing Packets During Reset
+#### `reset`: Finish the Ownership Story
 
-Removal completes the ownership story. `egress_pacer_reset` uses `bpf_for` to drain the current qlen. It releases every retained skb with `bpf_kfree_skb` and drops each node object. These packets increase `cleanup_dropped`, while admission failures during normal enqueue increase `policy_dropped`. Reset also clears the pacing clock, qlen, and backlog.
+Removing a qdisc does not make its queued skbs disappear. `egress_pacer_reset` uses `bpf_for` to pop as many nodes as the current qlen reports. It releases every retained skb with `bpf_kfree_skb`, then drops the node object. Those packets count toward `cleanup_dropped`, separate from admission failures in `policy_dropped`. Once the list is empty, reset clears the pacing clock, qlen, and backlog as well.
 
-Together, the BPF callbacks update the six counters we saw in the shared header:
+Each counter now has a clear update site and a concrete packet outcome:
 
 | Field | Meaning |
 | --- | --- |
-| `enqueued` | Packets successfully added to the FIFO |
+| `enqueued` | Packets that entered the FIFO |
 | `dequeued` | Packets returned for transmission |
-| `policy_dropped` | Packets rejected at the queue limit or after node allocation failed |
-| `cleanup_dropped` | Packets drained by qdisc reset |
-| `bytes_dequeued` | Total qdisc packet bytes returned by dequeue |
+| `policy_dropped` | Packets rejected at the queue limit or after allocation failed |
+| `cleanup_dropped` | Packets drained during qdisc reset |
+| `bytes_dequeued` | Total qdisc-packet bytes returned by dequeue |
 | `max_qlen` | Peak packet occupancy of the FIFO |
 
-### Loading and Removing the Qdisc
+### Install and Remove the Qdisc from User Space
 
-The user-space loader validates the command line, registers the BPF qdisc, installs it on one interface, waits for the requested duration, and removes it.
+The kernel-side file defines how the qdisc behaves. The user-space program below supplies its configuration, loads and registers it, installs it on one interface, and removes it when the run ends.
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -628,17 +630,19 @@ cleanup:
 }
 ```
 
-#### Keeping the Experiment on One Interface
+With the whole loader visible, we can follow the order from configuration to teardown.
 
-Before `egress_pacer_bpf__load()`, the CLI writes the chosen rate and queue limit into `skel->rodata->rate_kbps` and `skel->rodata->queue_limit`. Loading invokes the verifier, attaching the skeleton registers the `struct_ops` implementation, and `bpf_tc_hook_create` creates `bpf_pacer` at `BPF_TC_QDISC` and `TC_H_ROOT` on the selected ifindex.
+#### Keep Every Operation on the Target Interface
 
-The create request is exclusive. If another root qdisc already exists and creation returns `-EEXIST`, the loader refuses to inspect, replace, stack, save, or restore it. This conservative behavior is why the example belongs on an interface created for the experiment.
+After parsing arguments, the loader writes the rate and queue limit into `skel->rodata->rate_kbps` and `skel->rodata->queue_limit`. This must happen before `egress_pacer_bpf__load()` because rodata becomes immutable after loading. Once the verifier accepts the program, attaching the skeleton registers the `struct_ops` implementation. Only then does `bpf_tc_hook_create` create the `bpf_pacer` root qdisc at `BPF_TC_QDISC` and `TC_H_ROOT` for the target ifindex.
 
-After `READY`, the loader waits in 100 ms intervals until the duration expires or a signal handler sets `exiting`. Normal completion, SIGINT, and SIGTERM enter the same cleanup path. That path calls `bpf_tc_hook_destroy` before reading `skel->bss->stats`, so reset-time drops appear in `SUMMARY`. If removal fails, the loader prints the error and the counters available at that point, returns failure, and leaves the interface for explicit inspection. Destroying the skeleton then unregisters the `struct_ops` link.
+Creation is exclusive. If the interface already has a root qdisc, the kernel returns `-EEXIST` and the loader stops. It does not guess whether replacement is safe, and it does not try to save and restore the existing setup. That conservative rule limits the damage this tutorial can do, but it also means you should use an interface created for the experiment.
 
-## Compilation and execution
+After installation, the loader prints `READY` and checks the duration and `exiting` flag every 100 ms. A normal timeout, SIGINT, and SIGTERM all reach the same cleanup label. Cleanup order matters. The program calls `bpf_tc_hook_destroy` first, which triggers reset, and reads `skel->bss->stats` afterward. That is why `SUMMARY` includes packets dropped during reset. If destroy fails, the loader reports the error and any counters still available, returns failure, and leaves the interface in place for inspection. Destroying the skeleton then unregisters the `struct_ops` link.
 
-Build the BPF object and loader with the lesson's [`Makefile`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/Makefile). Compilation does not need root:
+## Build, Run, and Watch the Queue
+
+The lesson's [`Makefile`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/Makefile) builds the BPF object, skeleton, and user-space loader. This step does not need root:
 
 ```bash
 cd src/53-egress-pacer
@@ -646,13 +650,13 @@ make clean
 make -j2
 ```
 
-The safest first run uses the [integration fixture](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/tests/test_egress_pacer.py). It creates and removes a disposable `epac_tx`/`epac_rx` veth pair, so the runtime step needs root:
+Do not risk an existing interface on the first run. Use the [integration fixture](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/53-egress-pacer/tests/test_egress_pacer.py), which creates a disposable `epac_tx`/`epac_rx` veth pair and deletes it when the test ends. Loading BPF and changing a qdisc require root:
 
 ```bash
 sudo python3 tests/test_egress_pacer.py ./egress_pacer
 ```
 
-The example was tested on x86_64 with a `7.0.0-rc2+` kernel built from commit `a03114efd0720dff230388f7e160e427e54ea31b`. The fixture produced:
+Here is one completed run. It used x86_64 and a `7.0.0-rc2+` kernel built from commit `a03114efd0720dff230388f7e160e427e54ea31b`:
 
 ```console
 READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
@@ -661,17 +665,17 @@ TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64
 PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
 ```
 
-This is a functional smoke test, not a throughput or pacing-precision benchmark. The fixture sends 40 raw 1024-byte EtherType `0x88B5` frames into a 64 Kbit/s pacer with an 8-packet queue. In this run, 9 packets arrived over 1024 ms and 31 attempts entered the `policy_dropped` path. Those values describe this fixture and this run.
+This output answers whether the main paths work. It does not measure throughput or pacing precision. The fixture sends 40 raw 1024-byte EtherType `0x88B5` frames into a 64 Kbit/s queue that can hold 8 packets. In this run, the receiver saw 9 packets over 1024 ms and another 31 send attempts reached `policy_dropped`. The exact numbers can change with timing and environment.
 
-The same fixture also covers the less pleasant paths. It installs a conflicting `pfifo` and checks that the loader leaves it alone. It creates a backlog before SIGTERM, requires a nonzero `cleanup_dropped`, and checks `enqueued = dequeued + cleanup_dropped`. Finally, it sends SIGKILL. The uncatchable signal left `bpf_pacer` installed on this guest, so the fixture removed it with `tc`, verified recovery, and deleted the veth pair from a Python `finally` block.
+The fixture also exercises failure and cleanup. It installs a conflicting `pfifo` and confirms that the loader refuses to replace it. It builds a backlog, sends SIGTERM, requires `cleanup_dropped` to be nonzero, and checks `enqueued = dequeued + cleanup_dropped`. The final case sends SIGKILL, which the process cannot catch and may leave the qdisc behind. The fixture removes that qdisc with `tc`, confirms recovery, and deletes the veth pair from a Python `finally` block.
 
-For a manual run, use only an interface you control. Inspect its root qdisc first:
+Once the automatic test makes sense, you can inspect the behavior manually. Choose only an interface you fully control and check its current root qdisc first:
 
 ```bash
 tc qdisc show dev veth-service
 ```
 
-Then start the pacer for 30 seconds:
+If that interface is safe to use, start the pacer for 30 seconds:
 
 ```bash
 sudo ./egress_pacer --interface veth-service --rate-kbps 64000 --queue-limit 256 --duration 30
@@ -689,53 +693,50 @@ Usage: ./egress_pacer --interface IFACE [--rate-kbps KBPS] [--queue-limit PACKET
 | `--duration` | 1 to 86400 seconds | 10 |
 | `--verbose` | Flag | Off |
 
-The loader prints `READY` after installation and `SUMMARY` after successful removal. The ellipses below show the output shape rather than captured values:
+`READY` means installation succeeded. After the duration ends and removal succeeds, the loader prints `SUMMARY`. The ellipses below show the output format, not measured values:
 
 ```text
 READY interface=veth-service rate_kbps=64000 queue_limit=256 duration=30
 SUMMARY enqueued=... dequeued=... policy_dropped=... cleanup_dropped=... bytes_dequeued=... max_qlen=...
 ```
 
-An existing root qdisc makes exclusive creation fail with:
+If another root qdisc is present, the loader fails before changing it and explains the refusal:
 
 ```text
 refusing to replace the existing root qdisc on IFACE
 ```
 
-## Requirements and limits
+## Where This Example Runs, and What It Leaves Out
 
-- Linux 6.16 or newer with BTF and BPF JIT enabled. The [BPF qdisc merge commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb) introduced the required support.
-- `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_NET_SCHED=y`, and `CONFIG_NET_SCH_BPF=y`.
-- libbpf 1.6.0 or newer for the BPF qdisc TC hook. The repository vendors libbpf and bpftool under `src/third_party`. The [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df) and [1.6.0 release](https://github.com/libbpf/libbpf/releases/tag/v1.6.0) document the version boundary.
-- Root privileges to load BPF and create or destroy a qdisc.
-- For the fixture, Python 3, raw packet sockets, and the `ip` and `tc` tools from `iproute2`.
-- A controlled interface. A veth pair is sufficient. The tested configuration is x86_64.
+The BPF qdisc support used here starts with Linux 6.16. The [BPF qdisc merge commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb) contains the core change. The kernel must also enable BTF and the BPF JIT, with at least `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_NET_SCHED=y`, and `CONFIG_NET_SCH_BPF=y`.
 
-The scheduler has one aggregate FIFO. It provides no fairness, per-flow isolation, per-cgroup policy, classes, priorities, ECN, congestion-control integration, or token-bucket burst budget. The packet limit counts packets, while rate accounting uses `qdisc_skb_cb(skb)->pkt_len`. An idle queue lets its first packet leave immediately.
+The TC hook for a BPF qdisc also needs libbpf 1.6.0 or newer. This repository vendors libbpf and bpftool under `src/third_party`; the relevant [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df) and [1.6.0 release](https://github.com/libbpf/libbpf/releases/tag/v1.6.0) mark that boundary. Runtime operations require root. The fixture additionally needs Python 3, raw packet sockets, and the `ip` and `tc` tools from `iproute2`. One controlled veth pair is enough. The configuration tested here is x86_64.
 
-Rate and queue limit remain fixed for one invocation. Global queue and BSS state limit one loader process to one root qdisc instance. The duration-bounded CLI is not a daemon, controller, metrics exporter, or persistent policy manager.
+The design boundary is just as important as the version boundary. This scheduler has one aggregate FIFO. It has no fairness, per-flow isolation, per-cgroup policy, classes, priorities, ECN, congestion-control integration, or token-bucket burst allowance. The queue limit counts packets, and the timing calculation uses `qdisc_skb_cb(skb)->pkt_len`. When the FIFO is idle, its next packet can leave immediately.
 
-The fixture tested duration-based exit and SIGTERM cleanup. SIGINT uses the same handler but did not receive a separate test. SIGKILL and other abnormal failures may leave the qdisc installed. Host crashes, reboots, GSO/TSO, driver or hardware offload, real-NIC pacing precision, throughput, and hardware timing were not tested.
+Rate and queue limit are fixed when the object loads and cannot change during a run. The queue and counters use global BSS state, so one loader process manages one root qdisc instance. This duration-bounded CLI is not a daemon, controller, metrics exporter, or persistent policy manager.
 
-After an abnormal exit, inspect the interface:
+The tested cleanup paths are duration-based exit and SIGTERM. SIGINT shares the same handler but was not run as a separate case. SIGKILL and other abnormal failures may still leave the qdisc installed. This lesson also does not test system crashes or reboots, GSO/TSO, driver or hardware offload, real-NIC pacing precision, throughput, or hardware timing. Do not extend the smoke-test result to those cases.
+
+After an abnormal exit, inspect the interface before trying another install:
 
 ```bash
 tc qdisc show dev IFACE
 ```
 
-If `bpf_pacer` remains, remove it only from an interface you control:
+Only when the remaining qdisc is `bpf_pacer` and you fully control the interface should you remove it:
 
 ```bash
 sudo tc qdisc del dev IFACE root
 ```
 
-Deleting a qdisc changes traffic scheduling, so never run this recovery command on an interface you do not control.
+This command directly changes traffic scheduling. Never use it on a production interface or one whose purpose you do not know.
 
-## Summary
+## What to Take Away
 
-This lesson used a small FIFO to expose the full BPF qdisc lifecycle. `enqueue` takes ownership of an skb and assigns its departure time, the watchdog wakes `dequeue` without a busy loop, and `reset` accounts for packets still queued during removal. Those mechanics are the reusable part. Fairness, concurrent state, dynamic policy, persistence, and stronger recovery would require a larger scheduler.
+This deliberately small FIFO walked through the full BPF qdisc lifecycle. `enqueue` accepts an skb and schedules it from the packet length. The watchdog lets `dequeue` wait without a busy loop. `reset` closes the ownership path for skbs still queued during removal. Those ownership and timing rules are the reusable part of the lesson. Fairness, concurrent state, dynamic policy, persistence, and stronger recovery belong in a more complete scheduler.
 
-> If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
+> To keep learning eBPF by building complete examples, explore the [tutorial repository](https://github.com/eunomia-bpf/bpf-developer-tutorial).
 
 ## References
 
