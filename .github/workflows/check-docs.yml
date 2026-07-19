@@ -17,6 +17,7 @@ jobs:
         run: |
           python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc scripts.test_generate_compatibility
           python3 .agents/skills/write-bpf-production-tutorial/scripts/test_sync_source_blocks.py
+          python3 .agents/skills/write-bpf-production-tutorial/scripts/test_verify_claude_trace.py
           python3 .agents/skills/write-bpf-production-tutorial/scripts/test_verify_external_review.py
       - name: Regenerate documentation indexes
         run: |
