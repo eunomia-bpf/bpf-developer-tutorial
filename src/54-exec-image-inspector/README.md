@@ -16,7 +16,7 @@ The hook is not sleepable. A file-backed dynptr can read data that is already av
 
 BPF task work provides the second half of the design. `bpf_task_work_schedule_signal()` associates a callback with the current task. The callback can sleep, obtain the task's current executable file with `bpf_get_task_exe_file()`, and use the file dynptr helpers there.
 
-The tool observes one child created by its own loader. It is not a system-wide exec daemon. This narrow scope lets the loader know the target TGID before attachment and keeps one task-work slot sufficient for the example.
+The tool observes one child created by its own loader. The loader does not act as a system-wide exec daemon. This narrow scope lets the loader know the target TGID before attachment and keeps one task-work slot sufficient for the example.
 
 ## Follow one exec from command to event
 
@@ -871,7 +871,7 @@ cleanup:
 
 `schedule_exec_inspection` starts by comparing the current TGID with `target_tgid`. The loader sets that read-only value before load, so unrelated execs return immediately. A matching call increments `matched` and looks up key zero in the one-entry `pending` ARRAY map.
 
-The map value is `struct exec_work`. It contains `scheduled_ns`, the direct probe result, and the `struct bpf_task_work` storage. One invocation observes one child, so one slot is enough. Execs by that child are sequential because the task-work callback runs for the task before it can return to user space and call exec again. A service that handles concurrent tasks would need per-task storage, admission limits, and a policy for tasks that never run the callback.
+The map value is `struct exec_work`. It contains `scheduled_ns`, the direct probe result, and the `struct bpf_task_work` storage. One invocation observes one child, so one slot is enough. For the same child in this sequential fixture, each task-work callback runs before that task returns to user space and can issue the next exec. A service that handles concurrent tasks would need per-task storage, admission limits, and a policy for tasks that never run the callback.
 
 When `--probe-offset` is present, `probe_file_without_sleep` creates a file-backed dynptr from `bprm->file` and tries to read eight bytes. The fixture's [`create_probe_image()`](./tests/test_exec_image_inspector.py) places `EIPROBE!` on an evicted page more than 4 MiB into the copied executable. That direct access returns `-EFAULT` in the verified run. Cached data could succeed, which is why ordinary image inspection leaves the probe disabled.
 

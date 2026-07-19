@@ -871,7 +871,7 @@ cleanup:
 
 `schedule_exec_inspection` 先比较当前 TGID 与 `target_tgid`。加载器在 BPF object 加载前设置这个只读值，其他进程的 exec 会直接返回。命中目标后，程序增加 `matched`，再从只有一个元素的 `pending` ARRAY map 中查找 key 0。
 
-这个 map 的值是 `struct exec_work`，其中保存 `scheduled_ns`、直接探测结果和 `struct bpf_task_work` 所需存储。一次工具调用只观察一个子进程，因此一个槽位已经足够。同一子进程的多次 exec 按顺序发生，因为 task-work 回调会在该 task 返回用户态并再次调用 exec 之前运行。并发服务需要按 task 分配存储、设置准入上限，还要处理 task 永远没有执行回调的情况。
+这个 map 的值是 `struct exec_work`，其中保存 `scheduled_ns`、直接探测结果和 `struct bpf_task_work` 所需存储。一次工具调用只观察一个子进程，因此一个槽位已经足够。在这个顺序执行的测试程序中，同一子进程每次都要先运行 task-work 回调，随后该 task 才能返回用户态并发起下一次 exec。并发服务需要按 task 分配存储、设置准入上限，还要处理 task 永远没有执行回调的情况。
 
 设置 `--probe-offset` 后，`probe_file_without_sleep` 会从 `bprm->file` 创建 file-backed dynptr，并尝试读取 8 个字节。测试程序中的 [`create_probe_image()`](./tests/test_exec_image_inspector.py) 把 `EIPROBE!` 放到复制后可执行文件中超过 4 MiB 的位置，再驱逐标记所在页面。验证运行中的直接读取返回了 `-EFAULT`。普通检查不会设置这个选项，因为缓存中的数据也可能直接读取成功。
 
@@ -991,7 +991,7 @@ cat /sys/kernel/security/lsm
 - 事件最多保存 256 字节的路径和 16 字节的命令名。更长的路径可能设置 `path_error`，命令名也可能被截断。
 - 对于脚本，已安装镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
 - 冷页测试程序用于展示延迟文件读取的意义，不能证明所有直接文件读取都会失败。
-- 单个 map slot 适用于单子进程 CLI。并发服务需要 per-task 状态、准入上限，以及 task 未执行回调时的恢复策略。
+- 单个 map 槽位只适合一次运行一个子进程的命令行工具。并发服务需要按 task 分配状态、设置准入上限，并准备 task 未执行回调时的恢复策略。
 - KVM 运行只做功能测试，回调延迟不能作为基准测试或开销估算。
 - 运行行为只在 x86_64 上验证。其他架构需要自己的测试程序断言与 KVM 覆盖。
 - 加载器没有外部 SIGINT 或 SIGTERM 信号处理函数。加载器被终止时 BPF link 会关闭，但已经释放的子进程可能继续运行，需要由调用方管理。
