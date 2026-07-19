@@ -214,6 +214,50 @@ class SyncSourceBlocksTest(unittest.TestCase):
         self.assertEqual(first_english, english.read_bytes())
         self.assertEqual(first_chinese, chinese.read_bytes())
 
+    def test_rejects_empty_source_without_changing_either_readme(self) -> None:
+        source = self.root / "src/lesson/tool.c"
+        source.write_bytes(b"")
+        english = self.write_readme("src/lesson/README.md")
+        chinese = self.write_readme("src/lesson/README.zh.md")
+        before = (english.read_bytes(), chinese.read_bytes())
+
+        result = self.run_script(
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("complete source cannot be empty", result.stderr)
+        self.assertEqual(before, (english.read_bytes(), chinese.read_bytes()))
+
+    def test_rejects_source_without_final_lf(self) -> None:
+        source = self.root / "src/lesson/tool.c"
+        source.write_bytes(b"int value = 1;")
+        self.write_readme("src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md")
+
+        result = self.run_script(
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("must end with an LF byte", result.stderr)
+
+    def test_preserves_multiple_trailing_lfs(self) -> None:
+        source = self.root / "src/lesson/tool.c"
+        source.write_bytes(b"int value = 1;\n\n\n")
+        english = self.write_readme("src/lesson/README.md")
+        self.write_readme("src/lesson/README.zh.md")
+
+        result = self.run_script(
+            "--readme", "src/lesson/README.md",
+            "--readme", "src/lesson/README.zh.md",
+            "--write",
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("int value = 1;\n\n\n```", english.read_text(encoding="utf-8"))
+
     def test_requires_bilingual_pair(self) -> None:
         self.write_readme("src/lesson/README.md")
         result = self.run_script(

@@ -78,13 +78,19 @@ def render(
             raise ValueError(f"missing matching generated fence and {END!r} after {source_name}")
 
         language = LANGUAGES[source.suffix]
-        source_text = source.read_bytes().decode("utf-8")
+        source_bytes = source.read_bytes()
+        if not source_bytes:
+            raise ValueError(f"complete source cannot be empty: {source_name}")
+        if not source_bytes.endswith(b"\n"):
+            raise ValueError(
+                f"complete source must end with an LF byte for exact fenced inclusion: {source_name}"
+            )
+        source_text = source_bytes.decode("utf-8")
         if "\r" in source_text:
             raise ValueError(f"complete source must use LF line endings: {source_name}")
         max_backticks = max((len(run) for run in re.findall(r"`+", source_text)), default=0)
         generated_fence = "`" * max(3, max_backticks + 1)
-        if source_text.endswith("\n"):
-            source_text = source_text[:-1]
+        source_text = source_text[:-1]
         rendered.extend(
             [
                 lines[index],

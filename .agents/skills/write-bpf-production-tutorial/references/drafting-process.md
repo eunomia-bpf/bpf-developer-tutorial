@@ -10,6 +10,8 @@ Add a source-fidelity ledger. Inventory every supplied fact, number, command, co
 
 Add a code inventory that identifies the complete core files to reproduce in the tutorial. Include the kernel-mode eBPF source, user-space source, and any shared header needed to understand their contract. Keep tests, generated skeletons, vendored code, and build boilerplate as links unless the teaching mechanism depends on them.
 
+Every inventoried source must be non-empty UTF-8 text with LF line endings and a final LF byte. A fenced Markdown block cannot represent the absence of the final newline without changing the payload, so the synchronizer rejects an empty source or a source without the final LF instead of silently changing it. Do not normalize or edit an implementation file merely to make documentation synchronization pass without explicit authorization.
+
 ## Establish the teaching path
 
 Write one sentence for the tutorial's promise and one sentence for its reader. Map each planned section to a distinct reader question. Confirm that the path covers the problem, relevant background, whole-system flow, complete code, focused kernel explanation, brief user-space explanation, deeper concepts, compilation and execution, real output, requirements, failure and cleanup behavior, limitations, summary, and references.
