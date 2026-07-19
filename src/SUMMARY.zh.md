@@ -89,6 +89,7 @@ GPU:
 - [lesson 27-replace](27-replace/README.zh.md) 替换任意程序读取或者写入的文本
 - [lesson 28-detach](28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
+- [lesson 54-exec-image-inspector](54-exec-image-inspector/README.zh.md) eBPF 实例教程：在 `exec` 后检查可执行镜像
 
 
 特性:

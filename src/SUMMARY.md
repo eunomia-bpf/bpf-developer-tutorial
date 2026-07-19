@@ -89,6 +89,7 @@ Security:
 - [lesson 27-replace](27-replace/README.md) Transparent Text Replacement in File Reads
 - [lesson 28-detach](28-detach/README.md) Running eBPF After Application Exits: The Lifecycle of eBPF Programs
 - [lesson 34-syscall](34-syscall/README.md) Modifying System Call Arguments with eBPF
+- [lesson 54-exec-image-inspector](54-exec-image-inspector/README.md) Inspect the Executable Image After `exec`
 
 
 Features:
