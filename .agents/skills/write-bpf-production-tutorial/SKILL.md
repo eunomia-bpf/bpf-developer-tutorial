@@ -70,7 +70,9 @@ Follow the selected precedent's component rhythm. Introduce one component, prese
 
 Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, summary, and primary references. Explain cleanup as part of the normal mechanism instead of turning it into a warning section. Compress failure conditions, limitations, and safety boundaries into one short paragraph of at most two sentences near the end.
 
-Use canonical GitHub absolute URLs for every Markdown link, including links to the current lesson's source, `Makefile`, and tests. Never publish a `./` or `../` target or a link to another host. If no stable GitHub URL exists, omit the link. This repository rule overrides link examples in older lessons and the advanced guideline's website call to action.
+Use one opening complete-source callout whose only target is the lesson directory at `https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/<lesson>`. The directory is the single entry point for implementation files, the `Makefile`, fixtures, and tests; introduce individual filenames as code labels beside their complete blocks instead of turning the opening into a file-link catalog.
+
+Use canonical GitHub absolute URLs for every other Markdown link. Never publish a `./` or `../` target or a link to another host. If no stable GitHub URL exists, omit the link. This repository rule overrides link examples in older lessons and the advanced guideline's website call to action.
 
 Do not publish local infrastructure details. Keep workspace paths, shared lab repository names, VM names, host-to-guest copy steps, cache locations, and agent trace paths out of the README and PR description. Public reproducibility text may state the architecture, kernel version and commit, required configuration, commands, and captured output.
 

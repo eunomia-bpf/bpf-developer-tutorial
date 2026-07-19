@@ -43,7 +43,9 @@ Include complete core source exactly as implemented. Teach one component at a ti
 
 Do not simplify code, insert ellipses, or rewrite comments. Present complete source in ordinary Markdown fenced code blocks without HTML synchronization markers, then verify it against the real file.
 
-Use canonical GitHub absolute URLs for every Markdown link, even when the target belongs to the current lesson. Never use `./`, `../`, or another host. If no stable GitHub URL exists, leave the text unlinked. This rule overrides link patterns in older lessons and the website call to action in the advanced guidelines.
+Place one complete-source callout near the opening and link only the lesson's GitHub directory. Let the directory serve as the entry point for source, build files, fixtures, and tests, while later component sections name individual files beside their complete code blocks.
+
+Use canonical GitHub absolute URLs for every other Markdown link, even when the target belongs to the current lesson. Never use `./`, `../`, or another host. If no stable GitHub URL exists, leave the text unlinked. This rule overrides link patterns in older lessons and the website call to action in the advanced guidelines.
 
 Keep local infrastructure private. Do not name workspace paths, shared lab repositories, VM instances, copy routes, caches, or agent trace locations in a tutorial or PR description. Retain only public reproducibility facts such as architecture, kernel version and commit, configuration, commands, and captured output.
 

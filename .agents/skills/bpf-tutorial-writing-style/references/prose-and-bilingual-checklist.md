@@ -85,6 +85,7 @@ Apply the same repair in English. Replace a paragraph built from â€œno classes,â
 - Explain what advanced developers need to know: program type, attach point, context restrictions, helper or kfunc semantics, map ownership, state lifetime, concurrency, verifier constraints, event/control path, error handling, and cleanup.
 - Keep build and run commands copyable. Explain prerequisites before the command and interpret real output after it.
 - Label volatile fields and distinguish demonstrations, functional tests, and benchmarks.
+- Use one opening complete-source callout that links only to the lesson directory. Treat that directory as the entry point for implementation, build files, fixtures, and tests; name individual files as code labels next to their complete source blocks instead of listing file links in the opening.
 - Use canonical GitHub absolute URLs for every Markdown link, including links to the current lesson. Reject every `./`, `../`, or non-GitHub target. If no stable GitHub URL exists, do not add a link. This repository rule overrides link examples in precedents and the advanced guideline's website call to action.
 - Keep local infrastructure and agent state private. Never publish workspace paths, shared lab repository or VM names, host-to-guest copy routes, cache locations, prompt stores, or trace paths. Public reproducibility may include architecture, kernel version and commit, configuration, commands, and captured output.
 
