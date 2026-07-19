@@ -25,9 +25,11 @@ Do not write like a paper, specification, PR description, release note, test log
 
 ## Keep the source readable
 
-Include complete core source before the detailed walkthrough, exactly as implemented. Introduce each file with one sentence explaining its role. If the full source is long enough to interrupt the lesson, place each file in a collapsed `<details>` block, then reopen only the important excerpts in the walkthrough.
+Include complete core source exactly as implemented. Teach one component at a time: introduce its role, present its source inline, and immediately explain the important logic before moving on. Do not hide source in `<details>` and do not separate a long source dump from all of its explanation.
 
 Do not simplify code, insert ellipses, rewrite comments, or hand-edit synchronized source blocks. Link tests and build boilerplate unless they are part of the mechanism being taught.
+
+Link every other tutorial with its canonical absolute URL. Do not use relative cross-tutorial paths such as `../49-hid/README.md`, because those links break when the page is published outside the repository. Keep relative links only for files inside the current lesson.
 
 ## Keep scope honest
 

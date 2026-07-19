@@ -43,11 +43,12 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 ## Code and evidence presentation
 
 - Present full core source exactly as it exists before excerpting it again for explanation. Mark complete-source blocks for the workflow Skill's synchronizer, then require its `--check` mode to pass against the complete source inventory. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
-- Introduce each complete file with its role in the kernel/user-space flow. After the file, select only the parts that need deeper explanation.
-- When full source spans several files or hundreds of lines, place each exact file in a collapsed `<details>` block. The code still appears before the walkthrough, but it does not become a wall that hides the article.
+- Teach one component at a time. Introduce the file's role, present its complete source inline, and immediately explain the parts that matter before starting the next component.
+- Never hide source in `<details>` and never place several complete files in one uninterrupted dump followed by a distant walkthrough. Long examples need stronger component boundaries and local explanations, not collapsed code.
 - Explain what advanced developers need to know: program type, attach point, context restrictions, helper or kfunc semantics, map ownership, state lifetime, concurrency, verifier constraints, event/control path, error handling, and cleanup.
 - Keep build and run commands copyable. Explain prerequisites before the command and interpret real output after it.
 - Label volatile fields and distinguish demonstrations, functional tests, and benchmarks.
+- Use canonical absolute URLs for every link to another tutorial. Reject `../<lesson>/README.md` and `../<lesson>/README.zh.md`; reserve relative links for files inside the current lesson.
 
 ## Natural Chinese
 

@@ -12,7 +12,7 @@ Open with a concrete situation the reader can picture. Name the small tool or ex
 
 Give enough background to explain why the hook or kernel subsystem matters. Then introduce the whole kernel/user-space path before individual functions. Keep returning to the same packet, event, device, or failure so adjacent sections feel causally connected.
 
-Present complete core source before the detailed walkthrough, as required by the advanced tutorial guidelines. A small program can stay inline. When several files or hundreds of source lines would bury the story, wrap each complete file in a collapsed `<details>` block. The code remains present and exact, while the reader can continue to the explanation.
+Present complete core source exactly as required by the advanced tutorial guidelines, but organize it by component. Introduce one file, show it inline, explain its important behavior, and only then move to the next file. Never hide source in `<details>` and never make readers cross several complete files before reaching the explanation.
 
 After the source, explain the BPF structure, attach point, state and ownership, relevant helpers or kfuncs, kernel interaction, user-space lifecycle, error handling, and cleanup. Spend words on advanced constraints and surprising behavior. Do not explain ordinary C syntax.
 
@@ -31,9 +31,9 @@ The first `53-egress-pacer` draft was technically accurate but still failed as a
 - called a fixed-duration lab demo a production or operational tool without matching CLI capabilities;
 - wrote Chinese by following English sentence order.
 
-The successful rewrite kept all four complete source files, commands, output, versions, failure paths, and limits. It replaced the invented production story with an honest lab scope, followed one skb through ownership and timing, collapsed the long source listings, reduced 12 main sections to 9, and moved KVM evidence into compilation and execution. Repeated `EEXIST` discussion fell from six mentions to two without losing the behavior.
+The rewrite kept all four complete source files, commands, output, versions, failure paths, and limits. It replaced the invented production story with an honest lab scope and followed one skb through ownership and timing. Reader review then exposed a structural problem: collecting the files before their explanations made the tutorial read like a design document. The corrected method places each complete file beside its component explanation, as tutorials 47 and 49 do.
 
-Reuse the method, not those exact counts. Shrink overloaded openings, give the reader one useful mental model, collapse long full-source listings, and make the walkthrough answer the questions raised by the scenario. Keep each technical fact, but place it once where the reader is ready for it.
+Reuse the corrected method, not exact section counts. Shrink overloaded openings, give the reader one useful mental model, and alternate complete component source with nearby explanation. Keep each technical fact, but place it once where the reader is ready for it.
 
 ## Preserve modern correctness
 

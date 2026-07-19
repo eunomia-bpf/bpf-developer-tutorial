@@ -31,9 +31,11 @@ Do not turn the README into a validation transcript. Runtime provenance supports
 
 Follow the project-provided advanced tutorial guidelines through `$bpf-tutorial-writing-style`. Start with one concrete situation, explain the whole kernel/user-space path, include the complete core source exactly as implemented, then walk through the important mechanisms.
 
-When the complete source would dominate the page, keep it in the README but wrap each file in a collapsed `<details>` block. The source must remain searchable, copyable, byte-exact, and placed before the detailed walkthrough.
+Follow the selected precedent's component rhythm. Introduce one component, present its complete source inline, and explain its important logic before moving to the next component. Do not hide source in `<details>` or collect every file into one uninterrupted source dump. The source must remain searchable, copyable, and byte-exact.
 
 Explain advanced eBPF behavior, not ordinary C syntax. Keep build, run, expected output, requirements, cleanup, limitations, summary, and primary references. State once what the evidence proves and once where the example stops.
+
+Use canonical absolute URLs when linking to another tutorial. Never publish cross-tutorial links such as `../20-tc/README.md` or `../20-tc/README.zh.md`. Relative links are allowed only for files that belong to the current lesson, such as its `Makefile`, source files, and tests.
 
 ## 4. Write Chinese from the same facts
 
