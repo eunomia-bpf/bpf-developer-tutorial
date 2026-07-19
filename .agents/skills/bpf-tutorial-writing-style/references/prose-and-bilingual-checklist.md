@@ -37,7 +37,7 @@ This checklist carries the relevant eunomia.dev writing discipline into advanced
 
 ## Code and evidence presentation
 
-- Present full core source exactly as it exists before excerpting it again for explanation. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
+- Present full core source exactly as it exists before excerpting it again for explanation. Mark complete-source blocks for `scripts/sync-source-blocks.py`, then require its `--check` mode to pass. Never silently shorten functions, replace blocks with ellipses, translate comments, or “clean up” commands.
 - Introduce each complete file with its role in the kernel/user-space flow. After the file, select only the parts that need deeper explanation.
 - Explain what advanced developers need to know: program type, attach point, context restrictions, helper or kfunc semantics, map ownership, state lifetime, concurrency, verifier constraints, event/control path, error handling, and cleanup.
 - Keep build and run commands copyable. Explain prerequisites before the command and interpret real output after it.

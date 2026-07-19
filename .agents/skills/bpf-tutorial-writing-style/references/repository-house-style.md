@@ -2,6 +2,10 @@
 
 New advanced lessons must feel like they belong beside `src/47-cuda-events/` and `src/49-hid/`. Read both English/Chinese README pairs in full before drafting. Use `47-cuda-events` as the depth baseline for an end-to-end tool and `49-hid` as the voice and code-first teaching baseline.
 
+After those two anchors, inspect the repository index and nearby lesson directories. Select one to three additional finished bilingual tutorials when they offer a closer domain pattern. Networking work may use `20-tc`, `41-xdp-tcpdump`, `42-xdp-loadbalancer`, or `50-tcx`. Process and security work may use `7-execsnoop`, `19-lsm-connect`, `26-sudo`, or `34-syscall`. Tracing work may use `9-runqlat`, `17-biopattern`, or `33-funclatency`. Accelerator work may use `47-cuda-events` and the closest lesson under `src/xpu/`. A reusable primitive may use the closest `src/features/` pair plus one numbered end-to-end lesson.
+
+These examples are routing guidance, not an allowlist. The agent may choose another completed lesson when it is a better match. It must read each selected English/Chinese pair in full, name the concrete pattern being reused, and explain why that pattern fits. Do not copy a section skeleton simply because another lesson has it.
+
 ## Match the useful patterns
 
 - Start with a concrete situation the reader can picture. Address the reader directly when it sounds natural, then name the tool and what the reader will learn.
