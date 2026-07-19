@@ -1,6 +1,6 @@
 ---
 name: write-bpf-production-tutorial
-description: Create or revise a tested bilingual bpf-developer-tutorial lesson from the implementation and real runtime evidence. Use for tutorial scope, pinned Claude Opus 4.5 authorship, README drafting, exact source inclusion, host builds, KVM tests, supervised completion, and PR preparation. Pair with bpf-tutorial-writing-style for prose decisions.
+description: Create or revise a tested bilingual bpf-developer-tutorial lesson from the implementation and real runtime evidence. Use for tutorial scope, pinned Claude Opus 4.5 authorship, README drafting, technical flow diagrams, exact source inclusion, host builds, KVM tests, supervised completion, and PR preparation. Pair with bpf-tutorial-writing-style for prose decisions.
 ---
 
 # Write a BPF Tutorial
@@ -46,6 +46,12 @@ Write down two private working sentences as part of the fact pack: who the reade
 
 Choose an honest scope. A lesson may teach a small operational tool or a focused kernel feature. Do not call a lab demo production-ready, and do not invent a production story that the CLI, output, and tests cannot support.
 
+Decide once whether a technical diagram materially improves the lesson. A diagram earns its place when the reader must track at least three dependent state changes, a branch or retry loop, ownership across kernel and user space, or one source that affects several downstream components. A short linear filter or one-step attachment usually reads better as prose.
+
+Codex prepares technical diagrams from the verified fact pack before the Opus prose pass. Prefer a reviewable text source such as Graphviz DOT or Mermaid, or a directly maintained SVG, and commit that source beside the rendered PNG. Keep one language-neutral diagram when code identifiers carry the meaning; use paired Chinese and English assets only when prose labels are essential. Technical flowcharts come from code and tests rather than generative illustration.
+
+Render the asset deterministically and record a reproducible command in the fact pack. Use a descriptive image name, readable text at normal README width, restrained color, and a clear branch or ownership direction. Published Markdown uses descriptive alt text and a canonical absolute GitHub image target such as `https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/<lesson>/<diagram>.png`. Give Opus the finished asset and source so it can introduce the diagram, connect it to the running example, and explain the important branch immediately afterward.
+
 ## 2. Verify the implementation
 
 Build on the host. Use `$test-bpf-tutorial-kvm` for load, attach, and runtime behavior when the host kernel cannot run the feature safely. Exercise the normal path, one meaningful failure or boundary path, and cleanup. Record the commands, guest kernel version and commit, and real output needed by the README.
@@ -75,6 +81,8 @@ Opus must write Chinese as Chinese, using the voice sample and rules in `$bpf-tu
 Do not accept Opus's final message as evidence that the work is complete. Inspect the files and diff. Confirm that both README files changed, every requested prose paragraph was actually rewritten, every source file still appears exactly once, and code, commands, captured output, versions, requirements, failure behavior, cleanup, limitations, and references remain intact.
 
 For a full rewrite, compare prose outside fenced blocks with the entry version. Unchanged titles, tables, commands, output, and reference entries may be intentional. Unchanged explanatory paragraphs are evidence that the rewrite is incomplete unless the user explicitly exempted them. Inspect diff hunk distribution as well: changes concentrated only at the opening or ending do not satisfy a paragraph-by-paragraph rewrite.
+
+When the lesson contains a diagram, inspect the rendered image as well as its source. Confirm that every node and edge follows the implementation, both languages introduce the same figure and draw the same conclusion, the PNG remains legible at README width, and the absolute GitHub image target points to the committed asset.
 
 Codex performs this postcondition check after the one complete rewrite. If it finds a concrete defect, reject Opus's self-report and send one exact defect list back to the same pinned-model session. Opus must fix every listed issue without asking questions and rerun the final checks. This supervised correction is not permission to draft the lesson in batches: the first invocation must still attempt the entire Chinese and English pair before returning.
 
@@ -114,4 +122,4 @@ python3 .agents/skills/write-bpf-production-tutorial/scripts/sync-source-blocks.
 
 Repeat `--expected-source` for each complete shared header. Use ordinary Markdown fenced code blocks without HTML markers. Copy complete source from the real file, then run the checker; it is deliberately read-only.
 
-Run `git diff --check`, the lesson build, the relevant host tests, the KVM runtime test, and repository documentation checks. Inspect the final diff for unintended files. Commit and push the repository-local Skills and tutorial changes only after these checks pass. Do not merge unless the user asks.
+Run `git diff --check`, the lesson build, the relevant host tests, the KVM runtime test, and repository documentation checks. Re-render every diagram from its committed text or vector source and confirm that the generated PNG matches the committed asset. Inspect the final diff for unintended files. Commit and push the repository-local Skills and tutorial changes only after these checks pass. Do not merge unless the user asks.

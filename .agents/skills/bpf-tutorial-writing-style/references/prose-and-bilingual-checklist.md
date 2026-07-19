@@ -29,6 +29,17 @@ Use it as a reader-focused editing guide, not as a reason to add review rounds. 
 - Do not let provenance become the plot. Kernel commits, guest versions, CI details, and test matrices belong in a compact reproducibility note unless the lesson is specifically about them.
 - Match the scenario to the tool. A small fixture, lab command, or feature demonstration can be valuable without being described as a production service.
 
+## Diagram decision and presentation
+
+- Add a diagram when it makes a real relationship visible: three or more dependent state changes, a branch/retry loop, ownership transfer, or one component feeding several later actions.
+- Keep a simple linear filter, single attach point, or two-step command in prose. The figure count follows teaching value rather than article length.
+- Derive every node, edge, label, and branch from implementation or test evidence. A diagram carries technical claims and receives the same fidelity review as prose.
+- Prefer a reviewable DOT, Mermaid, or SVG source and commit it beside the rendered PNG. Use deterministic rendering so another agent can reproduce the asset after a code change.
+- Use short labels, code identifiers, one dominant reading direction, restrained color, and text that remains legible at README width.
+- Introduce the packet, event, task, or device interaction before the figure. Explain the important branch, retry, or ownership change immediately after it.
+- Use descriptive alt text and a canonical absolute GitHub image target. Keep both README files aligned on the same figure and conclusion; use paired assets when language-specific labels materially help readers.
+- Update the diagram in the same change whenever implementation or prose changes its state sequence, ownership, branch condition, or cleanup path.
+
 ## Positive and concrete sentences
 
 - Use a positive statement of behavior or scope. Write “The loader observes one child that it creates” instead of “The loader does not monitor every exec on the system.” Write “The example implements one aggregate FIFO” instead of opening with the scheduler policies it lacks.

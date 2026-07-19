@@ -29,6 +29,14 @@ Keep the actor close to the action. Start important sentences with a concrete co
 
 Do not write like a paper, specification, PR description, release note, test log, or compliance report. Build and KVM evidence belongs in compilation and execution, where it should support a claim instead of becoming the article's main plot.
 
+## Draw the relationship when prose starts carrying a graph
+
+Use a small technical diagram when the running example crosses at least three dependent states, branches and later rejoins, waits and retries, transfers ownership, or connects one component to several consumers. The diagram should let the reader see a relationship that would otherwise require rereading a paragraph. Keep a simple linear filter, a single hook, or a two-step command in prose.
+
+Build diagrams from verified code and tests. Prefer code identifiers and short labels, one clear direction, restrained color, and enough whitespace to read the figure at ordinary README width. Introduce the figure with the concrete packet, event, task, or device interaction already used in the story, then explain the decisive branch or ownership change after the image. A diagram supports the narrative; it does not replace the source walkthrough.
+
+Keep the editable DOT, Mermaid, or SVG source beside the rendered PNG. Use descriptive alt text and a canonical absolute GitHub target for the image. A language-neutral figure can serve both README files when code identifiers carry the flow; prose-heavy labels call for matched Chinese and English assets.
+
 ## Keep the source readable
 
 Include complete core source exactly as implemented. Teach one component at a time: introduce its role, present its source inline, and immediately explain the important logic before moving on. Do not hide source in `<details>` and do not separate a long source dump from all of its explanation.
