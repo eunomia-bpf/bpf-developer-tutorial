@@ -2,7 +2,9 @@
 
 A wrapper script launches another wrapper script, which finally starts an interpreter to load the actual business logic. During troubleshooting you know the command line but want to find out which executable image the kernel finally installed.
 
-This tutorial builds `exec_image_inspector`, a command runner that observes one child at the `bprm_committed_creds` LSM hook. It reports the installed executable path and decodes the ELF class, byte order, type, and machine. The example also shows why a file read that may fault needs BPF task work: the LSM hook itself is non-sleepable, but a task-work callback can enter a sleepable context and read file pages through a file-backed dynptr. By the end you will have a reusable pattern for moving small file inspections from a non-sleepable hook to a sleepable callback.
+This lesson is part of the eBPF Tutorial by Example series. User space uses `libbpf` to load a verifier-checked BPF LSM program and attach it to a kernel security hook. BPF maps hold callback state, and a ring buffer carries events back to user space. The `bprm_committed_creds` hook observes the installed image after credentials are committed, and it runs in a non-sleepable context. File reads that may fault need a sleepable execution context to complete. Linux 6.18 introduced BPF task work, which lets a BPF program schedule a callback for a target task. Linux 6.19 introduced file-backed dynptr lifecycle and read support, giving the callback a verifier-tracked way to access file data.
+
+This lesson combines those two capabilities into `exec_image_inspector`. The LSM hook selects the child and schedules task work. The sleepable callback reacquires the installed executable, reads cold file pages through a file-backed dynptr, decodes the ELF header, and sends the path and decoded fields through the ring buffer.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 

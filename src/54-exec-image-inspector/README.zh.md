@@ -2,7 +2,9 @@
 
 一个包装脚本启动另一个包装脚本，最终启动解释器加载真正的业务逻辑。排查故障时你只知道命令行，却想知道内核最后安装的是哪个可执行镜像。
 
-本课实现 `exec_image_inspector`，在 `bprm_committed_creds` LSM hook 上观察一个子进程，报告最终安装的可执行文件路径，并解析 ELF 类别、字节序、类型和机器架构。示例同时展示为什么可能触发缺页的文件读取要放到 BPF task work 回调中执行：LSM hook 本身不可睡眠，但 task-work 回调可以进入可睡眠上下文，通过 file-backed dynptr 读取文件页。学完本课后，你可以把这套把小规模文件检查从不可睡眠 hook 转移到可睡眠回调的做法用于类似场景。
+本课属于 eBPF Tutorial by Example 系列。用户态使用 `libbpf` 加载一个通过验证器检查的 BPF LSM 程序并把它挂载到内核安全 hook，BPF map 保存回调状态，ring buffer 把事件传回用户态。`bprm_committed_creds` 在凭据提交后观察已安装镜像，这个 hook 运行在不可睡眠上下文。触发缺页的文件读取需要可睡眠的执行环境才能完成。Linux 6.18 引入 BPF task work，让 BPF 程序为目标 task 安排回调。Linux 6.19 引入 file-backed dynptr 生命周期与读取支持，为回调提供验证器跟踪的文件数据访问方式。
+
+本课把这两个功能组合成 `exec_image_inspector`。LSM hook 选定子进程并调度 task work，可睡眠回调重新获取已安装的可执行文件，通过 file-backed dynptr 读取冷页、解析 ELF 头部，并把路径和解析结果通过 ring buffer 发送给用户态。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 
