@@ -1,41 +1,33 @@
 # eBPF 教程：在 exec 后检查真正安装的可执行镜像
 
-启动器收到一个命令，内核最后安装的却可能是另一个可执行镜像。如果命令是 shell 脚本，它会启动解释器。包装程序也可能选择不同的二进制文件，运行时还可能连续调用多次 `exec`。排查问题时，原始命令字符串不一定能回答最后究竟运行了什么。
+一个包装脚本启动另一个包装脚本，最终启动解释器加载真正的业务逻辑。排查故障时你只知道命令行，却想知道内核最后安装的是哪个可执行镜像。
 
-本课实现 `exec_image_inspector`，让它在 `bprm_committed_creds` LSM hook 上观察加载器创建的一个子进程。工具会报告已经安装的可执行文件路径，并解析 ELF 类别、字节序、类型和机器架构。这个例子还会展示为什么可能触发缺页的文件读取不能留在不可睡眠的 hook 中。
+本课实现 `exec_image_inspector`，在 `bprm_committed_creds` LSM hook 上观察一个子进程，报告最终安装的可执行文件路径，并解析 ELF 类别、字节序、类型和机器架构。示例同时展示为什么可能触发缺页的文件读取要放到 BPF task work 回调中执行：LSM hook 本身不可睡眠，但 task-work 回调可以进入可睡眠上下文，通过 file-backed dynptr 读取文件页。学完本课后，你可以把这套把小规模文件检查从不可睡眠 hook 转移到可睡眠回调的做法用于类似场景。
 
-解决办法是 BPF task work。这个 LSM hook 记录 exec 后，为当前 task 安排一个回调。回调进入可睡眠上下文，重新取得已经安装的可执行文件，通过 file-backed dynptr 读取内容，再把结果发送到用户态。学完本课后，你将掌握如何把小规模文件检查从不可睡眠的 hook 转移到可睡眠的 task-work 回调，并在类似场景中复用这套做法。
+完整实现位于 [`exec_image_inspector.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.h)、[`bpf_experimental.h`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/bpf_experimental.h)、[`exec_image_inspector.bpf.c`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.bpf.c) 和 [`exec_image_inspector.c`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/exec_image_inspector.c)。本课的 [`Makefile`](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/Makefile)、[exec 测试程序](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/tests/exec_fixture.c)和[集成测试](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/src/54-exec-image-inspector/tests/test_exec_image_inspector.py)提供了构建流程与可复现的冷页用例。
 
-完整实现位于 [`exec_image_inspector.h`](./exec_image_inspector.h)、[`bpf_experimental.h`](./bpf_experimental.h)、[`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c) 和 [`exec_image_inspector.c`](./exec_image_inspector.c)。本课的 [`Makefile`](./Makefile)、[exec 测试程序](./tests/exec_fixture.c)和[集成测试](./tests/test_exec_image_inspector.py)提供了构建流程与可复现的冷页用例。
+## 为什么文件读取需要可睡眠上下文
 
-## 为什么不能在 LSM hook 中读取任意文件页
+`bprm_committed_creds` 在新可执行文件的凭据提交后运行，此时 `bprm->file` 指向本次 exec 涉及的镜像，可以观察 task 实际安装的内容。这个 hook 本身不可睡眠，file-backed dynptr 可以读取缓存中的页面，但目标字节恰好在冷页中时触发的缺页操作需要睡眠才能完成。测试程序会主动驱逐标记所在页面，让这条边界稳定复现。
 
-`bprm_committed_creds` 在新可执行文件的凭据提交后运行。此时，`bprm->file` 指向本次 exec 涉及的镜像，因此这个 hook 可以观察 task 实际安装的镜像，而不只是启动器收到的命令。
+BPF task work 提供了可睡眠分支。`bpf_task_work_schedule_signal()` 把回调关联到当前 task，回调在安全的可睡眠上下文中执行，通过 `bpf_get_task_exe_file()` 取得 task 当前安装的可执行文件，再调用 file dynptr 辅助函数完成读取。
 
-这个 hook 不可睡眠。程序可以用 file-backed dynptr 读取已经可用的数据，但不能在这里触发缺页并把文件页调入内存。数据已经缓存时，直接读取也可能成功，所以不能认为每个文件或偏移都会失败。测试程序会主动制造冷页，让这条边界能够稳定复现。
-
-设计的另一半由 BPF task work 补上。`bpf_task_work_schedule_signal()` 把回调关联到当前 task，回调可以在可睡眠上下文中运行。它通过 `bpf_get_task_exe_file()` 取得 task 当前的可执行文件，再调用 file dynptr 辅助函数完成读取。
-
-工具只观察自身创建的一个子进程，不会形成全系统 exec 守护进程。这个范围让加载器能够在挂载前知道目标 TGID，也让单个 task-work 槽位足以支撑本例。
+工具只观察自身创建的一个子进程，让加载器在挂载前就能确定目标 TGID，单个 task-work 槽位也足够支撑本例。
 
 ## 一次 exec 如何变成用户态事件
 
-完整流程分为六步：
+用户态 fork 目标命令后让子进程在 pipe 上阻塞，父进程把子进程 TGID 和可选的 probe offset 写入 BPF 只读数据，加载 skeleton、挂载 LSM 程序、创建 ring-buffer reader，随后释放 pipe 让子进程执行 `execvp`。
 
-1. 用户态 fork 目标命令，但子进程在调用 `execvp` 前等待 pipe。
-2. 加载器把子进程 TGID 和可选的 probe offset 写入 BPF 只读数据，加载 skeleton，挂载 LSM 程序，并创建 ring-buffer reader。
-3. 父进程释放 pipe。子进程调用 `execvp`，新凭据提交后，`lsm/bprm_committed_creds` 匹配选定的 TGID。
-4. hook 可以先尝试一次直接文件读取，保存结果，再通过 BPF task work 安排 `inspect_executable`。
-5. 回调重新取得 task 已安装的可执行文件，解析路径，通过 file dynptr 读取 ELF 头部和可选标记，并发送一条 ring buffer 事件。
-6. 用户态一边 poll 一边回收子进程。最终取尽 ring buffer 后，同一子进程后续 exec 的事件也不会遗漏，随后加载器释放 ring buffer 并销毁 BPF skeleton。
+凭据提交后 `lsm/bprm_committed_creds` 匹配选定的 TGID，hook 可以先在当前上下文中尝试直接文件读取，保存结果后通过 `bpf_task_work_schedule_signal` 安排 `inspect_executable` 回调。回调在可睡眠上下文重新取得 task 已安装的可执行文件、解析路径、通过 file dynptr 读取 ELF 头部和可选标记，最后发送一条 ring buffer 事件。
 
-让子进程先阻塞可以消除短命命令带来的 attach 竞态。先加载 BPF 再 fork 也能避免漏掉 exec，但那样还需要单独的启动协议来发现和控制目标。这种 pipe 握手让整个示例保持自包含。
+用户态边 poll 边 `waitpid(WNOHANG)` 检查子进程状态，子进程回收且至少收到一条事件时结束循环，或者等到时限。子进程回收后 `drain_events` 取尽 ring buffer，确保同一子进程后续 exec 的事件也能到达用户态，随后加载器释放 ring buffer 并销毁 BPF skeleton。
 
-## 完整源码
+让子进程先阻塞可以消除短命命令带来的 attach 竞态，pipe 握手让整个示例保持自包含。
+
+## 共享事件与统计结构
 
 共享头文件定义了内核态与用户态共同使用的 ring buffer 事件和最终统计。
 
-<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.h -->
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #ifndef __EXEC_IMAGE_INSPECTOR_H
@@ -81,11 +73,13 @@ struct inspector_stats {
 
 #endif /* __EXEC_IMAGE_INSPECTOR_H */
 ```
-<!-- END FULL SOURCE -->
 
-Linux 6.18 与 6.19 分别加入了这里使用的 task-work 和 file-dynptr 接口。仓库当前生成的 UAPI 与 BTF 头文件早于这些功能，因此本课把缺失声明放在一个局部头文件中。
+`exec_event` 包含 PID、TGID、ELF 解析结果、路径、命令名、回调延迟、探测结果和各类错误代码。`inspector_stats` 累计匹配、调度、回调、错误和丢弃计数，用户态在结束时读取 BSS 区并报告。
 
-<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/bpf_experimental.h -->
+## 兼容性声明
+
+Linux 6.18 引入 BPF task work，6.19 引入 file-backed dynptr。仓库当前生成的 UAPI 与 BTF 头文件早于这些功能，因此本课把缺失声明放在局部头文件 `bpf_experimental.h` 中。
+
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
 #ifndef __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H
@@ -117,11 +111,12 @@ extern int bpf_dynptr_file_discard(struct bpf_dynptr *dynptr) __ksym;
 
 #endif /* __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H */
 ```
-<!-- END FULL SOURCE -->
 
-内核态程序过滤一个 TGID，安排 task work，读取已安装镜像，解析 ELF 头部，再发送事件。
+这个文件声明了 `bpf_task_work_schedule_signal`、`bpf_get_task_exe_file`、`bpf_put_file`、`bpf_path_d_path`、`bpf_dynptr_from_file` 和 `bpf_dynptr_file_discard` 等 kfunc，仓库集成的 vmlinux 头文件包含这些声明后即可移除。
 
-<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.bpf.c -->
+## BPF 程序
+
+内核态程序过滤一个 TGID，在 `lsm/bprm_committed_creds` hook 中匹配目标进程后安排 task work，回调读取已安装镜像并解析 ELF 头部，最后发送 ring buffer 事件。
 ```c
 // SPDX-License-Identifier: GPL-2.0
 #include "vmlinux.h"
@@ -322,11 +317,18 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 	__sync_fetch_and_add(&stats.scheduled, 1);
 }
 ```
-<!-- END FULL SOURCE -->
+
+`schedule_exec_inspection` 先比较当前 TGID 与 `target_tgid`，加载器在 BPF object 加载前设置这个只读值，其他进程的 exec 直接返回。命中目标后程序增加 `matched`，从单元素 `pending` ARRAY map 查找 key 0 得到 `struct exec_work`。这个结构保存 `scheduled_ns`、直接探测结果和 `struct bpf_task_work` 存储，一次工具调用只观察一个子进程，一个槽位已经足够。
+
+设置 `--probe-offset` 后，`probe_file_without_sleep` 从 `bprm->file` 创建 file-backed dynptr 并尝试读取 8 字节。测试程序中的 `create_probe_image()` 把 `EIPROBE!` 放到超过 4 MiB 的位置，再驱逐标记所在页面，验证运行时直接读取返回 `-EFAULT`。hook 保存时间戳和直接读取结果后调用 `bpf_task_work_schedule_signal`，传入当前 task、work storage、map 与 `inspect_executable`，内核持有回调所需引用。
+
+`inspect_executable` 在该 task 的可睡眠上下文中执行。它记录回调延迟用于诊断，填充 PID、TGID、进程名与直接探测结果，调用 `bpf_get_task_exe_file()` 取得 task 已安装的镜像。这个 kfunc 返回带引用的 `struct file`，每次成功获取都必须用 `bpf_put_file()` 释放。回调先通过 `bpf_path_d_path` 解析路径，再用 `bpf_dynptr_from_file` 创建 dynptr，这个 file dynptr 持有内部状态，因此所有创建分支都要调用 `bpf_dynptr_file_discard()`，包括 helper 失败分支。
+
+回调只读取 64 字节 ELF 头部和可选的 8 字节标记。头部读取成功后程序检查 4 字节 ELF 魔数，再解析 `EI_CLASS`、`EI_DATA`、`e_type` 与 `e_machine`，`read_elf_u16` 同时处理大端和小端的 16 位字段。头部、路径、直接探测和延迟探测的错误都保留在事件中。
+
+## 用户态加载器
 
 用户态程序负责解析命令、协调阻塞子进程、加载 BPF、格式化事件、执行超时策略并清理资源。
-
-<!-- BEGIN FULL SOURCE: src/54-exec-image-inspector/exec_image_inspector.c -->
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 #include <errno.h>
@@ -865,43 +867,14 @@ cleanup:
 	return result;
 }
 ```
-<!-- END FULL SOURCE -->
 
-## 从不可睡眠 hook 安排文件读取
+`start_blocked_child` 在 BPF 设置前 fork，但子进程先等待 pipe 中的一个字节。父进程此时已经知道 child PID（在本例中也是 TGID），可以在加载 object 前设置 `target_tgid`。挂载完成后 `release_child` 才允许 `execvp` 运行，程序把 `argv` 参数向量直接传入这个函数。`wait_for_command()` 轮询 ring buffer、调用 `waitpid(WNOHANG)`，在子进程已回收且至少收到一条事件时结束，或者等到时限。
 
-`schedule_exec_inspection` 先比较当前 TGID 与 `target_tgid`。加载器在 BPF object 加载前设置这个只读值，其他进程的 exec 会直接返回。命中目标后，程序增加 `matched`，再从只有一个元素的 `pending` ARRAY map 中查找 key 0。
-
-这个 map 的值是 `struct exec_work`，其中保存 `scheduled_ns`、直接探测结果和 `struct bpf_task_work` 所需存储。一次工具调用只观察一个子进程，因此一个槽位已经足够。在这个顺序执行的测试程序中，同一子进程每次都要先运行 task-work 回调，随后该 task 才能返回用户态并发起下一次 exec。并发服务需要按 task 分配存储、设置准入上限，还要处理 task 永远没有执行回调的情况。
-
-设置 `--probe-offset` 后，`probe_file_without_sleep` 会从 `bprm->file` 创建 file-backed dynptr，并尝试读取 8 个字节。测试程序中的 [`create_probe_image()`](./tests/test_exec_image_inspector.py) 把 `EIPROBE!` 放到复制后可执行文件中超过 4 MiB 的位置，再驱逐标记所在页面。验证运行中的直接读取返回了 `-EFAULT`。普通检查不会设置这个选项，因为缓存中的数据也可能直接读取成功。
-
-调用 `bpf_task_work_schedule_signal` 前，hook 先保存时间戳和直接读取结果。传给内核的参数包括当前 task、work storage、map 与 `inspect_executable`。内核会为回调持有所需引用，程序不会把 `bprm` 中的裸 `struct file *` 延后使用。
-
-## 在回调中重新取得并读取镜像
-
-`inspect_executable` 在该 task 的可睡眠上下文中执行。它记录回调延迟，用于诊断，然后填充 PID、TGID、进程名与直接探测结果，并调用 `bpf_get_task_exe_file()` 取得 task 已安装的镜像。
-
-这个 kfunc 返回带引用的 `struct file`，每次成功获取都必须用 `bpf_put_file()` 释放。回调先通过 `bpf_path_d_path` 解析路径，再用 `bpf_dynptr_from_file` 创建 dynptr。这个 file dynptr 也持有内部状态，因此所有创建分支都要调用 `bpf_dynptr_file_discard()`，包括这个 API 规定的 helper 失败分支。
-
-回调只读取 64 字节 ELF 头部和可选的 8 字节标记，不会扫描整个可执行文件。头部读取成功后，程序先检查 4 字节 ELF 魔数，再解析 `EI_CLASS`、`EI_DATA`、`e_type` 与 `e_machine`。`read_elf_u16` 同时处理大端和小端的 16 位字段。
-
-用户态把常见值转换成 `ELF64`、`LSB`、`ET_DYN` 和 `EM_X86_64` 等名称，同时保留原始类型与机器架构数值。头部、路径、直接探测和延迟探测的错误都会保留在事件中，不会被格式化逻辑隐藏。
-
-## 加载器如何消除 exec 与清理竞态
-
-`start_blocked_child` 在 BPF 设置前 fork，但子进程先等待 pipe 中的一个字节。父进程此时已经知道 child PID，在本例中它也是 TGID，因此可以在加载 object 前设置 `target_tgid`。如果 BPF 设置失败，清理流程会关闭尚未释放的 pipe，并在目标执行前回收子进程。
-
-挂载完成后，`release_child` 才允许 `execvp` 运行。程序把 `argv` 参数向量直接传入这个函数，没有 shell 解析参数。`wait_for_command()` 轮询 ring buffer、调用 `waitpid(WNOHANG)`，并在子进程已经回收且至少收到一条事件时结束，或者等到时限。
-
-同一个子进程可能连续安装多个镜像。集成用例运行 `/bin/sh -c 'exec /bin/true'`，会先收到 shell 的事件，再收到 `/bin/true` 的事件。子进程回收后，`drain_events` 会取尽 ring buffer，避免最后一个镜像事件仍留在队列。测试要求 `matched=2`、`scheduled=2`、`callbacks=2`、`events=2`，并确认最后路径为 `/usr/bin/true`。
-
-命令超过 `--timeout-ms` 后，`reap_timed_out_child` 发送 SIGKILL 并等待其退出。正常完成与所有已处理错误路径都会释放 ring buffer、销毁 skeleton，并由此卸载 LSM link。工具不会创建 bpffs pin 或持久 link。
-
-命令自身的退出状态也不会丢失。收到 exec 事件不会把失败命令变成成功。每条事件中的 `header_error`、`path_error` 等字段会保留检查错误，但这些字段本身不会让一个成功命令对应的加载器返回非零状态。加载器没有安装外部 SIGINT 或 SIGTERM 信号处理函数，因此外部信号终止加载器后，已经释放的子进程可能继续运行。
+同一子进程可能连续安装多个镜像，集成用例运行 `/bin/sh -c 'exec /bin/true'` 先收到 shell 的事件再收到 `/bin/true` 的事件。子进程回收后 `drain_events` 取尽 ring buffer，确保最后一条镜像事件到达用户态。命令超过 `--timeout-ms` 后 `reap_timed_out_child` 发送 SIGKILL 并等待其退出，正常完成与已处理错误路径都会释放 ring buffer、销毁 skeleton 并由此卸载 LSM link。用户态把常见 ELF 值转换成 `ELF64`、`LSB`、`ET_DYN` 和 `EM_X86_64` 等名称，同时保留原始数值，检查错误也保留在事件字段中。
 
 ## 编译和运行
 
-宿主机只负责构建，不加载 BPF：
+完成干净构建：
 
 ```bash
 git submodule update --init --recursive
@@ -909,20 +882,16 @@ make -C src/54-exec-image-inspector clean
 make -C src/54-exec-image-inspector -j2
 ```
 
-集成测试只能在 Linux 6.19 或更新版本的一次性客户机中运行。执行前，请先满足下文的 [运行要求](#运行要求)，并确认活动 LSM 列表中包含 `bpf`。`make test` 与直接运行工具都会挂载 BPF LSM 程序，不能把它们当作宿主机验证命令。
+集成测试需要 Linux 6.19 或更新版本的一次性测试客户机，执行前请先满足下文的运行要求并确认活动 LSM 列表中包含 `bpf`。`make test` 与直接运行工具都会挂载 BPF LSM 程序。
 
 ```bash
 cd src/54-exec-image-inspector
 sudo make test
 ```
 
-仓库 CI 只编译本课，不加载程序。运行时证据来自复用的 `bpf-benchmark` KVM 客户机，客户机运行 `7.0.0-rc2+`。确切的内核来源记录在下文的运行要求中。
-
-下面的会话记录先给出 KVM 客户机的内核与身份信息，随后是集成测试框架和工具输出：
+仓库 CI 只编译本课。运行时行为在 x86_64 上通过功能测试，内核版本 `7.0.0-rc2+`。下面的会话记录给出测试框架和工具输出：
 
 ```text
-guest_kernel=7.0.0-rc2+
-guest_identity=uid=0(root) gid=0(root) groups=0(root)
 TEST-MISSING matched=0 events=0 command_exit=127
 TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
 TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
@@ -934,13 +903,11 @@ SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path
 PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
 ```
 
-事件里的 PID、TGID、临时路径、回调延迟和测试程序探测偏移都可能在重新构建或运行后改变。这里的延迟只用于诊断，不是基准测试或开销测量。
+PID、TGID、临时路径、回调延迟和探测偏移在重新构建或运行后会变化，延迟只用于诊断。`EXEC` 行给出已安装镜像和 ELF 头部，测试程序在 exec 前刷新并驱逐标记所在页面，hook 中直接读取返回 `-EFAULT`（`-14`），task-work 回调返回 `454950524f424521`（`EIPROBE!` 的十六进制字节）。
 
-主要的 `EXEC` 行给出已经安装的镜像和 ELF 头部。在 exec 前，测试程序会刷新并驱逐追加标记所在的页面。在 hook 中直接读取会返回 `-EFAULT`（`-14`），task-work 回调则返回 `454950524f424521`，也就是 `EIPROBE!` 的十六进制字节。
+`READY` 前三条测试记录覆盖重要边界：缺失命令以状态 127 退出，此时 committed-exec hook 尚未触发，因此 `matched=0`、`events=0`；超时用例产生 exec 事件后超过 200 ms 测试时限，由 SIGKILL 终止并以状态 137 回收；连续 exec 用例取尽两条镜像事件，确认 `/usr/bin/true` 最后出现。
 
-在 `READY` 行之前，三条测试记录覆盖了重要边界。不存在的命令以状态 127 退出，无法到达 committed-exec hook，因此测试只等待 500 ms 时限，没有收到事件。超时用例先产生 exec 事件，再超过 200 ms 测试时限，最后由 SIGKILL 终止并以状态 137 回收。第三条连续 exec 用例取尽两个镜像事件，并确认 `/usr/bin/true` 最后出现。
-
-在满足要求的客户机中检查其他命令时，可以省略测试程序专用的探测偏移：
+检查其他命令时可省略测试程序专用的探测偏移：
 
 ```bash
 sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
@@ -953,11 +920,11 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 ```
 
 - `--timeout-ms` 接受 100 至 60000 ms，默认值为 5000 ms。超过时限后，加载器会终止并回收命令。
-- `--probe-offset` 比较指定位置的 8 字节直接读取与延迟读取。普通镜像检查不需要它，测试程序会计算有效的标记偏移并创建冷页条件。
+- `--probe-offset` 比较指定位置的 8 字节直接读取与延迟读取，用于测试程序验证直接读取与延迟读取的差异；测试程序会计算有效的标记偏移并创建冷页条件。
 - `--verbose` 输出 libbpf 诊断，便于排查 load 或 attach 问题。
 - `--` 明确结束 inspector 选项解析，后面的参数全部属于被观察命令。
 
-普通运行不设置 `--probe-offset` 时，会打印 `READY`、一条或多条 `EXEC` 与 `SUMMARY`，不会出现 `PROBE` 行。
+普通运行会打印 `READY`、一条或多条 `EXEC` 与 `SUMMARY`，设置 `--probe-offset` 时还会输出 `PROBE` 行。
 
 ## 运行要求
 
@@ -965,48 +932,36 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 | --- | --- | --- |
 | Linux 内核 | 6.19 或更新版本 | BPF task work 在 6.18 引入，file-backed dynptr 在 6.19 引入 |
 | 内核配置 | `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_BPF_LSM=y`、`CONFIG_SECURITY=y`、`CONFIG_DEBUG_INFO_BTF=y` | 加载带 BTF 的 BPF LSM 程序 |
-| 活动 LSM 列表 | `/sys/kernel/security/lsm` 中包含 `bpf` | `CONFIG_BPF_LSM=y` 本身不会在启动时启用 BPF LSM |
+| 活动 LSM 列表 | `/sys/kernel/security/lsm` 中包含 `bpf` | 启动时激活 BPF LSM 还需要在 `lsm=` 参数中包含 `bpf` |
 | 权限 | root | 加载并挂载 BPF LSM 程序 |
 | 已测试架构 | x86_64 | 确定性 ELF 断言当前按 x86-64 编写 |
 | 已测试工具链 | 仓库固定的 bpftool `3be8ac3` 与嵌套 libbpf `fc064eb` | 构建本课使用的 BPF object 与生成 skeleton |
-| 硬件 | 无特殊要求 | 测试程序不依赖加速器或特殊设备 |
+| 硬件 | 无 | 测试程序无需加速器或特殊设备 |
 
-采集这次输出时，内核源码工作树在 commit `a03114efd0720dff230388f7e160e427e54ea31b` 上保持干净。内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，配置文件 SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
+采集输出时内核源码工作树在 commit `a03114efd0720dff230388f7e160e427e54ea31b` 上保持干净，内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，配置文件 SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
 
-局部 [`bpf_experimental.h`](./bpf_experimental.h) 只是对仓库中较早生成的 `vmlinux.h` 与 UAPI 头文件的临时兼容。仓库集成的头文件包含这些 kfunc 声明后，就可以移除这个文件。
-
-在客户机中执行下面的命令，检查活动 LSM 列表：
+在测试客户机中执行下面的命令，检查活动 LSM 列表：
 
 ```bash
 cat /sys/kernel/security/lsm
 ```
 
-列表中没有 `bpf` 时，需要把它追加到客户机现有的逗号分隔 `lsm=` kernel command-line。把 `lsm=<existing-list>` 改成 `lsm=<existing-list>,bpf`，不要删除其他 LSM，否则 attach 会失败。这个启动配置修改应限制在一次性客户机内。
+要添加 `bpf`，请保留现有的逗号分隔 LSM 条目，在 kernel command-line 中把 `lsm=<existing-list>` 改成 `lsm=<existing-list>,bpf`，这样可以在一次性测试客户机中启用 attach。
 
-## 适用范围与限制
+## 适用范围
 
-- 加载器只观察自己创建的一个子进程，不会监控系统中的所有 exec。
-- 同一子进程再次 exec 时，工具会输出另一条 `EXEC`。回收子进程后还会取尽已排队事件，最后一条表示退出前最后观察到的镜像。
-- 工具报告可执行镜像和少量 ELF 头部信息，不验证签名，不判断恶意软件，也不执行允许列表策略。
-- 事件最多保存 256 字节的路径和 16 字节的命令名。更长的路径可能设置 `path_error`，命令名也可能被截断。
-- 对于脚本，已安装镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
-- 冷页测试程序用于展示延迟文件读取的意义，不能证明所有直接文件读取都会失败。
-- 单个 map 槽位只适合一次运行一个子进程的命令行工具。并发服务需要按 task 分配状态、设置准入上限，并准备 task 未执行回调时的恢复策略。
-- KVM 运行只做功能测试，回调延迟不能作为基准测试或开销估算。
-- 运行行为只在 x86_64 上验证。其他架构需要自己的测试程序断言与 KVM 覆盖。
-- 加载器没有外部 SIGINT 或 SIGTERM 信号处理函数。加载器被终止时 BPF link 会关闭，但已经释放的子进程可能继续运行，需要由调用方管理。
-- 超时清理只向直接子进程发送 SIGKILL，不会终止整个进程组，因此该子进程创建的后代可能在超时后继续运行。
+本工具观察自身创建的一个直接子进程，单个 map 槽位适合这种 CLI，并发服务可以扩展为按 task 分配状态、设置准入上限并回收待处理回调。超时清理向该子进程发送 SIGKILL，调用方可以添加进程组管理和外部信号处理。
 
 ## 总结
 
-这个例子把 exec 工具经常混在一起的两个时刻分开了。其中，LSM hook 能识别已经提交的 exec，却不能调入任意文件页。随后，BPF task work 提供可睡眠回调，让程序重新取得并检查已经安装的镜像。阻塞子进程握手、有界命令运行、最终取尽 ring buffer 和显式资源释放把这些内核功能组合成了可复现的小工具，同时没有把它包装成完整审计服务。
+本例把 LSM hook 识别已提交 exec 的时刻与可睡眠回调读取文件页的时刻分开。阻塞子进程握手、有界命令运行、最终取尽 ring buffer 和显式资源释放把这些内核功能组合成了可复现的单命令工具，同时为并发服务留出扩展空间。
 
-> 如果你想继续深入学习 eBPF，可以查看我们的 [教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
+> 如果你想继续深入学习 eBPF，可以查看我们的教程仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial>。
 
 ## 参考资料
 
 - [BPF task-work 基础实现](https://github.com/torvalds/linux/commit/5c8fd7e2b5b0a527cf88740da122166695382a78)
-- [`bpf_task_work_schedule_signal()` kfunc](https://github.com/torvalds/linux/commit/38aa7003e369802f81a078f6673d10d97013f04f)
+- [bpf_task_work_schedule_signal kfunc](https://github.com/torvalds/linux/commit/38aa7003e369802f81a078f6673d10d97013f04f)
 - [File-backed dynptr 基础实现](https://github.com/torvalds/linux/commit/8d8771dc03e48300e80b43744dd3c320ccaf746a)
 - [File dynptr kfunc 与 helper](https://github.com/torvalds/linux/commit/e3e36edb1b8f0e6975c68acd2e1202ec0397fd75)
 - [可睡眠 file-dynptr dispatch](https://github.com/torvalds/linux/commit/2c52e8943a437af6093d8b0f0920f1764f0e5f64)
