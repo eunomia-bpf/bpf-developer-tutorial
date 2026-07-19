@@ -392,6 +392,24 @@ static int setup_inspector(const struct child_process *child,
 	return 0;
 }
 
+static int reap_timed_out_child(struct child_process *child)
+{
+	int error;
+
+	if (child->reaped)
+		return 0;
+
+	fprintf(stderr, "command exceeded timeout; sending SIGKILL\n");
+	kill(child->pid, SIGKILL);
+	error = reap_child(child, 0);
+	if (error < 0) {
+		fprintf(stderr, "waitpid after timeout failed: %s\n",
+			strerror(-error));
+		return error;
+	}
+	return 0;
+}
+
 static int wait_for_command(struct ring_buffer *ring_buffer,
 			    struct child_process *child,
 			    const struct event_context *events)
@@ -443,16 +461,9 @@ static int wait_for_command(struct ring_buffer *ring_buffer,
 			continue;
 	}
 
-	if (!child->reaped) {
-		fprintf(stderr, "command exceeded timeout; sending SIGKILL\n");
-		kill(child->pid, SIGKILL);
-		error = reap_child(child, 0);
-		if (error < 0) {
-			fprintf(stderr, "waitpid after timeout failed: %s\n",
-				strerror(-error));
-			return error;
-		}
-	}
+	error = reap_timed_out_child(child);
+	if (error)
+		return error;
 	error = drain_events(ring_buffer);
 	if (error)
 		return error;

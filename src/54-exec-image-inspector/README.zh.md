@@ -34,8 +34,8 @@ guest_identity=uid=0(root) gid=0(root) groups=0(root)
 TEST-MISSING matched=0 events=0 command_exit=127
 TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
 TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
-READY target_tgid=1266 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-an6ws_fz/exec_fixture_image
-EXEC pid=1266 tgid=1266 comm=exec_fixture_im path=/tmp/exec-image-inspector-an6ws_fz/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=39
+READY target_tgid=1265 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image
+EXEC pid=1265 tgid=1265 comm=exec_fixture_im path=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=37
 PROBE offset=4214784 direct_error=-14 deferred_error=0 bytes=454950524f424521
 exec fixture completed
 SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path_errors=0 direct_probes=1 direct_probe_errors=1 deferred_probes=1 deferred_probe_errors=0 dropped=0 events=1 command_exit=0
