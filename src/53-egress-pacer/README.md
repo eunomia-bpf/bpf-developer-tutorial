@@ -1,10 +1,10 @@
 # eBPF Tutorial by Example: Build an Egress Pacer with a BPF Qdisc
 
-Want to throttle a virtual link in your test environment? Say, squeeze a veth down to 64 Kbit/s and watch how many packets queue up before they start dropping. Ordinary TC BPF handles inspection and actions, while the existing qdisc retains departure-time control.
+Want to throttle a virtual link in your test environment? Say, squeeze a veth down to 64 Kbit/s and watch how many packets queue up before they start dropping.
 
-Linux 6.16 hands that layer to BPF as well. You write a set of `struct_ops` callbacks and the kernel treats them as a real root qdisc. This tutorial builds `egress_pacer`, a small FIFO pacer that runs on a veth, TAP, or IFB. Give it a rate and a queue limit. It holds packets, releases them on schedule, and reports enqueue, dequeue, and drop statistics at the end.
+This lesson is part of the eBPF Tutorial by Example series. eBPF lets user space load a verifier-checked program into the kernel and attach it to a subsystem. `struct_ops` goes further by letting BPF supply an operation table whose callbacks the subsystem invokes. Ordinary TC BPF classifies or acts on packets while the existing qdisc still owns queueing and departure time. Linux 6.16 added BPF implementations of the `Qdisc_ops` callbacks through `struct_ops`. Programs implement `enqueue`, `dequeue`, `init`, `reset`, and `destroy` and register dynamically as a qdisc.
 
-This example uses one aggregate FIFO to demonstrate skb ownership, queue accounting, departure time, watchdog wakeups, and teardown cleanup. It is suitable for observing the full flow on controlled interfaces such as veth, TAP, or IFB. A fuller scheduler can build on this foundation with classes, fairness, ECN, and burst control.
+`egress_pacer` is a FIFO pacer built exactly this way. It becomes the root qdisc, owns `skb` queueing, computes release time from packet length, uses the `watchdog` to wake `dequeue`, and cleans up queued packets during `reset`. Give it a rate and a queue limit. It holds packets, releases them on schedule, and reports enqueue, dequeue, and drop statistics at the end. The example uses one aggregate FIFO to demonstrate `skb` ownership, pacing, and qdisc cleanup, suitable for observing the full flow on controlled interfaces such as `veth`, `TAP`, or `IFB`.
 
 > The complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer>
 

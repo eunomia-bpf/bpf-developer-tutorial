@@ -1,10 +1,10 @@
 # eBPF 教程：用 BPF Qdisc 实现出口限速
 
-想给测试环境里的一条虚拟网线限个速？比方说，把 veth 压到 64 Kbit/s，看看丢包之前队列能塞多少报文。常见的 TC BPF 示例处理检查和动作，发送时间仍由原有的 qdisc 安排。
+想给测试环境里的一条虚拟网线限个速？比方说，把 veth 压到 64 Kbit/s，看看丢包之前队列能塞多少报文。
 
-Linux 6.16 把这一层也交给了 BPF。你可以用 `struct_ops` 写一个真正的 qdisc，自己管 skb 队列，自己算发送时间。本课会用它构建 `egress_pacer`：一个运行在 veth、TAP 或 IFB 上的小型 FIFO 限速器。给出速率和队列上限，它就把报文存起来，到点再放，最后报告入队、发送和丢包统计。
+本课属于 eBPF Tutorial by Example 系列。eBPF 让用户态把经过 verifier 检查的程序加载到内核，再挂到某个子系统。`struct_ops` 进一步允许 BPF 提供一张操作表，子系统随后调用其中的回调。普通 TC BPF 程序可以检查和处理报文，排队和发送时间仍由原有的 qdisc 管理。Linux 6.16 通过 `struct_ops` 引入了 BPF 实现的 `Qdisc_ops` 回调。程序实现 `enqueue`、`dequeue`、`init`、`reset` 和 `destroy`，可以动态注册为一个 qdisc。
 
-这个例子用一条聚合 FIFO 展示 skb 所有权、队列统计、发送时间、watchdog 唤醒和 reset 清理，适合在 veth、TAP 或 IFB 这类受控接口上观察完整流程。更完整的调度器可以在此基础上加入 class、公平调度、ECN 和 burst 控制。
+本课的 `egress_pacer` 正是用这种方式构建的 FIFO 限速器。它注册为 root qdisc，自己管理 `skb` 入队，按报文长度计算发送时间，使用 `watchdog` 唤醒 `dequeue`，并在移除时清理队列中的报文。给出速率和队列上限后，它把报文存起来，到点再放，最后报告入队、发送和丢包统计。这个例子用一条聚合 FIFO 展示 `skb` 所有权、发送时序和 qdisc 清理，适合在 `veth`、`TAP` 或 `IFB` 这类受控接口上观察完整流程。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer>
 
