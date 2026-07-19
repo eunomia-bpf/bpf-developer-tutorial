@@ -1,0 +1,16 @@
+# Build artifacts
+.output/
+*.o
+*.skel.h
+
+# Generated binaries
+exec_image_inspector
+tests/exec_fixture
+
+# Python cache
+__pycache__/
+
+# Editor files
+*.swp
+*~
+.vscode/
