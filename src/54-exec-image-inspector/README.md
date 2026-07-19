@@ -1,4 +1,4 @@
-# eBPF Tutorial by Example: Inspect the Executable Image After `exec`
+# eBPF Tutorial by Example: Inspect the Executable Image After exec
 
 A launcher receives one command, but the kernel may install a different executable image. A shell script starts an interpreter, a wrapper selects another binary, and a runtime can call `exec` more than once. During an incident, the original command string does not always tell you what finally ran.
 
@@ -6,7 +6,7 @@ This tutorial builds `exec_image_inspector`, a command runner that observes one 
 
 The solution uses BPF task work. The hook records the exec and schedules a callback for the current task. That callback runs in a sleepable context, reacquires the installed executable file, reads it through a file-backed dynptr, and sends the result to user space. By the end, you will have a complete pattern for moving a small file inspection across that context boundary.
 
-The complete implementation is in [`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c), [`exec_image_inspector.c`](./exec_image_inspector.c), and [`tests/test_exec_image_inspector.py`](./tests/test_exec_image_inspector.py).
+The complete implementation is in [`exec_image_inspector.h`](./exec_image_inspector.h), [`bpf_experimental.h`](./bpf_experimental.h), [`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c), and [`exec_image_inspector.c`](./exec_image_inspector.c). The [`Makefile`](./Makefile), [exec fixture](./tests/exec_fixture.c), and [integration test](./tests/test_exec_image_inspector.py) provide the build and reproducible cold-page cases.
 
 ## Why the hook cannot read every file page
 
@@ -20,7 +20,7 @@ The tool observes one child created by its own loader. It is not a system-wide e
 
 ## Follow one exec from command to event
 
-The complete path has six steps:
+The full flow has six steps:
 
 1. User space forks the target command, but the child waits on a pipe before `execvp`.
 2. The loader writes the child's TGID and optional probe offset into BPF read-only data. It loads the skeleton, attaches the LSM program, and creates the ring-buffer reader.
@@ -897,7 +897,7 @@ A child may install more than one image. The integration case runs `/bin/sh -c '
 
 When a command exceeds `--timeout-ms`, `reap_timed_out_child` sends SIGKILL and waits for it. Normal completion and every handled error path free the ring buffer and destroy the skeleton, which detaches the LSM link. The tool creates no bpffs pin or persistent link.
 
-The command's exit status remains visible. Receiving an exec event does not turn a failed command into success, and a successful command does not hide an inspection failure. The loader has no external SIGINT or SIGTERM handler, so a released child may continue if an outside signal terminates the loader.
+The command's exit status remains visible. Receiving an exec event does not turn a failed command into success. Per-event inspection failures remain visible in fields such as `header_error` and `path_error`, but those fields do not by themselves turn a successful command into a nonzero loader exit. The loader has no external SIGINT or SIGTERM handler, so a released child may continue if an outside signal terminates the loader.
 
 ## Compilation and execution
 
@@ -909,14 +909,14 @@ make -C src/54-exec-image-inspector clean
 make -C src/54-exec-image-inspector -j2
 ```
 
-Run the integration test only inside a disposable Linux 6.19 or newer guest. Both `make test` and direct execution attach a BPF LSM program, so they are not host validation commands.
+Run the integration test only inside a disposable Linux 6.19 or newer guest. Before running it, satisfy the [runtime requirements](#runtime-requirements) and confirm that `bpf` appears in the active LSM list. Both `make test` and direct execution attach a BPF LSM program, so they are not host validation commands.
 
 ```bash
 cd src/54-exec-image-inspector
 sudo make test
 ```
 
-Repository CI compiles this lesson without loading it. Runtime proof came from the reused `bpf-benchmark` KVM guest. The source worktree was clean, and the guest ran `7.0.0-rc2+` from source commit `a03114efd0720dff230388f7e160e427e54ea31b`. The kernel image SHA-256 was `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`, and the config SHA-256 was `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`.
+Repository CI compiles this lesson without loading it. Runtime proof came from the reused `bpf-benchmark` KVM guest running `7.0.0-rc2+`. Exact kernel provenance appears with the runtime requirements below.
 
 The final run produced this output:
 
@@ -971,6 +971,8 @@ An ordinary run without `--probe-offset` prints `READY`, one or more `EXEC` line
 | Tested tooling | Repository-pinned bpftool `3be8ac3` with nested libbpf `fc064eb` | Builds the BPF object and generated skeleton used by this lesson |
 | Hardware | None | The fixture needs no accelerator or special device |
 
+For the captured run, the kernel source worktree was clean at commit `a03114efd0720dff230388f7e160e427e54ea31b`. The kernel image SHA-256 was `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`, and the config SHA-256 was `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`.
+
 The local [`bpf_experimental.h`](./bpf_experimental.h) is temporary compatibility glue for the repository's older generated `vmlinux.h` and UAPI headers. It can be removed after those vendored headers include the required kfunc declarations.
 
 Inside the guest, check the active LSM list with:
@@ -986,12 +988,14 @@ If `bpf` is absent, append it to the guest's existing comma-separated `lsm=` ker
 - The loader observes one child that it creates. It does not monitor every exec on the system.
 - A later exec by the same child produces another `EXEC` line. The loader drains queued events after reaping, and the last line identifies the last image observed before exit.
 - The tool reports an executable image and a compact ELF header. It does not verify signatures, classify malware, or enforce an allowlist.
+- The event stores at most 256 path bytes and 16 command-name bytes. A longer path can set `path_error`, and the command name can be truncated.
 - For a script, the installed executable may be the interpreter rather than the script path. The output answers which image the task installed, not every input file consumed by the launch chain.
 - The cold-page fixture demonstrates why deferred file I/O matters. It does not prove that every direct file read fails.
 - The single map slot fits the one-child CLI. A concurrent service needs per-task state, admission limits, and recovery for tasks that never execute the callback.
 - The KVM run is a functional test. Its callback latency is not a benchmark or an overhead estimate.
 - Runtime behavior was exercised on x86_64. Other architectures need their own fixture assertions and KVM coverage.
 - The loader has no external SIGINT or SIGTERM handler. Its BPF link closes if the loader is terminated, but an already released child may continue and must be managed by the caller.
+- Timeout cleanup sends SIGKILL only to the direct child. It does not kill a process group, so descendants created by that child may outlive the timeout.
 
 ## Summary
 

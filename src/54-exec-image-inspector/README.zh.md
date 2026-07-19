@@ -1,10 +1,10 @@
-# eBPF 教程：在 `exec` 后检查真正安装的可执行镜像
+# eBPF 教程：在 exec 后检查真正安装的可执行镜像
 
 启动器收到一个命令，内核最后安装的却可能是另一个可执行镜像。shell 脚本会启动解释器，包装程序可能选择不同的二进制文件，运行时还可能连续调用多次 `exec`。排查问题时，原始命令字符串不一定能回答最后究竟运行了什么。本课实现 `exec_image_inspector`，让它在 `bprm_committed_creds` LSM hook 上观察加载器创建的一个子进程。工具会报告已经安装的可执行文件路径，并解析 ELF class、字节序、类型和机器架构。这个例子还会展示为什么可能触发缺页的文件读取不能留在不可睡眠的 hook 中。
 
-解决办法是 BPF task work。LSM hook 记录 exec 后，为当前 task 安排一个回调。回调进入可睡眠上下文，重新取得已经安装的可执行文件，通过 file-backed dynptr 读取内容，再把结果发送到用户态。读完后，你将得到一条完整路径，把小规模文件检查安全地移过这条上下文边界。
+解决办法是 BPF task work。LSM hook 记录 exec 后，为当前 task 安排一个回调。回调进入可睡眠上下文，重新取得已经安装的可执行文件，通过 file-backed dynptr 读取内容，再把结果发送到用户态。学完本课后，你将掌握一套可复用的做法：把小规模文件检查从不可睡眠的 hook 转移到可睡眠的 task-work 回调。
 
-完整实现位于 [`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c)、[`exec_image_inspector.c`](./exec_image_inspector.c) 和 [`tests/test_exec_image_inspector.py`](./tests/test_exec_image_inspector.py)。
+完整实现位于 [`exec_image_inspector.h`](./exec_image_inspector.h)、[`bpf_experimental.h`](./bpf_experimental.h)、[`exec_image_inspector.bpf.c`](./exec_image_inspector.bpf.c) 和 [`exec_image_inspector.c`](./exec_image_inspector.c)。本课的 [`Makefile`](./Makefile)、[exec 测试程序](./tests/exec_fixture.c)和[集成测试](./tests/test_exec_image_inspector.py)提供了构建流程与可复现的冷页用例。
 
 ## 为什么不能在 LSM hook 中读取任意文件页
 
@@ -18,7 +18,7 @@
 
 ## 一次 exec 如何变成用户态事件
 
-完整路径包含六步：
+完整流程分为六步：
 
 1. 用户态 fork 目标命令，但子进程在调用 `execvp` 前等待 pipe。
 2. 加载器把子进程 TGID 和可选的 probe offset 写入 BPF 只读数据，加载 skeleton，挂载 LSM 程序，并创建 ring-buffer reader。
@@ -879,7 +879,7 @@ cleanup:
 
 `inspect_executable` 在该 task 的可睡眠上下文中执行。它记录回调延迟，用于诊断，然后填充 PID、TGID、进程名与直接探测结果，并调用 `bpf_get_task_exe_file()` 取得 task 已安装的镜像。
 
-这个 kfunc 返回带引用的 `struct file`，每次成功获取都必须用 `bpf_put_file()` 释放。回调先通过 `bpf_path_d_path` 解析路径，再用 `bpf_dynptr_from_file` 创建 dynptr。file dynptr 也持有内部状态，因此所有创建路径都要调用 `bpf_dynptr_file_discard()`，包括这个 API 规定的 helper 失败路径。
+这个 kfunc 返回带引用的 `struct file`，每次成功获取都必须用 `bpf_put_file()` 释放。回调先通过 `bpf_path_d_path` 解析路径，再用 `bpf_dynptr_from_file` 创建 dynptr。file dynptr 也持有内部状态，因此所有创建分支都要调用 `bpf_dynptr_file_discard()`，包括这个 API 规定的 helper 失败分支。
 
 回调只读取 64 字节 ELF header 和可选的 8 字节 marker，不会扫描整个可执行文件。header 读取成功后，程序先检查四个 ELF magic byte，再解析 `EI_CLASS`、`EI_DATA`、`e_type` 与 `e_machine`。`read_elf_u16` 同时处理大端和小端的 16 位字段。
 
@@ -895,7 +895,7 @@ cleanup:
 
 命令超过 `--timeout-ms` 后，`reap_timed_out_child` 发送 SIGKILL 并等待其退出。正常完成与所有已处理错误路径都会释放 ring buffer、销毁 skeleton，并由此卸载 LSM link。工具不会创建 bpffs pin 或持久 link。
 
-命令自身的退出状态也不会丢失。收到 exec event 不会把失败命令变成成功，命令成功也不会掩盖检查错误。加载器没有安装外部 SIGINT 或 SIGTERM handler，因此外部信号终止加载器后，已经释放的子进程可能继续运行。
+命令自身的退出状态也不会丢失。收到 exec event 不会把失败命令变成成功。每条事件中的 `header_error`、`path_error` 等字段会保留检查错误，但这些字段本身不会让一个成功命令对应的加载器返回非零状态。加载器没有安装外部 SIGINT 或 SIGTERM handler，因此外部信号终止加载器后，已经释放的子进程可能继续运行。
 
 ## 编译和运行
 
@@ -907,14 +907,14 @@ make -C src/54-exec-image-inspector clean
 make -C src/54-exec-image-inspector -j2
 ```
 
-集成测试只能在 Linux 6.19 或更新版本的一次性客户机中运行。`make test` 与直接运行工具都会挂载 BPF LSM 程序，不能把它们当作宿主机验证命令。
+集成测试只能在 Linux 6.19 或更新版本的一次性客户机中运行。执行前，请先满足下文的 [运行要求](#运行要求)，并确认活动 LSM 列表中包含 `bpf`。`make test` 与直接运行工具都会挂载 BPF LSM 程序，不能把它们当作宿主机验证命令。
 
 ```bash
 cd src/54-exec-image-inspector
 sudo make test
 ```
 
-仓库 CI 只编译本课，不加载程序。运行时证据来自复用的 `bpf-benchmark` KVM 客户机。内核源码 worktree 保持干净，客户机运行 `7.0.0-rc2+`，源码 commit 为 `a03114efd0720dff230388f7e160e427e54ea31b`。内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，config SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
+仓库 CI 只编译本课，不加载程序。运行时证据来自复用的 `bpf-benchmark` KVM 客户机，客户机运行 `7.0.0-rc2+`。确切的内核来源记录在下文的运行要求中。
 
 最终运行得到下面的输出：
 
@@ -967,9 +967,11 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 | 权限 | root | 加载并挂载 BPF LSM 程序 |
 | 已测试架构 | x86_64 | 确定性 ELF 断言当前按 x86-64 编写 |
 | 已测试工具链 | 仓库固定的 bpftool `3be8ac3` 与嵌套 libbpf `fc064eb` | 构建本课使用的 BPF object 与生成 skeleton |
-| 硬件 | 无特殊要求 | Fixture 不依赖加速器或特殊设备 |
+| 硬件 | 无特殊要求 | 测试程序不依赖加速器或特殊设备 |
 
-局部 [`bpf_experimental.h`](./bpf_experimental.h) 只是对仓库旧生成 `vmlinux.h` 与 UAPI header 的临时兼容。vendored header 包含这些 kfunc 声明后，就可以移除这个文件。
+采集这次输出时，内核源码工作树在 commit `a03114efd0720dff230388f7e160e427e54ea31b` 上保持干净。内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，配置文件 SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。
+
+局部 [`bpf_experimental.h`](./bpf_experimental.h) 只是对仓库中较早生成的 `vmlinux.h` 与 UAPI 头文件的临时兼容。仓库集成的头文件包含这些 kfunc 声明后，就可以移除这个文件。
 
 在客户机中执行下面的命令，检查活动 LSM 列表：
 
@@ -984,18 +986,20 @@ cat /sys/kernel/security/lsm
 - 加载器只观察自己创建的一个子进程，不会监控系统中的所有 exec。
 - 同一子进程再次 exec 时，工具会输出另一条 `EXEC`。回收子进程后还会取尽已排队事件，最后一条表示退出前最后观察到的镜像。
 - 工具报告可执行镜像和少量 ELF header 信息，不验证签名，不判断恶意软件，也不执行 allowlist 策略。
+- 事件最多保存 256 字节的路径和 16 字节的命令名。更长的路径可能设置 `path_error`，命令名也可能被截断。
 - 对于脚本，已安装镜像可能是解释器，而不是脚本路径。输出回答 task 安装了哪个镜像，不包含启动链消费的每个输入文件。
 - 冷页 fixture 用于展示延迟文件读取的意义，不能证明所有直接文件读取都会失败。
 - 单个 map slot 适用于单子进程 CLI。并发服务需要 per-task 状态、准入上限，以及 task 未执行回调时的恢复策略。
 - KVM 运行只做功能测试，回调延迟不能作为 benchmark 或开销估算。
 - 运行行为只在 x86_64 上验证。其他架构需要自己的 fixture 断言与 KVM 覆盖。
 - 加载器没有外部 SIGINT 或 SIGTERM handler。加载器被终止时 BPF link 会关闭，但已经释放的子进程可能继续运行，需要由调用方管理。
+- 超时清理只向直接子进程发送 SIGKILL，不会终止整个进程组，因此该子进程创建的后代可能在超时后继续运行。
 
 ## 总结
 
 这个例子把 exec 工具经常混在一起的两个时刻分开了。LSM hook 能识别已经提交的 exec，却不能 fault 任意文件页。BPF task work 则提供可睡眠回调，让程序重新取得并检查已经安装的镜像。阻塞子进程握手、有界命令运行、最终 ring-buffer drain 和显式资源释放把这些内核功能组合成了可复现的小工具，同时没有把它包装成完整审计服务。
 
-> 如果你想继续深入学习 eBPF，可以查看我们的[教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
+> 如果你想继续深入学习 eBPF，可以查看我们的 [教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
 
 ## 参考资料
 
