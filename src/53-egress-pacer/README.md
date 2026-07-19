@@ -14,6 +14,10 @@ An ordinary TC BPF program leaves queue ownership with the existing qdisc, so it
 
 Follow one packet and the design becomes easier to see. User space sets the rate and queue limit, loads `bpf_pacer`, and attaches it at `TC_H_ROOT`. On arrival, `enqueue` puts the skb into a BPF-managed node and computes the earliest time it may leave. When `dequeue` runs, it returns an eligible skb or sets the watchdog so the kernel comes back later. User space eventually removes the qdisc, and `reset` drains the remaining queue. Every piece of code below belongs to this path.
 
+![egress_pacer data flow: configuration, attachment, enqueue, BPF FIFO, dequeue, transmit path, policy-drop branch, watchdog loop, and reset lifecycle](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/53-egress-pacer/egress-pacer-flow.png)
+
+The solid path starts with setup, then follows one skb from enqueue through the BPF FIFO and dequeue back to the transmit path. A full queue or an empty node-allocation result sends the packet to the policy-drop branch. An early dequeue pushes the node back to the front, schedules the watchdog, returns NULL, and loops back when the watchdog wakes the qdisc. The dashed lifecycle path removes the root qdisc and lets reset release queued skbs and clear qlen and backlog.
+
 ## Start the Pacer with Shared Data
 
 The shared data contract comes before the callbacks. BPF manages the queue, while user space installs it and reports the result. Both sides first agree on the exact layout of the counters.

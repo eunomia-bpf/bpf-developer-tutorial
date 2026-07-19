@@ -14,6 +14,10 @@ Linux 6.16 把这一层也交给了 BPF。你可以用 `struct_ops` 写一个真
 
 先跟着一个报文走一遍。用户态设置速率和队列上限，加载 `bpf_pacer`，再把它挂到 `TC_H_ROOT`。报文到达时，`enqueue` 把 skb 装进 BPF 管理的节点，并算出它最早可以离开的时间。轮到 `dequeue` 时，到点的报文交还 skb；早到的报文设置 watchdog，等内核稍后再来。最后，用户态移除 qdisc，`reset` 收走仍在队列里的报文。后面的代码都围绕这条路径展开。
 
+![egress_pacer 数据流：从配置、挂载、入队、BPF FIFO、出队到发送路径，包含 policy-drop 分支、watchdog 循环和 reset 生命周期](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/53-egress-pacer/egress-pacer-flow.png)
+
+图中实线从配置和挂载开始，随后跟踪一个 skb 从 enqueue 进入 BPF FIFO，再由 dequeue 交还给发送路径；队列已满或节点分配返回空时走 policy-drop 分支。早到的 dequeue 把节点推回队首，安排 watchdog 并返回 NULL，等 watchdog 唤醒后重新进入 dequeue。虚线表示生命周期路径：移除 root qdisc 后 reset 释放队列中的 skb 并清零 qlen 和 backlog。
+
 ## 从共享数据开始搭起 Pacer
 
 共享数据契约在回调之前。BPF 程序负责排队，用户态负责安装和汇报结果，两边先约定相同的统计数据布局。
