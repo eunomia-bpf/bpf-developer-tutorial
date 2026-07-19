@@ -735,7 +735,7 @@ refusing to replace the existing root qdisc on IFACE
 
 This lesson implements one aggregate FIFO. It has no fairness, per-flow isolation, per-cgroup policy, classes, priorities, ECN, burst budget, or congestion-control integration. The queue limit counts packets, and rate accounting uses `qdisc_skb_cb(skb)->pkt_len`. The first packet after an idle period may depart immediately.
 
-Rate and queue limit stay fixed for one invocation. Global queue and BSS state also limit one loader process to one root qdisc instance. The loader stops whenever exclusive creation reports `-EEXIST`; it does not inspect, preserve, stack, or restore the conflicting qdisc.
+Rate and queue limit stay fixed for one invocation. Global queue and BSS state also limit one loader process to one root qdisc instance. The loader stops whenever exclusive creation reports `-EEXIST`. It does not inspect, preserve, stack, or restore the conflicting qdisc.
 
 The CLI is duration bounded. It is not a daemon, controller, metrics exporter, or persistent policy manager. Duration-based exit and SIGTERM cleanup were tested. SIGINT uses the same handler but was not tested separately. Cleanup is not guaranteed after SIGKILL or another abnormal process failure, and host-crash and reboot behavior were not tested.
 
