@@ -2,9 +2,9 @@
 
 A lab service sends a sudden burst through a veth interface. The queue grows, latency jumps, and packets disappear without useful accounting. You want to slow that burst to a known rate, keep the queue bounded, and see whether packets left the interface or were dropped.
 
-This tutorial builds `egress_pacer`, a small BPF qdisc for that job. It registers a FIFO qdisc with Linux 6.16 BPF `struct_ops`, assigns each packet an eligible departure time, and reports enqueue, dequeue, byte, and drop counters when the run ends. The loader also refuses to overwrite an existing root qdisc.
+This tutorial builds `egress_pacer`, a small BPF qdisc for that job. It registers a FIFO qdisc with Linux 6.16 BPF `struct_ops`, assigns each packet an eligible departure time, and reports enqueue, dequeue, byte, and drop counters when the run ends. The loader uses exclusive creation and refuses to continue when that operation returns `-EEXIST`, including the tested conflict with a `pfifo` root qdisc.
 
-The example targets a controlled veth, TAP, or IFB interface. It is not a general-purpose scheduler for a production NIC. By the end, you will understand how a BPF qdisc owns an skb, how its watchdog avoids busy waiting, and how user space installs and removes the qdisc safely enough for a bounded lab run.
+The example targets a controlled veth, TAP, or IFB interface. This example is not a general-purpose scheduler for a production NIC. By the end, you will understand how a BPF qdisc owns an skb, how its watchdog avoids busy waiting, and how user space handles normal removal and abnormal-exit recovery in a bounded lab run.
 
 The complete lesson is available in the [`53-egress-pacer` source directory](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer).
 
@@ -14,7 +14,7 @@ Linux already sends outgoing packets through a queueing discipline, or qdisc. An
 
 This example takes a different path. Its BPF `struct_ops` object implements `struct Qdisc_ops` and registers `bpf_pacer` as the root qdisc itself. The BPF program decides whether a packet enters the queue, when the head packet may leave, and what happens to queued skbs during reset.
 
-That control comes with a lifecycle cost. Replacing a root qdisc can change live traffic, so the loader treats any existing root qdisc as a conflict. It runs for a fixed duration, removes the qdisc after normal completion or a handled SIGINT or SIGTERM, and leaves an explicit recovery command for abnormal termination. An uncatchable SIGKILL can leave the qdisc installed.
+That control comes with a lifecycle cost. Replacing a root qdisc can change live traffic, so the loader requests exclusive creation and stops when the request returns `-EEXIST`. It runs for a fixed duration, removes the qdisc after normal completion or a handled SIGINT or SIGTERM, and leaves an explicit recovery command for abnormal termination. An uncatchable SIGKILL can leave the qdisc installed.
 
 ## Follow one packet through the tool
 
@@ -641,17 +641,17 @@ The BSS `pacer_stats` fields have the following meanings:
 
 ## User space owns the qdisc lifecycle
 
-The loader sets `skel->rodata->rate_kbps` and `skel->rodata->queue_limit` before the verifier loads the BPF object. Attaching the skeleton registers the `struct_ops` implementation. `bpf_tc_hook_create` then asks libbpf to create `bpf_pacer` at `BPF_TC_QDISC` and `TC_H_ROOT` on the selected ifindex.
+The loader sets `skel->rodata->rate_kbps` and `skel->rodata->queue_limit` before calling `egress_pacer_bpf__load()`. The kernel verifier checks the programs during that load. Attaching the skeleton registers the `struct_ops` implementation. `bpf_tc_hook_create` then asks libbpf to create `bpf_pacer` at `BPF_TC_QDISC` and `TC_H_ROOT` on the selected ifindex.
 
-An existing root qdisc makes that create call return `-EEXIST`. The loader prints a refusal instead of inspecting, stacking, replacing, saving, or restoring the existing qdisc. This conservative rule is why the example belongs on an interface you created for the test.
+When exclusive creation returns `-EEXIST`, the loader prints a refusal instead of inspecting, stacking, replacing, saving, or restoring the conflicting qdisc. The fixture verifies this behavior with an explicitly installed `pfifo`. This conservative rule is why the example belongs on an interface you created for the test.
 
 After printing `READY`, the loader sleeps in 100 ms intervals until the duration expires or a signal handler sets `exiting`. SIGINT and SIGTERM share that handler. The integration fixture exercises duration-based exit and SIGTERM, but it does not run a separate SIGINT case.
 
-Cleanup calls `bpf_tc_hook_destroy` before reading `skel->bss->stats`. Destroying the qdisc invokes reset for any remaining queue. The loader prints `SUMMARY` only after those cleanup drops have been counted, then destroys the skeleton and unregisters the `struct_ops` link.
+Cleanup calls `bpf_tc_hook_destroy` before reading `skel->bss->stats`. On successful removal, destroying the qdisc invokes reset for any remaining queue, so `SUMMARY` includes those cleanup drops. If removal fails, the loader reports the error, prints the BSS counters available at that point, returns failure, and leaves the operator to inspect and recover the interface. It then destroys the skeleton and unregisters the `struct_ops` link.
 
 ## Compilation and execution
 
-Build the BPF object and loader without root:
+Build the BPF object and loader with the lesson's [`Makefile`](./Makefile), without root:
 
 ```bash
 cd src/53-egress-pacer
@@ -659,13 +659,13 @@ make clean
 make -j2
 ```
 
-The safest first run is the integration fixture. It creates and deletes a disposable `epac_tx`/`epac_rx` veth pair, so this command requires root:
+The safest first run is the [integration fixture](./tests/test_egress_pacer.py). It creates and deletes a disposable `epac_tx`/`epac_rx` veth pair, so this command requires root:
 
 ```bash
 sudo python3 tests/test_egress_pacer.py ./egress_pacer
 ```
 
-The final test binary was run in the reused `bpf-benchmark` KVM guest with a clean `7.0.0-rc2+` kernel from source commit `a03114efd0720dff230388f7e160e427e54ea31b`. The captured output was:
+After a clean host build, the final test binary was run in the reused `bpf-benchmark` KVM guest with a clean `7.0.0-rc2+` kernel from source commit `a03114efd0720dff230388f7e160e427e54ea31b`. The captured output was:
 
 ```console
 READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
@@ -674,7 +674,7 @@ TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64
 PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
 ```
 
-The captured run is a functional smoke test, not a throughput or pacing-precision benchmark. The fixture bursts 40 raw 1024-byte EtherType `0x88B5` frames into a 64 Kbit/s pacer with an 8-packet queue. In this run, 31 attempts were counted as `policy_dropped` when the queue filled, while 9 packets were paced and received over 1024 ms. These numbers describe this fixture only.
+The captured run is a functional smoke test, not a throughput or pacing-precision benchmark. The fixture bursts 40 raw 1024-byte EtherType `0x88B5` frames into a 64 Kbit/s pacer with an 8-packet queue. In this run, 31 attempts were counted as `policy_dropped` when the queue filled. The timestamps of the 9 received packets spanned 1024 ms. These numbers describe this fixture only.
 
 Before that burst, the fixture installs a conflicting `pfifo` and confirms that the loader refuses to replace it. A second burst leaves packets queued before SIGTERM. That run requires a nonzero `cleanup_dropped` value and checks `enqueued = dequeued + cleanup_dropped`.
 
@@ -706,14 +706,14 @@ Usage: ./egress_pacer --interface IFACE [--rate-kbps KBPS] [--queue-limit PACKET
 | `--duration` | 1 to 86400 seconds | 10 |
 | `--verbose` | Flag | Off |
 
-When the qdisc is active, the loader prints `READY`. It prints the final counters in `SUMMARY` after removal. The following block shows only the output shape. Its ellipses are placeholders, not captured values.
+When the qdisc is active, the loader prints `READY`. After a successful removal, `SUMMARY` contains the final counters, including reset-time cleanup drops. A removal failure instead produces an error and the BSS counters available at that point. The following block shows only the success-path output shape. Its ellipses are placeholders, not captured values.
 
 ```text
 READY interface=veth-service rate_kbps=64000 queue_limit=256 duration=30
 SUMMARY enqueued=... dequeued=... policy_dropped=... cleanup_dropped=... bytes_dequeued=... max_qlen=...
 ```
 
-If the interface already has a root qdisc, the loader exits with this diagnostic:
+If exclusive creation returns `-EEXIST`, as it does for the fixture's conflicting `pfifo`, the loader exits with this diagnostic:
 
 ```text
 refusing to replace the existing root qdisc on IFACE
@@ -722,7 +722,7 @@ refusing to replace the existing root qdisc on IFACE
 ## Requirements
 
 - Linux 6.16 or newer. [The BPF qdisc merge commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb) introduced the required kernel support.
-- libbpf 1.6.0 or newer for the BPF qdisc TC hook. The repository vendors libbpf and bpftool under `src/third_party`, and the relevant [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df) documents the API.
+- libbpf 1.6.0 or newer for the BPF qdisc TC hook. The repository vendors libbpf and bpftool under `src/third_party`. The relevant [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df) and [libbpf 1.6.0 release](https://github.com/libbpf/libbpf/releases/tag/v1.6.0) document the API and release boundary.
 - An x86_64 system for the tested configuration.
 - Root privileges to load BPF and create or destroy the qdisc.
 - Root privileges, Python 3, raw packet sockets, and `iproute2` tools `ip` and `tc` for the integration fixture.
@@ -735,7 +735,7 @@ refusing to replace the existing root qdisc on IFACE
 
 This lesson implements one aggregate FIFO. It has no fairness, per-flow isolation, per-cgroup policy, classes, priorities, ECN, burst budget, or congestion-control integration. The queue limit counts packets, and rate accounting uses `qdisc_skb_cb(skb)->pkt_len`. The first packet after an idle period may depart immediately.
 
-Rate and queue limit stay fixed for one invocation. Global queue and BSS state also limit one loader process to one root qdisc instance. The loader refuses every existing root qdisc without inspecting, preserving, stacking, or restoring it.
+Rate and queue limit stay fixed for one invocation. Global queue and BSS state also limit one loader process to one root qdisc instance. The loader stops whenever exclusive creation reports `-EEXIST`; it does not inspect, preserve, stack, or restore the conflicting qdisc.
 
 The CLI is duration bounded. It is not a daemon, controller, metrics exporter, or persistent policy manager. Duration-based exit and SIGTERM cleanup were tested. SIGINT uses the same handler but was not tested separately. Cleanup is not guaranteed after SIGKILL or another abnormal process failure, and host-crash and reboot behavior were not tested.
 
@@ -766,6 +766,7 @@ This example turns the Linux 6.16 BPF qdisc interface into a bounded, short-live
 - [Linux BPF qdisc merge commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb)
 - [Qdisc watchdog follow-up commit](https://github.com/torvalds/linux/commit/7a2dafda950b78611dc441c83d105dfdc7082681)
 - [libbpf qdisc TC hook support](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df)
+- [libbpf 1.6.0 release](https://github.com/libbpf/libbpf/releases/tag/v1.6.0)
 - [Upstream BPF FIFO qdisc selftest](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/bpf_qdisc_fifo.c)
 - [Upstream BPF qdisc test runner](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/bpf_qdisc.c)
 - [libbpf 1.7.0 release](https://github.com/libbpf/libbpf/releases/tag/v1.7.0)

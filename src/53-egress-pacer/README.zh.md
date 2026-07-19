@@ -1,6 +1,6 @@
 # eBPF 教程：用 BPF Qdisc 控制出口流量
 
-实验服务突然向 veth 接口发送一阵流量。队列随之增长，延迟开始抖动，部分报文消失了，却没有留下清晰的丢包统计。遇到这种情况，我们需要把突发限制在已知速率内，给队列设定上限，还要知道报文究竟已经发出，还是在队列中被丢弃。本课实现的 `egress_pacer` 就是这样一个小工具。它使用 Linux 6.16 引入的 BPF `struct_ops` 注册一个 FIFO qdisc，为每个报文计算允许发送的时间，并在运行结束时报告入队、出队、字节数和丢包统计。加载器发现已有 root qdisc 时会直接拒绝安装，不会覆盖现有配置。
+实验服务突然向 veth 接口发送一阵流量。队列随之增长，延迟开始抖动，部分报文消失了，却没有留下清晰的丢包统计。遇到这种情况，我们需要把突发限制在已知速率内，给队列设定上限，还要知道报文究竟已经发出，还是在队列中被丢弃。本课实现的 `egress_pacer` 就是这样一个小工具。它使用 Linux 6.16 引入的 BPF `struct_ops` 注册一个 FIFO qdisc，为每个报文计算允许发送的时间，并在运行结束时报告入队、出队、字节数和丢包统计。加载器采用独占创建；如果操作返回 `-EEXIST`，它就拒绝继续。测试中安装冲突 `pfifo` 的场景会触发这条路径。
 
 这个示例面向受控的 veth、TAP 或 IFB 接口，不是通用物理网卡上的生产调度器。读完后，你会理解 BPF qdisc 如何持有 skb、qdisc watchdog 如何避免忙等待，以及用户态如何在一个有时限的实验中安装并移除 qdisc。
 
@@ -8,11 +8,11 @@
 
 ## 为什么要在 qdisc 中限速
 
-Linux 会让出口报文经过队列规则，也就是 qdisc。普通 TC classifier 可以检查报文并返回处理动作，但报文队列仍由另一个内核 qdisc 管理。[TC classifier 教程](../20-tc/README.zh.md)采用的就是这种方式。
+Linux 会让出口报文经过队列规则，也就是 qdisc。普通 TC classifier 可以检查报文并返回处理动作，但报文队列仍由另一个内核 qdisc 管理。[TC classifier 教程](../20-tc/README.zh.md) 采用的就是这种方式。
 
 本例走的是另一条路径。BPF `struct_ops` 对象直接实现 `struct Qdisc_ops`，把 `bpf_pacer` 注册成 root qdisc。报文能否入队、队首何时可以发送，以及 reset 时如何释放残留 skb，都由这个 BPF 程序决定。
 
-这种控制能力也带来了生命周期风险。替换 root qdisc 会改变实时流量，所以加载器把任何已有 root qdisc 都视为冲突。程序只运行指定时长，并在正常结束或处理 SIGINT、SIGTERM 后移除 qdisc。SIGKILL 无法捕获，可能留下已经安装的 qdisc，因此文末还给出了显式恢复方法。
+这种控制能力也带来了生命周期风险。替换 root qdisc 会改变实时流量，所以加载器请求独占创建，并在操作返回 `-EEXIST` 时停止。程序只运行指定时长，并在正常结束或处理 SIGINT、SIGTERM 后移除 qdisc。SIGKILL 无法捕获，可能留下已经安装的 qdisc，因此文末还给出了显式恢复方法。
 
 ## 一个报文如何经过整个工具
 
@@ -21,7 +21,7 @@ Linux 会让出口报文经过队列规则，也就是 qdisc。普通 TC classif
 1. 加载器解析受控接口，把速率和报文上限写入 BPF 只读数据，然后加载 BPF object。
 2. 挂载 `struct_ops` map 后，内核注册 `bpf_pacer`。加载器再通过 libbpf 的 qdisc TC hook，把它创建在 `TC_H_ROOT`。
 3. 流量到来前，qdisc 的 `init` 回调把 `queue_limit` 写入 `sch->limit`。
-4. `egress_pacer_enqueue` 在队列达到上限时丢包，否则把 skb 移交给一个 BPF queue node，并根据报文长度和配置速率计算允许发送时间。
+4. `egress_pacer_enqueue` 在队列达到上限时丢包，否则把 skb 移交给一个 BPF 队列节点，并根据报文长度和配置速率计算允许发送时间。
 5. `egress_pacer_dequeue` 返回已经到达发送时间的 skb。如果队首报文还不能发送，回调会把它放回去，并让 qdisc watchdog 在正确时间重试。
 6. 用户态移除 qdisc 时，`egress_pacer_reset` 释放仍在队列中的 skb。加载器随后读取最终 BSS 计数器并打印 `SUMMARY`。
 
@@ -50,7 +50,7 @@ struct pacer_stats {
 ```
 <!-- END FULL SOURCE -->
 
-仓库当前生成的 header 早于部分 BPF qdisc 定义。下面这个本地兼容头文件补齐了所需声明，不会修改仓库全局 vendored header。
+仓库中较早生成的头文件缺少部分 BPF qdisc 定义。下面这个本地兼容头文件补齐了所需声明，不会修改仓库全局集成的头文件。
 
 <!-- BEGIN FULL SOURCE: src/53-egress-pacer/bpf_experimental.h -->
 ```c
@@ -89,7 +89,7 @@ bpf_list_pop_front(struct bpf_list_head *head) __ksym;
 ```
 <!-- END FULL SOURCE -->
 
-内核态程序实现 qdisc operation、报文队列、限速时钟和统计计数。
+内核态程序实现 qdisc 操作、报文队列、限速时钟和统计计数。
 
 <!-- BEGIN FULL SOURCE: src/53-egress-pacer/egress_pacer.bpf.c -->
 ```c
@@ -600,7 +600,7 @@ cleanup:
 
 `egress_pacer_enqueue` 先读取 `qdisc_skb_cb(skb)->pkt_len`。队列上限以报文数计算，速率则使用 qdisc 记录的报文长度。队列已满时，程序直接进入丢弃路径。`bpf_obj_new` 分配失败也会走同一路径，因此两种情况都会累加 `policy_dropped`。
 
-报文被接受后，`bpf_obj_new` 创建一个 `packet_node`，`bpf_kptr_xchg` 再把 skb 转移到节点的 `__kptr` 字段。节点同时保存报文长度和 `eligible_ns` 时间戳。BPF list 与 skb 的所有权一起移动，后续 reset 才能可靠释放这两类对象。
+报文被接受后，`bpf_obj_new` 创建一个 `packet_node`，`bpf_kptr_xchg` 再把 skb 转移到节点的 `__kptr` 字段。节点同时保存报文长度和 `eligible_ns` 时间戳。BPF 链表节点与 skb 的所有权一起移动，后续 reset 才能可靠释放这两类对象。
 
 限速间隔就是该报文在配置速率下的序列化时间：
 
@@ -616,13 +616,13 @@ next_departure_ns = eligible_ns + interval_ns
 
 ## 出队时如何避免忙等待
 
-`egress_pacer_dequeue` 取出第一个节点，并把它的时间戳与 `bpf_ktime_get_ns()` 比较。时间已经到达时，另一次 `bpf_kptr_xchg` 把 skb 从 BPF node 中移出。回调减少 qlen 和 backlog，释放空节点，更新 qdisc 字节统计，再累加 `dequeued` 与 `bytes_dequeued`。
+`egress_pacer_dequeue` 取出第一个节点，并把它的时间戳与 `bpf_ktime_get_ns()` 比较。时间已经到达时，另一次 `bpf_kptr_xchg` 把 skb 从 BPF 节点中移出。回调减少 qlen 和 backlog，释放空节点，更新 qdisc 字节统计，再累加 `dequeued` 与 `bytes_dequeued`。
 
-如果报文还不能发送，回调会把节点放回队首，调用 `bpf_qdisc_watchdog_schedule(sch, expire, 0)`，然后返回 `NULL`。qdisc core 会在 `eligible_ns` 到来时重试，BPF 程序不需要循环等待时间流逝。
+如果报文还不能发送，回调会把节点放回队首，调用 `bpf_qdisc_watchdog_schedule(sch, expire, 0)`，然后返回 `NULL`。qdisc 核心会在 `eligible_ns` 到来时重试，BPF 程序不需要循环等待时间流逝。
 
 ## 为什么要单独记录 reset 清理丢包
 
-移除 qdisc 时，队列中可能仍有报文。`egress_pacer_reset` 按当前 qlen 运行 `bpf_for`，依次移除节点，用 `bpf_kfree_skb` 释放 skb，再释放 node。这个阶段释放的报文累加到 `cleanup_dropped`，不会混入 `policy_dropped`。
+移除 qdisc 时，队列中可能仍有报文。`egress_pacer_reset` 按当前 qlen 运行 `bpf_for`，依次移除节点，用 `bpf_kfree_skb` 释放 skb，再释放节点。这个阶段释放的报文累加到 `cleanup_dropped`，不会混入 `policy_dropped`。
 
 两个字段回答的是不同问题。`policy_dropped` 表示 pacer 运行期间的准入失败，`cleanup_dropped` 表示带着 backlog 移除 qdisc 时丢弃的报文。reset 最后还会清零 `next_departure_ns`、qlen 和 backlog。
 
@@ -632,24 +632,24 @@ next_departure_ns = eligible_ns + interval_ns
 | --- | --- |
 | `enqueued` | 成功进入 FIFO 的报文数 |
 | `dequeued` | 已返回给发送路径的报文数 |
-| `policy_dropped` | 队列达到上限或 node 分配失败时拒绝的报文数 |
+| `policy_dropped` | 队列达到上限或节点分配失败时拒绝的报文数 |
 | `cleanup_dropped` | qdisc reset 时排空的报文数 |
 | `bytes_dequeued` | dequeue 返回的 qdisc 报文总字节数 |
 | `max_qlen` | FIFO 的报文占用峰值 |
 
 ## 用户态如何管理 qdisc 生命周期
 
-验证器加载 BPF object 之前，加载器会设置 `skel->rodata->rate_kbps` 与 `skel->rodata->queue_limit`。挂载 skeleton 会注册 `struct_ops` 实现，随后 `bpf_tc_hook_create` 在指定 ifindex 的 `BPF_TC_QDISC`、`TC_H_ROOT` 位置创建 `bpf_pacer`。
+调用 `egress_pacer_bpf__load()` 之前，加载器会设置 `skel->rodata->rate_kbps` 与 `skel->rodata->queue_limit`。内核验证器在加载期间检查程序。挂载 skeleton 会注册 `struct_ops` 实现，随后 `bpf_tc_hook_create` 在指定 ifindex 的 `BPF_TC_QDISC`、`TC_H_ROOT` 位置创建 `bpf_pacer`。
 
-已有 root qdisc 会让创建调用返回 `-EEXIST`。加载器不会检查、堆叠、替换、保存或恢复现有 qdisc，只会输出拒绝信息。因此，手动运行时必须选择自己创建的测试接口。
+独占创建返回 `-EEXIST` 时，加载器不会检查、堆叠、替换、保存或恢复冲突的 qdisc，只会输出拒绝信息。测试程序通过预先安装 `pfifo` 验证了这条路径。因此，手动运行时必须选择自己创建的测试接口。
 
-工具打印 `READY` 后，以 100 ms 为间隔休眠，直到持续时间结束或信号处理器设置 `exiting`。SIGINT 和 SIGTERM 共用这个 handler。集成测试覆盖按时长退出与 SIGTERM，没有另外执行一遍 SIGINT。
+工具打印 `READY` 后，以 100 ms 为间隔休眠，直到持续时间结束或信号处理函数设置 `exiting`。SIGINT 和 SIGTERM 共用这个处理函数。集成测试覆盖按时长退出与 SIGTERM，没有另外执行一遍 SIGINT。
 
-清理流程先调用 `bpf_tc_hook_destroy`，再读取 `skel->bss->stats`。销毁 qdisc 会让 reset 处理残留队列，因此 `SUMMARY` 中已经包含清理阶段的丢包。最后，加载器销毁 skeleton，并注销 `struct_ops` link。
+清理流程先调用 `bpf_tc_hook_destroy`，再读取 `skel->bss->stats`。成功移除 qdisc 时，reset 会处理残留队列，因此 `SUMMARY` 包含清理阶段的丢包。如果移除失败，加载器会报告错误，打印当时可读到的 BSS 统计并返回失败；操作者仍需检查并恢复接口。最后，加载器销毁 skeleton，并注销 `struct_ops` link。
 
 ## 编译和运行
 
-编译 BPF object 与加载器不需要 root：
+使用本课的 [`Makefile`](./Makefile) 编译 BPF object 与加载器，不需要 root：
 
 ```bash
 cd src/53-egress-pacer
@@ -657,13 +657,13 @@ make clean
 make -j2
 ```
 
-第一次运行最好使用集成测试。它会创建并删除一次性的 `epac_tx`/`epac_rx` veth 对，因此下面的命令需要 root：
+第一次运行最好使用[集成测试程序](./tests/test_egress_pacer.py)。它会创建并删除一次性的 `epac_tx`/`epac_rx` veth 对，因此下面的命令需要 root：
 
 ```bash
 sudo python3 tests/test_egress_pacer.py ./egress_pacer
 ```
 
-最终测试程序运行在复用的 `bpf-benchmark` KVM 客户机中。客户机使用干净的 `7.0.0-rc2+` 内核，源码 commit 为 `a03114efd0720dff230388f7e160e427e54ea31b`。实际采集到的输出如下：
+完成一次干净的宿主机编译后，最终测试程序运行在复用的 `bpf-benchmark` KVM 客户机中。客户机使用干净的 `7.0.0-rc2+` 内核，源码 commit 为 `a03114efd0720dff230388f7e160e427e54ea31b`。实际采集到的输出如下：
 
 ```console
 READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
@@ -672,11 +672,11 @@ TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64
 PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
 ```
 
-这是一项功能性冒烟测试，不是吞吐量或限速精度 benchmark。测试向速率 64 Kbit/s、队列上限 8 的 pacer 突发发送 40 个 1024 字节的 EtherType `0x88B5` 原始帧。在本次运行中，队列填满时有 31 次发送计入 `policy_dropped`，另外 9 个报文经过限速后在 1024 ms 内到达接收端。这些数字只描述当前 fixture。
+这是一项功能性冒烟测试，不是吞吐量或限速精度基准测试。测试向速率 64 Kbit/s、队列上限 8 的 pacer 突发发送 40 个 1024 字节的 EtherType `0x88B5` 原始帧。在本次运行中，队列填满时有 31 次发送计入 `policy_dropped`。接收到的 9 个报文，其首尾时间戳相隔 1024 ms。这些数字只描述当前测试程序。
 
-突发测试之前，fixture 会安装一个冲突的 `pfifo`，确认加载器不会将其替换。第二轮先制造 backlog，再发送 SIGTERM。测试要求 `cleanup_dropped` 非零，并验证 `enqueued = dequeued + cleanup_dropped`。
+突发测试之前，测试程序会安装一个冲突的 `pfifo`，确认加载器不会将其替换。第二轮先制造 backlog，再发送 SIGTERM。测试要求 `cleanup_dropped` 非零，并验证 `enqueued = dequeued + cleanup_dropped`。
 
-最后一轮发送 SIGKILL。在测试客户机上，这个不可捕获的信号留下了 `bpf_pacer`。fixture 随后使用 `tc` 显式删除 qdisc、验证接口恢复，并在 Python `finally` 块中删除 veth 对。
+最后一轮发送 SIGKILL。在测试客户机上，这个不可捕获的信号留下了 `bpf_pacer`。测试程序随后使用 `tc` 显式删除 qdisc、验证接口恢复，并在 Python `finally` 块中删除 veth 对。
 
 手动运行前，请先创建一个专用接口，并确认自己拥有它。先检查 root qdisc：
 
@@ -704,14 +704,14 @@ Usage: ./egress_pacer --interface IFACE [--rate-kbps KBPS] [--queue-limit PACKET
 | `--duration` | 1 到 86400 秒 | 10 |
 | `--verbose` | 开关 | 关闭 |
 
-加载器会在 qdisc 生效后打印 `READY`。移除 qdisc 后，最终统计出现在 `SUMMARY` 中。下面只展示输出格式，省略号是占位符，不是实测值。
+加载器会在 qdisc 生效后打印 `READY`。成功移除 qdisc 后，`SUMMARY` 包含最终统计和 reset 阶段的清理丢包。移除失败时，程序会输出错误以及当时可读到的 BSS 统计。下面只展示成功路径的输出格式，省略号是占位符，不是实测值。
 
 ```text
 READY interface=veth-service rate_kbps=64000 queue_limit=256 duration=30
 SUMMARY enqueued=... dequeued=... policy_dropped=... cleanup_dropped=... bytes_dequeued=... max_qlen=...
 ```
 
-接口已有 root qdisc 时，加载器退出并打印：
+独占创建返回 `-EEXIST` 时，例如测试程序安装冲突 `pfifo` 的场景，加载器会退出并打印：
 
 ```text
 refusing to replace the existing root qdisc on IFACE
@@ -719,11 +719,11 @@ refusing to replace the existing root qdisc on IFACE
 
 ## 运行要求
 
-- Linux 6.16 或更新版本。[BPF qdisc 合入 commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb)引入了所需内核支持。
-- libbpf 1.6.0 或更新版本，用于 BPF qdisc TC hook。仓库在 `src/third_party` 中集成了 libbpf 与 bpftool，相关 [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df)记录了这个 API。
+- Linux 6.16 或更新版本。[BPF qdisc 合入 commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb) 引入了所需内核支持。
+- libbpf 1.6.0 或更新版本，用于 BPF qdisc TC hook。仓库在 `src/third_party` 中集成了 libbpf 与 bpftool。相关 [libbpf commit](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df) 和 [libbpf 1.6.0 发布说明](https://github.com/libbpf/libbpf/releases/tag/v1.6.0) 记录了这个 API 及其版本边界。
 - 已测试的系统架构为 x86_64。
 - 加载 BPF、创建和销毁 qdisc 需要 root 权限。
-- 集成测试还需要 root、Python 3、原始报文 socket，以及 `iproute2` 提供的 `ip` 和 `tc`。
+- 集成测试还需要 root、Python 3、原始报文套接字，以及 `iproute2` 提供的 `ip` 和 `tc`。
 - 异常退出后的显式恢复需要 `tc` 命令。
 - 内核需要启用 BTF 与 BPF JIT。
 - 内核配置需要包含 `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_DEBUG_INFO_BTF=y`、`CONFIG_NET_SCHED=y` 和 `CONFIG_NET_SCH_BPF=y`。
@@ -731,13 +731,13 @@ refusing to replace the existing root qdisc on IFACE
 
 ## 适用边界与恢复方法
 
-本课只实现一个聚合 FIFO，没有公平调度、每流隔离、每 cgroup 策略、class、优先级、ECN、突发预算或拥塞控制集成。队列上限统计报文数，速率计算使用 `qdisc_skb_cb(skb)->pkt_len`。接口空闲后的第一个报文可以立即发出。
+本课只实现一个聚合 FIFO，没有公平调度、每流隔离、每 cgroup 策略、类别、优先级、ECN、突发预算或拥塞控制集成。队列上限统计报文数，速率计算使用 `qdisc_skb_cb(skb)->pkt_len`。接口空闲后的第一个报文可以立即发出。
 
-一次运行中的速率和队列上限保持固定。全局 queue 与 BSS 状态也意味着一个加载器进程只能管理一个 root qdisc instance。任何已有 root qdisc 都会被拒绝，加载器不会检查、保留、堆叠或恢复它。
+一次运行中的速率和队列上限保持固定。全局队列与 BSS 状态也意味着一个加载器进程只能管理一个 root qdisc 实例。独占创建返回 `-EEXIST` 时，加载器会停止；它不会检查、保留、堆叠或恢复冲突的 qdisc。
 
-这个 CLI 只运行指定时长，不是 daemon、controller、metrics exporter 或持久策略管理器。测试覆盖了按时长退出和 SIGTERM 清理。SIGINT 使用同一个 handler，但没有单独测试。SIGKILL 或其他异常终止后不保证完成清理，宿主机崩溃与重启后的行为也没有测试。
+这个命令行工具只运行指定时长，不是守护进程、控制器、指标导出器或持久策略管理器。测试覆盖了按时长退出和 SIGTERM 清理。SIGINT 使用同一个信号处理函数，但没有单独测试。SIGKILL 或其他异常终止后不保证完成清理，宿主机崩溃与重启后的行为也没有测试。
 
-这项 KVM fixture 只验证功能，不覆盖真实网卡上的吞吐量、限速精度、驱动或硬件 offload、GSO/TSO，也不覆盖真实硬件时序。
+这项 KVM 测试只验证功能，不覆盖真实网卡上的吞吐量、限速精度、驱动或硬件卸载、GSO/TSO，也不覆盖真实硬件时序。
 
 程序异常退出后，先检查受控接口：
 
@@ -757,13 +757,14 @@ sudo tc qdisc del dev IFACE root
 
 这个示例把 Linux 6.16 的 BPF qdisc 接口变成了一个有界、短时运行的出口 pacer。我们分析了 BPF object 如何持有 skb、报文序列化时间如何形成发送计划、watchdog 如何避免忙等待，以及 reset 如何区分策略丢包与清理丢包。相同结构可以承载更丰富的策略，但真实服务还需要明确设计公平性、并发状态、持久化和故障恢复。
 
-> 如果你想继续深入学习 eBPF，可以查看我们的[教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
+> 如果你想继续深入学习 eBPF，可以查看我们的 [教程仓库](https://github.com/eunomia-bpf/bpf-developer-tutorial)，或访问 [eunomia 教程网站](https://eunomia.dev/tutorials/)。
 
 ## 参考资料
 
 - [Linux BPF qdisc 合入 commit](https://github.com/torvalds/linux/commit/c8240344956e3f0b4e8f1d40ec3435e47040cacb)
 - [Qdisc watchdog 后续 commit](https://github.com/torvalds/linux/commit/7a2dafda950b78611dc441c83d105dfdc7082681)
 - [libbpf qdisc TC hook 支持](https://github.com/libbpf/libbpf/commit/f580871b429c550edf910a1b0d700510245351df)
+- [libbpf 1.6.0 发布说明](https://github.com/libbpf/libbpf/releases/tag/v1.6.0)
 - [上游 BPF FIFO qdisc selftest](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/progs/bpf_qdisc_fifo.c)
 - [上游 BPF qdisc test runner](https://github.com/torvalds/linux/blob/v7.1/tools/testing/selftests/bpf/prog_tests/bpf_qdisc.c)
 - [libbpf 1.7.0 发布说明](https://github.com/libbpf/libbpf/releases/tag/v1.7.0)
