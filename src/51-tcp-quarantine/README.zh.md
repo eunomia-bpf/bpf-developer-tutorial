@@ -1,8 +1,10 @@
 # eBPF 教程：精准隔离已建立的 TCP 连接
 
-假设某个出站目标地址刚被添加到威胁情报黑名单，防火墙已更新规则来阻止后续连接。然而 `netstat` 显示某台服务器上已经存在一条到该地址的活跃 TCP 会话，你需要精准关闭这条连接，同时保留进程和其他无关流量。
+假设某个出站目标地址刚被添加到威胁情报黑名单，防火墙已更新规则阻止后续连接。然而 `netstat` 显示某台服务器上已经存在一条到该地址的活跃 TCP 会话，你需要精准关闭这条连接，同时保留进程和其他无关流量。
 
-本教程构建 `tcp_quarantine`，一个单次执行的 eBPF 命令行工具，用于精确匹配指定的 IPv4 目标地址和端口，找到所有符合该元组的 `ESTABLISHED` TCP 连接并统计或销毁它们。默认模式是 dry-run，只报告匹配结果；`--apply` 模式调用内核的 `bpf_sock_destroy` kfunc 销毁每个匹配的套接字。BPF TCP 迭代器的扫描范围是加载它的进程所在的网络命名空间。
+本教程属于 eBPF Tutorial by Example 系列。eBPF 允许用户态程序加载经过验证器检查的 BPF 程序并附加到内核执行接口，BPF TCP 迭代器为加载进程所在网络命名空间内的套接字驱动类型化回调。本教程的 BPF 程序在这些回调中聚合计数器，供用户态加载器在遍历结束后读取。
+
+Linux 6.5 引入了 `bpf_sock_destroy` kfunc，可从 BPF TCP 和 UDP 迭代器上下文调用，迭代器筛选套接字后由该 kfunc 同步执行协议特定的销毁路径。`tcp_quarantine` 工具利用这一能力找出精确匹配 IPv4 目标地址和端口的已建立连接，`dry-run` 模式统计匹配数量，`--apply` 模式销毁选中的套接字。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 

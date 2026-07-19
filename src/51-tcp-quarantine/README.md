@@ -1,8 +1,10 @@
 # eBPF Tutorial by Example: Targeted TCP Connection Quarantine
 
-Suppose an egress destination has just been added to a policy or threat-intelligence blocklist. A firewall blocks future connects, but `netstat` shows the server already has an active TCP session to that address. You want to preview and close that exact established session while preserving the process and unrelated connections.
+Suppose an egress destination has just been added to a threat-intelligence blocklist. A firewall blocks future connects, but `netstat` shows the server already has an active TCP session to that address. You want to close that exact session while preserving the process and unrelated traffic.
 
-This tutorial builds `tcp_quarantine`, a one-shot CLI that matches an exact IPv4 destination address and port, finds all `ESTABLISHED` TCP connections matching that tuple, and counts or destroys them. The default mode is dry-run, which reports matches. The `--apply` flag directs the BPF program to call the kernel's `bpf_sock_destroy` kfunc on each match. The TCP BPF iterator's scan scope is the network namespace of the loading process.
+This tutorial is part of the eBPF Tutorial by Example series. In eBPF, user space loads a verifier-checked BPF program and attaches it to a kernel execution interface. A BPF TCP iterator drives typed callbacks over sockets in the loading process's network namespace. This lesson's program aggregates counters in those callbacks for its user-space loader to read after traversal.
+
+Linux 6.5 introduced the `bpf_sock_destroy` kfunc, available from BPF TCP and UDP iterator contexts. The iterator filters sockets and the kfunc synchronously invokes the protocol-specific destroy path for selected sockets. The `tcp_quarantine` tool uses that capability. It finds exact established IPv4 destination-and-port matches, counts them in `dry-run` mode, and destroys selected sockets in `--apply` mode.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
