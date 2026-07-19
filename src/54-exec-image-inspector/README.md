@@ -883,7 +883,7 @@ The hook stores the timestamp and direct result before calling `bpf_task_work_sc
 
 That kfunc returns a referenced `struct file`. Every successful acquisition must end with `bpf_put_file()`. The callback resolves the path with `bpf_path_d_path` and creates a dynptr with `bpf_dynptr_from_file`. The file dynptr also owns internal state, so every creation path calls `bpf_dynptr_file_discard()`, including the helper's failure path required by this API.
 
-The callback reads only a 64-byte header plus the optional eight-byte marker. It does not scan the whole executable. A successful header read must begin with the four ELF magic bytes. The program then decodes `EI_CLASS`, `EI_DATA`, `e_type`, and `e_machine`, handling both little-endian and big-endian 16-bit values.
+The callback reads only a 64-byte header plus the optional eight-byte marker. It does not scan the whole executable. After a successful header read, the program checks the first four bytes for the ELF magic. Only a matching header is decoded into `EI_CLASS`, `EI_DATA`, `e_type`, and `e_machine`, with both little-endian and big-endian 16-bit values handled.
 
 User space turns common values into names such as `ELF64`, `LSB`, `ET_DYN`, and `EM_X86_64`, while retaining the original numeric type and machine values. Header, path, direct-probe, and deferred-probe failures stay in the event instead of being hidden.
 
@@ -918,7 +918,7 @@ sudo make test
 
 Repository CI compiles this lesson without loading it. Runtime proof came from the reused `bpf-benchmark` KVM guest running `7.0.0-rc2+`. Exact kernel provenance appears with the runtime requirements below.
 
-The final run produced this output:
+The captured session starts with KVM guest provenance, followed by the integration-test harness and tool output:
 
 ```text
 guest_kernel=7.0.0-rc2+
