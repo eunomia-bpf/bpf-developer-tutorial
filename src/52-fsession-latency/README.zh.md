@@ -1,61 +1,42 @@
-# eBPF 实践教程：使用 fsession 追踪慢速 vfs_read 调用
+# eBPF 教程：使用 fsession 追踪慢速 vfs_read 调用
 
 假设一个文件服务出现了读延迟尖峰，应用层计时只能告诉你请求变慢了，却无法区分是内核读路径阻塞还是用户态逻辑耗时。有用的问题是：哪个线程发起了读操作、请求了多少字节、调用返回了什么、这一次 `vfs_read` 花了多长时间。
 
-本教程属于 eBPF Tutorial by Example 系列。用户空间将经过验证器检查的追踪程序加载并附加到内核函数上，BPF 侧测量内核执行过程并将选中的事件发送回用户空间。
-
-当一个追踪场景需要同时观察函数进入和返回时，传统做法是编写独立的 fentry 和 fexit 程序，用一个按线程索引的 map 将时间戳从进入传递到返回。Linux 7.0 引入了 fsession，它让同一个 BPF 程序在被追踪函数的进入和返回阶段各执行一次，并通过 `bpf_session_cookie(ctx)` 提供一个 8 字节的调用级暂存区。本教程的 `fsession_latency` 利用这一能力，在 `vfs_read` 进入时记录时间戳、返回时计算延迟，按 TGID 和阈值过滤后上报慢读事件。
+本教程展示如何使用 Linux 7.0 引入的 fsession 机制测量 `vfs_read` 调用延迟。工具在函数进入时记录时间戳、返回时计算延迟，按 TGID 和阈值过滤后上报慢读事件。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 
-## 构建与运行
+## 为什么需要 fsession
 
-从源码构建（仓库内置 libbpf 1.7.0 和 bpftool v7.7.0）：
+传统的函数延迟测量方案都有明显的局限性。
 
-```bash
-cd src/52-fsession-latency
-make clean
-make -j2
-```
+**独立的 fentry 和 fexit 程序**是最常见的做法。你需要编写两个 BPF 程序，一个附加到函数入口，一个附加到函数返回。两个程序之间需要通过一个按线程索引的哈希表来传递时间戳：进入时存入 `bpf_get_current_pid_tgid()` 到时间戳的映射，返回时查找并删除。这个模式有几个问题：首先需要维护额外的哈希表，每次调用都有查找和删除的开销；其次如果进入后没有正常返回（比如线程被杀死），哈希表中的条目会泄漏；最后两个程序之间没有天然的关联，状态传递完全依赖外部数据结构。
 
-追踪指定服务进程 30 秒，上报 10 ms 及以上的读操作：
+**kprobe 和 kretprobe**同样需要两个独立的程序和外部哈希表。相比 fentry/fexit，kprobe 的开销更大，因为它通过断点机制工作，而 fentry 直接挂钩到函数序言，在 x86_64 上使用 JIT 优化的调用序列。
 
-```bash
-SERVICE_PID=$(pgrep -n my-service)
-sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
-```
+**用户态采样**如 `perf record` 或 `bpftrace` 的周期性堆栈采样只能提供统计概貌，无法精确测量每次调用的延迟。对于需要捕获尾部延迟事件的场景，采样可能完全错过关键的慢调用。
 
-`--pid` 比较的是 `bpf_get_current_pid_tgid()` 返回的 TGID，即宿主机（初始）PID 命名空间中的 TGID。上面的 `pgrep` 适用于直接在宿主机上运行的进程，容器或嵌套 PID 命名空间内的目标需要解析并传入其宿主机可见的 TGID。
+**fsession 机制**从根本上解决了这个问题。Linux 7.0 引入了 fsession，它让同一个 BPF 程序在被追踪函数的进入和返回阶段各执行一次，并通过 `bpf_session_cookie(ctx)` 提供一个 8 字节的调用级暂存区。这个 cookie 从进入到返回期间持续有效，完全替代了外部哈希表。程序用 `bpf_session_is_return(ctx)` 区分两个阶段，在同一个程序内处理所有逻辑。
 
-命令行参数：
+## fsession 的工作原理
 
-```text
-Usage: ./fsession_latency [--threshold-us USEC] [--duration SEC] [--pid TGID] [--verbose]
-```
+fsession 是一种特殊的 ftracing 程序类型。当你用 `SEC("fsession/vfs_read")` 声明一个程序时，内核会在 `vfs_read` 的进入和返回阶段各调用一次你的 BPF 程序。
 
-默认阈值 1000 微秒、持续 10 秒、追踪所有进程。`--duration` 接受 1 到 86400 秒，`--pid` 接受 1 到 2^32−1，`--threshold-us` 接受 0 到 `UINT64_MAX / 1000` 微秒（用户空间在加载前转换为纳秒）。空值和尾随字符都会被 `parse_u64` 拒绝。
+`bpf_session_is_return(ctx)` 返回 false 表示进入阶段，返回 true 表示返回阶段。程序可以用这个 helper 函数区分当前处于哪个阶段，执行相应的逻辑。
 
-## 示例输出
+`bpf_session_cookie(ctx)` 返回一个指向 8 字节暂存区的指针。这个暂存区是每次调用独立的，从进入阶段到返回阶段持续有效。你可以在进入阶段写入数据（比如时间戳），在返回阶段读取并使用它。
 
-以下输出在运行内核 `7.0.0-rc2+` 的 x86_64 环境中采集。集成测试执行 64 次普通文件读取加一次延迟 50 ms 的管道读取，管道读超过 10 ms 阈值后出现在事件流中：
+返回阶段的上下文不仅包含原始函数参数，还包含函数的返回值。对于 `vfs_read`，进入时能看到 `file`、`buf`、`count`、`pos` 四个参数，返回时还能看到 `ret` 返回值。这意味着你不需要把参数存到 map 里，返回阶段可以直接访问。
 
-```console
-Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
-EVENT comm=python3          tgid=1257 pid=1257 requested=1 result=1 latency_us=50160
-SUMMARY calls=66 slow=1 errors=0 dropped=0 events=1
-TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshold_calls=66 threshold_slow=1 events=1 dropped=0
-PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
-```
+`fsession_latency` 工具利用这些能力实现延迟测量。进入阶段，它检查 TGID 是否匹配目标进程，匹配的调用在 cookie 中存入 `bpf_ktime_get_ns()` 时间戳。返回阶段，它从 cookie 读取时间戳计算延迟，递增聚合计数器，超过阈值的调用通过 ring buffer 上报详细事件。
 
-具体调用次数、PID 值和延迟数值因运行环境而异。
-
-## 实现详解
+## 代码实现
 
 本工具由三个文件组成：共享头文件定义事件和统计结构、BPF 程序测量延迟并提交事件、用户空间加载器管理生命周期并打印结果。
 
 ### 共享头文件
 
-`fsession_latency.h` 定义了 BPF 和用户空间共享的事件与统计结构。`latency_event` 包含 32 位 PID 和 TGID、64 位请求字节数、有符号 64 位返回值、纳秒精度延迟和进程名。`latency_stats` 包含 `calls`（总调用数）、`slow`（达到阈值的调用数）、`errors`（返回负值的调用数）和 `dropped`（ring buffer 预留失败计数）。
+`fsession_latency.h` 定义了 BPF 和用户空间共享的事件与统计结构。`latency_event` 包含 32 位 PID 和 TGID、64 位请求字节数、有符号 64 位返回值、纳秒精度延迟和进程名。`latency_stats` 包含四个计数器用于聚合统计。
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -83,11 +64,11 @@ struct latency_stats {
 #endif /* __FSESSION_LATENCY_H */
 ```
 
-`FSESSION_COMM_LEN` 设为 16，与内核 `TASK_COMM_LEN` 一致。
+四个计数器分别记录：`calls` 是总调用数、`slow` 是达到阈值的调用数、`errors` 是返回负值的调用数、`dropped` 是 ring buffer 预留失败的计数。`FSESSION_COMM_LEN` 设为 16，与内核 `TASK_COMM_LEN` 一致。
 
 ### BPF 程序
 
-`fsession_latency.bpf.c` 附加一个程序到 `SEC("fsession/vfs_read")`。Linux 7.0 的 fsession 让这个程序在 `vfs_read` 的进入和返回阶段各执行一次。程序用 `bpf_session_is_return(ctx)` 区分两个阶段，用 `bpf_session_cookie(ctx)` 获取一个 8 字节的调用级暂存区，从进入到返回期间持续有效，替代了外部哈希表。
+`fsession_latency.bpf.c` 使用 `SEC("fsession/vfs_read")` 声明为 fsession 类型。内核会在 `vfs_read` 的进入和返回阶段各调用一次这个程序。
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -166,11 +147,15 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 }
 ```
 
-进入阶段，`bpf_get_current_pid_tgid()` 提供 PID 和 TGID。如果设置了 `target_tgid` 且调用来自其他 TGID，程序在 cookie 中写入 0 以便返回阶段跳过，匹配的调用则存入 `bpf_ktime_get_ns()` 时间戳。
+程序结构分为进入阶段和返回阶段两部分。两个 `const volatile` 变量位于 `.rodata` 段，用户态在 `open()` 之后、`load()` 之前写入阈值和目标 TGID，验证器将它们视为编译期常量。`bpf_session_is_return` 和 `bpf_session_cookie` 通过 `extern ... __ksym` 声明为 kfunc 符号，内核在加载时解析。
 
-返回阶段，cookie 为 0 表示已过滤的调用。否则程序用当前单调纳秒时间戳减去保存的时间戳计算延迟，递增 `calls`，如果 `ret < 0` 递增 `errors`。延迟低于 `threshold_ns` 的调用只更新聚合计数器，达到阈值的调用递增 `slow`，预留固定大小的 ring buffer 记录，填入 PID、TGID、请求字节数、返回值、延迟和进程名后提交。预留失败时递增 `dropped`，使最终统计暴露事件路径的压力。返回阶段的 fsession 上下文包含原始函数参数和返回值，因此 `count` 和 `ret` 无需保存到 map。
+进入阶段，程序调用 `bpf_get_current_pid_tgid()` 获取调用者的 PID 和 TGID。如果设置了 `target_tgid` 且调用来自其他进程，程序在 cookie 中写入 0 表示这次调用应该被跳过。匹配的调用则存入 `bpf_ktime_get_ns()` 返回的单调时间戳。
 
-文件开头的宏处理仓库 `vmlinux.h` 快照中旧版本的 `bpf_session_is_return` 和 `bpf_session_cookie` 声明。这是一个本地兼容桥接，用于绕过生成头文件的版本差异，从 7.0 以上内核重新生成的 `vmlinux.h` 可以直接携带当前签名。
+返回阶段，程序首先检查 cookie 是否为 0。cookie 为 0 表示进入阶段已经过滤了这次调用，直接返回。否则计算延迟为当前时间戳减去保存的进入时间戳，然后递增 `calls` 计数器。如果 `ret < 0` 表示读操作返回错误，递增 `errors` 计数器。延迟低于 `threshold_ns` 的调用到此为止，只更新聚合计数器不上报事件。
+
+达到阈值的调用递增 `slow` 计数器，然后尝试在 ring buffer 中预留固定大小的记录。预留失败时递增 `dropped` 计数器，这让最终统计能够暴露事件路径的压力。预留成功后填入 PID、TGID、请求字节数、返回值、延迟和进程名，最后提交到 ring buffer。
+
+文件开头的宏处理是一个本地兼容桥接。仓库的 `vmlinux.h` 快照中 `bpf_session_is_return` 和 `bpf_session_cookie` 的声明早于 Linux 7.0 添加的 `ctx` 参数。宏先把旧声明重命名，include 之后再 undef，然后用正确的 Linux 7.0 签名重新声明。从 7.0 以上内核重新生成的 `vmlinux.h` 可以直接使用，不需要这个桥接。
 
 ### 用户空间加载器
 
@@ -434,40 +419,78 @@ cleanup:
 }
 ```
 
-加载前，用户空间将 `threshold_ns` 和 `target_tgid` 写入只读 BPF 配置。它打开、加载并附加 skeleton，创建 ring buffer 消费者，计算单调时间截止点，每次迭代最多轮询 100 ms 直到截止或收到 SIGINT/SIGTERM。每个事件打印 comm、TGID、PID、请求字节数、结果和延迟微秒数。
+加载器的流程比较标准。解析命令行后，打开 skeleton 并把 `threshold_ns` 和 `target_tgid` 写入只读 BPF 配置。用户输入的阈值是微秒单位，乘以 1000 转换为纳秒后写入。调用 `load` 完成 BPF 程序加载，然后附加到 `vfs_read`。加载失败时的诊断同时给出内核 errno 和前置条件列表，方便用户排查问题。
 
-轮询结束后，加载器先解除 fsession 程序的附加以使聚合计数器停止变化，再调用 `ring_buffer__consume()` 投递解除附加前已提交的记录，最后打印稳定的 `SUMMARY` 计数器。这个顺序是观察窗口边界正确性的一部分。退出时释放 ring buffer 并销毁 skeleton。
+`ring_buffer__new` 创建 ring buffer 消费者，注册 `handle_event` 回调处理每个事件。回调打印 comm、TGID、PID、请求字节数、结果和延迟微秒数，并递增 `events_printed` 计数。
 
-仓库使用 bpftool v7.7.0，其内置 libbpf v1.7.0。libbpf 1.7.0 通过公开接口识别 `fsession/` 段名。
+`poll_until_deadline` 函数驱动事件消费循环。它计算单调时间截止点，每次迭代最多轮询 100 ms 直到截止或收到 SIGINT/SIGTERM。轮询返回 `-EINTR` 时继续循环，其他负值表示错误。
 
-## 运行测试
+轮询结束后，加载器先调用 `fsession_latency_bpf__detach` 解除 fsession 程序的附加，使聚合计数器停止变化。然后调用 `ring_buffer__consume` 投递解除附加前已提交但尚未消费的记录。这个顺序是观察窗口边界正确性的一部分：先停止新事件产生，再排空已有事件，最后读取稳定的计数器。退出时释放 ring buffer 并销毁 skeleton。
 
-集成测试对构建产物运行四个场景加上 CLI 解析测试：
+## 编译与运行
+
+从源码构建（仓库内置 libbpf 1.7.0 和 bpftool v7.7.0）：
+
+```bash
+cd src/52-fsession-latency
+make clean
+make -j2
+```
+
+追踪指定服务进程 30 秒，上报 10 ms 及以上的读操作：
+
+```bash
+SERVICE_PID=$(pgrep -n my-service)
+sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
+```
+
+`--pid` 比较的是 `bpf_get_current_pid_tgid()` 返回的 TGID，即宿主机（初始）PID 命名空间中的 TGID。上面的 `pgrep` 适用于直接在宿主机上运行的进程，容器或嵌套 PID 命名空间内的目标需要解析并传入其宿主机可见的 TGID。
+
+命令行参数：
+
+```text
+Usage: ./fsession_latency [--threshold-us USEC] [--duration SEC] [--pid TGID] [--verbose]
+
+Options:
+  -t, --threshold-us USEC  慢读阈值（默认：1000 微秒）
+  -d, --duration SEC       追踪时长，1-86400（默认：10 秒）
+  -p, --pid TGID           追踪指定进程 ID（默认：所有进程）
+  -v, --verbose            打印 libbpf 诊断信息
+  -h, --help               显示帮助
+```
+
+默认阈值 1000 微秒、持续 10 秒、追踪所有进程。`--duration` 接受 1 到 86400 秒，`--pid` 接受 1 到 2^32-1，`--threshold-us` 接受 0 到 `UINT64_MAX / 1000` 微秒（用户空间在加载前转换为纳秒）。空值和尾随字符都会被 `parse_u64` 拒绝。
+
+以下输出在运行内核 `7.0.0-rc2+` 的 x86_64 环境中采集。集成测试执行 64 次普通文件读取加一次延迟 50 ms 的管道读取，管道读超过 10 ms 阈值后出现在事件流中：
+
+```console
+Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
+EVENT comm=python3          tgid=1257 pid=1257 requested=1 result=1 latency_us=50160
+SUMMARY calls=66 slow=1 errors=0 dropped=0 events=1
+TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshold_calls=66 threshold_slow=1 events=1 dropped=0
+PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
+```
+
+具体调用次数、PID 值和延迟数值因运行环境而异。
+
+运行测试：
 
 ```bash
 sudo make test
 ```
 
-测试验证四个运行时路径：
+集成测试验证四个运行时路径：目标 TGID 为 `UINT32_MAX` 产生零调用和事件、10,000,000 微秒阈值使普通读产生零慢事件、64 次普通文件读加一次延迟 50 ms 的管道读在 10,000 微秒阈值下产生慢事件、阈值为 0 时 `slow == events + dropped` 证明每个阈值匹配调用要么被投递要么被计入 ring buffer 预留失败。CLI 测试覆盖无效 duration、空 duration、空 threshold 和空 PID。
 
-1. 目标 TGID 为 `UINT32_MAX` 产生零调用和事件。
-2. 10,000,000 微秒阈值使普通读完成后仍产生零慢事件。
-3. 64 次普通文件读加一次延迟 50 ms 的管道读、阈值 10,000 微秒时产生慢事件并验证其 TGID、PID、请求大小、结果和延迟。
-4. 阈值为 0 时持续读到一秒截止后成功退出，且 `slow == events + dropped`，证明窗口边界的每个阈值匹配调用要么被投递要么被明确计入 ring buffer 预留失败。
+### 环境要求
 
-CLI 测试覆盖无效 duration、空 duration、空 threshold 和空 PID。
-
-## 环境要求
-
-| 要求 | 值 |
+| 要求 | 详情 |
 |---|---|
-| 内核 | Linux 7.0 |
-| libbpf | 1.7.0 |
-| 架构 | x86_64（当前已测试配置） |
-| BTF | 必须 |
+| 内核版本 | Linux 7.0+（fsession 首次引入） |
+| BTF | 必须启用 (`CONFIG_DEBUG_INFO_BTF=y`) |
+| 内核配置 | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y` |
+| BPF JIT | 运行时必须启用 |
+| 架构 | 已在 x86_64 上测试 |
 | 权限 | root |
-| 内核配置 | `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_BPF_EVENTS=y`、`CONFIG_DEBUG_INFO_BTF=y`、`CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y` |
-| 运行时 | BPF JIT 已启用、`vfs_read` 在内核 BTF 中存在且可追踪 |
 
 运行时行为在 x86_64 内核 `7.0.0-rc2+` 上测试。上游合并提交为 `f17b474e36647c23801ef8fdaf2255ab66dd2973`。
 
@@ -477,7 +500,11 @@ CLI 测试覆盖无效 duration、空 duration、空 threshold 和空 PID。
 
 ## 总结
 
-一个 `fsession/vfs_read` 程序同时看到进入和返回，8 字节的调用级 session cookie 替代外部关联 map 携带时间戳，TGID 过滤和阈值筛选出有用事件，聚合计数器在选定范围内保留调用数、阈值匹配数、错误数和丢弃数，解除附加、排空 ring buffer 再读取汇总的顺序干净地关闭观察窗口。如果想深入了解 eBPF，请查看教程仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial>。
+本教程展示了如何使用 Linux 7.0 的 fsession 机制测量内核函数延迟。相比传统的 fentry/fexit 两程序配合哈希表的方案，fsession 用一个程序同时处理进入和返回，8 字节的调用级 session cookie 替代外部关联 map 携带时间戳，代码更简洁、无状态泄漏风险、性能开销更低。
+
+工具的设计演示了 fsession 的核心模式：用 `bpf_session_is_return` 区分阶段，用 `bpf_session_cookie` 传递调用级状态，返回阶段直接访问函数参数和返回值。这个模式适用于任何需要关联函数进入和返回的场景。
+
+> 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
 ## 参考资料
 
