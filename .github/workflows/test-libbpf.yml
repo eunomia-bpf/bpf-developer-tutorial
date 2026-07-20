@@ -180,6 +180,10 @@ jobs:
       run: |
           make -C src/50-tcx
 
+    - name: test 53 egress pacer
+      run: |
+          make -C src/53-egress-pacer
+
     - name: test 54 exec image inspector
       run: |
           make -C src/54-exec-image-inspector
