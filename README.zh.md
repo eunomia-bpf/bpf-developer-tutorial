@@ -88,7 +88,7 @@ GPU:
 - [lesson 39-nginx](src/39-nginx/README.zh.md) 使用 eBPF 跟踪 Nginx 请求
 - [lesson 40-mysql](src/40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
 - [lesson 48-energy](src/48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
-- [lesson 52-fsession-latency](src/52-fsession-latency/README.zh.md) eBPF 实践教程：使用 fsession 追踪慢速 vfs_read 调用
+- [lesson 52-fsession-latency](src/52-fsession-latency/README.zh.md) eBPF 教程：使用 fsession 追踪慢速 vfs_read 调用
 
 
 安全:
@@ -100,7 +100,7 @@ GPU:
 - [lesson 28-detach](src/28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](src/34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
 - [lesson 51-tcp-quarantine](src/51-tcp-quarantine/README.zh.md) eBPF 教程：精准隔离已建立的 TCP 连接
-- [lesson 54-exec-image-inspector](src/54-exec-image-inspector/README.zh.md) eBPF 教程：在 exec 后检查真正安装的可执行镜像
+- [lesson 54-exec-image-inspector](src/54-exec-image-inspector/README.zh.md) eBPF 教程：检查 exec 后真正安装的可执行镜像
 
 
 特性:
