@@ -11,38 +11,59 @@ Use `$bpf-tutorial-writing-style` for the finished prose. Keep this workflow sma
 
 Read these inputs before writing:
 
-- `scripts/guideline_advance.md`;
-- both README files from `src/47-cuda-events` and `src/49-hid`;
+- `scripts/guideline_advance.md` for tutorials 40+, `scripts/guideline_basic.md` for tutorials 0-39;
+- both README files from `src/47-cuda-events`, `src/48-energy`, and `src/49-hid` as style references;
 - the lesson's implementation, headers, Makefile, fixtures, and tests;
 - the current README pair when revising an existing lesson;
 - primary upstream sources for versions and feature semantics.
 
-Collect the facts the reader needs: the problem, kernel/user-space flow, feature versions, requirements, commands, real output, cleanup, limits, and references. Keep every claim grounded in the code, tests, captured output, or a primary source. Preserve an existing draft before a from-scratch rewrite.
+Collect the facts the reader needs: the problem, why traditional approaches fail, the kernel/user-space flow, feature versions, requirements, commands, real output, cleanup, limits, and references. Keep every claim grounded in the code, tests, captured output, or a primary source. Preserve an existing draft before a from-scratch rewrite.
 
 Build and run the example when the environment supports it. Use `$test-bpf-tutorial-kvm` for kernel features that need the repository's KVM environment. Runtime details support the tutorial; local workspace paths, VM names, shared repositories, caches, prompts, and agent traces stay private.
 
-## 2. Let Opus write
+## 2. Structure requirements
+
+For advanced tutorials (40+), follow this exact section order as defined in `$bpf-tutorial-writing-style`:
+
+1. **Title + Introduction**: Concrete problem scenario, link to source
+2. **Background / Why This Approach**: Explain traditional approaches and their limitations, then what eBPF enables
+3. **High-Level Mechanism**: How the feature works before showing code
+4. **Code Implementation**: Complete source blocks, then paragraph explanations
+5. **Additional Concepts** (if needed)
+6. **Compilation and Execution**: AFTER code analysis, not before
+7. **Summary + Call to Action**
+8. **References**
+
+The "Background / Why" section is critical. It must explain:
+- What traditional approaches exist
+- Why each doesn't work well
+- What the eBPF approach enables
+
+## 3. Let Opus write
 
 Claude Opus writes all reader-facing tutorial prose. Use the exact model ID `claude-opus-4-5-20251101`. Stop if that model is unavailable instead of substituting another model.
 
 Use one non-interactive invocation for the complete English and Chinese pair. The prompt stays short and names only:
 
 - the two target README files;
-- `scripts/guideline_advance.md`;
+- `scripts/guideline_advance.md` or `scripts/guideline_basic.md`;
 - `$bpf-tutorial-writing-style`;
-- `src/47-cuda-events` and `src/49-hid` as style references;
+- `src/47-cuda-events`, `src/48-energy`, and `src/49-hid` as style references;
 - the request to read the implementation and write both files completely before returning.
 
 Do not paste a second checklist, paragraph plan, fact inventory, or review rubric into the prompt. Add a technical fact only when it is unavailable in the repository.
 
 Run Claude from the repository root with the pinned model and permission to read the repository and write the two README files. Opus does not commit or push.
 
-## 3. Check the result
+## 4. Check the result
 
 Inspect both files and the diff instead of trusting the model's final message. Confirm that:
 
 - both languages are complete and tell the same technical story;
 - the opening reads like a tutorial rather than an abstract or feature list;
+- there is a "Why" section explaining traditional approaches and their limitations;
+- the high-level mechanism is explained BEFORE code sections;
+- compilation/execution is AFTER code analysis;
 - every core source file appears once in a complete ordinary Markdown fence;
 - code, commands, output, versions, requirements, cleanup, and limits agree with the repository;
 - the opening source link points only to the lesson directory;
