@@ -185,6 +185,10 @@ jobs:
           make -C src/51-tcp-quarantine
           sudo timeout 30 make -C src/51-tcp-quarantine test
 
+    - name: test 52 fsession latency
+      run: |
+          make -C src/52-fsession-latency
+
     - name: test 53 egress pacer
       run: |
           make -C src/53-egress-pacer

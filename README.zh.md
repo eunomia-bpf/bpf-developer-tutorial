@@ -88,6 +88,7 @@ GPU:
 - [lesson 39-nginx](src/39-nginx/README.zh.md) 使用 eBPF 跟踪 Nginx 请求
 - [lesson 40-mysql](src/40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
 - [lesson 48-energy](src/48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
+- [lesson 52-fsession-latency](src/52-fsession-latency/README.zh.md) eBPF 实践教程：使用 fsession 追踪慢速 vfs_read 调用
 
 
 安全:

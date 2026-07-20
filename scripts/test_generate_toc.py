@@ -15,6 +15,7 @@ TRACING_LESSONS = {
     "src/39-nginx",
     "src/40-mysql",
     "src/48-energy",
+    "src/52-fsession-latency",
 }
 
 
