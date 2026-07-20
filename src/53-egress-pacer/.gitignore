@@ -1,0 +1,15 @@
+# Build artifacts
+.output/
+*.o
+*.skel.h
+
+# Generated binary
+egress_pacer
+
+# Python cache
+__pycache__/
+
+# Editor files
+*.swp
+*~
+.vscode/

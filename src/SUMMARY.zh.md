@@ -68,6 +68,7 @@ GPU:
 - [lesson 42-xdp-loadbalancer](42-xdp-loadbalancer/README.zh.md) eBPF 开发者教程： 简单的 XDP 负载均衡器
 - [lesson 46-xdp-test](46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
 - [lesson 50-tcx](50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
+- [lesson 53-egress-pacer](53-egress-pacer/README.zh.md) eBPF 教程：用 BPF Qdisc 实现出口限速
 
 
 追踪:
@@ -79,6 +80,7 @@ GPU:
 - [lesson 39-nginx](39-nginx/README.zh.md) 使用 eBPF 跟踪 Nginx 请求
 - [lesson 40-mysql](40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
 - [lesson 48-energy](48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
+- [lesson 52-fsession-latency](52-fsession-latency/README.zh.md) eBPF 教程：使用 fsession 追踪慢速 vfs_read 调用
 
 
 安全:
@@ -89,6 +91,8 @@ GPU:
 - [lesson 27-replace](27-replace/README.zh.md) 替换任意程序读取或者写入的文本
 - [lesson 28-detach](28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
+- [lesson 51-tcp-quarantine](51-tcp-quarantine/README.zh.md) eBPF 教程：精准隔离已建立的 TCP 连接
+- [lesson 54-exec-image-inspector](54-exec-image-inspector/README.zh.md) eBPF 教程：检查 exec 后真正安装的可执行镜像
 
 
 特性:

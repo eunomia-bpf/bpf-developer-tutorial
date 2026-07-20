@@ -1,0 +1,129 @@
+digraph egress_pacer_flow {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.25",
+    nodesep="0.32",
+    ranksep="0.44",
+    splines=spline,
+    size="9,8",
+    ratio=compress,
+    newrank=true,
+    fontname="DejaVu Sans"
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#F7FAFC",
+    color="#4A5568",
+    fontcolor="#1A202C",
+    fontname="DejaVu Sans",
+    fontsize=12,
+    margin="0.16,0.10"
+  ];
+  edge [
+    color="#4A5568",
+    fontcolor="#2D3748",
+    fontname="DejaVu Sans",
+    fontsize=10,
+    arrowsize=0.75
+  ];
+
+  configure [
+    label="User space\nrate_kbps + queue_limit",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  attach [
+    label="bpf_pacer\nTC_H_ROOT",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  enqueue [
+    label="enqueue\nskb → packet_node\ncompute eligible_ns",
+    fillcolor="#E6FFFA",
+    color="#319795"
+  ];
+  admitted [
+    label="queue has capacity\nand node is allocated?",
+    shape=diamond,
+    style="filled",
+    fillcolor="#FFFAF0",
+    color="#DD6B20",
+    margin="0.10,0.05"
+  ];
+  policy_drop [
+    label="policy drop\nbpf_qdisc_skb_drop",
+    fillcolor="#FFF5F5",
+    color="#E53E3E"
+  ];
+  fifo [
+    label="BPF FIFO\nqlen + backlog",
+    shape=cylinder,
+    fillcolor="#F0FFF4",
+    color="#38A169"
+  ];
+  dequeue [
+    label="dequeue\npop queue head",
+    fillcolor="#E6FFFA",
+    color="#319795"
+  ];
+  eligible [
+    label="now >= eligible_ns?",
+    shape=diamond,
+    style="filled",
+    fillcolor="#FFFAF0",
+    color="#DD6B20",
+    margin="0.10,0.05"
+  ];
+  transmit [
+    label="return skb\nupdate bstats + counters",
+    fillcolor="#F0FFF4",
+    color="#38A169"
+  ];
+  watchdog [
+    label="push_front\nwatchdog_schedule\nreturn NULL",
+    fillcolor="#FAF5FF",
+    color="#805AD5"
+  ];
+  remove [
+    label="remove root qdisc",
+    fillcolor="#EBF8FF",
+    color="#3182CE"
+  ];
+  reset [
+    label="reset\nkfree queued skb\nzero qlen + backlog",
+    fillcolor="#FFF5F5",
+    color="#C53030"
+  ];
+
+  { rank=same; attach; remove; }
+  { rank=same; admitted; policy_drop; }
+  { rank=same; fifo; reset; }
+  { rank=same; eligible; transmit; }
+
+  configure -> attach [label="load + attach"];
+  attach -> enqueue [label="packet arrives"];
+  enqueue -> admitted;
+  admitted -> fifo [label="yes"];
+  admitted -> policy_drop [label="no"];
+  fifo -> dequeue;
+  dequeue -> eligible;
+  eligible -> transmit [label="yes"];
+  eligible -> watchdog [label="no"];
+  watchdog -> dequeue [label="watchdog wakeup", constraint=false];
+
+  attach -> remove [
+    label="control window ends",
+    style=dashed,
+    color="#718096",
+    constraint=false
+  ];
+  remove -> reset [style=dashed, color="#718096"];
+  fifo -> reset [
+    label="queued skb",
+    style=dashed,
+    color="#718096",
+    constraint=false
+  ];
+}

@@ -77,6 +77,7 @@ Networking:
 - [lesson 42-xdp-loadbalancer](src/42-xdp-loadbalancer/README.md) XDP Load Balancer
 - [lesson 46-xdp-test](src/46-xdp-test/README.md) Building a High-Performance XDP Packet Generator
 - [lesson 50-tcx](src/50-tcx/README.md) Composable Traffic Control with TCX Links
+- [lesson 53-egress-pacer](src/53-egress-pacer/README.md) Building an Egress Pacer with BPF Qdisc
 
 
 Tracing:
@@ -88,6 +89,7 @@ Tracing:
 - [lesson 39-nginx](src/39-nginx/README.md) Using eBPF to Trace Nginx Requests
 - [lesson 40-mysql](src/40-mysql/README.md) Using eBPF to Trace MySQL Queries
 - [lesson 48-energy](src/48-energy/README.md) Energy Monitoring for Process-Level Power Analysis
+- [lesson 52-fsession-latency](src/52-fsession-latency/README.md) Tracing Slow vfs_read Calls with fsession
 
 
 Security:
@@ -98,6 +100,8 @@ Security:
 - [lesson 27-replace](src/27-replace/README.md) Transparent Text Replacement in File Reads
 - [lesson 28-detach](src/28-detach/README.md) Running eBPF After Application Exits: The Lifecycle of eBPF Programs
 - [lesson 34-syscall](src/34-syscall/README.md) Modifying System Call Arguments with eBPF
+- [lesson 51-tcp-quarantine](src/51-tcp-quarantine/README.md) Precisely Isolating Established TCP Connections
+- [lesson 54-exec-image-inspector](src/54-exec-image-inspector/README.md) Inspecting the Executable Image After exec
 
 
 Features:
