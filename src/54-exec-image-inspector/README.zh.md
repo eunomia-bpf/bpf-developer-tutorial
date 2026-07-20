@@ -941,7 +941,7 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 | 活动 LSM 列表 | `/sys/kernel/security/lsm` 中包含 `bpf` | 启动时激活 BPF LSM 还需要在 `lsm=` 参数中包含 `bpf` |
 | 权限 | root | 加载并挂载 BPF LSM 程序 |
 | 已测试架构 | x86_64 | 确定性 ELF 断言当前按 x86-64 编写 |
-| 已测试工具链 | 仓库固定的 bpftool `3be8ac3` 与嵌套 libbpf `fc064eb` | 构建本课使用的 BPF object 与生成 skeleton |
+| 已测试工具链 | 仓库固定的 bpftool `4222ef1` 与嵌套 libbpf `f5dcbae` | 构建本课使用的 BPF object 与生成 skeleton |
 | 硬件 | 无 | 测试程序无需加速器或特殊设备 |
 
 采集输出时内核源码工作树在 commit `a03114efd0720dff230388f7e160e427e54ea31b` 上保持干净，内核镜像 SHA-256 为 `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`，配置文件 SHA-256 为 `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`。

@@ -941,7 +941,7 @@ An ordinary run prints `READY`, one or more `EXEC` lines, and `SUMMARY`. Setting
 | Active LSM list | `bpf` appears in `/sys/kernel/security/lsm` | Boot activation also requires `bpf` in the `lsm=` parameter |
 | Privilege | Root | Loads and attaches the BPF LSM program |
 | Tested architecture | x86_64 | The deterministic ELF assertions currently expect x86-64 |
-| Tested tooling | Repository-pinned bpftool `3be8ac3` with nested libbpf `fc064eb` | Builds the BPF object and generated skeleton used by this lesson |
+| Tested tooling | Repository-pinned bpftool `4222ef1` with nested libbpf `f5dcbae` | Builds the BPF object and generated skeleton used by this lesson |
 | Hardware | None | The fixture needs no accelerator or special device |
 
 For the captured run the kernel source worktree was clean at commit `a03114efd0720dff230388f7e160e427e54ea31b`. The kernel image SHA-256 was `760150dd317a5c05e58d35928bd70c399f41838f3be3ac643f3f3a3af4340b88`, and the config SHA-256 was `82f63944a9ddd0bc3b0a60c3e6ebbe3e9900f2eefad7d3872793bb98b3cc68fe`.
