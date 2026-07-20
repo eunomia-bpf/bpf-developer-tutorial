@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test BPF Tutorials in KVM"
+  short_description: "Build locally and test with the benchmark KVM kernel"
+  default_prompt: "Use $test-bpf-tutorial-kvm to build this BPF tutorial locally and run its smoke test with the bpf-benchmark KVM kernel."

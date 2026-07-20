@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Test documentation scripts
-        run: python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc scripts.test_generate_compatibility
+        run: |
+          python3 -m unittest scripts.test_check_internal_links scripts.test_generate_toc scripts.test_generate_compatibility
+          python3 .agents/skills/write-bpf-production-tutorial/scripts/test_sync_source_blocks.py
       - name: Regenerate documentation indexes
         run: |
           python3 scripts/generate_toc.py
