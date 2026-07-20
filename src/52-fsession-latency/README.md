@@ -1,61 +1,42 @@
-# eBPF Tutorial by Example: Trace Slow vfs_read Calls with fsession
+# eBPF Tutorial: Tracing Slow vfs_read Calls with fsession
 
-Suppose a file-backed service shows read-latency spikes. Application timing tells you that requests slowed down, but it cannot distinguish a blocked kernel read path from user-space work. The useful question is: which thread made the read, how many bytes did it request, what did the call return, and how long did that one `vfs_read` invocation take?
+Suppose a file-backed service shows read-latency spikes. Application-level timing tells you that requests slowed down, but it cannot distinguish whether the kernel read path blocked or user-space logic took too long. The useful questions are: which thread issued the read, how many bytes did it request, what did the call return, and how long did that single `vfs_read` invocation take?
 
-This tutorial is part of the eBPF Tutorial by Example series. The basic model is that user space loads and attaches a verifier-checked tracing program to a kernel function, and the BPF side measures kernel execution and sends selected events back to user space.
-
-When a tracing scenario needs to observe both function entry and return, the common approach is to write separate fentry and fexit programs and carry the timestamp from entry to return through a per-thread map. Linux 7.0 introduced fsession, which executes one BPF program at both function entry and return and supplies an 8-byte per-invocation session cookie via `bpf_session_cookie(ctx)`. The `fsession_latency` tool in this tutorial uses that capability to timestamp `vfs_read` entry, compute latency at return, filter by TGID and threshold, and report slow reads.
+This tutorial demonstrates how to measure `vfs_read` call latency using the fsession mechanism introduced in Linux 7.0. The tool timestamps function entry, computes latency at return, filters by TGID and threshold, and reports slow-read events.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 
-## Build and Run
+## Why fsession Is Needed
 
-Build from source (libbpf 1.7.0 and bpftool v7.7.0 are vendored in this repository):
+Traditional approaches to measuring function latency all have notable limitations.
 
-```bash
-cd src/52-fsession-latency
-make clean
-make -j2
-```
+**Separate fentry and fexit programs** are the most common approach. You write two BPF programs: one attached to function entry, one to function return. The two programs pass timestamps through a per-thread hash map: entry stores a mapping from `bpf_get_current_pid_tgid()` to timestamp, and return looks up and deletes the entry. This pattern has several problems. First, you must maintain an extra hash map, incurring lookup and deletion overhead on every call. Second, if a thread dies between entry and return (for example, if it is killed), the hash-map entry leaks. Third, the two programs have no intrinsic relationship; state passing depends entirely on an external data structure.
 
-Trace a specific service process for 30 seconds, reporting reads that take 10 ms or longer:
+**kprobe and kretprobe** also require two separate programs and an external hash map. Compared to fentry/fexit, kprobes have higher overhead because they work through a breakpoint mechanism, whereas fentry hooks directly into the function prologue using JIT-optimized call sequences on x86_64.
 
-```bash
-SERVICE_PID=$(pgrep -n my-service)
-sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
-```
+**User-space sampling** such as `perf record` or periodic stack sampling with `bpftrace` provides only a statistical profile and cannot precisely measure the latency of each call. For scenarios that need to capture tail-latency events, sampling may completely miss critical slow calls.
 
-`--pid` compares against the TGID returned by `bpf_get_current_pid_tgid()`, which is the TGID in the host (initial) PID namespace. The `pgrep` example above works for a process running directly on the host, and a target inside a container or nested PID namespace needs its host-visible TGID.
+**The fsession mechanism** solves this problem fundamentally. Linux 7.0 introduced fsession, which executes the same BPF program once at function entry and once at return, providing an 8-byte per-invocation scratch area through `bpf_session_cookie(ctx)`. This cookie persists from entry to return, completely replacing external hash maps. The program uses `bpf_session_is_return(ctx)` to distinguish the two phases and handles all logic within a single program.
 
-CLI arguments:
+## How fsession Works
 
-```text
-Usage: ./fsession_latency [--threshold-us USEC] [--duration SEC] [--pid TGID] [--verbose]
-```
+fsession is a special ftracing program type. When you declare a program with `SEC("fsession/vfs_read")`, the kernel calls your BPF program once at `vfs_read` entry and once at return.
 
-Defaults are threshold 1000 microseconds, duration 10 seconds, and all processes. `--duration` accepts 1 through 86400 seconds, `--pid` accepts 1 through `UINT32_MAX`, and `--threshold-us` accepts 0 through `UINT64_MAX / 1000` microseconds because user space converts the value to nanoseconds before load. Empty values and trailing characters are rejected by `parse_u64`.
+`bpf_session_is_return(ctx)` returns false during the entry phase and true during the return phase. The program uses this helper to determine which phase it is in and execute the appropriate logic.
 
-## Example Output
+`bpf_session_cookie(ctx)` returns a pointer to an 8-byte scratch area. This scratch area is unique to each invocation and persists from entry to return. You can write data (such as a timestamp) during entry and read it during return.
 
-The following output was captured on x86_64 with kernel `7.0.0-rc2+`. The integration test performs 64 ordinary file reads plus one pipe read delayed by 50 ms. The pipe read crosses the 10 ms threshold and appears in the event stream:
+The return-phase context includes not only the original function arguments but also the function's return value. For `vfs_read`, you can see the `file`, `buf`, `count`, and `pos` arguments at entry; at return you can also see the `ret` return value. This means you do not need to store arguments in a map - the return phase can access them directly.
 
-```console
-Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
-EVENT comm=python3          tgid=1257 pid=1257 requested=1 result=1 latency_us=50160
-SUMMARY calls=66 slow=1 errors=0 dropped=0 events=1
-TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshold_calls=66 threshold_slow=1 events=1 dropped=0
-PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
-```
+The `fsession_latency` tool leverages these capabilities for latency measurement. At entry, it checks whether the TGID matches the target process; matching calls store a `bpf_ktime_get_ns()` timestamp in the cookie. At return, it reads the timestamp from the cookie to compute latency, increments aggregate counters, and reports detailed events through a ring buffer for calls exceeding the threshold.
 
-Exact call counts, PID values, and latency vary by run.
+## Code Implementation
 
-## Implementation
-
-The tool consists of three files: a shared header defining the event and statistics structures, a BPF program that measures latency and submits events, and a user-space loader that manages the lifecycle and prints results.
+This tool consists of three files: a shared header defining event and statistics structures, a BPF program that measures latency and submits events, and a user-space loader that manages the lifecycle and prints results.
 
 ### Shared Header
 
-`fsession_latency.h` defines the event and statistics structures shared between BPF and user space. `latency_event` contains 32-bit PID and TGID, 64-bit requested bytes, signed 64-bit result, nanosecond latency, and the command name. `latency_stats` contains `calls` (total invocations), `slow` (invocations at or above threshold), `errors` (negative return values), and `dropped` (ring-buffer reservation failures).
+`fsession_latency.h` defines the event and statistics structures shared between BPF and user space. `latency_event` contains a 32-bit PID and TGID, 64-bit requested bytes, a signed 64-bit return value, nanosecond-precision latency, and the process name. `latency_stats` contains four counters for aggregate statistics.
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -83,11 +64,11 @@ struct latency_stats {
 #endif /* __FSESSION_LATENCY_H */
 ```
 
-`FSESSION_COMM_LEN` is 16 to match the kernel's `TASK_COMM_LEN`.
+The four counters record: `calls` for total invocations, `slow` for calls reaching the threshold, `errors` for calls returning negative values, and `dropped` for ring-buffer reservation failures. `FSESSION_COMM_LEN` is set to 16 to match the kernel's `TASK_COMM_LEN`.
 
 ### BPF Program
 
-`fsession_latency.bpf.c` attaches a program at `SEC("fsession/vfs_read")`. Linux 7.0 fsession runs this program once at `vfs_read` entry and once at return. The program uses `bpf_session_is_return(ctx)` to distinguish the two phases and `bpf_session_cookie(ctx)` to obtain an 8-byte per-invocation scratch slot that persists from entry to return, replacing an external hash map.
+`fsession_latency.bpf.c` uses `SEC("fsession/vfs_read")` to declare itself as an fsession type. The kernel calls this program once at `vfs_read` entry and once at return.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -166,15 +147,19 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 }
 ```
 
-At entry, `bpf_get_current_pid_tgid()` provides PID and TGID. If `target_tgid` is set and the call belongs to a different TGID, the program writes zero to the cookie so the return phase can skip that invocation. A matching call stores the `bpf_ktime_get_ns()` timestamp.
+The program is structured into entry and return phases. The two `const volatile` variables reside in the `.rodata` section; user space writes the threshold and target TGID after `open()` but before `load()`, and the verifier treats them as compile-time constants. `bpf_session_is_return` and `bpf_session_cookie` are declared as kfunc symbols via `extern ... __ksym`, resolved by the kernel at load time.
 
-At return, a zero cookie identifies a filtered call. Otherwise the program subtracts the saved timestamp from the current monotonic nanosecond timestamp, increments `calls`, and increments `errors` when `ret < 0`. Calls below `threshold_ns` remain in aggregate counters. Calls at or above the threshold increment `slow`, reserve a fixed-size ring-buffer record, fill PID, TGID, requested bytes, result, latency, and command name, then submit. A failed reservation increments `dropped`, so the final accounting exposes pressure in the event path. The return-side fsession context includes the original function arguments and return value, which is why `count` and `ret` are available without saving them in a map.
+At entry, the program calls `bpf_get_current_pid_tgid()` to obtain the caller's PID and TGID. If `target_tgid` is set and the call comes from a different process, the program writes 0 to the cookie to indicate this invocation should be skipped. Matching calls store the monotonic timestamp returned by `bpf_ktime_get_ns()`.
 
-The macros at the top handle the older `bpf_session_is_return` and `bpf_session_cookie` declarations in the repository's `vmlinux.h` snapshot. This is a local compatibility bridge around generated-header age, and a freshly generated 7.0+ `vmlinux.h` can carry the current signatures directly.
+At return, the program first checks whether the cookie is 0. A zero cookie indicates the entry phase already filtered this call, so it returns immediately. Otherwise it computes latency as the current timestamp minus the saved entry timestamp, then increments the `calls` counter. If `ret < 0`, indicating the read operation returned an error, it increments the `errors` counter. Calls with latency below `threshold_ns` stop here, updating only aggregate counters without reporting events.
+
+Calls reaching the threshold increment the `slow` counter, then attempt to reserve a fixed-size record in the ring buffer. A failed reservation increments the `dropped` counter, allowing the final statistics to expose pressure in the event path. On successful reservation, the record is filled with PID, TGID, requested bytes, return value, latency, and process name, then submitted to the ring buffer.
+
+The macros at the beginning of the file provide a local compatibility bridge. The repository's `vmlinux.h` snapshot has `bpf_session_is_return` and `bpf_session_cookie` declarations that predate the `ctx` argument added in Linux 7.0. The macros rename the old declarations, include the snapshot, undef, then redeclare with the correct Linux 7.0 signatures. A freshly regenerated `vmlinux.h` from kernel 7.0 or later can be used directly without this bridge.
 
 ### User-Space Loader
 
-`fsession_latency.c` parses CLI arguments, configures BPF constants, manages the observation window, and prints results.
+`fsession_latency.c` parses the command line, configures BPF constants, manages the observation window, and prints results.
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -434,50 +419,92 @@ cleanup:
 }
 ```
 
-Before load, user space writes `threshold_ns` and `target_tgid` into read-only BPF configuration. It opens, loads, and attaches the skeleton, creates the ring-buffer consumer, calculates a monotonic deadline, and polls for at most 100 ms per iteration until the deadline or SIGINT/SIGTERM. Each event prints comm, TGID, PID, requested bytes, result, and latency in microseconds.
+The loader follows a standard flow. After parsing the command line, it opens the skeleton and writes `threshold_ns` and `target_tgid` to the read-only BPF configuration. The user-provided threshold is in microseconds; it is multiplied by 1000 to convert to nanoseconds before writing. Calling `load` completes BPF program loading, then attaches to `vfs_read`. The failure diagnostic provides both the kernel errno and a prerequisite list to help users troubleshoot.
 
-After polling, the loader detaches the fsession program first so aggregate counters stop changing, calls `ring_buffer__consume()` to deliver records submitted before detach, and only then prints stable `SUMMARY` counters. This ordering is part of correctness at the observation-window boundary. The loader frees the ring buffer and destroys the skeleton on exit.
+`ring_buffer__new` creates the ring-buffer consumer and registers the `handle_event` callback to process each event. The callback prints comm, TGID, PID, requested bytes, result, and latency in microseconds, incrementing `events_printed`.
 
-The repository uses bpftool v7.7.0 with nested libbpf v1.7.0. libbpf 1.7.0 recognizes `fsession/` section names through the released public interface.
+The `poll_until_deadline` function drives the event consumption loop. It calculates a monotonic deadline and polls for up to 100 ms per iteration until the deadline or SIGINT/SIGTERM. A `-EINTR` return continues the loop; other negative values indicate errors.
 
-## Running the Tests
+After polling ends, the loader first calls `fsession_latency_bpf__detach` to detach the fsession program, stopping changes to aggregate counters. It then calls `ring_buffer__consume` to deliver records submitted before detach but not yet consumed. This ordering is part of observation-window boundary correctness: stop new event production first, drain existing events, then read stable counters. On exit, it frees the ring buffer and destroys the skeleton.
 
-The integration test runs four scenarios plus CLI parsing tests against the built binary:
+## Compilation and Execution
+
+Build from source (the repository vendors libbpf 1.7.0 and bpftool v7.7.0):
+
+```bash
+cd src/52-fsession-latency
+make clean
+make -j2
+```
+
+Trace a specific service process for 30 seconds, reporting reads of 10 ms or longer:
+
+```bash
+SERVICE_PID=$(pgrep -n my-service)
+sudo ./fsession_latency --pid "$SERVICE_PID" --threshold-us 10000 --duration 30
+```
+
+`--pid` compares against the TGID returned by `bpf_get_current_pid_tgid()`, which is the TGID in the host (initial) PID namespace. The `pgrep` example above works for processes running directly on the host; targets inside containers or nested PID namespaces need their host-visible TGID resolved and passed in.
+
+Command-line arguments:
+
+```text
+Usage: ./fsession_latency [--threshold-us USEC] [--duration SEC] [--pid TGID] [--verbose]
+
+Options:
+  -t, --threshold-us USEC  slow-read threshold (default: 1000 microseconds)
+  -d, --duration SEC       trace duration, 1-86400 (default: 10 seconds)
+  -p, --pid TGID           trace a specific process ID (default: all processes)
+  -v, --verbose            print libbpf diagnostics
+  -h, --help               show this help
+```
+
+Defaults are 1000 microsecond threshold, 10 second duration, and all processes. `--duration` accepts 1 through 86400 seconds, `--pid` accepts 1 through 2^32-1, and `--threshold-us` accepts 0 through `UINT64_MAX / 1000` microseconds (user space converts to nanoseconds before load). Empty values and trailing characters are rejected by `parse_u64`.
+
+The following output was captured on x86_64 with kernel `7.0.0-rc2+`. The integration test performs 64 ordinary file reads plus one pipe read delayed by 50 ms; the pipe read exceeds the 10 ms threshold and appears in the event stream:
+
+```console
+Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
+EVENT comm=python3          tgid=1257 pid=1257 requested=1 result=1 latency_us=50160
+SUMMARY calls=66 slow=1 errors=0 dropped=0 events=1
+TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshold_calls=66 threshold_slow=1 events=1 dropped=0
+PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
+```
+
+Exact call counts, PID values, and latency numbers vary by run.
+
+Running the tests:
 
 ```bash
 sudo make test
 ```
 
-The test validates four runtime paths:
+The integration test validates four runtime paths: target TGID of `UINT32_MAX` produces zero calls and events; a 10,000,000 microsecond threshold causes ordinary reads to produce zero slow events; 64 ordinary file reads plus one 50 ms delayed pipe read under a 10,000 microsecond threshold produces a slow event; and threshold 0 verifies `slow == events + dropped`, proving every threshold-matching call is either delivered or accounted as a ring-buffer reservation failure. CLI tests cover invalid duration, empty duration, empty threshold, and empty PID.
 
-1. Target TGID `UINT32_MAX` yields zero calls and events.
-2. A 10,000,000-microsecond threshold allows ordinary reads to complete while producing zero slow events.
-3. 64 ordinary file reads followed by one pipe read delayed by 50 ms, under a 10,000-microsecond threshold, produces a slow-read event and verifies its TGID, PID, request size, result, and latency.
-4. Threshold 0 with continuous reads through the one-second deadline verifies successful exit and `slow == events + dropped`, proving that every threshold-matching call at the boundary is either delivered or explicitly accounted as a ring-buffer reservation drop.
+### Environment Requirements
 
-CLI tests cover invalid duration, empty duration, empty threshold, and empty PID.
-
-## Requirements
-
-| Requirement | Value |
+| Requirement | Details |
 |---|---|
-| Kernel | Linux 7.0 |
-| libbpf | 1.7.0 |
-| Architecture | x86_64 (current tested setup) |
-| BTF | Required |
+| Kernel version | Linux 7.0+ (fsession first introduced) |
+| BTF | Must be enabled (`CONFIG_DEBUG_INFO_BTF=y`) |
+| Kernel config | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y` |
+| BPF JIT | Must be enabled at runtime |
+| Architecture | Tested on x86_64 |
 | Privilege | root |
-| Kernel configs | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_EVENTS=y`, `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS=y` |
-| Runtime | BPF JIT enabled and `vfs_read` present in kernel BTF and traceable |
 
 Runtime behavior was tested on x86_64 with kernel `7.0.0-rc2+`. The upstream merge commit is `f17b474e36647c23801ef8fdaf2255ab66dd2973`.
 
-## Scope
+## Observation Scope
 
-The tool measures time inside `vfs_read`, covering read paths that reach that function and selecting an exact host-visible TGID. A broader tracer can add cgroup, path, inode, mount, stack, or long-running metrics dimensions while keeping the same fsession correlation pattern, and the existing `dropped` count remains the event-loss signal under load.
+This tool measures time inside `vfs_read`, covering read paths that reach that function and filtering by exact host-visible TGID. A more comprehensive tracer could add cgroup, path, inode, mount, stack, or long-running metrics dimensions while keeping the same fsession correlation pattern; the existing `dropped` counter remains the event-loss signal under load.
 
 ## Summary
 
-One `fsession/vfs_read` program sees both entry and return, and the 8-byte per-invocation session cookie replaces an external correlation map for carrying the timestamp while TGID filtering and thresholding select useful events and aggregate counters retain totals for calls, threshold matches, errors, and dropped events within that scope. Detaching, draining, and then reading the summary closes the observation window cleanly, and if you want to dive deeper into eBPF, check out the tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial>.
+This tutorial demonstrated how to measure kernel function latency using the fsession mechanism in Linux 7.0. Compared to the traditional approach of two fentry/fexit programs with a hash map, fsession handles both entry and return in a single program. The 8-byte per-invocation session cookie replaces the external correlation map for carrying timestamps, resulting in cleaner code, no state-leak risk, and lower performance overhead.
+
+The tool's design demonstrates the core fsession pattern: use `bpf_session_is_return` to distinguish phases, use `bpf_session_cookie` to pass per-invocation state, and access function arguments and return values directly in the return phase. This pattern applies to any scenario requiring correlation between function entry and return.
+
+> To learn more about eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit <https://eunomia.dev/tutorials/>.
 
 ## References
 
