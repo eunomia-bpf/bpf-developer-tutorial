@@ -180,6 +180,11 @@ jobs:
       run: |
           make -C src/50-tcx
 
+    - name: test 51 TCP quarantine
+      run: |
+          make -C src/51-tcp-quarantine
+          sudo timeout 30 make -C src/51-tcp-quarantine test
+
     - name: test 53 egress pacer
       run: |
           make -C src/53-egress-pacer

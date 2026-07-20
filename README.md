@@ -99,6 +99,7 @@ Security:
 - [lesson 27-replace](src/27-replace/README.md) Transparent Text Replacement in File Reads
 - [lesson 28-detach](src/28-detach/README.md) Running eBPF After Application Exits: The Lifecycle of eBPF Programs
 - [lesson 34-syscall](src/34-syscall/README.md) Modifying System Call Arguments with eBPF
+- [lesson 51-tcp-quarantine](src/51-tcp-quarantine/README.md) Targeted TCP Connection Quarantine
 - [lesson 54-exec-image-inspector](src/54-exec-image-inspector/README.md) Inspect the Executable Image After exec
 
 
