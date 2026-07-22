@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
-"""Deterministic KVM checks for the deferred executable image inspector."""
+"""Deterministic KVM checks for the continuous executable image inspector."""
 
 from __future__ import annotations
 
 import os
 import re
+import select
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 
 MARKER = b"EIPROBE!"
 PROBE_DISTANCE = 4 * 1024 * 1024
+WORKERS = 16
 
 SUMMARY = re.compile(
     r"SUMMARY matched=(\d+) scheduled=(\d+) schedule_errors=(\d+) "
-    r"callbacks=(\d+) header_errors=(\d+) path_errors=(\d+) "
+    r"callbacks=(\d+) completed=(\d+) header_errors=(\d+) path_errors=(\d+) "
     r"direct_probes=(\d+) direct_probe_errors=(\d+) "
     r"deferred_probes=(\d+) deferred_probe_errors=(\d+) dropped=(\d+) "
-    r"events=(\d+) command_exit=(\d+)"
+    r"cleanup_errors=(\d+) events=(\d+)"
 )
 
 
@@ -44,6 +48,7 @@ def parse_summary(output: str) -> dict[str, int]:
         "scheduled",
         "schedule_errors",
         "callbacks",
+        "completed",
         "header_errors",
         "path_errors",
         "direct_probes",
@@ -51,8 +56,8 @@ def parse_summary(output: str) -> dict[str, int]:
         "deferred_probes",
         "deferred_probe_errors",
         "dropped",
+        "cleanup_errors",
         "events",
-        "command_exit",
     )
     return dict(zip(names, map(int, match.groups())))
 
@@ -73,124 +78,125 @@ def create_probe_image(fixture: str, directory: str) -> tuple[str, int]:
     return image, probe_offset
 
 
-def test_missing_command(inspector: str) -> dict[str, int]:
-    missing = "/definitely/missing/exec-image-inspector-fixture"
-    result = run(
-        inspector,
-        "--timeout-ms", "500",
-        "--",
-        missing,
-        check=False,
-    )
-    assert result.returncode != 0, result.stdout
-    assert f"failed to execute {missing}" in result.stdout, result.stdout
-    assert "no executable image event was observed" in result.stdout, result.stdout
-    stats = parse_summary(result.stdout)
-    assert stats["matched"] == 0, stats
-    assert stats["scheduled"] == 0, stats
-    assert stats["callbacks"] == 0, stats
-    assert stats["events"] == 0, stats
-    assert stats["command_exit"] == 127, stats
-    return stats
+def test_cli(inspector: str) -> None:
+    help_result = run(inspector, "--help")
+    assert help_result.returncode == 0, help_result.stdout
+    assert "Continuously inspect executable images" in help_result.stdout
+    assert "--timeout-ms" not in help_result.stdout
+
+    legacy_result = run(inspector, "--", "/bin/true", check=False)
+    assert legacy_result.returncode == 2, legacy_result.stdout
+    assert "unexpected argument: /bin/true" in legacy_result.stdout
+
+    zero_offset = run(inspector, "--probe-offset", "0", check=False)
+    assert zero_offset.returncode == 2, zero_offset.stdout
+    assert "invalid probe offset: 0" in zero_offset.stdout
 
 
-def test_timeout_cleanup(inspector: str) -> dict[str, int]:
-    result = run(
-        inspector,
-        "--timeout-ms", "200",
-        "--",
-        "/bin/sleep", "2",
-        check=False,
-    )
-    assert result.returncode == 128 + 9, result.stdout
-    assert "command exceeded timeout; sending SIGKILL" in result.stdout, result.stdout
-    stats = parse_summary(result.stdout)
-    assert stats["matched"] == 1, stats
-    assert stats["scheduled"] == 1, stats
-    assert stats["callbacks"] == 1, stats
-    assert stats["events"] == 1, stats
-    assert stats["command_exit"] == 137, stats
-    return stats
+def stop_monitor(
+    monitor: subprocess.Popen[str], signal_number: signal.Signals
+) -> tuple[int, str]:
+    monitor.send_signal(signal_number)
+    try:
+        output, _ = monitor.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        monitor.kill()
+        output, _ = monitor.communicate()
+        raise AssertionError("monitor did not stop after signal:\n" + output)
+    return monitor.returncode, output
 
 
-def test_reexec_chain(inspector: str) -> tuple[dict[str, int], str]:
-    final_path = os.path.realpath("/bin/true")
-    result = run(
-        inspector,
-        "--timeout-ms", "1000",
-        "--",
-        "/bin/sh", "-c", "exec /bin/true",
-        check=False,
-    )
-    assert result.returncode == 0, result.stdout
-    exec_lines = [
-        line for line in result.stdout.splitlines() if line.startswith("EXEC ")
-    ]
-    assert len(exec_lines) == 2, result.stdout
-    assert f"path={final_path}" in exec_lines[-1], exec_lines[-1]
+def wait_until_ready(monitor: subprocess.Popen[str]) -> list[str]:
+    lines: list[str] = []
+    deadline = time.monotonic() + 8
+    assert monitor.stdout is not None
 
-    stats = parse_summary(result.stdout)
-    assert stats["matched"] == 2, stats
-    assert stats["scheduled"] == 2, stats
-    assert stats["callbacks"] == 2, stats
-    assert stats["events"] == 2, stats
-    assert stats["command_exit"] == 0, stats
-    return stats, final_path
+    while time.monotonic() < deadline:
+        readable, _, _ = select.select([monitor.stdout], [], [], 0.25)
+        if readable:
+            line = monitor.stdout.readline()
+            if line:
+                lines.append(line)
+                if line.startswith("READY "):
+                    return lines
+        if monitor.poll() is not None:
+            break
+
+    monitor.kill()
+    remainder, _ = monitor.communicate()
+    raise AssertionError("monitor did not become ready:\n" + "".join(lines) + remainder)
 
 
-def test_deferred_probe(inspector: str, fixture: str) -> str:
+def test_continuous_monitor(
+    inspector: str, fixture: str
+) -> tuple[str, dict[str, int]]:
     with tempfile.TemporaryDirectory(prefix="exec-image-inspector-") as directory:
         image, probe_offset = create_probe_image(fixture, directory)
-        result = run(
-            inspector,
-            "--probe-offset", str(probe_offset),
-            "--timeout-ms", "3000",
-            "--",
-            image,
-            check=False,
+        monitor = subprocess.Popen(
+            [inspector, "--probe-offset", str(probe_offset)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
         )
-        assert result.returncode == 0, result.stdout
+        try:
+            lines = wait_until_ready(monitor)
 
-        exec_line = next(
-            (line for line in result.stdout.splitlines() if line.startswith("EXEC ")),
-            "",
+            workers = [
+                subprocess.Popen(
+                    [image], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+                )
+                for _ in range(WORKERS)
+            ]
+            for worker in workers:
+                assert worker.wait(timeout=5) == 0
+
+            reexec = run("/bin/sh", "-c", "exec /bin/true")
+            assert reexec.returncode == 0, reexec.stdout
+            time.sleep(1)
+            returncode, remainder = stop_monitor(monitor, signal.SIGINT)
+            output = "".join(lines) + remainder
+        finally:
+            if monitor.poll() is None:
+                monitor.kill()
+                monitor.wait()
+
+        assert returncode == 0, output
+        assert f"READY scope=system-wide probe_offset={probe_offset}" in output, output
+
+        exec_lines = [
+            line for line in output.splitlines() if line.startswith("EXEC ")
+        ]
+        image_lines = [line for line in exec_lines if f"path={image}" in line]
+        assert len(image_lines) == WORKERS, output
+        assert all("is_elf=1" in line for line in image_lines), image_lines
+        assert all("class=ELF64" in line for line in image_lines), image_lines
+        assert all("endian=LSB" in line for line in image_lines), image_lines
+        assert all("machine=EM_X86_64(62)" in line for line in image_lines), image_lines
+        assert all("header_error=0 path_error=0" in line for line in image_lines)
+
+        final_path = os.path.realpath("/bin/true")
+        assert any(f"path={final_path}" in line for line in exec_lines), output
+
+        probe_lines = [
+            line for line in output.splitlines() if line.startswith("PROBE ")
+        ]
+        expected_probe = (
+            f"offset={probe_offset} direct_error=-14 deferred_error=0 "
+            f"bytes={MARKER.hex()}"
         )
-        assert exec_line, result.stdout
-        assert f"path={image}" in exec_line, exec_line
-        assert "is_elf=1" in exec_line, exec_line
-        assert "class=ELF64" in exec_line, exec_line
-        assert "endian=LSB" in exec_line, exec_line
-        assert "machine=EM_X86_64(62)" in exec_line, exec_line
-        assert "header_error=0 path_error=0" in exec_line, exec_line
+        assert any(expected_probe in line for line in probe_lines), output
 
-        probe_line = next(
-            (line for line in result.stdout.splitlines() if line.startswith("PROBE ")),
-            "",
-        )
-        assert probe_line, result.stdout
-        assert f"offset={probe_offset}" in probe_line, probe_line
-        assert "direct_error=-14" in probe_line, probe_line
-        assert "deferred_error=0" in probe_line, probe_line
-        assert f"bytes={MARKER.hex()}" in probe_line, probe_line
-
-        stats = parse_summary(result.stdout)
-        expected = {
-            "matched": 1,
-            "scheduled": 1,
-            "schedule_errors": 0,
-            "callbacks": 1,
-            "header_errors": 0,
-            "path_errors": 0,
-            "direct_probes": 1,
-            "direct_probe_errors": 1,
-            "deferred_probes": 1,
-            "deferred_probe_errors": 0,
-            "dropped": 0,
-            "events": 1,
-            "command_exit": 0,
-        }
-        assert stats == expected, stats
-        return result.stdout
+        stats = parse_summary(output)
+        assert stats["matched"] >= WORKERS + 2, stats
+        assert stats["scheduled"] == stats["matched"], stats
+        assert stats["schedule_errors"] == 0, stats
+        assert stats["callbacks"] == stats["scheduled"], stats
+        assert stats["completed"] == stats["scheduled"], stats
+        assert stats["events"] == stats["completed"], stats
+        assert stats["dropped"] == 0, stats
+        assert stats["cleanup_errors"] == 0, stats
+        assert stats["deferred_probe_errors"] == stats["matched"] - WORKERS, stats
+        return output, stats
 
 
 def main() -> int:
@@ -204,30 +210,17 @@ def main() -> int:
         sys.argv[2] if len(sys.argv) > 2 else "./tests/exec_fixture"
     )
 
-    missing_stats = test_missing_command(inspector)
-    timeout_stats = test_timeout_cleanup(inspector)
-    reexec_stats, final_path = test_reexec_chain(inspector)
-    output = test_deferred_probe(inspector, fixture)
+    test_cli(inspector)
+    output, stats = test_continuous_monitor(inspector, fixture)
     print(
-        "TEST-MISSING "
-        f"matched={missing_stats['matched']} events={missing_stats['events']} "
-        f"command_exit={missing_stats['command_exit']}"
-    )
-    print(
-        "TEST-TIMEOUT "
-        f"matched={timeout_stats['matched']} callbacks={timeout_stats['callbacks']} "
-        f"events={timeout_stats['events']} command_exit={timeout_stats['command_exit']}"
-    )
-    print(
-        "TEST-REEXEC "
-        f"matched={reexec_stats['matched']} callbacks={reexec_stats['callbacks']} "
-        f"events={reexec_stats['events']} command_exit={reexec_stats['command_exit']} "
-        f"final_path={final_path}"
+        "TEST-CONTINUOUS "
+        f"workers={WORKERS} matched={stats['matched']} "
+        f"callbacks={stats['callbacks']} events={stats['events']}"
     )
     print(output, end="")
     print(
-        "PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, "
-        "and deferred file read succeeded"
+        "PASS: persistent monitoring, concurrent execs, signal cleanup, ELF decode, "
+        "and deferred file reads succeeded"
     )
     return 0
 

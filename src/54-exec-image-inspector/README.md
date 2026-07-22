@@ -2,7 +2,7 @@
 
 When a process calls `execve`, the kernel replaces its memory image with a new executable. But which executable, exactly? If the command line says `/usr/bin/wrapper.sh --config /etc/app.conf`, the actual running code might be a Python interpreter or a compiled binary launched three layers deep through wrapper scripts. Security tools, container runtimes, and troubleshooting utilities all need to know what the kernel *actually* installed, not just what the user typed.
 
-This tutorial builds a tool that captures that information at the kernel level. It hooks the moment credentials are committed after exec, schedules a deferred callback, then reads the installed executable's ELF header and reports the architecture, byte order, and file type. Along the way, it demonstrates two recent kernel features (BPF task work and file dynptr) that together solve a problem traditional eBPF approaches cannot.
+This tutorial builds a continuously running tool that captures that information at the kernel level. It hooks the moment credentials are committed after each successful exec, schedules a deferred callback, then reads the installed executable's ELF header and reports the architecture, byte order, and file type. Along the way, it demonstrates two recent kernel features (BPF task work and file dynptr) that together solve a problem traditional eBPF approaches cannot.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 
@@ -13,6 +13,8 @@ Why would a security tool need to read the executable's content rather than just
 The most direct approach to inspecting an executable is reading `/proc/<pid>/exe`, but this only works if the process is still alive. Short-lived processes exit before you can read them. Even if you catch them in time, the `/proc` filesystem is accessed from user space, creating a race window: by the time you read the symlink, the process might have called `execve` again.
 
 Tracepoints and kprobes can hook `sched_process_exec` to observe exec events synchronously, but these hooks run in what the kernel calls a **non-sleepable context**. This matters because of how Linux manages file data in memory.
+
+This tutorial uses an LSM hook for a second, stricter reason: the kernel exposes `bpf_get_task_exe_file`, `bpf_put_file`, and `bpf_path_d_path` only to BPF LSM programs. A `sched_process_exec` tracepoint can report basic exec metadata, but it cannot call those kfuncs, and its borrowed `bprm->file` cannot be retained across an asynchronous task-work boundary. Without BPF LSM, this exact design cannot reliably recover the installed executable file and path for deferred cold-page reads.
 
 When you read from a file, the kernel first checks whether the requested bytes are already in the **page cache**, a memory region that caches recently-accessed file data. If they are, the read completes immediately. If they are not (a **cold page**), the kernel must issue I/O to the storage device, and the calling context must **sleep** while waiting for that I/O to complete.
 
@@ -28,17 +30,17 @@ Linux 6.19 introduced **file dynptr**, which provides verifier-tracked access to
 
 Combining these features, the design becomes:
 
-1. Attach an LSM hook to `bprm_committed_creds`, which fires after exec installs the new credentials
-2. In the hook (non-sleepable), identify the target process and schedule a task work callback
+1. Attach an LSM hook to `bprm_committed_creds`, which fires after each successful exec installs the new credentials
+2. In the hook (non-sleepable), create per-exec state and schedule a task work callback
 3. The callback runs in a sleepable context, where it can access the installed executable, read content from any offset (including cold pages), and send results to user space
 
-This separation (identify the target in a non-sleepable hook, do the heavy lifting in a sleepable callback) is the key insight.
+This separation (admit the exec in a non-sleepable hook, do the heavy lifting in a sleepable callback) is the key insight.
 
 ## How BPF task work operates
 
 When you call `bpf_task_work_schedule_signal(task, work, map, callback)`, the kernel associates your callback with the specified task. The callback does not run immediately; it runs later, at a safe point before that task returns to user space.
 
-The `struct bpf_task_work` is an opaque structure that the kernel uses to track the scheduled callback. Your BPF program allocates storage for it but does not interpret its contents. This tool uses a single-element ARRAY map to hold `struct exec_work`, which contains the `bpf_task_work` storage plus fields for timestamps and intermediate results.
+The `struct bpf_task_work` is an opaque structure that the kernel uses to track the scheduled callback. Your BPF program allocates storage for it but does not interpret its contents. This tool uses a HASH map keyed by `pid_tgid`; each `struct exec_work` value contains the `bpf_task_work` storage plus fields for timestamps and intermediate results. Separate keys allow concurrent execs to remain independent.
 
 The callback signature is `int callback(struct bpf_map *map, void *key, void *value)`. The `value` parameter points to the map element containing your `bpf_task_work`, so you can pass data from the scheduling hook to the callback through surrounding fields.
 
@@ -56,18 +58,11 @@ In a non-sleepable context, `bpf_dynptr_read` only succeeds if the target bytes 
 
 ## Tool architecture
 
-The user-space program forks a child process, but holds the child blocked on a pipe before it calls `execvp`. This gives the parent time to:
+The user-space program loads and attaches the BPF program, creates a ring buffer reader, and prints `READY scope=system-wide`. It then remains active until SIGINT or SIGTERM, so workloads can start independently after readiness instead of being launched through a special child-command interface.
 
-1. Note the child's PID (which becomes its TGID, thread group ID)
-2. Open the BPF skeleton and write the target TGID into read-only data
-3. Load and attach the BPF program
-4. Create a ring buffer reader
+For every successful exec after `READY`, the `lsm/bprm_committed_creds` hook inserts one `exec_work` value into the `pending` HASH map under the current `pid_tgid`, records a timestamp, and schedules a task work callback. Failed insertions or scheduling attempts are counted and clean up the map entry.
 
-Only then does the parent release the child by writing to the pipe. This handshake eliminates a race condition: without it, a fast-exiting command might finish before the BPF program attaches.
-
-When the child calls `execvp`, the `lsm/bprm_committed_creds` hook fires. The BPF program compares the current TGID with the configured target; if they match, it records a timestamp and schedules a task work callback.
-
-The callback (`inspect_executable`) runs in the child's sleepable context. It:
+The callback (`inspect_executable`) runs later in the execing task's sleepable context. It:
 
 1. Calls `bpf_get_task_exe_file` to get the installed executable (returning a referenced `struct file` that must be released with `bpf_put_file`)
 2. Resolves the path with `bpf_path_d_path`
@@ -75,7 +70,7 @@ The callback (`inspect_executable`) runs in the child's sleepable context. It:
 4. Parses ELF fields: magic number, class (32/64-bit), data (endianness), type (executable vs shared object), and machine (architecture)
 5. Sends an event through the ring buffer
 
-User space polls the ring buffer while also checking whether the child has exited. A single child might exec multiple times (for example, `/bin/sh -c 'exec /bin/true'` first execs the shell, then execs `/bin/true`), so after the child exits, the tool drains any remaining events from the ring buffer.
+User space polls the ring buffer until a signal arrives. Shutdown first detaches the LSM program to stop admitting new execs, waits until `completed >= scheduled`, drains remaining events, prints stable counters, and only then destroys the skeleton. This ordering prevents queued callbacks from outliving their maps or ring buffer.
 
 ![Exec image inspector data flow](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/54-exec-image-inspector/exec-image-flow.png)
 
@@ -121,6 +116,7 @@ struct inspector_stats {
 	unsigned long long scheduled;
 	unsigned long long schedule_errors;
 	unsigned long long callbacks;
+	unsigned long long completed;
 	unsigned long long header_errors;
 	unsigned long long path_errors;
 	unsigned long long direct_probes;
@@ -128,6 +124,7 @@ struct inspector_stats {
 	unsigned long long deferred_probes;
 	unsigned long long deferred_probe_errors;
 	unsigned long long dropped;
+	unsigned long long cleanup_errors;
 };
 
 #endif /* __EXEC_IMAGE_INSPECTOR_H */
@@ -196,7 +193,6 @@ char LICENSE[] SEC("license") = "GPL";
 #define ELFDATA2LSB 1
 #define ELFDATA2MSB 2
 
-const volatile __u32 target_tgid;
 const volatile __u32 probe_offset;
 
 struct inspector_stats stats;
@@ -213,9 +209,10 @@ struct exec_work {
 };
 
 struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
-	__type(key, __u32);
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__uint(max_entries, 4096);
+	__type(key, __u64);
 	__type(value, struct exec_work);
 } pending SEC(".maps");
 
@@ -256,21 +253,82 @@ record:
 	return err;
 }
 
-static int inspect_executable(struct bpf_map *map, void *key, void *value)
+static __always_inline void record_header_error(struct exec_event *event, int err)
+{
+	event->header_error = err;
+	__sync_fetch_and_add(&stats.header_errors, 1);
+}
+
+static __always_inline void record_deferred_probe(struct exec_event *event,
+						   int err)
+{
+	if (!probe_offset)
+		return;
+
+	event->deferred_probe_error = err;
+	__sync_fetch_and_add(&stats.deferred_probes, 1);
+	if (err)
+		__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
+}
+
+static __always_inline void parse_elf_header(const unsigned char *header,
+					     struct exec_event *event)
+{
+	if (event->header_error || header[0] != 0x7f || header[1] != 'E' ||
+	    header[2] != 'L' || header[3] != 'F')
+		return;
+
+	event->is_elf = 1;
+	event->elf_class = header[EI_CLASS];
+	event->elf_data = header[EI_DATA];
+	event->elf_type = read_elf_u16(header, 16, event->elf_data);
+	event->elf_machine = read_elf_u16(header, 18, event->elf_data);
+}
+
+static __always_inline void inspect_file(struct file *file,
+					 struct exec_event *event)
 {
 	unsigned char header[64] = {};
+	struct bpf_dynptr dynptr;
+	int err;
+
+	err = bpf_path_d_path(&file->f_path, event->path, sizeof(event->path));
+	if (err < 0) {
+		event->path_error = err;
+		__sync_fetch_and_add(&stats.path_errors, 1);
+	}
+
+	err = bpf_dynptr_from_file(file, 0, &dynptr);
+	if (err) {
+		bpf_dynptr_file_discard(&dynptr);
+		record_header_error(event, err);
+		record_deferred_probe(event, err);
+		return;
+	}
+
+	err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
+	if (err)
+		record_header_error(event, err);
+
+	if (probe_offset) {
+		err = bpf_dynptr_read(event->probe_bytes,
+				      sizeof(event->probe_bytes),
+				      &dynptr, probe_offset, 0);
+		record_deferred_probe(event, err);
+	}
+	bpf_dynptr_file_discard(&dynptr);
+	parse_elf_header(header, event);
+}
+
+static int inspect_executable(struct bpf_map *map, void *key, void *value)
+{
 	struct exec_work *work = value;
 	struct exec_event event = {};
 	struct task_struct *task;
-	struct bpf_dynptr dynptr;
 	struct file *file;
 	__u64 pid_tgid;
-	int err;
 
-	(void)map;
-	(void)key;
 	__sync_fetch_and_add(&stats.callbacks, 1);
-
 	pid_tgid = bpf_get_current_pid_tgid();
 	event.pid = (__u32)pid_tgid;
 	event.tgid = pid_tgid >> 32;
@@ -282,65 +340,19 @@ static int inspect_executable(struct bpf_map *map, void *key, void *value)
 	task = bpf_get_current_task_btf();
 	file = bpf_get_task_exe_file(task);
 	if (!file) {
-		event.header_error = -ENOENT;
-		__sync_fetch_and_add(&stats.header_errors, 1);
-		if (probe_offset) {
-			event.deferred_probe_error = -ENOENT;
-			__sync_fetch_and_add(&stats.deferred_probes, 1);
-			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
-		}
+		record_header_error(&event, -ENOENT);
+		record_deferred_probe(&event, -ENOENT);
 		goto emit;
 	}
 
-	err = bpf_path_d_path(&file->f_path, event.path, sizeof(event.path));
-	if (err < 0) {
-		event.path_error = err;
-		__sync_fetch_and_add(&stats.path_errors, 1);
-	}
-
-	err = bpf_dynptr_from_file(file, 0, &dynptr);
-	if (err) {
-		bpf_dynptr_file_discard(&dynptr);
-		event.header_error = err;
-		__sync_fetch_and_add(&stats.header_errors, 1);
-		if (probe_offset) {
-			event.deferred_probe_error = err;
-			__sync_fetch_and_add(&stats.deferred_probes, 1);
-			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
-		}
-		goto put_file;
-	}
-
-	err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
-	if (err) {
-		event.header_error = err;
-		__sync_fetch_and_add(&stats.header_errors, 1);
-	}
-
-	if (probe_offset) {
-		__sync_fetch_and_add(&stats.deferred_probes, 1);
-		err = bpf_dynptr_read(event.probe_bytes, sizeof(event.probe_bytes),
-				      &dynptr, probe_offset, 0);
-		event.deferred_probe_error = err;
-		if (err)
-			__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
-	}
-	bpf_dynptr_file_discard(&dynptr);
-
-	if (!event.header_error && header[0] == 0x7f && header[1] == 'E' &&
-	    header[2] == 'L' && header[3] == 'F') {
-		event.is_elf = 1;
-		event.elf_class = header[EI_CLASS];
-		event.elf_data = header[EI_DATA];
-		event.elf_type = read_elf_u16(header, 16, event.elf_data);
-		event.elf_machine = read_elf_u16(header, 18, event.elf_data);
-	}
-
-put_file:
+	inspect_file(file, &event);
 	bpf_put_file(file);
 emit:
 	if (bpf_ringbuf_output(&events, &event, sizeof(event), 0))
 		__sync_fetch_and_add(&stats.dropped, 1);
+	if (bpf_map_delete_elem(map, key))
+		__sync_fetch_and_add(&stats.cleanup_errors, 1);
+	__sync_fetch_and_add(&stats.completed, 1);
 	return 0;
 }
 
@@ -348,20 +360,25 @@ SEC("lsm/bprm_committed_creds")
 void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 {
 	struct task_struct *task;
+	struct exec_work empty_work = {};
 	struct exec_work *work;
 	__u64 pid_tgid;
-	__u32 key = 0, tgid;
+	__u64 key;
 	int err;
 
 	pid_tgid = bpf_get_current_pid_tgid();
-	tgid = pid_tgid >> 32;
-	if (target_tgid && tgid != target_tgid)
-		return;
-
+	key = pid_tgid;
 	__sync_fetch_and_add(&stats.matched, 1);
+	err = bpf_map_update_elem(&pending, &key, &empty_work, BPF_NOEXIST);
+	if (err) {
+		__sync_fetch_and_add(&stats.schedule_errors, 1);
+		return;
+	}
 	work = bpf_map_lookup_elem(&pending, &key);
 	if (!work) {
 		__sync_fetch_and_add(&stats.schedule_errors, 1);
+		if (bpf_map_delete_elem(&pending, &key))
+			__sync_fetch_and_add(&stats.cleanup_errors, 1);
 		return;
 	}
 
@@ -372,29 +389,31 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 					    inspect_executable);
 	if (err) {
 		__sync_fetch_and_add(&stats.schedule_errors, 1);
+		if (bpf_map_delete_elem(&pending, &key))
+			__sync_fetch_and_add(&stats.cleanup_errors, 1);
 		return;
 	}
 	__sync_fetch_and_add(&stats.scheduled, 1);
 }
 ```
 
-The entry point is `schedule_exec_inspection`, declared with `SEC("lsm/bprm_committed_creds")`. This LSM hook fires after the new executable's credentials have been installed, so `bprm->file` points to the file being executed. The hook itself is non-sleepable, but it can identify the target and schedule the deferred work.
+The entry point is `schedule_exec_inspection`, declared with `SEC("lsm/bprm_committed_creds")`. This LSM hook fires after the new executable's credentials have been installed, so `bprm->file` points to the file being executed. The hook itself is non-sleepable, but it can admit the exec and schedule the deferred work.
 
-The two `const volatile` variables (`target_tgid` and `probe_offset`) live in the `.rodata` section. User space writes values between `open()` and `load()`, and the verifier treats them as compile-time constants for optimization.
+The optional `probe_offset` variable lives in `.rodata`. User space writes it between `open()` and `load()`, and the verifier treats it as a compile-time constant for optimization.
 
-When the target matches, the program looks up `struct exec_work` from the single-element `pending` ARRAY map. This structure holds the `bpf_task_work` storage plus a timestamp and optional direct-probe result. A single slot suffices because this tool observes one child process per invocation.
+For each exec, the program inserts a zeroed `struct exec_work` into the `pending` HASH map with `BPF_NOEXIST`, keyed by `pid_tgid`, then looks it up to fill the timestamp and optional direct-probe result. The callback deletes that exact key. This supports concurrent execs without sharing one task-work slot.
 
 The optional `--probe-offset` flag makes the tool attempt a direct read in the non-sleepable hook via `probe_file_without_sleep`. The test suite uses this to verify that reading a cold page fails with `-EFAULT` in the non-sleepable context but succeeds in the sleepable callback.
 
-After saving the timestamp and direct-probe result, the hook calls `bpf_task_work_schedule_signal`. The kernel holds the references needed to execute the callback later.
+After saving the timestamp and direct-probe result, the hook calls `bpf_task_work_schedule_signal`. The kernel holds the references needed to execute the callback later. Every insert, lookup, or scheduling failure is counted, and every path that created pending state deletes it.
 
 The callback `inspect_executable` calculates latency for diagnostics, then acquires the executable file with `bpf_get_task_exe_file`. This returns a referenced `struct file` that must be released with `bpf_put_file`. The callback resolves the path, creates a file dynptr, reads the 64-byte ELF header, and parses it. The `read_elf_u16` helper handles endianness: ELF files declare their byte order in the header, and multi-byte fields must be read accordingly.
 
-Every path that creates a dynptr, success or failure, must call `bpf_dynptr_file_discard`. Finally, `bpf_ringbuf_output` sends the event to user space.
+Every path that creates a dynptr, success or failure, must call `bpf_dynptr_file_discard`. Finally, `bpf_ringbuf_output` sends the event to user space, the callback deletes its pending entry, and `completed` is incremented so shutdown can wait for finished work rather than merely scheduled work.
 
 ### User-space loader
 
-`exec_image_inspector.c` coordinates the child process, loads BPF, receives events, and reports results:
+`exec_image_inspector.c` loads BPF, receives events continuously, handles signals, and reports results:
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -403,13 +422,9 @@ Every path that creates a dynptr, success or failure, must call `bpf_dynptr_file
 #include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include <bpf/libbpf.h>
 #include "exec_image_inspector.h"
@@ -417,26 +432,15 @@ Every path that creates a dynptr, success or failure, must call `bpf_dynptr_file
 
 struct environment {
 	unsigned long long probe_offset;
-	unsigned int timeout_ms;
 	bool verbose;
-	char **command;
-};
-
-struct child_process {
-	pid_t pid;
-	int release_fd;
-	bool released;
-	bool reaped;
-	int status;
 };
 
 struct event_context {
-	unsigned int seen;
+	unsigned long long seen;
 };
 
-static struct environment env = {
-	.timeout_ms = 5000,
-};
+static struct environment env;
+static volatile sig_atomic_t exiting;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 			   va_list args)
@@ -446,40 +450,28 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 	return vfprintf(stderr, format, args);
 }
 
-static void usage(const char *program)
+static void usage(FILE *stream, const char *program)
 {
-	fprintf(stderr,
-		"Usage: %s [--probe-offset BYTES] [--timeout-ms MS] [--verbose] "
-		"-- COMMAND [ARG...]\n\n"
-		"Inspect the executable image installed by one command.\n\n"
+	fprintf(stream,
+		"Usage: %s [--probe-offset BYTES] [--verbose]\n\n"
+		"Continuously inspect executable images installed by exec.\n"
+		"Press Ctrl-C to stop and print a summary.\n\n"
 		"Options:\n"
-		"  -p, --probe-offset BYTES  also compare direct/deferred file reads\n"
-		"  -t, --timeout-ms MS       bound the command, 100-60000 "
-		"(default: 5000)\n"
+		"  -p, --probe-offset BYTES  compare reads at a positive offset\n"
 		"  -v, --verbose             print libbpf diagnostics\n"
 		"  -h, --help                show this help\n",
 		program);
 }
 
-static int parse_u64(const char *value, unsigned long long maximum,
-			     unsigned long long *result)
+static int parse_probe_offset(const char *value)
 {
 	char *end = NULL;
 	unsigned long long parsed;
 
 	errno = 0;
 	parsed = strtoull(value, &end, 10);
-	if (errno || end == value || *end || parsed > maximum)
-		return -EINVAL;
-	*result = parsed;
-	return 0;
-}
-
-static int parse_probe_offset(const char *value)
-{
-	unsigned long long parsed;
-
-	if (parse_u64(value, UINT_MAX - EXEC_PROBE_LEN, &parsed)) {
+	if (errno || end == value || *end || !parsed ||
+	    parsed > UINT_MAX - EXEC_PROBE_LEN) {
 		fprintf(stderr, "invalid probe offset: %s\n", value);
 		return -EINVAL;
 	}
@@ -487,152 +479,56 @@ static int parse_probe_offset(const char *value)
 	return 0;
 }
 
-static int parse_timeout(const char *value)
-{
-	unsigned long long parsed;
-
-	if (parse_u64(value, 60000, &parsed) || parsed < 100) {
-		fprintf(stderr, "invalid timeout in milliseconds: %s\n", value);
-		return -EINVAL;
-	}
-	env.timeout_ms = parsed;
-	return 0;
-}
-
-static int parse_option(int option, const char *program)
-{
-	switch (option) {
-	case 'p':
-		return parse_probe_offset(optarg);
-	case 't':
-		return parse_timeout(optarg);
-	case 'v':
-		env.verbose = true;
-		return 0;
-	case 'h':
-		usage(program);
-		exit(0);
-	default:
-		return -EINVAL;
-	}
-}
-
 static int parse_args(int argc, char **argv)
 {
 	static const struct option options[] = {
 		{ "probe-offset", required_argument, NULL, 'p' },
-		{ "timeout-ms", required_argument, NULL, 't' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{},
 	};
-	int error, option;
+	int option;
 
-	while ((option = getopt_long(argc, argv, "+p:t:vh", options, NULL)) != -1) {
-		error = parse_option(option, argv[0]);
-		if (error)
-			return error;
+	while ((option = getopt_long(argc, argv, "+p:vh", options, NULL)) != -1) {
+		switch (option) {
+		case 'p':
+			if (parse_probe_offset(optarg))
+				return -EINVAL;
+			break;
+		case 'v':
+			env.verbose = true;
+			break;
+		case 'h':
+			usage(stdout, argv[0]);
+			exit(0);
+		default:
+			return -EINVAL;
+		}
 	}
 
-	if (optind == argc) {
-		fprintf(stderr, "COMMAND is required\n");
+	if (optind != argc) {
+		fprintf(stderr, "unexpected argument: %s\n", argv[optind]);
 		return -EINVAL;
 	}
-	env.command = &argv[optind];
 	return 0;
 }
 
-static long long monotonic_milliseconds(void)
+static void handle_signal(int signal_number)
 {
-	struct timespec timestamp;
-
-	if (clock_gettime(CLOCK_MONOTONIC, &timestamp))
-		return -errno;
-	return timestamp.tv_sec * 1000LL + timestamp.tv_nsec / 1000000;
+	(void)signal_number;
+	exiting = 1;
 }
 
-static int start_blocked_child(struct child_process *child)
+static int install_signal_handlers(void)
 {
-	int pipe_fds[2];
-	pid_t pid;
+	struct sigaction action = {
+		.sa_handler = handle_signal,
+	};
 
-	if (pipe(pipe_fds))
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL))
 		return -errno;
-
-	pid = fork();
-	if (pid < 0) {
-		int error = -errno;
-
-		close(pipe_fds[0]);
-		close(pipe_fds[1]);
-		return error;
-	}
-
-	if (pid == 0) {
-		char release;
-		ssize_t count;
-
-		close(pipe_fds[1]);
-		do {
-			count = read(pipe_fds[0], &release, sizeof(release));
-		} while (count < 0 && errno == EINTR);
-		close(pipe_fds[0]);
-		if (count != sizeof(release))
-			_exit(126);
-
-		/* Intentional argv execution; no shell parses the supplied arguments. */
-		execvp(env.command[0], env.command); /* Flawfinder: ignore */
-		fprintf(stderr, "failed to execute %s: %s\n", env.command[0],
-			strerror(errno));
-		_exit(127);
-	}
-
-	close(pipe_fds[0]);
-	child->pid = pid;
-	child->release_fd = pipe_fds[1];
 	return 0;
-}
-
-static int release_child(struct child_process *child)
-{
-	char release = 1;
-	ssize_t count;
-
-	do {
-		count = write(child->release_fd, &release, sizeof(release));
-	} while (count < 0 && errno == EINTR);
-	close(child->release_fd);
-	child->release_fd = -1;
-	if (count != sizeof(release))
-		return count < 0 ? -errno : -EIO;
-	child->released = true;
-	return 0;
-}
-
-static int child_exit_code(int status)
-{
-	if (WIFEXITED(status))
-		return WEXITSTATUS(status);
-	if (WIFSIGNALED(status))
-		return 128 + WTERMSIG(status);
-	return 125;
-}
-
-static int reap_child(struct child_process *child, int options)
-{
-	pid_t result;
-
-	if (child->reaped)
-		return 1;
-	do {
-		result = waitpid(child->pid, &child->status, options);
-	} while (result < 0 && errno == EINTR);
-	if (result < 0)
-		return -errno;
-	if (result == 0)
-		return 0;
-	child->reaped = true;
-	return 1;
 }
 
 static int drain_events(struct ring_buffer *ring_buffer)
@@ -738,21 +634,7 @@ static int handle_event(void *context, void *data, size_t size)
 	return 0;
 }
 
-static void stop_child(struct child_process *child)
-{
-	if (child->reaped || child->pid <= 0)
-		return;
-	if (!child->released && child->release_fd >= 0) {
-		close(child->release_fd);
-		child->release_fd = -1;
-	} else {
-		kill(child->pid, SIGKILL);
-	}
-	(void)reap_child(child, 0);
-}
-
-static int setup_inspector(const struct child_process *child,
-			   struct event_context *events,
+static int setup_inspector(struct event_context *events,
 			   struct exec_image_inspector_bpf **skeleton,
 			   struct ring_buffer **ring_buffer)
 {
@@ -766,12 +648,16 @@ static int setup_inspector(const struct child_process *child,
 		return -ENOMEM;
 	}
 	*skeleton = skel;
-	skel->rodata->target_tgid = child->pid;
 	skel->rodata->probe_offset = env.probe_offset;
 
 	error = exec_image_inspector_bpf__load(skel);
 	if (error) {
-		fprintf(stderr, "failed to load BPF object: %s\n", strerror(-error));
+		fprintf(stderr,
+			"failed to load BPF object: %s\n"
+			"This monitor requires Linux 6.19+, BTF, BPF JIT, "
+			"CONFIG_BPF_LSM=y, and an active bpf LSM.\n"
+			"Check the active list with: cat /sys/kernel/security/lsm\n",
+			strerror(-error));
 		return error;
 	}
 	error = exec_image_inspector_bpf__attach(skel);
@@ -791,155 +677,107 @@ static int setup_inspector(const struct child_process *child,
 	return 0;
 }
 
-static int reap_timed_out_child(struct child_process *child)
+static int monitor_execs(struct ring_buffer *ring_buffer)
 {
 	int error;
 
-	if (child->reaped)
-		return 0;
-
-	fprintf(stderr, "command exceeded timeout; sending SIGKILL\n");
-	kill(child->pid, SIGKILL);
-	error = reap_child(child, 0);
-	if (error < 0) {
-		fprintf(stderr, "waitpid after timeout failed: %s\n",
-			strerror(-error));
-		return error;
-	}
-	return 0;
-}
-
-static int wait_for_command(struct ring_buffer *ring_buffer,
-			    struct child_process *child,
-			    const struct event_context *events)
-{
-	long long deadline, now;
-	int error;
-
-	printf("READY target_tgid=%d probe_offset=%llu timeout_ms=%u command=%s\n",
-	       child->pid, env.probe_offset, env.timeout_ms, env.command[0]);
+	printf("READY scope=system-wide probe_offset=%llu\n", env.probe_offset);
 	fflush(stdout);
-	error = release_child(child);
-	if (error) {
-		fprintf(stderr, "failed to release command process: %s\n",
-			strerror(-error));
-		return error;
-	}
-
-	now = monotonic_milliseconds();
-	if (now < 0) {
-		fprintf(stderr, "failed to read monotonic clock: %s\n",
-			strerror((int)-now));
-		return (int)now;
-	}
-	deadline = now + env.timeout_ms;
-
-	for (;;) {
-		error = ring_buffer__poll(ring_buffer, 50);
+	while (!exiting) {
+		error = ring_buffer__poll(ring_buffer, 100);
 		if (error == -EINTR)
 			continue;
 		if (error < 0) {
 			fprintf(stderr, "ring-buffer poll failed: %s\n", strerror(-error));
 			return error;
 		}
-
-		error = reap_child(child, WNOHANG);
-		if (error < 0) {
-			fprintf(stderr, "waitpid failed: %s\n", strerror(-error));
-			return error;
-		}
-		if (child->reaped && events->seen)
-			break;
-
-		now = monotonic_milliseconds();
-		if (now < 0)
-			return (int)now;
-		if (now >= deadline)
-			break;
-		if (child->reaped && !events->seen)
-			continue;
 	}
-
-	error = reap_timed_out_child(child);
-	if (error)
-		return error;
-	error = drain_events(ring_buffer);
-	if (error)
-		return error;
-	return child_exit_code(child->status);
+	return 0;
 }
 
-static int report_result(const struct exec_image_inspector_bpf *skel,
-			 const struct event_context *events, int command_exit)
+static int drain_pending_events(struct ring_buffer *ring_buffer,
+				const struct exec_image_inspector_bpf *skel)
+{
+	int attempts, error;
+
+	for (attempts = 0; attempts < 10; attempts++) {
+		if (skel->bss->stats.completed >= skel->bss->stats.scheduled)
+			return drain_events(ring_buffer);
+		error = ring_buffer__poll(ring_buffer, 100);
+		if (error == -EINTR)
+			continue;
+		if (error < 0) {
+			fprintf(stderr, "ring-buffer shutdown poll failed: %s\n",
+				strerror(-error));
+			return error;
+		}
+	}
+
+	fprintf(stderr, "timed out waiting for %llu scheduled callbacks\n",
+		skel->bss->stats.scheduled - skel->bss->stats.completed);
+	return -ETIMEDOUT;
+}
+
+static void report_result(const struct exec_image_inspector_bpf *skel,
+			  const struct event_context *events)
 {
 	struct inspector_stats final_stats = skel->bss->stats;
 
 	printf("SUMMARY matched=%llu scheduled=%llu schedule_errors=%llu "
-	       "callbacks=%llu header_errors=%llu path_errors=%llu "
+	       "callbacks=%llu completed=%llu header_errors=%llu path_errors=%llu "
 	       "direct_probes=%llu direct_probe_errors=%llu "
 	       "deferred_probes=%llu deferred_probe_errors=%llu dropped=%llu "
-	       "events=%u command_exit=%d\n",
+	       "cleanup_errors=%llu events=%llu\n",
 	       final_stats.matched, final_stats.scheduled,
 	       final_stats.schedule_errors, final_stats.callbacks,
-	       final_stats.header_errors, final_stats.path_errors,
+	       final_stats.completed, final_stats.header_errors,
+	       final_stats.path_errors,
 	       final_stats.direct_probes, final_stats.direct_probe_errors,
 	       final_stats.deferred_probes, final_stats.deferred_probe_errors,
-	       final_stats.dropped, events->seen, command_exit);
-
-	if (!events->seen) {
-		fprintf(stderr, "no executable image event was observed\n");
-		return 1;
-	}
-	if (command_exit) {
-		fprintf(stderr, "command exited with status %d\n", command_exit);
-		return command_exit;
-	}
-	return 0;
+	       final_stats.dropped, final_stats.cleanup_errors, events->seen);
 }
 
 int main(int argc, char **argv)
 {
 	struct exec_image_inspector_bpf *skel = NULL;
-	struct child_process child = { .release_fd = -1 };
 	struct event_context events = {};
 	struct ring_buffer *ring_buffer = NULL;
-	int command_exit, error, result = 1;
+	int error, result = 1;
 
 	error = parse_args(argc, argv);
 	if (error) {
-		usage(argv[0]);
+		usage(stderr, argv[0]);
 		return 2;
 	}
-
-	libbpf_set_print(libbpf_print_fn);
-	error = start_blocked_child(&child);
+	error = install_signal_handlers();
 	if (error) {
-		fprintf(stderr, "failed to create command process: %s\n",
+		fprintf(stderr, "failed to install signal handlers: %s\n",
 			strerror(-error));
 		return 1;
 	}
 
-	error = setup_inspector(&child, &events, &skel, &ring_buffer);
+	libbpf_set_print(libbpf_print_fn);
+	error = setup_inspector(&events, &skel, &ring_buffer);
 	if (error)
 		goto cleanup;
-	command_exit = wait_for_command(ring_buffer, &child, &events);
-	if (command_exit < 0)
-		goto cleanup;
-	result = report_result(skel, &events, command_exit);
+	error = monitor_execs(ring_buffer);
+	exec_image_inspector_bpf__detach(skel);
+	if (!error)
+		error = drain_pending_events(ring_buffer, skel);
+	report_result(skel, &events);
+	if (!error)
+		result = 0;
 
 cleanup:
-	stop_child(&child);
 	ring_buffer__free(ring_buffer);
 	exec_image_inspector_bpf__destroy(skel);
 	return result;
 }
 ```
 
-The core technique is the blocked-child handshake. `start_blocked_child` forks before BPF setup, but the child blocks on a pipe read. The parent notes the child's PID, opens the skeleton, writes `target_tgid`, loads and attaches, creates the ring buffer, and only then calls `release_child` to write to the pipe and let the child proceed to `execvp`.
+`setup_inspector` opens, configures, loads, and attaches the skeleton before creating the ring buffer. `monitor_execs` prints `READY`, then polls until SIGINT or SIGTERM. There is no required timeout and no `-- COMMAND` child-launch mode.
 
-`wait_for_command` is the main loop. It prints a `READY` line, releases the child, then alternates between polling the ring buffer and checking whether the child has exited. The loop ends when the child is reaped and at least one event has arrived, or when the timeout expires. After timeout, `reap_timed_out_child` sends SIGKILL and waits.
-
-A single exec might trigger multiple events if the command itself execs (for example, `/bin/sh -c 'exec /bin/true'`). After the child exits, `drain_events` does a zero-timeout poll to collect any remaining events.
+On shutdown, `main` detaches first. `drain_pending_events` then waits in bounded 100 ms polls for `completed` to catch up with `scheduled`, drains the ring buffer, and reports all counters before resources are destroyed.
 
 `handle_event` formats the output, translating numeric ELF values to readable names while preserving the raw values for scripting.
 
@@ -968,44 +806,36 @@ cd src/54-exec-image-inspector
 sudo make test
 ```
 
-The repository CI only compiles this lesson. Runtime behavior was functionally tested on x86_64 with kernel `7.0.0-rc2+`. Sample output:
+The repository CI compiles this lesson. Runtime behavior was also functionally tested in the tutorial KVM on x86_64 with kernel `7.2.0-rc4`. A shortened sample is:
 
 ```text
-TEST-MISSING matched=0 events=0 command_exit=127
-TEST-TIMEOUT matched=1 callbacks=1 events=1 command_exit=137
-TEST-REEXEC matched=2 callbacks=2 events=2 command_exit=0 final_path=/usr/bin/true
-READY target_tgid=1265 probe_offset=4214784 timeout_ms=3000 command=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image
-EXEC pid=1265 tgid=1265 comm=exec_fixture_im path=/tmp/exec-image-inspector-sxm3lumw/exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=37
+TEST-CONTINUOUS workers=16 matched=18 callbacks=18 events=18
+READY scope=system-wide probe_offset=4214784
+EXEC pid=... tgid=... comm=exec_fixture_im path=/tmp/.../exec_fixture_image is_elf=1 class=ELF64 endian=LSB type=ET_DYN(3) machine=EM_X86_64(62) header_error=0 path_error=0 latency_us=...
 PROBE offset=4214784 direct_error=-14 deferred_error=0 bytes=454950524f424521
-exec fixture completed
-SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path_errors=0 direct_probes=1 direct_probe_errors=1 deferred_probes=1 deferred_probe_errors=0 dropped=0 events=1 command_exit=0
-PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
+SUMMARY matched=18 scheduled=18 schedule_errors=0 callbacks=18 completed=18 header_errors=0 path_errors=0 direct_probes=18 direct_probe_errors=18 deferred_probes=18 deferred_probe_errors=2 dropped=0 cleanup_errors=0 events=18
+PASS: persistent monitoring, concurrent execs, signal cleanup, ELF decode, and deferred file reads succeeded
 ```
 
-The first three test lines cover boundary conditions:
-
-- **TEST-MISSING**: A nonexistent command exits with status 127. The LSM hook never fires because exec fails before credentials are committed, so `matched=0` and `events=0`.
-- **TEST-TIMEOUT**: The command runs too long, gets SIGKILL, and is reaped with status 137 (128 + 9). One exec event was observed.
-- **TEST-REEXEC**: A shell command that uses `exec` internally produces two events, and the final path is `/usr/bin/true`.
+The test starts the monitor, waits for `READY`, launches 16 fixture processes concurrently plus a shell that re-execs `/bin/true`, and stops the monitor with SIGINT. It checks `scheduled == callbacks == completed == events`, with zero scheduling, drop, or cleanup errors. It also verifies that the obsolete `--timeout-ms` and `-- COMMAND` interface is rejected.
 
 The `EXEC` line shows the installed image and parsed ELF fields. The `PROBE` line demonstrates the sleepable-context difference: the test writes a marker (`EIPROBE!`) to a page, flushes and evicts it from the page cache, then execs. The direct read in the non-sleepable hook returns `-EFAULT` (`-14`) because the page is cold. The deferred read in the sleepable callback succeeds, returning the marker bytes as hex (`454950524f424521`).
 
-To inspect a simple command:
+To monitor subsequent execs system-wide:
 
 ```bash
-sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
+sudo ./exec_image_inspector
 ```
 
 Command-line format:
 
 ```text
-exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COMMAND [ARG...]
+exec_image_inspector [--probe-offset BYTES] [--verbose]
 ```
 
-- `--timeout-ms`: 100 to 60000 milliseconds (default 5000). The tool kills and reaps the command after this deadline.
 - `--probe-offset`: Read 8 bytes at this offset both in the hook (direct) and in the callback (deferred), to verify the cold-page difference.
 - `--verbose`: Print libbpf diagnostic messages.
-- `--`: Separates inspector options from the command to run.
+- Ctrl-C or SIGTERM: Stop admission, wait for scheduled callbacks, drain events, print `SUMMARY`, and unload.
 
 ### Requirements
 
@@ -1019,13 +849,13 @@ exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COM
 
 ## Limitations and extensions
 
-This tool observes one direct child per invocation, using a single map slot. For concurrent services, you would allocate per-task state, implement admission limits, and handle callback reclamation. Timeout cleanup sends SIGKILL to the child only; callers needing process-group management or external signal handling would add those features.
+This tool observes successful execs system-wide after `READY`. The pending HASH map supports up to 4096 concurrent `pid_tgid` keys; insertion or scheduling pressure is visible in `schedule_errors`. Shutdown waits for callbacks for about one second before returning an error rather than destroying live callback state silently. `--probe-offset` is an advanced diagnostic for comparing cold-page behavior, not a workload filter.
 
 ## Summary
 
-This tutorial demonstrates how to combine BPF task work and file dynptr to inspect the executable image actually installed by exec. The key insight is separating two moments: identifying the target (in a non-sleepable LSM hook) and reading file content (in a sleepable task work callback). This lets eBPF programs read file data reliably, even when the target bytes are not in the page cache.
+This tutorial demonstrates how to combine BPF task work and file dynptr to inspect the executable image actually installed by exec. The key insight is separating two moments: admitting an exec (in a non-sleepable LSM hook) and reading file content (in a sleepable task work callback). This lets eBPF programs read file data reliably, even when the target bytes are not in the page cache.
 
-The blocked-child handshake eliminates attach races, bounded execution ensures cleanup, and the final drain captures all events. Together, these techniques produce a reproducible single-command tool while leaving room for extension.
+The persistent monitor exposes a natural `READY` boundary for independent workloads. Detach-before-drain shutdown, per-exec pending state, and completed-work accounting keep concurrent callbacks safe while preserving the original task-work and file-dynptr lesson.
 
 > To learn more about eBPF, visit our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or <https://eunomia.dev/tutorials/>.
 

@@ -31,6 +31,7 @@ struct inspector_stats {
 	unsigned long long scheduled;
 	unsigned long long schedule_errors;
 	unsigned long long callbacks;
+	unsigned long long completed;
 	unsigned long long header_errors;
 	unsigned long long path_errors;
 	unsigned long long direct_probes;
@@ -38,6 +39,7 @@ struct inspector_stats {
 	unsigned long long deferred_probes;
 	unsigned long long deferred_probe_errors;
 	unsigned long long dropped;
+	unsigned long long cleanup_errors;
 };
 
 #endif /* __EXEC_IMAGE_INSPECTOR_H */
