@@ -10,7 +10,7 @@
 
 eBPF 可以让经过验证器检查的程序运行在内核 hook 上，XDP 则把其中一个 hook 放在 Linux 网络接收路径的最前端。Linux 4.18 引入的 AF_XDP 把 XDP redirect 连接到由用户态注册内存支撑的 socket，XSKMAP 再建立 RX queue number 与对应 AF_XDP socket 之间的关系。
 
-两边的职责很明确。XDP 程序只解析足够的信息，判断报文是否属于这个工具；AF_XDP socket 管理共享内存 ring，并把选中的字节交给用户态。本例还会在 redirect 之前用 `bpf_map_lookup_elem()` 检查 XSKMAP，这项能力从 Linux 5.3 开始可用，因此最低内核版本是 5.3。
+两边的职责很明确。XDP 程序只解析足够的信息，判断报文是否属于这个工具；AF_XDP socket 管理共享内存 ring，并把选中的字节交给用户态。本例还会在 redirect 之前用 `bpf_map_lookup_elem()` 检查 XSKMAP，这项能力从 Linux 5.3 开始可用。清理阶段的 compare-and-detach 使用 Linux 5.7 加入的 expected-program FD，因此完整工具的最低内核版本是 5.7。
 
 跟着一个报文和一个 frame 走一遍。用户态在 UMEM 中分配 64 个 4096 字节 frame，把它们的地址发布到 fill ring。发往指定端口的 UDP 报文到达 XDP hook 后，程序检查 Ethernet、IPv4 与 UDP 长度，通过 `ctx->rx_queue_index` 找到注册 socket，再返回 `XDP_REDIRECT`。copy mode 下，内核把报文复制到一个已发布的 frame，并把 `xdp_desc` 放入 RX ring。用户态读取 descriptor、打印报文、推进 consumer index，最后把同一个地址放回 fill ring。
 
@@ -647,7 +647,7 @@ AF_XDP dump integration test: PASS
 
 | 要求 | 说明 |
 |---|---|
-| 内核 | Linux 5.3 或更高版本，AF_XDP 在 4.18 引入，本例还使用 XDP 对 XSKMAP 的 lookup |
+| 内核 | Linux 5.7 或更高版本，AF_XDP 在 4.18 引入，XDP 对 XSKMAP 的 lookup 在 5.3 引入，安全的 expected-FD detach 在 5.7 引入 |
 | 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_XDP_SOCKETS`、`CONFIG_DEBUG_INFO_BTF` |
 | 权限 | root，或者等价的 BPF 与网络管理 capability |
 | 网络接口 | 接口包含所选 RX queue，native XDP 可选，工具也支持 generic XDP |
@@ -668,3 +668,4 @@ AF_XDP dump integration test: PASS
 - [Linux AF_XDP 文档](https://docs.kernel.org/networking/af_xdp.html)
 - [AF_XDP 引入 commit](https://github.com/torvalds/linux/commit/c0c77d8fb787cfe0c3fca689c2a30d1dad4eaba7)
 - [XDP 支持 XSKMAP lookup 的 commit](https://github.com/torvalds/linux/commit/fada7fdc83c0)
+- [XDP replace 与 detach 的 expected-program FD](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)

@@ -10,7 +10,7 @@ This tutorial builds that path from the AF_XDP ABI rather than hiding it behind 
 
 eBPF runs verifier-checked programs at kernel hooks, and XDP places one of those hooks at the earliest receive point in the Linux network path. AF_XDP, added in Linux 4.18, connects an XDP redirect to a socket backed by user-registered memory. An XSKMAP supplies the missing association between an RX queue number and the AF_XDP socket that serves it.
 
-The roles are deliberately separate. The XDP program parses just enough of the packet to decide whether it belongs to the tool. The AF_XDP socket owns the shared-memory rings and carries selected bytes to user space. This example also checks XSKMAP with `bpf_map_lookup_elem()` before redirecting, support added in Linux 5.3, so Linux 5.3 is its minimum kernel version.
+The roles are deliberately separate. The XDP program parses just enough of the packet to decide whether it belongs to the tool. The AF_XDP socket owns the shared-memory rings and carries selected bytes to user space. This example checks XSKMAP with `bpf_map_lookup_elem()` before redirecting, support added in Linux 5.3. Its compare-and-detach cleanup uses the expected-program FD added in Linux 5.7, which sets the complete tool's minimum kernel version.
 
 Follow one packet and one frame. User space allocates 64 frames of 4096 bytes in UMEM and posts their addresses to the fill ring. A UDP packet for the configured port reaches the XDP hook. The program validates Ethernet, IPv4, and UDP lengths, finds the socket registered for `ctx->rx_queue_index`, and returns `XDP_REDIRECT`. In copy mode the kernel copies the packet into one posted frame and publishes an `xdp_desc` on the RX ring. User space reads the descriptor, prints the packet, advances the consumer index, and puts the same address back on the fill ring.
 
@@ -647,7 +647,7 @@ AF_XDP dump integration test: PASS
 
 | Requirement | Details |
 |---|---|
-| Kernel | Linux 5.3 or newer; AF_XDP arrived in 4.18 and this example also uses XSKMAP lookup from XDP |
+| Kernel | Linux 5.7 or newer; AF_XDP arrived in 4.18, XSKMAP lookup from XDP in 5.3, and safe expected-FD detach in 5.7 |
 | Kernel config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_XDP_SOCKETS`, `CONFIG_DEBUG_INFO_BTF` |
 | Privileges | Root, or equivalent BPF and network-administration capabilities |
 | Interface | An interface with the selected RX queue; native XDP is optional because generic XDP is available |
@@ -668,3 +668,4 @@ This example exposes the complete AF_XDP receive contract. XDP selects one UDP f
 - [Linux AF_XDP documentation](https://docs.kernel.org/networking/af_xdp.html)
 - [AF_XDP introduction commit](https://github.com/torvalds/linux/commit/c0c77d8fb787cfe0c3fca689c2a30d1dad4eaba7)
 - [XSKMAP lookup from XDP commit](https://github.com/torvalds/linux/commit/fada7fdc83c0)
+- [Expected-program FD for XDP replacement and detach](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)
