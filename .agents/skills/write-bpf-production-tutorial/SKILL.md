@@ -19,6 +19,8 @@ Read these inputs before writing:
 
 Collect the facts the reader needs: the problem, the kernel/user-space flow, feature versions, requirements, commands, real output, cleanup, scope, and references. Add alternatives when they help the reader choose or understand the mechanism. Keep every claim grounded in the code, tests, captured output, or a primary source. Preserve an existing draft before a from-scratch rewrite.
 
+Write down the narrowest useful description supported by the normal execution path before drafting. Use it to align the title, opening, CLI, output, and test. For stateful security examples, include the correlation key, admission checks, state lifetime, enforcement point, and the negative cases exercised by the test.
+
 Make the example a small useful tool. Its normal mode works on a reader-selected process, cgroup, interface, or other real target. A deterministic demo or integration test may create its own workload. Keep the CLI compact and keep infrastructure details out of public text.
 
 Build and run the example when the environment supports it. Use `$test-bpf-tutorial-kvm` for kernel features that need the repository's KVM environment. Runtime details support the tutorial; local workspace paths, VM names, shared repositories, caches, prompts, and agent traces stay private.
@@ -57,6 +59,8 @@ Inspect both files and the diff instead of trusting the model's final message. C
 
 - both languages are complete and tell the same technical story;
 - the opening reads like a tutorial rather than an abstract or feature list;
+- every mechanism promised by the title and introduction appears in the executable path, and a feature-driven lesson both uses and explains the named API;
+- the title and opening describe the narrowest useful behavior proven by the normal mode and test, without expanding a focused allowlist, profiler, index, capture tool, or monitor into a broader product category;
 - the relevant eBPF and kernel background appears before details that depend on it;
 - the high-level mechanism is explained before code sections;
 - compilation/execution is AFTER code analysis;

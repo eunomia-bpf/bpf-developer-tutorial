@@ -53,6 +53,8 @@ For every serious candidate, write five short fields:
 
 Defer an idea when these fields remain vague. A helper name alone is not a tutorial topic.
 
+Before marking a feature-driven candidate ready, verify the complete API path against the target kernel. Check the intended BPF program type, map fields, helpers or kfunc sets, sleepability, locking, and verifier restrictions together; a selftest using another program type is not evidence that the proposed hook can use the same API. Build and load the smallest representative probe in KVM when static inspection leaves doubt. If the target program type cannot use the feature, choose a scenario where it can instead of routing data through user space solely to make the API appear in the example.
+
 ## Score value
 
 Score from evidence, then subtract costs. Keep the breakdown in working notes and place the final score in `TUTORIAL_IDEAS.md`.
@@ -80,6 +82,7 @@ A candidate can become `ready` only when:
 - the repository does not already teach the same flow;
 - the example can fit one coherent tutorial;
 - primary sources establish the technical claims;
+- the intended program type can load every required map and API on the target kernel;
 - required kernel, architecture, privilege, and hardware conditions are known;
 - the likely maintenance burden is proportionate to its value.
 
