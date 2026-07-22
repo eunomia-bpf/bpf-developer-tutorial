@@ -2,11 +2,11 @@
 
 ## The Problem: Testing Under Bandwidth Constraints
 
-Suppose you need to test how your application behaves when bandwidth is limited. You create a veth pair to simulate a network link and want to cap egress at 64 Kbit/s while observing what happens when the queue fills up and packets start dropping. Traditional approaches—complex tc configurations or user-space proxies—work but are heavyweight for a quick validation.
+Suppose you need to test how your application behaves when bandwidth is limited. You create a veth pair to simulate a network link and want to cap egress at 64 Kbit/s while observing what happens when the queue fills up and packets start dropping. Traditional approaches (complex tc configurations or user-space proxies) work but are heavyweight for a quick validation.
 
 Linux 6.16 introduced a new option: BPF qdisc. Instead of configuring existing schedulers, you can implement a complete queuing discipline directly in eBPF. This tutorial builds a FIFO rate limiter that demonstrates the full qdisc lifecycle: registering as the root qdisc, managing packet ownership through enqueue and dequeue, computing transmission times, using the watchdog timer for scheduling, and cleaning up when removed.
 
-This example is designed for controlled interfaces like veth, TAP, or IFB—environments where you have full control and can safely experiment with packet scheduling.
+This example is designed for controlled interfaces like veth, TAP, or IFB, environments where you have full control and can safely experiment with packet scheduling.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer>
 
@@ -14,7 +14,7 @@ This example is designed for controlled interfaces like veth, TAP, or IFB—envi
 
 To see what BPF qdisc changes, compare it with three common approaches.
 
-**Built-in schedulers are fixed algorithms.** tc provides TBF (Token Bucket Filter), HTB (Hierarchical Token Bucket), and others, but these are predefined behaviors in the kernel. If you need something custom—prioritizing by application type, adjusting rates based on real-time metrics—you must either patch the kernel or chain multiple tc classifiers together.
+**Built-in schedulers are fixed algorithms.** tc provides TBF (Token Bucket Filter), HTB (Hierarchical Token Bucket), and others, but these are predefined behaviors in the kernel. If you need something custom (prioritizing by application type, adjusting rates based on real-time metrics), you must either patch the kernel or chain multiple tc classifiers together.
 
 **TC BPF programs cannot control timing.** Regular TC BPF programs can inspect packets and decide whether to pass or drop them, but the underlying qdisc still controls when packets actually transmit. [Lesson 20](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/20-tc) shows this pattern: BPF decides pass/drop, but not "send this packet at time T."
 
@@ -36,7 +36,7 @@ Here is the lifecycle:
 
 4. **Reset**: When the qdisc is removed, the kernel calls `reset`. You iterate through any remaining packets, release their resources, and zero the counters.
 
-Throughout this lifecycle, your BPF program owns the packets. From receiving an `skb` in `enqueue`, through holding it in your data structure, to returning it in `dequeue` or freeing it in `reset`—the BPF program is responsible.
+Throughout this lifecycle, your BPF program owns the packets. From receiving an `skb` in `enqueue`, through holding it in your data structure, to returning it in `dequeue` or freeing it in `reset`, the BPF program is responsible.
 
 ![egress_pacer data flow: from configuration, attachment, enqueue, BPF FIFO, dequeue to transmit path, including policy-drop branch, watchdog loop, and reset lifecycle](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/53-egress-pacer/egress-pacer-flow.png)
 
@@ -69,13 +69,13 @@ struct pacer_stats {
 
 - `enqueued` / `dequeued`: Packets that successfully entered and left the FIFO.
 - `policy_dropped`: Packets dropped at enqueue because the queue was full or allocation failed.
-- `cleanup_dropped`: Packets still in the queue when reset runs—these were queued but never transmitted.
+- `cleanup_dropped`: Packets still in the queue when reset runs. These were queued but never transmitted.
 - `bytes_dequeued`: Total bytes actually transmitted.
 - `max_qlen`: Peak queue depth observed.
 
 ### Compatibility Header
 
-BPF qdisc uses "graph-object" kfuncs—kernel functions for managing BPF-owned linked lists and objects. This local header provides the necessary declarations:
+BPF qdisc uses "graph-object" kfuncs, kernel functions for managing BPF-owned linked lists and objects. This local header provides the necessary declarations:
 
 ```c
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -347,7 +347,7 @@ The `private(A)` macro places the lock, list head, and departure timestamp in a 
 6. Under the spin lock, set the packet's eligible time. If the queue was idle (`next_departure_ns` is in the past), this packet can leave immediately; otherwise it waits behind the previous departure.
 7. Push the node onto the FIFO, update counters, unlock, and return success.
 
-The `bpf_qdisc_skb_drop` call handles dropped packets—it adds the `skb` to the kernel's free list and updates qdisc statistics.
+The `bpf_qdisc_skb_drop` call handles dropped packets: it adds the `skb` to the kernel's free list and updates qdisc statistics.
 
 #### The dequeue callback
 
@@ -358,7 +358,7 @@ The `bpf_qdisc_skb_drop` call handles dropped packets—it adds the `skb` to the
 3. Check if the current time has reached `eligible_ns`. If not, push the node back to the front, schedule a watchdog timer for `eligible_ns`, and return NULL. The kernel will call dequeue again when the timer fires.
 4. If ready, extract the `skb` from the node using `bpf_kptr_xchg`, decrement counters, free the node, update statistics, and return the `skb`.
 
-The watchdog mechanism (`bpf_qdisc_watchdog_schedule`) is how BPF qdisc implements transmission timing—you tell the kernel when to wake you, and it calls dequeue at that time.
+The watchdog mechanism (`bpf_qdisc_watchdog_schedule`) is how BPF qdisc implements transmission timing: you tell the kernel when to wake you, and it calls dequeue at that time.
 
 #### The reset callback
 
@@ -713,7 +713,7 @@ TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64
 PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
 ```
 
-What happened: the test sent 40 raw Ethernet frames (1024 bytes each, EtherType `0x88B5`) into a 64 Kbit/s queue limited to 8 packets. Nine packets made it through the queue, spaced over 1024ms—matching the expected rate. The other 31 sends hit the queue limit and went to `policy_dropped`. Exact numbers vary by system timing.
+What happened: the test sent 40 raw Ethernet frames (1024 bytes each, EtherType `0x88B5`) into a 64 Kbit/s queue limited to 8 packets. Nine packets made it through the queue, spaced over 1024ms, matching the expected rate. The other 31 sends hit the queue limit and went to `policy_dropped`. Exact numbers vary by system timing.
 
 The test also exercises edge cases:
 - Pre-installs a `pfifo` to confirm the loader refuses to replace existing qdiscs.
@@ -774,7 +774,7 @@ This tutorial demonstrated BPF qdisc through a complete FIFO rate limiter:
 - **dequeue** uses the watchdog timer to wake at the right moment and returns packets to the kernel.
 - **reset** frees any packets still queued when the qdisc is removed.
 
-These three phases—receiving packets, timing their release, and cleaning up—form a reusable pattern for custom scheduling disciplines.
+These three phases (receiving packets, timing their release, and cleaning up) form a reusable pattern for custom scheduling disciplines.
 
 This particular scheduler implements a single aggregate FIFO with fixed rate and queue limit set at load time. It is intentionally simple, suited for validating correctness on controlled interfaces. A production scheduler could build on this foundation to add fairness, dynamic policies, or state persistence across restarts.
 

@@ -2,13 +2,13 @@
 
 ## The Problem
 
-An outbound IP address has just been added to a threat-intelligence blocklist. Your firewall now rejects new connections to that address. But when you check `netstat`, you find a server already has an active TCP session to the same destination. You need to close that exact connection immediately—without killing the process, disrupting unrelated traffic, or waiting for the session to time out.
+An outbound IP address has just been added to a threat-intelligence blocklist. Your firewall now rejects new connections to that address. But when you check `netstat`, you find a server already has an active TCP session to the same destination. You need to close that exact connection immediately, without killing the process, disrupting unrelated traffic, or waiting for the session to time out.
 
 This seemingly simple requirement is surprisingly difficult to achieve with traditional tools:
 
 - **Killing the process** disrupts all its connections, not just the problematic one. Worse, the process may immediately reconnect to the same destination after restarting.
 
-- **Firewall rules** block new connections but have no effect on sessions that are already established. Even `iptables -m state --state ESTABLISHED` can only match existing connections for filtering future packets—it cannot tear down an active session.
+- **Firewall rules** block new connections but have no effect on sessions that are already established. Even `iptables -m state --state ESTABLISHED` can only match existing connections for filtering future packets; it cannot tear down an active session.
 
 - **User-space tools** like `ss --kill` or `tcpkill` work by reading `/proc/net/tcp` and then injecting TCP RST packets. This approach suffers from a race condition: the socket state can change between reading the list and sending the RST. RST injection also requires guessing the correct sequence number and may fail against encrypted tunnels or certain network configurations.
 
@@ -24,7 +24,7 @@ Before diving into the code, let's understand the two kernel features that make 
 
 ### BPF Iterators
 
-A BPF iterator is a special type of BPF program that the kernel invokes repeatedly—once for each element in some kernel data structure. Unlike tracepoints or kprobes that fire when specific events occur, iterators let you actively scan kernel state on demand.
+A BPF iterator is a special type of BPF program that the kernel invokes repeatedly, once for each element in some kernel data structure. Unlike tracepoints or kprobes that fire when specific events occur, iterators let you actively scan kernel state on demand.
 
 The TCP iterator (`SEC("iter/tcp")`) iterates over all TCP sockets in the network namespace of the process that triggers it. User space initiates a scan by reading from an iterator file descriptor. Each `read()` call causes the kernel to invoke your BPF callback for a batch of sockets. When `read()` returns zero (EOF), the traversal is complete.
 
@@ -34,7 +34,7 @@ Because the kernel controls the iteration and holds appropriate locks while invo
 
 Kfuncs (kernel functions) are a mechanism for BPF programs to call specific kernel functions directly. Unlike the older BPF helper functions which have a fixed ABI, kfuncs are regular kernel functions that are explicitly marked as callable from BPF. They can do things that helpers cannot, including operations that modify kernel state in complex ways.
 
-The `bpf_sock_destroy` kfunc, introduced in Linux 6.5 (commit `4ddbcb886268af8d12a23e6640b39d1d9c652b1b`), allows a BPF program running in an iterator context to forcibly close a socket. The kernel executes the full protocol-specific teardown: removing the socket from hash tables, sending FIN/RST as appropriate, and releasing resources. This happens synchronously—by the time the call returns, the socket is destroyed.
+The `bpf_sock_destroy` kfunc, introduced in Linux 6.5 (commit `4ddbcb886268af8d12a23e6640b39d1d9c652b1b`), allows a BPF program running in an iterator context to forcibly close a socket. The kernel executes the full protocol-specific teardown: removing the socket from hash tables, sending FIN/RST as appropriate, and releasing resources. This happens synchronously: by the time the call returns, the socket is destroyed.
 
 ## How the Tool Works
 
@@ -141,7 +141,7 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 
 Let's break down the key elements:
 
-**Configuration variables**: The three `const volatile` variables (`target_addr`, `target_port`, `apply`) live in the BPF program's read-only data section (`.rodata`). User space writes to them after opening the skeleton but before loading the program. The `const volatile` pattern tells the BPF verifier these are compile-time constants while still allowing user space to set them. This enables the verifier to optimize code paths—for example, when `apply` is false, the entire destruction branch can be eliminated.
+**Configuration variables**: The three `const volatile` variables (`target_addr`, `target_port`, `apply`) live in the BPF program's read-only data section (`.rodata`). User space writes to them after opening the skeleton but before loading the program. The `const volatile` pattern tells the BPF verifier these are compile-time constants while still allowing user space to set them. This enables the verifier to optimize code paths; for example, when `apply` is false, the entire destruction branch can be eliminated.
 
 **Kfunc declaration**: The line `extern int bpf_sock_destroy(struct sock_common *sock) __ksym;` declares `bpf_sock_destroy` as an external kernel symbol. The `__ksym` annotation tells the loader to resolve this at load time by looking up the kernel function.
 
@@ -358,7 +358,7 @@ The key workflow:
 
 5. **Read results**: After iteration, we read statistics from `skel->bss->stats`. The BSS section is automatically memory-mapped, so these reads just access shared memory.
 
-The iterator's `read()` loop discards the buffer contents because this tool doesn't produce output through the iterator interface—it only uses the traversal to drive the BPF callback. Other iterator programs might write data to the iterator (e.g., formatted socket information), but ours communicates exclusively through the BSS statistics.
+The iterator's `read()` loop discards the buffer contents because this tool doesn't produce output through the iterator interface; it only uses the traversal to drive the BPF callback. Other iterator programs might write data to the iterator (e.g., formatted socket information), but ours communicates exclusively through the BSS statistics.
 
 ## Network Namespace Boundary
 

@@ -1,8 +1,8 @@
 # eBPF Tutorial by Example 50: Composable Traffic Control with TCX Links
 
-Imagine you need to run two BPF programs on every inbound packet: one that collects statistics, and another that decides whether to accept the packet. With classic TC attachment, you would create a qdisc, assign each program a numeric priority, and hope no other application on the system picks the same priority numbers. If your stats-gathering application crashes, its filter stays attached—possibly interfering with the classifier. If a third-party CNI plugin runs `tc filter del` to clean up its own filters, it might accidentally remove yours too.
+Imagine you need to run two BPF programs on every inbound packet: one that collects statistics, and another that decides whether to accept the packet. With classic TC attachment, you would create a qdisc, assign each program a numeric priority, and hope no other application on the system picks the same priority numbers. If your stats-gathering application crashes, its filter stays attached, possibly interfering with the classifier. If a third-party CNI plugin runs `tc filter del` to clean up its own filters, it might accidentally remove yours too.
 
-**TCX** (Traffic Control eXtension) solves these problems. Introduced by Daniel Borkmann and merged in Linux 6.6, TCX provides a link-based attachment model for the TC ingress and egress hooks. Programs gain automatic cleanup on file descriptor close, explicit ordering through `BPF_F_BEFORE` and `BPF_F_AFTER` flags, and immunity from accidental deletion by other processes—all without touching qdiscs or filter priorities.
+**TCX** (Traffic Control eXtension) solves these problems. Introduced by Daniel Borkmann and merged in Linux 6.6, TCX provides a link-based attachment model for the TC ingress and egress hooks. Programs gain automatic cleanup on file descriptor close, explicit ordering through `BPF_F_BEFORE` and `BPF_F_AFTER` flags, and immunity from accidental deletion by other processes, all without touching qdiscs or filter priorities.
 
 In this tutorial, we build a minimal demonstration: two TCX ingress programs on the loopback interface, with controlled execution order and observable counters.
 
@@ -14,7 +14,7 @@ In this tutorial, we build a minimal demonstration: two TCX ingress programs on 
 
 Classic `tc` BPF attachment (`cls_bpf`) was designed when a single operator controlled the entire Traffic Control pipeline. To attach a BPF program, you create a `clsact` qdisc, then add filters with handles and priorities. This model breaks down when multiple independent applications need to coexist:
 
-1. **No ownership model.** A filter is identified by its handle and priority, not by the process that created it. Any process with sufficient privilege can delete any filter—there is no protection against one application removing another's program.
+1. **No ownership model.** A filter is identified by its handle and priority, not by the process that created it. Any process with sufficient privilege can delete any filter; there is no protection against one application removing another's program.
 
 2. **Priority collisions.** Two applications might independently choose priority 100. The second attachment silently replaces the first, with no error and no warning.
 
@@ -22,7 +22,7 @@ Classic `tc` BPF attachment (`cls_bpf`) was designed when a single operator cont
 
 4. **Shared control plane.** Both the `tc` CLI and libbpf-based programs use netlink to manage filters. Your BPF application competes with every other tc user on the system for this shared namespace.
 
-These problems became critical in projects like Cilium, where BPF datapaths must coexist with third-party CNI plugins, observability agents, and security tools—all attaching to the same interfaces.
+These problems became critical in projects like Cilium, where BPF datapaths must coexist with third-party CNI plugins, observability agents, and security tools, all attaching to the same interfaces.
 
 ### The Solution: Link-Based Attachment
 
@@ -103,7 +103,7 @@ Both programs receive a `struct __sk_buff *skb` parameter. This is the same sock
 - `skb->protocol`: EtherType in network byte order (hence `bpf_ntohs()`)
 - `skb->ifindex`: the interface index where the packet arrived
 
-For packet data access, you would use `bpf_skb_load_bytes()` or direct packet pointers—but this demo focuses on attachment mechanics rather than packet parsing.
+For packet data access, you would use `bpf_skb_load_bytes()` or direct packet pointers, but this demo focuses on attachment mechanics rather than packet parsing.
 
 ### Global Variables as Counters
 
@@ -129,7 +129,7 @@ classifier_link = bpf_program__attach_tcx(skel->progs.tcx_classifier,
 					 ifindex, NULL);
 ```
 
-This attaches `tcx_classifier` to the TCX ingress hook on the specified interface. Passing `NULL` for options uses defaults—the program appends to the chain. The chain now contains one program.
+This attaches `tcx_classifier` to the TCX ingress hook on the specified interface. Passing `NULL` for options uses defaults: the program appends to the chain. The chain now contains one program.
 
 ### Step 2: Insert the Second Program Before the First
 
@@ -142,7 +142,7 @@ stats_link = bpf_program__attach_tcx(skel->progs.tcx_stats,
 				    ifindex, &before_opts);
 ```
 
-The `bpf_tcx_opts` structure specifies that `tcx_stats` should be inserted *before* `tcx_classifier`. The `.relative_fd` field identifies the reference point—the file descriptor of the already-attached classifier. After this call, the chain is: `tcx_stats` → `tcx_classifier`.
+The `bpf_tcx_opts` structure specifies that `tcx_stats` should be inserted *before* `tcx_classifier`. The `.relative_fd` field identifies the reference point: the file descriptor of the already-attached classifier. After this call, the chain is: `tcx_stats` → `tcx_classifier`.
 
 You could achieve the same ordering with `BPF_F_AFTER` and a different reference point. The key insight is that you express order directly, not through numeric priorities that might collide.
 
@@ -160,7 +160,7 @@ err = bpf_prog_query_opts(ifindex, BPF_TCX_INGRESS, &query);
 
 After attachment, the loader queries the kernel for the live chain state. The result includes:
 
-- **`revision`**: A monotonically increasing counter that increments on each chain modification. You can pass this as `expected_revision` when attaching to ensure the chain hasn't changed since you last observed it—useful for atomic multi-step updates.
+- **`revision`**: A monotonically increasing counter that increments on each chain modification. You can pass this as `expected_revision` when attaching to ensure the chain hasn't changed since you last observed it (useful for atomic multi-step updates).
 - **`prog_ids[]`**: BPF program IDs in execution order.
 - **`link_ids[]`**: Corresponding BPF link IDs.
 
@@ -219,7 +219,7 @@ Counters:
 
 **Reading the output:**
 
-- **Revision 2**: The chain was modified twice—once when `tcx_classifier` attached (revision 1), and once when `tcx_stats` was inserted before it (revision 2).
+- **Revision 2**: The chain was modified twice: once when `tcx_classifier` attached (revision 1), and once when `tcx_stats` was inserted before it (revision 2).
 - **Slot ordering**: Slot 0 is `tcx_stats` (the program we inserted with `BPF_F_BEFORE`); slot 1 is `tcx_classifier`.
 - **Protocol 0x0800**: IPv4 (the generated UDP packet).
 - **Length 46**: The 20-byte payload "tcx tutorial packet" plus headers.
@@ -232,7 +232,7 @@ Counters:
 
 ## Comparison with Lesson 20 (Classic TC)
 
-[Lesson 20](../20-tc/README.md) teaches the classic TC path: creating a `clsact` qdisc, attaching a `SEC("tc")` program as a filter, and inspecting packets with `__sk_buff`. That lesson remains valuable because the **data-plane model** is identical—TCX programs use the same context structure and the same helpers for packet access.
+[Lesson 20](../20-tc/README.md) teaches the classic TC path: creating a `clsact` qdisc, attaching a `SEC("tc")` program as a filter, and inspecting packets with `__sk_buff`. That lesson remains valuable because the **data-plane model** is identical: TCX programs use the same context structure and the same helpers for packet access.
 
 TCX replaces the **control plane**:
 
@@ -249,7 +249,7 @@ For new libbpf-based networking tools, TCX is the recommended attachment method.
 
 ## Summary
 
-TCX modernizes TC program attachment by replacing qdisc-based plumbing with BPF link semantics. In this tutorial, we attached two ingress programs, controlled their execution order with `BPF_F_BEFORE`, queried the live chain state, and verified correct execution by observing counters. TCX provides safe ownership, explicit ordering, revision-aware updates, and backward compatibility with classic TC—making it the foundation for composable, multi-program traffic control in modern eBPF applications.
+TCX modernizes TC program attachment by replacing qdisc-based plumbing with BPF link semantics. In this tutorial, we attached two ingress programs, controlled their execution order with `BPF_F_BEFORE`, queried the live chain state, and verified correct execution by observing counters. TCX provides safe ownership, explicit ordering, revision-aware updates, and backward compatibility with classic TC, making it the foundation for composable, multi-program traffic control in modern eBPF applications.
 
 For more eBPF tutorials, visit our repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or <https://eunomia.dev/tutorials/>.
 

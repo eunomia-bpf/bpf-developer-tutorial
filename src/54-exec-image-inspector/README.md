@@ -1,20 +1,20 @@
 # eBPF Tutorial: Inspecting the Executable Image After exec
 
-When a process calls `execve`, the kernel replaces its memory image with a new executable. But which executable, exactly? If the command line says `/usr/bin/wrapper.sh --config /etc/app.conf`, the actual running code might be a Python interpreter or a compiled binary launched three layers deep through wrapper scripts. Security tools, container runtimes, and troubleshooting utilities all need to know what the kernel *actually* installed—not just what the user typed.
+When a process calls `execve`, the kernel replaces its memory image with a new executable. But which executable, exactly? If the command line says `/usr/bin/wrapper.sh --config /etc/app.conf`, the actual running code might be a Python interpreter or a compiled binary launched three layers deep through wrapper scripts. Security tools, container runtimes, and troubleshooting utilities all need to know what the kernel *actually* installed, not just what the user typed.
 
-This tutorial builds a tool that captures that information at the kernel level. It hooks the moment credentials are committed after exec, schedules a deferred callback, then reads the installed executable's ELF header and reports the architecture, byte order, and file type. Along the way, it demonstrates two recent kernel features—BPF task work and file dynptr—that together solve a problem traditional eBPF approaches cannot.
+This tutorial builds a tool that captures that information at the kernel level. It hooks the moment credentials are committed after exec, schedules a deferred callback, then reads the installed executable's ELF header and reports the architecture, byte order, and file type. Along the way, it demonstrates two recent kernel features (BPF task work and file dynptr) that together solve a problem traditional eBPF approaches cannot.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 
 ## The problem: reading file content from eBPF
 
-Why would a security tool need to read the executable's content rather than just its path? Because the path alone does not identify what code will run. A hash of the executable's content can verify it matches a known-good binary. Embedded signatures or certificates can prove provenance. Specific byte patterns at known offsets can identify packing, obfuscation, or tampering. None of this information is available from the path—you must read the file's bytes. Doing so from eBPF, at the exact moment of exec, eliminates the race window that plagues user-space approaches.
+Why would a security tool need to read the executable's content rather than just its path? Because the path alone does not identify what code will run. A hash of the executable's content can verify it matches a known-good binary. Embedded signatures or certificates can prove provenance. Specific byte patterns at known offsets can identify packing, obfuscation, or tampering. None of this information is available from the path; you must read the file's bytes. Doing so from eBPF, at the exact moment of exec, eliminates the race window that plagues user-space approaches.
 
 The most direct approach to inspecting an executable is reading `/proc/<pid>/exe`, but this only works if the process is still alive. Short-lived processes exit before you can read them. Even if you catch them in time, the `/proc` filesystem is accessed from user space, creating a race window: by the time you read the symlink, the process might have called `execve` again.
 
 Tracepoints and kprobes can hook `sched_process_exec` to observe exec events synchronously, but these hooks run in what the kernel calls a **non-sleepable context**. This matters because of how Linux manages file data in memory.
 
-When you read from a file, the kernel first checks whether the requested bytes are already in the **page cache**—a memory region that caches recently-accessed file data. If they are, the read completes immediately. If they are not (a **cold page**), the kernel must issue I/O to the storage device, and the calling context must **sleep** while waiting for that I/O to complete.
+When you read from a file, the kernel first checks whether the requested bytes are already in the **page cache**, a memory region that caches recently-accessed file data. If they are, the read completes immediately. If they are not (a **cold page**), the kernel must issue I/O to the storage device, and the calling context must **sleep** while waiting for that I/O to complete.
 
 BPF programs attached to tracepoints and kprobes cannot sleep. They run with interrupts potentially disabled and locks held; sleeping would deadlock the system. If a BPF program tries to read file content and encounters a cold page, the read fails with `-EFAULT` instead of waiting for I/O.
 
@@ -32,7 +32,7 @@ Combining these features, the design becomes:
 2. In the hook (non-sleepable), identify the target process and schedule a task work callback
 3. The callback runs in a sleepable context, where it can access the installed executable, read content from any offset (including cold pages), and send results to user space
 
-This separation—identify the target in a non-sleepable hook, do the heavy lifting in a sleepable callback—is the key insight.
+This separation (identify the target in a non-sleepable hook, do the heavy lifting in a sleepable callback) is the key insight.
 
 ## How BPF task work operates
 
@@ -50,7 +50,7 @@ A dynptr wraps a pointer with bounds information that the BPF verifier can track
 - `bpf_dynptr_read(dst, len, dynptr, offset, flags)` reads content at the specified offset
 - `bpf_dynptr_file_discard(dynptr)` releases the dynptr's internal state
 
-Every path that creates a dynptr—including error paths—must call `bpf_dynptr_file_discard` to release it. Failing to do so leaks internal resources.
+Every path that creates a dynptr, including error paths, must call `bpf_dynptr_file_discard` to release it. Failing to do so leaks internal resources.
 
 In a non-sleepable context, `bpf_dynptr_read` only succeeds if the target bytes are already in the page cache. Accessing a cold page returns `-EFAULT`. In a sleepable context, the same call can trigger page fault handling and wait for I/O, so it succeeds even for cold pages. This difference is why task work matters: the callback runs in a sleepable context where file reads work reliably.
 
@@ -58,7 +58,7 @@ In a non-sleepable context, `bpf_dynptr_read` only succeeds if the target bytes 
 
 The user-space program forks a child process, but holds the child blocked on a pipe before it calls `execvp`. This gives the parent time to:
 
-1. Note the child's PID (which becomes its TGID—thread group ID)
+1. Note the child's PID (which becomes its TGID, thread group ID)
 2. Open the BPF skeleton and write the target TGID into read-only data
 3. Load and attach the BPF program
 4. Create a ring buffer reader
@@ -67,7 +67,7 @@ Only then does the parent release the child by writing to the pipe. This handsha
 
 When the child calls `execvp`, the `lsm/bprm_committed_creds` hook fires. The BPF program compares the current TGID with the configured target; if they match, it records a timestamp and schedules a task work callback.
 
-The callback—`inspect_executable`—runs in the child's sleepable context. It:
+The callback (`inspect_executable`) runs in the child's sleepable context. It:
 
 1. Calls `bpf_get_task_exe_file` to get the installed executable (returning a referenced `struct file` that must be released with `bpf_put_file`)
 2. Resolves the path with `bpf_path_d_path`
@@ -380,7 +380,7 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 
 The entry point is `schedule_exec_inspection`, declared with `SEC("lsm/bprm_committed_creds")`. This LSM hook fires after the new executable's credentials have been installed, so `bprm->file` points to the file being executed. The hook itself is non-sleepable, but it can identify the target and schedule the deferred work.
 
-The two `const volatile` variables—`target_tgid` and `probe_offset`—live in the `.rodata` section. User space writes values between `open()` and `load()`, and the verifier treats them as compile-time constants for optimization.
+The two `const volatile` variables (`target_tgid` and `probe_offset`) live in the `.rodata` section. User space writes values between `open()` and `load()`, and the verifier treats them as compile-time constants for optimization.
 
 When the target matches, the program looks up `struct exec_work` from the single-element `pending` ARRAY map. This structure holds the `bpf_task_work` storage plus a timestamp and optional direct-probe result. A single slot suffices because this tool observes one child process per invocation.
 
@@ -390,7 +390,7 @@ After saving the timestamp and direct-probe result, the hook calls `bpf_task_wor
 
 The callback `inspect_executable` calculates latency for diagnostics, then acquires the executable file with `bpf_get_task_exe_file`. This returns a referenced `struct file` that must be released with `bpf_put_file`. The callback resolves the path, creates a file dynptr, reads the 64-byte ELF header, and parses it. The `read_elf_u16` helper handles endianness: ELF files declare their byte order in the header, and multi-byte fields must be read accordingly.
 
-Every path that creates a dynptr—success or failure—must call `bpf_dynptr_file_discard`. Finally, `bpf_ringbuf_output` sends the event to user space.
+Every path that creates a dynptr, success or failure, must call `bpf_dynptr_file_discard`. Finally, `bpf_ringbuf_output` sends the event to user space.
 
 ### User-space loader
 

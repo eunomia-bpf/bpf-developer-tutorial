@@ -1,8 +1,8 @@
 # eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
 
-假设你需要在每个入站数据包上运行两个 BPF 程序：一个收集统计信息，另一个决定是否接受该数据包。使用经典 TC 挂载方式，你需要创建 qdisc，为每个程序分配一个数字优先级，然后祈祷系统上没有其他应用选择相同的优先级。如果你的统计收集应用崩溃了，它的 filter 会继续挂在那里——可能会干扰分类器。如果某个第三方 CNI 插件执行 `tc filter del` 清理自己的 filter，可能会顺带把你的也删掉。
+假设你需要在每个入站数据包上运行两个 BPF 程序：一个收集统计信息，另一个决定是否接受该数据包。使用经典 TC 挂载方式，你需要创建 qdisc，为每个程序分配一个数字优先级，然后祈祷系统上没有其他应用选择相同的优先级。如果你的统计收集应用崩溃了，它的 filter 会继续挂在那里，可能会干扰分类器。如果某个第三方 CNI 插件执行 `tc filter del` 清理自己的 filter，可能会顺带把你的也删掉。
 
-**TCX**（Traffic Control eXtension）解决了这些问题。它由 Daniel Borkmann 开发，于 Linux 6.6 合入内核，为 TC ingress 和 egress 挂载点提供了基于 link 的挂载模型。程序获得了文件描述符关闭时自动清理的能力、通过 `BPF_F_BEFORE` 和 `BPF_F_AFTER` 标志的显式排序，以及不被其他进程意外删除的保护——所有这些都不需要接触 qdisc 或 filter 优先级。
+**TCX**（Traffic Control eXtension）解决了这些问题。它由 Daniel Borkmann 开发，于 Linux 6.6 合入内核，为 TC ingress 和 egress 挂载点提供了基于 link 的挂载模型。程序获得了文件描述符关闭时自动清理的能力、通过 `BPF_F_BEFORE` 和 `BPF_F_AFTER` 标志的显式排序，以及不被其他进程意外删除的保护，所有这些都不需要接触 qdisc 或 filter 优先级。
 
 本教程构建一个最小化的演示：在 loopback 接口上挂载两个 TCX ingress 程序，控制它们的执行顺序，并通过计数器观察执行情况。
 
@@ -14,7 +14,7 @@
 
 经典的 `tc` BPF 挂载（`cls_bpf`）是在单一操作者控制整个 Traffic Control 流水线的时代设计的。要挂载一个 BPF 程序，你需要创建 `clsact` qdisc，然后添加带有 handle 和 priority 的 filter。当多个独立应用需要共存时，这种模型就崩溃了：
 
-1. **没有所有权模型。** Filter 通过 handle 和 priority 标识，而不是创建它的进程。任何有足够权限的进程都能删除任何 filter——一个应用删除另一个应用的程序毫无保护可言。
+1. **没有所有权模型。** Filter 通过 handle 和 priority 标识，而不是创建它的进程。任何有足够权限的进程都能删除任何 filter，一个应用删除另一个应用的程序毫无保护可言。
 
 2. **优先级冲突。** 两个应用可能独立地选择优先级 100。第二次挂载会悄无声息地替换第一次，没有错误，没有警告。
 
@@ -22,7 +22,7 @@
 
 4. **共享控制面。** `tc` CLI 和基于 libbpf 的程序都使用 netlink 来管理 filter。你的 BPF 应用和系统上所有其他 tc 用户竞争这个共享命名空间。
 
-这些问题在 Cilium 等项目中变得非常严重，BPF 数据面必须与第三方 CNI 插件、可观测性 agent 和安全工具共存——它们都在同一个接口上挂载。
+这些问题在 Cilium 等项目中变得非常严重，BPF 数据面必须与第三方 CNI 插件、可观测性 agent 和安全工具共存，它们都在同一个接口上挂载。
 
 ### 解决方案：基于 Link 的挂载
 
@@ -103,7 +103,7 @@ int tcx_classifier(struct __sk_buff *skb)
 - `skb->protocol`：网络字节序的 EtherType（因此需要 `bpf_ntohs()`）
 - `skb->ifindex`：数据包到达的接口索引
 
-要访问数据包内容，可以使用 `bpf_skb_load_bytes()` 或直接数据包指针——但本演示聚焦于挂载机制而非数据包解析。
+要访问数据包内容，可以使用 `bpf_skb_load_bytes()` 或直接数据包指针，但本演示聚焦于挂载机制而非数据包解析。
 
 ### 全局变量作为计数器
 
@@ -129,7 +129,7 @@ classifier_link = bpf_program__attach_tcx(skel->progs.tcx_classifier,
 					 ifindex, NULL);
 ```
 
-这将 `tcx_classifier` 挂到指定接口的 TCX ingress 挂载点。`NULL` 选项表示使用默认值——程序追加到链末尾。此时链中有一个程序。
+这将 `tcx_classifier` 挂到指定接口的 TCX ingress 挂载点。`NULL` 选项表示使用默认值，程序追加到链末尾。此时链中有一个程序。
 
 ### 第二步：把第二个程序插到第一个前面
 
@@ -142,7 +142,7 @@ stats_link = bpf_program__attach_tcx(skel->progs.tcx_stats,
 				    ifindex, &before_opts);
 ```
 
-`bpf_tcx_opts` 结构体指定 `tcx_stats` 应该插入到 `tcx_classifier` *前面*。`.relative_fd` 字段标识参考点——已挂载的 classifier 的文件描述符。这个调用之后，链的顺序是：`tcx_stats` → `tcx_classifier`。
+`bpf_tcx_opts` 结构体指定 `tcx_stats` 应该插入到 `tcx_classifier` *前面*。`.relative_fd` 字段标识参考点：已挂载的 classifier 的文件描述符。这个调用之后，链的顺序是：`tcx_stats` → `tcx_classifier`。
 
 你可以用 `BPF_F_AFTER` 配合不同的参考点达到同样的排序效果。关键是你直接表达顺序，而不是通过可能冲突的数字优先级。
 
@@ -160,7 +160,7 @@ err = bpf_prog_query_opts(ifindex, BPF_TCX_INGRESS, &query);
 
 挂载完成后，加载器查询内核中链的实时状态。结果包括：
 
-- **`revision`**：每次链被修改时递增的单调计数器。挂载时可以把这个值作为 `expected_revision` 传入，确保链在你上次观察之后没有变化——这对原子多步更新很有用。
+- **`revision`**：每次链被修改时递增的单调计数器。挂载时可以把这个值作为 `expected_revision` 传入，确保链在你上次观察之后没有变化，这对原子多步更新很有用。
 - **`prog_ids[]`**：按执行顺序排列的 BPF 程序 ID。
 - **`link_ids[]`**：对应的 BPF link ID。
 
@@ -219,7 +219,7 @@ Counters:
 
 **输出解读：**
 
-- **Revision 2**：链被修改了两次——`tcx_classifier` 挂载时（revision 1），`tcx_stats` 插入到它前面时（revision 2）。
+- **Revision 2**：链被修改了两次，`tcx_classifier` 挂载时（revision 1），`tcx_stats` 插入到它前面时（revision 2）。
 - **Slot 顺序**：Slot 0 是 `tcx_stats`（用 `BPF_F_BEFORE` 插入的程序）；slot 1 是 `tcx_classifier`。
 - **Protocol 0x0800**：IPv4（生成的 UDP 包）。
 - **Length 46**：20 字节的载荷 "tcx tutorial packet" 加上报头。
@@ -232,7 +232,7 @@ Counters:
 
 ## 与第 20 课（经典 TC）的对比
 
-[第 20 课](../20-tc/README.zh.md)讲的是经典 TC 路径：创建 `clsact` qdisc，挂载 `SEC("tc")` 程序作为 filter，用 `__sk_buff` 检查数据包。那一课仍然有价值，因为**数据面模型**是相同的——TCX 程序使用相同的上下文结构和相同的 helper 来访问数据包。
+[第 20 课](../20-tc/README.zh.md)讲的是经典 TC 路径：创建 `clsact` qdisc，挂载 `SEC("tc")` 程序作为 filter，用 `__sk_buff` 检查数据包。那一课仍然有价值，因为**数据面模型**是相同的，TCX 程序使用相同的上下文结构和相同的 helper 来访问数据包。
 
 TCX 替换的是**控制面**：
 
@@ -249,7 +249,7 @@ TCX 替换的是**控制面**：
 
 ## 总结
 
-TCX 用 BPF link 语义取代了基于 qdisc 的管道，使 TC 程序挂载现代化。本教程中，我们挂载了两个 ingress 程序，用 `BPF_F_BEFORE` 控制了它们的执行顺序，查询了实时链状态，并通过观察计数器验证了正确执行。TCX 提供了安全的所有权、显式排序、revision 感知的更新以及与经典 TC 的向后兼容——使其成为现代 eBPF 应用中可组合、多程序流量控制的基石。
+TCX 用 BPF link 语义取代了基于 qdisc 的管道，使 TC 程序挂载现代化。本教程中，我们挂载了两个 ingress 程序，用 `BPF_F_BEFORE` 控制了它们的执行顺序，查询了实时链状态，并通过观察计数器验证了正确执行。TCX 提供了安全的所有权、显式排序、revision 感知的更新以及与经典 TC 的向后兼容，使其成为现代 eBPF 应用中可组合、多程序流量控制的基石。
 
 更多 eBPF 教程请访问我们的仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或 <https://eunomia.dev/tutorials/>。
 
