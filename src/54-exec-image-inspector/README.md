@@ -14,8 +14,6 @@ The most direct approach to inspecting an executable is reading `/proc/<pid>/exe
 
 Tracepoints and kprobes can hook `sched_process_exec` to observe exec events synchronously, but these hooks run in what the kernel calls a **non-sleepable context**. This matters because of how Linux manages file data in memory.
 
-This tutorial uses an LSM hook for a second, stricter reason: the kernel exposes `bpf_get_task_exe_file`, `bpf_put_file`, and `bpf_path_d_path` only to BPF LSM programs. A `sched_process_exec` tracepoint can report basic exec metadata, but it cannot call those kfuncs, and its borrowed `bprm->file` cannot be retained across an asynchronous task-work boundary. Without BPF LSM, this exact design cannot reliably recover the installed executable file and path for deferred cold-page reads.
-
 When you read from a file, the kernel first checks whether the requested bytes are already in the **page cache**, a memory region that caches recently-accessed file data. If they are, the read completes immediately. If they are not (a **cold page**), the kernel must issue I/O to the storage device, and the calling context must **sleep** while waiting for that I/O to complete.
 
 BPF programs attached to tracepoints and kprobes cannot sleep. They run with interrupts potentially disabled and locks held; sleeping would deadlock the system. If a BPF program tries to read file content and encounters a cold page, the read fails with `-EFAULT` instead of waiting for I/O.

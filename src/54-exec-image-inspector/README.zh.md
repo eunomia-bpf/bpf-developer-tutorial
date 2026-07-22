@@ -14,8 +14,6 @@
 
 Tracepoint 和 kprobe 可以钩住 `sched_process_exec` 同步观察 exec 事件，但这些钩子运行在内核所谓的**不可睡眠上下文**中。为什么这很重要？这涉及到 Linux 如何管理内存中的文件数据。
 
-本教程使用 LSM 还有一个更严格的原因：内核只允许 BPF LSM 程序调用 `bpf_get_task_exe_file`、`bpf_put_file` 和 `bpf_path_d_path`。`sched_process_exec` tracepoint 可以报告基本 exec 元数据，却不能调用这些 kfunc；它借用的 `bprm->file` 也不能跨异步 task-work 边界保留。没有 BPF LSM，这套设计无法为延迟冷页读取可靠地取得已安装的可执行文件和路径。
-
 当你读取文件时，内核首先检查请求的字节是否已经在**页缓存**（page cache）中，这是一块缓存最近访问过的文件数据的内存区域。如果在，读取立即完成。如果不在（即**冷页**），内核必须向存储设备发起 I/O 请求，调用上下文必须**睡眠**等待 I/O 完成。
 
 挂载在 tracepoint 和 kprobe 上的 BPF 程序不能睡眠。它们运行时可能中断被禁用、持有锁；如果睡眠会导致系统死锁。当 BPF 程序尝试读取文件内容遇到冷页时，读取会以 `-EFAULT` 失败，而不是等待 I/O。
