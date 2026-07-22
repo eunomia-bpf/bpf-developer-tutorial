@@ -92,7 +92,7 @@ GPU:
 - [lesson 28-detach](28-detach/README.zh.md) 在应用程序退出后运行 eBPF 程序：eBPF 程序的生命周期
 - [lesson 34-syscall](34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
 - [lesson 51-tcp-quarantine](51-tcp-quarantine/README.zh.md) eBPF 教程：精准隔离已建立的 TCP 连接
-- [lesson 54-exec-image-inspector](54-exec-image-inspector/README.zh.md) eBPF 教程：检查 exec 后真正安装的可执行镜像
+- [lesson 54-exec-image-inspector](54-exec-image-inspector/README.zh.md) eBPF 教程：检查 exec 后实际安装的可执行镜像
 
 
 特性:
