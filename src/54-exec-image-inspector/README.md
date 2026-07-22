@@ -1,54 +1,91 @@
 # eBPF Tutorial: Inspecting the Executable Image After exec
 
-Imagine a container running a series of nested wrapper scripts. What you see from `ps` or `/proc` is `/usr/bin/wrapper.sh --config /etc/app.conf`, but the actual business logic might be a Python interpreter or some dynamically linked binary three layers deep. When troubleshooting, you need to know which executable image the kernel finally installed, what architecture it targets, and what byte order it uses - not just the command-line arguments.
+When a process calls `execve`, the kernel replaces its memory image with a new executable. But which executable, exactly? If the command line says `/usr/bin/wrapper.sh --config /etc/app.conf`, the actual running code might be a Python interpreter or a compiled binary launched three layers deep through wrapper scripts. Security tools, container runtimes, and troubleshooting utilities all need to know what the kernel *actually* installed—not just what the user typed.
 
-This tutorial shows how to achieve this using BPF task work and file-backed dynptr. The tool attaches an LSM hook to observe the `bprm_committed_creds` moment, schedules a task work callback for the target process after credentials are committed, and that callback runs in a sleepable context to reacquire the installed executable file, resolve its path, read the ELF header, and send the results to user space through a ring buffer.
+This tutorial builds a tool that captures that information at the kernel level. It hooks the moment credentials are committed after exec, schedules a deferred callback, then reads the installed executable's ELF header and reports the architecture, byte order, and file type. Along the way, it demonstrates two recent kernel features—BPF task work and file dynptr—that together solve a problem traditional eBPF approaches cannot.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/54-exec-image-inspector>
 
-## Why BPF task work and file dynptr are needed
+## The problem: reading file content from eBPF
 
-Traditional approaches to inspecting executable files all have significant limitations.
+Why would a security tool need to read the executable's content rather than just its path? Because the path alone does not identify what code will run. A hash of the executable's content can verify it matches a known-good binary. Embedded signatures or certificates can prove provenance. Specific byte patterns at known offsets can identify packing, obfuscation, or tampering. None of this information is available from the path—you must read the file's bytes. Doing so from eBPF, at the exact moment of exec, eliminates the race window that plagues user-space approaches.
 
-The most straightforward idea is to read the `/proc/<pid>/exe` symlink, but this requires the process to still be alive. Short-lived processes may have already exited before you can read it. Furthermore, `/proc` access happens in user space, creating a race window with the kernel's exec event - the same process might have already executed `execve` multiple times.
+The most direct approach to inspecting an executable is reading `/proc/<pid>/exe`, but this only works if the process is still alive. Short-lived processes exit before you can read them. Even if you catch them in time, the `/proc` filesystem is accessed from user space, creating a race window: by the time you read the symlink, the process might have called `execve` again.
 
-Using a tracepoint or kprobe to observe `sched_process_exec` can capture exec events, but these hooks run in a non-sleepable context. You can obtain the file path, but if you need to read file contents to verify the ELF header or check embedded metadata, you run into a problem: the file-backed dynptr's `bpf_dynptr_read` triggers a page fault when target bytes are on a cold page, and page faults require sleep to complete. BPF programs in a non-sleepable context cannot wait for I/O.
+Tracepoints and kprobes can hook `sched_process_exec` to observe exec events synchronously, but these hooks run in what the kernel calls a **non-sleepable context**. This matters because of how Linux manages file data in memory.
 
-BPF task work solves this problem. Linux 6.18 introduced the `bpf_task_work_schedule_signal` kfunc, which allows a BPF program to schedule a callback for a target task. The kernel executes this callback in a safe sleepable context. Linux 6.19 introduced file-backed dynptr, providing verifier-tracked file data access. Combining these two features, you can identify the target process in an LSM hook, record a timestamp, and schedule task work. The callback then runs in a sleepable context where it can reacquire the task's installed executable file, read content from any offset through the dynptr (including cold pages), and finally send the complete inspection results to user space.
+When you read from a file, the kernel first checks whether the requested bytes are already in the **page cache**—a memory region that caches recently-accessed file data. If they are, the read completes immediately. If they are not (a **cold page**), the kernel must issue I/O to the storage device, and the calling context must **sleep** while waiting for that I/O to complete.
 
-This is the design philosophy behind `exec_image_inspector`: the LSM hook selects the child process and schedules task work, while the sleepable callback performs the actual file reading and parsing.
+BPF programs attached to tracepoints and kprobes cannot sleep. They run with interrupts potentially disabled and locks held; sleeping would deadlock the system. If a BPF program tries to read file content and encounters a cold page, the read fails with `-EFAULT` instead of waiting for I/O.
 
-## How BPF task work and file dynptr work
+This creates a fundamental limitation: you can observe exec events, but you cannot reliably read the executable's content to verify its ELF header or check embedded metadata.
 
-BPF task work is a deferred execution mechanism. When you call `bpf_task_work_schedule_signal(task, work, map, callback)` in a BPF program, the kernel associates the callback with the specified task. The callback does not execute immediately - it runs at a safe point before that task returns to user space, where the context allows sleeping.
+## The solution: BPF task work and file dynptr
 
-`struct bpf_task_work` is an opaque 64-byte structure. The BPF program only needs to allocate storage for it; the kernel manages its internal state. This tool uses a single-element ARRAY map to store `struct exec_work`, which contains the `bpf_task_work` storage, a scheduling timestamp, and direct probe results.
+Linux 6.18 introduced **BPF task work**, a mechanism that lets a BPF program schedule a callback to run later in a safe, sleepable context. The callback executes before the target task returns to user space, at a point where the kernel permits sleeping.
 
-File-backed dynptr provides a verifier-tracked file data access interface. `bpf_dynptr_from_file(file, flags, dynptr)` creates a dynptr from a file, and `bpf_dynptr_read(dst, len, dynptr, offset, flags)` reads content at the specified offset. The dynptr holds internal state, so every path that creates a dynptr must call `bpf_dynptr_file_discard` to release it, including failure branches.
+Linux 6.19 introduced **file dynptr**, which provides verifier-tracked access to file data. A dynptr (dynamic pointer) is a BPF abstraction that tracks a pointer's bounds at verification time; the file variant wraps file I/O operations so the verifier can ensure memory safety.
 
-In a non-sleepable context, the dynptr can only read content already in the page cache; accessing a cold page returns `-EFAULT`. In a sleepable context, the dynptr can trigger page fault operations and wait for I/O to complete. This is precisely the value of the task work callback.
+Combining these features, the design becomes:
 
-## Overall tool flow
+1. Attach an LSM hook to `bprm_committed_creds`, which fires after exec installs the new credentials
+2. In the hook (non-sleepable), identify the target process and schedule a task work callback
+3. The callback runs in a sleepable context, where it can access the installed executable, read content from any offset (including cold pages), and send results to user space
 
-After user space starts, it forks the target command, but the child process blocks waiting for a release signal on a pipe. This way the parent knows the child's PID (which is also the TGID) before the child executes `execvp`, and can write this value into the BPF program's read-only data section as a filter condition. Blocking the child eliminates the attach race with short-lived commands and keeps the example self-contained.
+This separation—identify the target in a non-sleepable hook, do the heavy lifting in a sleepable callback—is the key insight.
 
-The parent opens the BPF skeleton, sets `target_tgid` and the optional `probe_offset`, loads and attaches the LSM program, creates a ring buffer reader, then writes a release byte to the pipe to let the child execute `execvp`.
+## How BPF task work operates
 
-After the child executes exec, the `lsm/bprm_committed_creds` hook triggers when credentials are committed. The BPF program compares the current TGID with `target_tgid` and returns immediately if they do not match. After matching the target, the program records a scheduling timestamp, optionally attempts a direct read in the current context if `--probe-offset` is set (to verify the cold page scenario), then calls `bpf_task_work_schedule_signal` to schedule the callback.
+When you call `bpf_task_work_schedule_signal(task, work, map, callback)`, the kernel associates your callback with the specified task. The callback does not run immediately; it runs later, at a safe point before that task returns to user space.
 
-The callback `inspect_executable` runs in that task's sleepable context. It calls `bpf_get_task_exe_file` to obtain the task's currently installed executable file (returning a referenced `struct file` that must be released with `bpf_put_file`), resolves the path with `bpf_path_d_path`, and reads the 64-byte ELF header plus the optional marker location using the file dynptr. After a successful read, it parses the ELF magic, class, data, type, and machine fields. Finally, it packages all the information into a ring buffer event and sends it to user space.
+The `struct bpf_task_work` is an opaque structure that the kernel uses to track the scheduled callback. Your BPF program allocates storage for it but does not interpret its contents. This tool uses a single-element ARRAY map to hold `struct exec_work`, which contains the `bpf_task_work` storage plus fields for timestamps and intermediate results.
 
-User space alternates between polling the ring buffer and checking child process status with `waitpid(WNOHANG)`. The loop ends when the child is reaped and at least one event is received, or when the timeout is reached. The same child might install multiple images in succession (for example, `/bin/sh -c 'exec /bin/true'`), so after the child is reaped, `drain_events` performs a zero-timeout poll to collect any remaining events in the ring buffer.
+The callback signature is `int callback(struct bpf_map *map, void *key, void *value)`. The `value` parameter points to the map element containing your `bpf_task_work`, so you can pass data from the scheduling hook to the callback through surrounding fields.
+
+## How file dynptr operates
+
+A dynptr wraps a pointer with bounds information that the BPF verifier can track. For file dynptrs:
+
+- `bpf_dynptr_from_file(file, flags, dynptr)` creates a dynptr from a file
+- `bpf_dynptr_read(dst, len, dynptr, offset, flags)` reads content at the specified offset
+- `bpf_dynptr_file_discard(dynptr)` releases the dynptr's internal state
+
+Every path that creates a dynptr—including error paths—must call `bpf_dynptr_file_discard` to release it. Failing to do so leaks internal resources.
+
+In a non-sleepable context, `bpf_dynptr_read` only succeeds if the target bytes are already in the page cache. Accessing a cold page returns `-EFAULT`. In a sleepable context, the same call can trigger page fault handling and wait for I/O, so it succeeds even for cold pages. This difference is why task work matters: the callback runs in a sleepable context where file reads work reliably.
+
+## Tool architecture
+
+The user-space program forks a child process, but holds the child blocked on a pipe before it calls `execvp`. This gives the parent time to:
+
+1. Note the child's PID (which becomes its TGID—thread group ID)
+2. Open the BPF skeleton and write the target TGID into read-only data
+3. Load and attach the BPF program
+4. Create a ring buffer reader
+
+Only then does the parent release the child by writing to the pipe. This handshake eliminates a race condition: without it, a fast-exiting command might finish before the BPF program attaches.
+
+When the child calls `execvp`, the `lsm/bprm_committed_creds` hook fires. The BPF program compares the current TGID with the configured target; if they match, it records a timestamp and schedules a task work callback.
+
+The callback—`inspect_executable`—runs in the child's sleepable context. It:
+
+1. Calls `bpf_get_task_exe_file` to get the installed executable (returning a referenced `struct file` that must be released with `bpf_put_file`)
+2. Resolves the path with `bpf_path_d_path`
+3. Creates a file dynptr and reads the 64-byte ELF header
+4. Parses ELF fields: magic number, class (32/64-bit), data (endianness), type (executable vs shared object), and machine (architecture)
+5. Sends an event through the ring buffer
+
+User space polls the ring buffer while also checking whether the child has exited. A single child might exec multiple times (for example, `/bin/sh -c 'exec /bin/true'` first execs the shell, then execs `/bin/true`), so after the child exits, the tool drains any remaining events from the ring buffer.
 
 ![Exec image inspector data flow](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/54-exec-image-inspector/exec-image-flow.png)
 
-## Code implementation
+## Code walkthrough
 
-This tool consists of four files: a shared header defining event and statistics structures, a compatibility header declaring new kernel kfuncs, a BPF program implementing the hook and callback, and a user-space loader managing the lifecycle.
+The implementation spans four files: a shared header, a compatibility header for new kernel interfaces, the BPF program, and the user-space loader.
 
 ### Shared header
 
-`exec_image_inspector.h` defines the ring buffer event structure and statistics structure shared between BPF and user space.
+`exec_image_inspector.h` defines structures shared between BPF and user space:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -96,11 +133,11 @@ struct inspector_stats {
 #endif /* __EXEC_IMAGE_INSPECTOR_H */
 ```
 
-`exec_event` contains all the information needed to inspect one exec: PID, TGID, process name, path, ELF parsing results, probe results, callback latency, and various error codes. `inspector_stats` accumulates match, schedule, callback, error, and drop counts; user space reads the BSS section at the end and reports the statistics.
+`exec_event` carries everything needed to report one exec: process identifiers, the resolved path, ELF metadata, and error codes. `inspector_stats` accumulates counters that user space reads from the BSS section at exit to report success and failure rates.
 
-### Compatibility declarations
+### Compatibility header
 
-Linux 6.18 introduced BPF task work, and 6.19 introduced file-backed dynptr. The repository's currently generated UAPI and BTF headers predate these features, so this tool places the missing declarations in a local header `bpf_experimental.h`.
+The repository's vendored vmlinux headers predate Linux 6.18/6.19, so `bpf_experimental.h` declares the new interfaces locally:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -134,11 +171,11 @@ extern int bpf_dynptr_file_discard(struct bpf_dynptr *dynptr) __ksym;
 #endif /* __EXEC_IMAGE_INSPECTOR_BPF_EXPERIMENTAL_H */
 ```
 
-This file declares kfuncs including `bpf_task_work_schedule_signal`, `bpf_get_task_exe_file`, `bpf_put_file`, `bpf_path_d_path`, `bpf_dynptr_from_file`, and `bpf_dynptr_file_discard`. This file can be removed once the repository's integrated vmlinux headers include these declarations.
+These declarations use `__ksym` to mark them as kernel symbols resolved at load time. Once the repository's vmlinux headers are regenerated from a 6.19+ kernel, this file can be removed.
 
 ### BPF program
 
-`exec_image_inspector.bpf.c` implements the LSM hook and task work callback.
+`exec_image_inspector.bpf.c` implements the LSM hook and the task work callback:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -341,23 +378,23 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 }
 ```
 
-The program entry point is the `schedule_exec_inspection` function declared with `SEC("lsm/bprm_committed_creds")`. The `bprm_committed_creds` hook runs after the new executable's credentials have been committed, at which point `bprm->file` points to the image involved in this exec. This hook itself is non-sleepable, but we can identify the target process here and schedule task work.
+The entry point is `schedule_exec_inspection`, declared with `SEC("lsm/bprm_committed_creds")`. This LSM hook fires after the new executable's credentials have been installed, so `bprm->file` points to the file being executed. The hook itself is non-sleepable, but it can identify the target and schedule the deferred work.
 
-The two `const volatile` variables `target_tgid` and `probe_offset` are in the `.rodata` section. User space writes values after `open()` but before `load()`, and the verifier treats them as compile-time constants. The program first compares the current TGID with `target_tgid`, returning immediately if they do not match to avoid observing unrelated process execs.
+The two `const volatile` variables—`target_tgid` and `probe_offset`—live in the `.rodata` section. User space writes values between `open()` and `load()`, and the verifier treats them as compile-time constants for optimization.
 
-After matching the target, the program looks up key 0 from the single-element `pending` ARRAY map to obtain `struct exec_work`. This structure stores the scheduling timestamp, direct probe result, and `struct bpf_task_work` storage. This tool observes only one child process per invocation, so one slot is sufficient. When `--probe-offset` is set, `probe_file_without_sleep` attempts to read 8 bytes from the specified location in `bprm->file` in the current non-sleepable context. The test program places the marker on a cold page to verify that direct reads return `-EFAULT` in this scenario.
+When the target matches, the program looks up `struct exec_work` from the single-element `pending` ARRAY map. This structure holds the `bpf_task_work` storage plus a timestamp and optional direct-probe result. A single slot suffices because this tool observes one child process per invocation.
 
-After the hook saves the timestamp and direct read result, it calls `bpf_task_work_schedule_signal`, passing the current task, work storage, map pointer, and the `inspect_executable` callback function pointer. The kernel holds the references needed for callback execution, and the callback will run in a sleepable context before that task returns to user space.
+The optional `--probe-offset` flag makes the tool attempt a direct read in the non-sleepable hook via `probe_file_without_sleep`. The test suite uses this to verify that reading a cold page fails with `-EFAULT` in the non-sleepable context but succeeds in the sleepable callback.
 
-`inspect_executable` is the task work callback function, with signature `int callback(struct bpf_map *map, void *key, void *value)`. It first calculates callback latency (current time minus scheduling timestamp) for diagnostics, then fills PID, TGID, process name, and direct probe result into the event structure. It then calls `bpf_get_task_exe_file` to obtain the task's installed executable file. This kfunc returns a referenced `struct file`; every successful acquisition must be released with `bpf_put_file`.
+After saving the timestamp and direct-probe result, the hook calls `bpf_task_work_schedule_signal`. The kernel holds the references needed to execute the callback later.
 
-The callback first resolves the file path with `bpf_path_d_path`, then creates a dynptr with `bpf_dynptr_from_file`. Since we are now in a sleepable context, `bpf_dynptr_read` can trigger page fault operations and wait for I/O to complete. The callback only reads a 64-byte ELF header and an optional 8-byte marker. After a successful header read, the program checks the 4-byte ELF magic `\x7fELF`, then parses `EI_CLASS` (32-bit or 64-bit), `EI_DATA` (little-endian or big-endian), `e_type` (executable or shared object), and `e_machine` (architecture). The `read_elf_u16` helper function correctly parses 16-bit fields according to byte order.
+The callback `inspect_executable` calculates latency for diagnostics, then acquires the executable file with `bpf_get_task_exe_file`. This returns a referenced `struct file` that must be released with `bpf_put_file`. The callback resolves the path, creates a file dynptr, reads the 64-byte ELF header, and parses it. The `read_elf_u16` helper handles endianness: ELF files declare their byte order in the header, and multi-byte fields must be read accordingly.
 
-Every path that creates a dynptr must call `bpf_dynptr_file_discard` to release its internal state, including branches where the helper fails. Finally, `bpf_ringbuf_output` sends the event to user space; the `dropped` counter is incremented if sending fails.
+Every path that creates a dynptr—success or failure—must call `bpf_dynptr_file_discard`. Finally, `bpf_ringbuf_output` sends the event to user space.
 
 ### User-space loader
 
-`exec_image_inspector.c` handles command-line parsing, coordinates the blocked child, loads BPF, formats events, and cleans up resources.
+`exec_image_inspector.c` coordinates the child process, loads BPF, receives events, and reports results:
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -898,17 +935,15 @@ cleanup:
 }
 ```
 
-The loader's flow centers on the blocked child handshake. `start_blocked_child` forks before BPF setup, but the child blocks on a pipe read. The parent already knows the child PID at this point and can write it to `rodata->target_tgid` after opening the skeleton. After attachment, `release_child` writes one byte to the pipe to let the child continue with `execvp`. This handshake eliminates the attach race with short-lived commands.
+The core technique is the blocked-child handshake. `start_blocked_child` forks before BPF setup, but the child blocks on a pipe read. The parent notes the child's PID, opens the skeleton, writes `target_tgid`, loads and attaches, creates the ring buffer, and only then calls `release_child` to write to the pipe and let the child proceed to `execvp`.
 
-The `setup_inspector` function opens the skeleton, sets read-only data, loads and attaches the BPF program, and creates the ring buffer reader. Error messages on load failure indicate possible causes to help users troubleshoot kernel version or configuration issues.
+`wait_for_command` is the main loop. It prints a `READY` line, releases the child, then alternates between polling the ring buffer and checking whether the child has exited. The loop ends when the child is reaped and at least one event has arrived, or when the timeout expires. After timeout, `reap_timed_out_child` sends SIGKILL and waits.
 
-`wait_for_command` is the main loop. It first prints a `READY` line indicating the tool is ready, then releases the child, sets a timeout deadline, and enters the poll loop. The loop alternates between calling `ring_buffer__poll` to receive events and `waitpid(WNOHANG)` to check child status. The loop exits when the child is reaped and at least one event is received, or when the timeout is reached. After timeout, `reap_timed_out_child` sends SIGKILL to the child and waits for it to exit.
+A single exec might trigger multiple events if the command itself execs (for example, `/bin/sh -c 'exec /bin/true'`). After the child exits, `drain_events` does a zero-timeout poll to collect any remaining events.
 
-The same child may install multiple images in succession. For example, running `/bin/sh -c 'exec /bin/true'` causes the shell to exec itself first, then exec `/bin/true`. After the child is reaped, `drain_events` uses zero-timeout poll to collect any remaining events in the ring buffer, ensuring the last image event also reaches user space.
+`handle_event` formats the output, translating numeric ELF values to readable names while preserving the raw values for scripting.
 
-`handle_event` parses ring buffer events and prints formatted output. It converts ELF numeric values to readable names like `ELF64`, `LSB`, `ET_DYN`, `EM_X86_64`, while preserving original values. When `--probe-offset` is set, it also prints a `PROBE` line showing probe results.
-
-## Compilation and execution
+## Building and running
 
 Build from source:
 
@@ -918,22 +953,22 @@ make -C src/54-exec-image-inspector clean
 make -C src/54-exec-image-inspector -j2
 ```
 
-The integration test requires Linux 6.19 or newer. Before running, confirm that `bpf` appears in the active LSM list:
+The test suite requires Linux 6.19 or newer with the BPF LSM active. Check that `bpf` appears in the LSM list:
 
 ```bash
 cat /sys/kernel/security/lsm
 ```
 
-To add `bpf`, change `lsm=<existing-list>` to `lsm=<existing-list>,bpf` in the kernel boot parameters.
+If `bpf` is missing, add it to the kernel command line: change `lsm=<existing-list>` to `lsm=<existing-list>,bpf` in your bootloader configuration.
 
-Run tests:
+Run the tests:
 
 ```bash
 cd src/54-exec-image-inspector
 sudo make test
 ```
 
-Repository CI only compiles this lesson. Runtime behavior was functionally tested on x86_64 with kernel `7.0.0-rc2+`. The following session output shows the test harness and tool output:
+The repository CI only compiles this lesson. Runtime behavior was functionally tested on x86_64 with kernel `7.0.0-rc2+`. Sample output:
 
 ```text
 TEST-MISSING matched=0 events=0 command_exit=127
@@ -947,11 +982,15 @@ SUMMARY matched=1 scheduled=1 schedule_errors=0 callbacks=1 header_errors=0 path
 PASS: missing-command, timeout cleanup, re-exec drain, ELF decode, and deferred file read succeeded
 ```
 
-The first three test records cover important boundaries: a missing command exits with status 127, at which point the committed-exec hook has not yet triggered, so `matched=0` and `events=0`; the timeout case produces an exec event then exceeds the test deadline, is terminated by SIGKILL, and reaped with status 137; the successive exec case drains two image events and confirms `/usr/bin/true` appears last.
+The first three test lines cover boundary conditions:
 
-The `EXEC` line shows the installed image and ELF header parsing results. The test program flushes and evicts the marker page before exec, so the direct read in the hook returns `-EFAULT` (`-14`), while the task-work callback successfully returns `454950524f424521` (the hexadecimal bytes for `EIPROBE!`). This verifies that non-sleepable context cannot read cold pages, while sleepable context can.
+- **TEST-MISSING**: A nonexistent command exits with status 127. The LSM hook never fires because exec fails before credentials are committed, so `matched=0` and `events=0`.
+- **TEST-TIMEOUT**: The command runs too long, gets SIGKILL, and is reaped with status 137 (128 + 9). One exec event was observed.
+- **TEST-REEXEC**: A shell command that uses `exec` internally produces two events, and the final path is `/usr/bin/true`.
 
-To inspect other commands, omit the test-program-specific probe offset:
+The `EXEC` line shows the installed image and parsed ELF fields. The `PROBE` line demonstrates the sleepable-context difference: the test writes a marker (`EIPROBE!`) to a page, flushes and evicts it from the page cache, then execs. The direct read in the non-sleepable hook returns `-EFAULT` (`-14`) because the page is cold. The deferred read in the sleepable callback succeeds, returning the marker bytes as hex (`454950524f424521`).
+
+To inspect a simple command:
 
 ```bash
 sudo ./exec_image_inspector --timeout-ms 3000 -- /bin/true
@@ -963,29 +1002,32 @@ Command-line format:
 exec_image_inspector [--probe-offset BYTES] [--timeout-ms MS] [--verbose] -- COMMAND [ARG...]
 ```
 
-`--timeout-ms` accepts 100 to 60000 milliseconds, default is 5000 milliseconds; the loader terminates and reaps the command after the deadline. `--probe-offset` compares 8-byte direct and deferred reads at the specified location, used to verify cold page scenarios. `--verbose` outputs libbpf diagnostics for troubleshooting load or attach issues. `--` explicitly ends inspector option parsing; all subsequent arguments belong to the observed command.
+- `--timeout-ms`: 100 to 60000 milliseconds (default 5000). The tool kills and reaps the command after this deadline.
+- `--probe-offset`: Read 8 bytes at this offset both in the hook (direct) and in the callback (deferred), to verify the cold-page difference.
+- `--verbose`: Print libbpf diagnostic messages.
+- `--`: Separates inspector options from the command to run.
 
-### Environment requirements
+### Requirements
 
 | Requirement | Details |
 |---|---|
-| Kernel version | Linux 6.19+ (BPF task work introduced in 6.18, file-backed dynptr introduced in 6.19) |
+| Kernel version | Linux 6.19+ (BPF task work introduced in 6.18, file dynptr in 6.19) |
 | Kernel configuration | `CONFIG_BPF=y`, `CONFIG_BPF_SYSCALL=y`, `CONFIG_BPF_JIT=y`, `CONFIG_BPF_LSM=y`, `CONFIG_SECURITY=y`, `CONFIG_DEBUG_INFO_BTF=y` |
-| Active LSM | `/sys/kernel/security/lsm` contains `bpf` |
+| Active LSM | `/sys/kernel/security/lsm` must contain `bpf` |
 | Architecture | Tested on x86_64 |
-| Privilege | root |
+| Privileges | root |
 
-## Scope
+## Limitations and extensions
 
-This tool observes one direct child that it creates, and a single map slot is sufficient for this CLI scenario. To extend it to concurrent services, you could allocate per-task state, set admission limits, and reclaim pending callbacks. Timeout cleanup sends SIGKILL to the child; callers can add process-group management and external signal handling to cover more complex scenarios.
+This tool observes one direct child per invocation, using a single map slot. For concurrent services, you would allocate per-task state, implement admission limits, and handle callback reclamation. Timeout cleanup sends SIGKILL to the child only; callers needing process-group management or external signal handling would add those features.
 
 ## Summary
 
-This tutorial demonstrates how to use BPF task work and file-backed dynptr to inspect the executable image actually installed after exec. Compared to reading `/proc/<pid>/exe` or obtaining paths in tracepoints, this approach can read file contents in a sleepable context, even when target bytes are on cold pages.
+This tutorial demonstrates how to combine BPF task work and file dynptr to inspect the executable image actually installed by exec. The key insight is separating two moments: identifying the target (in a non-sleepable LSM hook) and reading file content (in a sleepable task work callback). This lets eBPF programs read file data reliably, even when the target bytes are not in the page cache.
 
-The core idea of this tool is to separate the moment of identifying the target process (non-sleepable LSM hook) from the moment of reading file contents (sleepable task work callback). The blocked-child handshake eliminates attach races, bounded command execution and final drain ensure all events reach user space, and explicit resource release guarantees complete cleanup. These kernel features combine into a reproducible single-command tool while leaving room for extension to concurrent scenarios.
+The blocked-child handshake eliminates attach races, bounded execution ensures cleanup, and the final drain captures all events. Together, these techniques produce a reproducible single-command tool while leaving room for extension.
 
-> If you want to learn more about eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
+> To learn more about eBPF, visit our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or <https://eunomia.dev/tutorials/>.
 
 ## References
 

@@ -1,48 +1,54 @@
 # eBPF 教程：用 BPF Qdisc 实现出口限速
 
-假设你需要在测试环境中验证应用程序在低带宽条件下的行为。你创建了一对 veth 接口模拟网络链路，现在想把出口速率限制到 64 Kbit/s，同时观察队列深度达到上限时的丢包行为。传统的限速方案需要复杂的 tc 配置或用户态代理，而 Linux 6.16 引入的 BPF qdisc 允许你用 eBPF 程序直接实现完整的排队规则。
+## 问题背景：带宽受限场景下的测试
 
-本教程展示如何使用 `struct_ops` 实现一个 FIFO 限速器。程序注册为 root qdisc，自己管理 skb 入队和出队，按报文长度计算发送时间，使用 watchdog 调度下一次出队，并在 qdisc 移除时清理队列中的报文。这是一个完整的 qdisc 生命周期示例，适合在 veth、TAP 或 IFB 这类受控接口上验证 skb 所有权、发送时序和资源清理。
+假设你需要测试应用程序在低带宽条件下的行为。你创建了一对 veth 接口模拟网络链路，想把出口速率限制到 64 Kbit/s，同时观察队列满时的丢包情况。传统方案——复杂的 tc 配置或用户态代理——虽然可行，但对于快速验证来说过于笨重。
+
+Linux 6.16 提供了一种新选择：BPF qdisc。你不再需要配置现有的调度器，而是可以用 eBPF 直接实现一个完整的排队规则。本教程构建一个 FIFO 限速器，演示 qdisc 的完整生命周期：注册为 root qdisc、在入队和出队过程中管理报文所有权、计算发送时间、使用 watchdog 定时器调度下次出队、以及在移除时清理资源。
+
+本示例适用于 veth、TAP 或 IFB 这类受控接口——你拥有完全控制权，可以安心进行报文调度实验。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/53-egress-pacer>
 
 ## 为什么需要 BPF Qdisc
 
-传统的流量整形方案有明显的局限性。
+要理解 BPF qdisc 改变了什么，可以先和三种常见做法对照。
 
-tc 提供了丰富的 qdisc 选项，如 TBF（Token Bucket Filter）和 HTB（Hierarchical Token Bucket），但这些都是内核中预定义的算法。如果你需要一种特殊的调度策略，比如按应用程序类型区分优先级，或者根据实时指标动态调整速率，就必须修改内核代码或使用复杂的 tc 分类器组合。
+**内置调度器是固定算法。** tc 提供了 TBF（令牌桶过滤器）、HTB（分层令牌桶）等多种选项，但这些都是内核中预定义的行为。如果你需要自定义的调度策略——比如按应用程序类型区分优先级，或者根据实时指标动态调整速率——就必须修改内核代码或串联多个 tc 分类器。
 
-普通的 TC BPF 程序可以检查和处理报文，但排队和发送时间仍由原有的 qdisc 管理。[第 20 课](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/20-tc) 展示的就是这种模式：BPF 程序决定放行或丢弃，但无法控制报文何时发送。如果你想实现自定义的排队策略，TC BPF 的能力是不够的。
+**TC BPF 程序无法控制发送时机。** 普通的 TC BPF 程序可以检查报文并决定放行或丢弃，但底层的 qdisc 仍然控制着报文的实际发送时间。[第 20 课](https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/20-tc)展示的正是这种模式：BPF 决定放行还是丢弃，但无法做到"在时刻 T 发送这个报文"。
 
-用户态限速方案如 tc-netem 配合外部工具或 DPDK 可以实现复杂的流量整形，但引入了额外的上下文切换和复杂的部署依赖。在测试环境中，你可能只想快速验证一个想法，而不是搭建完整的用户态网络栈。
+**用户态方案会引入额外开销。** tc-netem 配合外部工具或 DPDK 可以实现流量整形，但会带来上下文切换和部署复杂度。在测试场景中，你往往需要轻量级的方案。
 
-Linux 6.16 通过 `struct_ops` 引入了 BPF 实现的 `Qdisc_ops` 回调。程序实现 `enqueue`、`dequeue`、`init`、`reset` 和 `destroy`，可以动态注册为一个 qdisc。这意味着你可以用 BPF 程序完全控制报文的排队和发送时序，同时保持内核网络栈的性能优势。本课的 `egress_pacer` 就是用这种方式构建的 FIFO 限速器。
+BPF qdisc 解决了这些问题。从 Linux 6.16 开始，你可以用 eBPF 实现 `Qdisc_ops` 的回调函数（`enqueue`、`dequeue`、`init`、`reset`、`destroy`），并将其注册为一种 qdisc 类型。你的 BPF 程序可以完全控制报文的排队和发送时序，同时保持在内核态运行。本教程的 `egress_pacer` 就是用这种方式构建的 FIFO 限速器。
 
 ## BPF Qdisc 的工作原理
 
-在深入代码之前，先理解 BPF qdisc 的整体流程。与普通 TC BPF 程序不同，qdisc BPF 程序注册为 root qdisc，完全接管报文的排队和发送。
+与在现有 qdisc 内部运行的普通 TC BPF 程序不同，BPF qdisc 本身**就是** qdisc。当你把它挂载到接口的 root 位置后，你的 BPF 代码会处理每一个出口报文。
 
-用户态程序首先设置速率和队列上限，加载 BPF 程序并注册 `struct_ops` 实现，然后把它挂载到指定接口的 `TC_H_ROOT` 位置。此后所有经过该接口的出口报文都由 BPF 程序处理。
+整个生命周期如下：
 
-当内核需要发送报文时，它调用 `enqueue` 回调。BPF 程序创建一个节点来保存 skb，根据报文长度计算最早可以发送的时间，然后把节点加入 FIFO 队列。如果队列已满或节点分配失败，程序丢弃报文并更新统计。
+1. **初始化**：用户态程序设置速率和队列上限，加载 BPF 程序，注册 `struct_ops` 实现，然后把它挂载到目标接口的 `TC_H_ROOT` 位置。
 
-当内核尝试取出报文发送时，它调用 `dequeue` 回调。BPF 程序检查队首节点的发送时间。如果当前时间已经到达或超过该时间，程序取出 skb 返回给内核；如果还没到发送时间，程序用 `bpf_qdisc_watchdog_schedule` 设置一个定时器，然后返回 NULL。定时器到期后，内核会再次调用 `dequeue`。
+2. **入队**：当内核需要将报文排队发送时，它调用你的 `enqueue` 回调。你接收到一个 `skb`，创建一个节点来保存它，根据报文长度和速率计算发送时间，然后把节点加入队列。如果队列已满或分配失败，则丢弃报文。
 
-当用户态程序移除 qdisc 时，内核调用 `reset` 回调。BPF 程序遍历队列中所有未发送的报文，释放它们占用的资源，并清零计数器。
+3. **出队**：当内核想要发送报文时，它调用你的 `dequeue` 回调。你检查队首报文的发送时间是否已到。如果是，返回 `skb`；如果否，为正确的时间安排一个 watchdog 定时器并返回 NULL。定时器触发后，内核会再次调用 `dequeue`。
 
-整个生命周期中，BPF 程序完全控制 skb 的所有权。从 `enqueue` 接收 skb 开始，到 `dequeue` 返回 skb 或 `reset` 释放 skb 为止，报文都由 BPF 管理的数据结构保存。
+4. **重置**：当 qdisc 被移除时，内核调用 `reset`。你需要遍历所有剩余的报文，释放它们占用的资源，并将计数器清零。
+
+在整个生命周期中，你的 BPF 程序拥有报文的所有权。从 `enqueue` 接收 `skb`，到在你的数据结构中持有它，再到在 `dequeue` 中返回它或在 `reset` 中释放它——BPF 程序始终是责任方。
 
 ![egress_pacer 数据流：从配置、挂载、入队、BPF FIFO、出队到发送路径，包含 policy-drop 分支、watchdog 循环和 reset 生命周期](https://github.com/eunomia-bpf/bpf-developer-tutorial/raw/main/src/53-egress-pacer/egress-pacer-flow.png)
 
-图中实线从配置和挂载开始，随后跟踪一个 skb 从 enqueue 进入 BPF FIFO，再由 dequeue 交还给发送路径。队列已满或节点分配返回空时走 policy-drop 分支。早到的 dequeue 把节点推回队首，安排 watchdog 并返回 NULL，等 watchdog 唤醒后重新进入 dequeue。虚线表示生命周期路径：移除 root qdisc 后 reset 释放队列中的 skb 并清零 qlen 和 backlog。
+图中实线描绘了报文的正常路径：配置和挂载，然后入队进入 FIFO，再出队到发送路径。当队列已满或分配失败时，报文走 policy-drop 分支。如果在报文发送时间到来之前调用了 dequeue，节点会被推回队首，安排 watchdog，然后返回 NULL；watchdog 随后会重新进入 dequeue。虚线表示生命周期路径：移除 qdisc 会触发 reset，释放队列中的报文并清零 qlen 和 backlog。
 
 ## 代码实现
 
-本工具由四个文件组成：共享头文件定义统计结构、兼容头文件提供 graph-object kfunc 声明、BPF 程序实现 qdisc 回调、用户空间加载器管理生命周期并打印结果。
+本实现由四个文件组成：定义统计结构的共享头文件、提供 BPF graph-object 声明的兼容头文件、实现 qdisc 回调的 BPF 程序，以及管理生命周期的用户态加载器。
 
 ### 共享头文件
 
-`egress_pacer.h` 定义了 BPF 和用户空间共享的统计结构。这六个字段把报文的一生分成几种结果，位于 BSS 段作为结果通道。
+`egress_pacer.h` 定义了 BPF 和用户态之间共享的统计结构。这六个计数器把每个报文的最终结果分门别类：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -61,11 +67,15 @@ struct pacer_stats {
 #endif /* __EGRESS_PACER_H */
 ```
 
-成功进入和离开 FIFO 的报文分别计入 `enqueued` 和 `dequeued`。队列已满或节点分配失败时，`policy_dropped` 增加。reset 时仍在队列中的报文计入 `cleanup_dropped`。`bytes_dequeued` 累计实际交还给发送路径的字节数，`max_qlen` 记录队列的峰值深度。
+- `enqueued` / `dequeued`：成功进入和离开 FIFO 的报文数。
+- `policy_dropped`：在入队阶段因队列已满或分配失败而丢弃的报文数。
+- `cleanup_dropped`：reset 运行时仍在队列中的报文数——这些报文已入队但从未发送。
+- `bytes_dequeued`：实际发送的总字节数。
+- `max_qlen`：观察到的队列深度峰值。
 
 ### 兼容头文件
 
-这个示例需要 graph-object kfunc，因此用一个本地兼容头文件补齐 BPF qdisc 声明。这些声明仅存在于本课目录，与仓库统一使用的头文件相互独立。
+BPF qdisc 使用"graph-object"kfunc——用于管理 BPF 所持有的链表和对象的内核函数。这个本地头文件提供了必要的声明：
 
 ```c
 /* SPDX-License-Identifier: GPL-2.0 */
@@ -102,11 +112,16 @@ bpf_list_pop_front(struct bpf_list_head *head) __ksym;
 #endif /* __EGRESS_PACER_BPF_EXPERIMENTAL_H */
 ```
 
-这个文件提供构建队列所需的 graph-object 辅助函数。`bpf_obj_new` 创建报文节点，`bpf_obj_drop` 在节点用完后释放它。`bpf_list_push_back` 和 `bpf_list_pop_front` 让这些节点组成 FIFO。`__contains` 生成 BTF tag，告诉 verifier 这个 list head 装的是哪一种节点，使 verifier 可以安全地跟踪链表对象。
+这些辅助函数让 BPF 代码可以安全地管理内核对象：
+
+- `bpf_obj_new` 分配给定类型的新对象。
+- `bpf_obj_drop` 释放对象。
+- `bpf_list_push_back` / `bpf_list_push_front` / `bpf_list_pop_front` 实现双向链表操作。
+- `__contains` 宏生成 BTF 标签，告诉验证器 list head 包含的是哪种节点类型，从而实现安全的所有权追踪。
 
 ### BPF 程序
 
-`egress_pacer.bpf.c` 使用 `SEC(".struct_ops")` 声明 `Qdisc_ops` 实现。内核在加载时注册这些回调，使 BPF 程序成为一个完整的 qdisc。
+`egress_pacer.bpf.c` 实现了 qdisc。`SEC(".struct_ops")` 声明将其注册为 `Qdisc_ops` 实现：
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -308,19 +323,59 @@ struct Qdisc_ops pacer = {
 };
 ```
 
-程序结构围绕 qdisc 的三个核心阶段展开。两个 `const volatile` 变量 `rate_kbps` 和 `queue_limit` 位于 `.rodata` 段，用户态在 `open()` 之后、`load()` 之前写入速率和队列上限，验证器将它们视为编译期常量。`packet_node` 结构体定义了队列中的节点，包含发送时间、报文长度、skb 指针和链表节点。`__kptr` 标记告诉 verifier 这个字段持有内核指针的所有权。
+#### 关键数据结构
 
-`egress_pacer_enqueue` 是入队回调。它首先从 `qdisc_skb_cb(skb)->pkt_len` 取得 qdisc 看到的报文长度，然后检查队列是否还有空间。如果队列已满或节点创建失败，程序调用 `bpf_qdisc_skb_drop` 丢弃报文并递增 `policy_dropped`。真正的所有权转移发生在 `bpf_kptr_xchg`：调用成功后，skb 被放进节点的 `__kptr` 字段，节点从此负责保管它。程序随后在持有 `queue_lock` 的情况下计算发送时间、把节点加入 FIFO 尾部、更新 qlen 和 backlog。发送间隔按 `packet_len * 8 * 1000000 / rate_kbps` 计算，单位是纳秒。队列空闲一段时间后，`next_departure_ns` 会早于当前时间，新来的第一个报文可以立刻离开。
+`const volatile` 变量 `rate_kbps` 和 `queue_limit` 位于 `.rodata` 段。用户态在 `open()` 之后、`load()` 之前写入它们，之后验证器将其视为编译期常量。
 
-`egress_pacer_dequeue` 是出队回调。它从队首取出节点，比较 `eligible_ns` 与当前时间。如果报文已经可以发送，程序用 `bpf_kptr_xchg` 把 skb 从节点取回，扣减 qlen 和 backlog，释放节点，然后调用 `bpf_qdisc_bstats_update` 更新 qdisc 统计并返回 skb。如果还没到发送时间，程序把节点放回队首，调用 `bpf_qdisc_watchdog_schedule` 设置定时器，然后返回 NULL。内核会在指定时间再次调用 dequeue。
+`packet_node` 结构体保存每个排队的报文：
+- `eligible_ns`：该报文最早可以发送的时间（纳秒）。
+- `packet_len`：报文长度，用于 backlog 统计。
+- `skb`：一个 `__kptr` 字段，拥有内核套接字缓冲区的所有权。`__kptr` 标注告诉验证器这个字段持有一个被拥有的内核指针。
+- `node`：一个 `bpf_list_node`，用于链入 FIFO。
 
-`egress_pacer_reset` 负责清理。当 qdisc 被移除时，队列中可能还有未发送的报文。程序用 `bpf_for` 逐个取出节点，调用 `bpf_kfree_skb` 释放 skb，然后销毁节点对象。清掉的报文计入 `cleanup_dropped`，与 enqueue 阶段的 `policy_dropped` 分开。链表排空后，程序把 `next_departure_ns`、qlen 和 backlog 一起归零。
+`private(A)` 宏将锁、链表头和出发时间戳放入一个私有数据段，并确保正确对齐。
 
-程序末尾的 `SEC(".struct_ops")` 块把所有回调注册为 `Qdisc_ops` 结构体。`id` 字段指定 qdisc 名称为 `bpf_pacer`，用户态通过这个名称创建 qdisc 实例。
+#### 入队回调
 
-### 用户空间加载器
+`egress_pacer_enqueue` 从内核接收报文：
 
-`egress_pacer.c` 解析命令行参数、配置 BPF 常量、创建 qdisc 并等待指定时间后清理。
+1. 从 `qdisc_skb_cb(skb)->pkt_len` 获取报文长度。
+2. 如果队列已满，丢弃报文。
+3. 分配一个 `packet_node`。如果分配失败，丢弃。
+4. 计算该报文何时可以发送：`interval_ns = packet_len * 8 * 1000000 / rate_kbps`（比特数除以千比特每秒得到纳秒）。
+5. 用 `bpf_kptr_xchg` 将 `skb` 的所有权转移给节点。调用完成后，节点拥有这个 `skb`。
+6. 在自旋锁保护下设置报文的可发送时间。如果队列之前是空闲的（`next_departure_ns` 在过去），这个报文可以立即发送；否则它需要排在上一个报文之后。
+7. 把节点推入 FIFO 尾部，更新计数器，解锁，返回成功。
+
+`bpf_qdisc_skb_drop` 调用处理被丢弃的报文——它把 `skb` 加入内核的释放链表并更新 qdisc 统计。
+
+#### 出队回调
+
+当内核想要发送报文时，会调用 `egress_pacer_dequeue`：
+
+1. 从 FIFO 弹出队首节点。
+2. 如果队列为空，返回 NULL。
+3. 检查当前时间是否已到达 `eligible_ns`。如果未到，把节点推回队首，为 `eligible_ns` 安排一个 watchdog 定时器，然后返回 NULL。定时器触发后，内核会再次调用 dequeue。
+4. 如果已经可以发送，用 `bpf_kptr_xchg` 从节点取出 `skb`，递减计数器，释放节点，更新统计，返回 `skb`。
+
+watchdog 机制（`bpf_qdisc_watchdog_schedule`）是 BPF qdisc 实现发送时序的关键——你告诉内核什么时候唤醒你，它在那个时间调用 dequeue。
+
+#### 重置回调
+
+`egress_pacer_reset` 在 qdisc 被移除时运行。队列中可能还有未发送的报文，必须释放它们：
+
+1. 用 `bpf_for`（一个用于有界迭代的 BPF 辅助函数）遍历所有节点。
+2. 弹出每个节点，取出其 `skb`，用 `bpf_kfree_skb` 释放。
+3. 释放的报文计入 `cleanup_dropped`。
+4. 将出发时间戳和 qdisc 计数器清零。
+
+#### 注册
+
+末尾的 `SEC(".struct_ops")` 块将回调函数注册为 `Qdisc_ops` 结构体。`id` 字段（`"bpf_pacer"`）是用户态用于创建这个 qdisc 实例的名称。
+
+### 用户态加载器
+
+`egress_pacer.c` 处理命令行参数，配置 BPF 程序，挂载 qdisc，等待指定时长，然后清理：
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -621,11 +676,17 @@ cleanup:
 }
 ```
 
-加载器的流程比较标准。解析命令行后，用 `if_nametoindex` 验证接口存在。打开 skeleton 后把速率和队列上限写入 `.rodata` 段，然后调用 `load` 完成 BPF 程序加载。加载成功后调用 `attach` 注册 `struct_ops` 实现，使 `bpf_pacer` 成为可用的 qdisc 类型。
+加载器遵循标准的 libbpf 模式：
 
-接下来的 `bpf_tc_hook_create` 在目标接口的 `TC_H_ROOT` 位置创建名为 `bpf_pacer` 的 root qdisc。这个调用带着独占语义：目标接口已经有 root qdisc 时，内核返回 `-EEXIST`，程序立即停止，保留现有配置。这种独占做法限制了工具的作用范围，适合把它用在专门创建的测试接口上。
+1. 解析参数，用 `if_nametoindex` 验证接口存在。
+2. 打开 skeleton，将速率和队列上限写入 `.rodata`。
+3. 加载 BPF 程序（这一步会进行验证和 JIT 编译）。
+4. 挂载 `struct_ops` 实现，使 `bpf_pacer` 成为可用的 qdisc 类型。
+5. 用 `bpf_tc_hook_create` 在目标接口上创建 root qdisc。
 
-安装成功后，程序打印 `READY` 行，然后每隔 100 ms 检查运行时间和 `exiting` 标志。SIGINT、SIGTERM 或时间到期都会退出等待循环。清理顺序保证 `SUMMARY` 包含 reset 清掉的报文：先调用 `bpf_tc_hook_destroy` 触发 reset，再读取 `skel->bss->stats`，最后销毁 skeleton 并注销 `struct_ops` link。
+`bpf_tc_hook_create` 调用具有独占语义：如果接口已经有 root qdisc，内核返回 `-EEXIST`，程序直接退出而不做任何修改。这一安全措施意味着该工具最适合用于你完全控制配置的专用测试接口。
+
+挂载成功后，程序打印 `READY`，然后每隔 100ms 检查一次，直到时长到期或收到信号。清理顺序很重要：先调用 `bpf_tc_hook_destroy`（触发 reset 并释放排队的报文），然后读取最终统计，最后销毁 skeleton。
 
 ## 编译与运行
 
@@ -637,13 +698,13 @@ make clean
 make -j2
 ```
 
-第一次运行可以直接使用集成测试程序，它会创建一次性的 `epac_tx`/`epac_rx` veth 对，完成测试后删除。加载 BPF 和修改 qdisc 需要 root：
+最简单的测试方式是使用附带的集成测试，它会创建一个临时的 veth 对并在测试后清理。加载 BPF 和修改 qdisc 需要 root 权限：
 
 ```bash
 sudo python3 tests/test_egress_pacer.py ./egress_pacer
 ```
 
-下面是一次已经完成的运行。环境为 x86_64，内核是从 commit `a03114efd0720dff230388f7e160e427e54ea31b` 构建的 `7.0.0-rc2+`：
+下面是一次成功运行的输出，环境为 x86_64，内核版本 `7.0.0-rc2+`（commit `a03114efd0720dff230388f7e160e427e54ea31b`）：
 
 ```console
 READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
@@ -652,49 +713,70 @@ TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64
 PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
 ```
 
-这段输出展示主要路径的功能正确性：队列上限、限速调度和计数一致。测试向一个 64 Kbit/s、最多容纳 8 个报文的队列连续发送 40 个 1024 字节 EtherType `0x88B5` 原始帧。本次运行中，接收端看到 9 个报文，首尾相隔 1024 ms；另外 31 次发送走到 `policy_dropped`。换一个系统或时序，这些具体数字会有所不同。
+发生了什么：测试向一个 64 Kbit/s、最多容纳 8 个报文的队列发送了 40 个原始以太网帧（每个 1024 字节，EtherType `0x88B5`）。9 个报文成功通过队列，分布在 1024ms 内——与预期速率吻合。其他 31 次发送触发了队列上限，计入 `policy_dropped`。具体数字因系统时序而异。
 
-测试同时覆盖冲突检测、信号清理和异常恢复。它会预先安装一个冲突的 `pfifo`，确认加载器保留现有配置；制造 backlog 后发送 SIGTERM，检查 `cleanup_dropped` 大于零，并验证 `enqueued = dequeued + cleanup_dropped`。最后的 SIGKILL 由测试程序接管：用 `tc` 删除残留的 qdisc，确认接口恢复正常，并在 Python 的 `finally` 块中清掉 veth 对。
+测试还覆盖了边界情况：
+- 预先安装一个 `pfifo`，确认加载器拒绝替换现有的 qdisc。
+- 在队列中有报文时发送 SIGTERM，验证 `cleanup_dropped > 0` 且 `enqueued = dequeued + cleanup_dropped`。
+- 发送 SIGKILL（跳过清理），然后用 `tc` 手动删除残留的 qdisc，确认接口恢复正常。
 
-手动运行时，选择一个完全由你控制的接口，先查看它当前使用的 root qdisc：
+手动测试时，选择一个你控制的接口，先查看其当前 qdisc：
 
 ```bash
 tc qdisc show dev veth-service
 ```
 
-确认接口可以安全使用后，让 pacer 持续 30 秒：
+如果显示的是默认的 `noqueue` 或 `pfifo_fast`，就可以挂载 pacer：
 
 ```bash
 sudo ./egress_pacer --interface veth-service --rate-kbps 64000 --queue-limit 256 --duration 30
 ```
 
-命令行参数：
+命令行选项：
 
 ```text
 Usage: ./egress_pacer --interface IFACE [--rate-kbps KBPS] [--queue-limit PACKETS] [--duration SEC] [--verbose]
 
 Options:
   -i, --interface IFACE       目标接口（必选）
-  -r, --rate-kbps KBPS        出口速率，8-100000000（默认：1024）
-  -q, --queue-limit PACKETS   队列容量，1-65535 个报文（默认：256）
-  -d, --duration SEC          控制时长，1-86400 秒（默认：10）
-  -v, --verbose               打印 libbpf 诊断信息
+  -r, --rate-kbps KBPS        出口速率，单位 Kbit/s，范围 8-100000000（默认：1024）
+  -q, --queue-limit PACKETS   队列容量，单位报文数，范围 1-65535（默认：256）
+  -d, --duration SEC          运行时长，单位秒，范围 1-86400（默认：10）
+  -v, --verbose               打印 libbpf 调试输出
   -h, --help                  显示帮助
 ```
 
-看到 `READY` 就表示 qdisc 已经安装。运行结束并成功移除后，程序打印 `SUMMARY`。
+看到 `READY` 就表示 qdisc 已安装并正在限速。时长结束（或按 Ctrl+C）后，程序移除 qdisc 并打印 `SUMMARY`。
 
 ### 环境要求
 
-这个功能从 Linux 6.16 开始可用。内核需要启用 BTF 和 BPF JIT，并至少包含 `CONFIG_BPF=y`、`CONFIG_BPF_SYSCALL=y`、`CONFIG_BPF_JIT=y`、`CONFIG_DEBUG_INFO_BTF=y`、`CONFIG_NET_SCHED=y` 与 `CONFIG_NET_SCH_BPF=y`。
+BPF qdisc 需要 Linux 6.16 或更高版本。内核必须启用 BTF 和 BPF JIT：
 
-BPF qdisc TC hook 需要 libbpf 1.6.0 或更新版本。仓库已经在 `src/third_party` 中集成 libbpf 和 bpftool。运行时需要 root 权限。集成测试另外依赖 Python 3、原始报文套接字，以及 `iproute2` 中的 `ip` 和 `tc`。一个受控的 veth 对就足够了；本课验证的架构是 x86_64。
+| 要求 | 最低版本 / 配置 |
+| --- | --- |
+| Linux 内核 | 6.16+ |
+| `CONFIG_BPF` | y |
+| `CONFIG_BPF_SYSCALL` | y |
+| `CONFIG_BPF_JIT` | y |
+| `CONFIG_DEBUG_INFO_BTF` | y |
+| `CONFIG_NET_SCHED` | y |
+| `CONFIG_NET_SCH_BPF` | y |
+| libbpf | 1.6.0+ |
+| 权限 | root |
+
+仓库已在 `src/third_party` 中包含 libbpf 和 bpftool。集成测试另外依赖 Python 3、原始套接字能力，以及 iproute2 中的 `ip` 和 `tc`。一对 veth 接口即可满足测试需求；已在 x86_64 上验证。
 
 ## 总结
 
-本教程展示了如何使用 `struct_ops` 实现一个完整的 BPF qdisc。`enqueue` 接管 skb 并按报文长度安排发送时间，`dequeue` 用 watchdog 在适当时刻被唤醒并返回 skb，`reset` 释放移除时仍在队列里的报文。这三段所有权和时序处理构成可复用的 qdisc 模式。
+本教程通过一个完整的 FIFO 限速器演示了 BPF qdisc：
 
-这个调度器实现一条聚合 FIFO，队列上限按报文个数计算，发送间隔使用 qdisc 报文长度推导。速率和队列上限在加载时固定，适合在受控接口上验证功能正确性。更完整的调度器可以在此基础上加入公平性、动态策略和持久化恢复。
+- **enqueue** 接管报文所有权，根据报文长度和速率安排发送时间。
+- **dequeue** 使用 watchdog 定时器在正确的时刻被唤醒，并将报文返回给内核。
+- **reset** 释放 qdisc 移除时仍在队列中的所有报文。
+
+这三个阶段——接收报文、控制释放时机、清理资源——构成了自定义调度器的可复用模式。
+
+这个调度器实现了一条聚合 FIFO，速率和队列上限在加载时固定。它有意保持简单，适合在受控接口上验证功能正确性。生产级调度器可以在此基础上添加公平性、动态策略或跨重启的状态持久化。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
