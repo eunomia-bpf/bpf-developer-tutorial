@@ -12,7 +12,7 @@
 
 我们需要的是一种内核级机制，能够原子地识别并销毁特定套接字，不存在竞态窗口。这正是 Linux 6.5 引入 `bpf_sock_destroy` 内核函数（kfunc）所提供的能力。
 
-本教程将构建一个命令行工具，使用 BPF 迭代器遍历内核的 TCP 套接字表。dry-run 列出所有匹配远端 IPv4 地址和端口的已建立连接；apply 模式还必须给出选中的本地 IPv4 地址和端口，因此只会销毁完整 4-tuple 对应的连接。你将学习 BPF 迭代器如何在持有锁的情况下安全遍历内核数据结构，以及 `bpf_sock_destroy` 这样的 kfunc 如何将内核操作暴露给 BPF 程序。
+本教程将构建一个命令行工具，使用 BPF 迭代器遍历内核的 TCP 套接字表，找出与指定 IPv4 地址和端口匹配的已建立连接，并按需销毁。你将学习 BPF 迭代器如何在持有锁的情况下安全遍历内核数据结构，以及 `bpf_sock_destroy` 这样的 kfunc 如何将内核操作暴露给 BPF 程序。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 

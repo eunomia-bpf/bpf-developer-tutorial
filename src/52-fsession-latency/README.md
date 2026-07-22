@@ -1,10 +1,8 @@
 # eBPF Tutorial: Tracing Slow vfs_read Calls with fsession
 
-When a file-backed service shows read-latency spikes, application-level timing tells you that requests slowed down, but it cannot distinguish whether the kernel spent time inside `vfs_read` or user-space logic took too long. The useful questions are: which thread issued the read, which VFS object was involved, how many bytes did it request, what did the call return, and how long did that single `vfs_read` invocation take?
+When a file-backed service shows read-latency spikes, application-level timing tells you that requests slowed down, but it cannot distinguish whether the kernel blocked on I/O or user-space logic took too long. The useful questions are: which thread issued the read, how many bytes did it request, what did the call return, and how long did that single `vfs_read` invocation take?
 
-This tutorial demonstrates how to measure `vfs_read` call latency using the **fsession** mechanism introduced in Linux 7.0. fsession is a new eBPF program type that runs once at function entry and once at return, with built-in per-invocation storage for correlating the two phases. The tool timestamps function entry, computes latency at return, filters by process and threshold, and reports the object type plus a `major:minor:inode` identity through a ring buffer.
-
-`vfs_read` is not limited to regular files: pipes, character devices, and other file-backed objects also pass through it. A slow event therefore identifies a slow `vfs_read` call, not necessarily slow storage. Use the reported `type` together with the `major:minor:inode` identity to distinguish regular-file reads from FIFOs and other VFS objects.
+This tutorial demonstrates how to measure `vfs_read` call latency using the **fsession** mechanism introduced in Linux 7.0. fsession is a new eBPF program type that runs once at function entry and once at return, with built-in per-invocation storage for correlating the two phases. The tool we build timestamps function entry, computes latency at return, filters by process and threshold, and reports slow-read events through a ring buffer.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 

@@ -14,7 +14,7 @@ This seemingly simple requirement is surprisingly difficult to achieve with trad
 
 What we need is a kernel-level mechanism that can identify and destroy specific sockets atomically, with no race window. This is exactly what Linux 6.5 introduced with the `bpf_sock_destroy` kernel function (kfunc).
 
-This tutorial builds a command-line tool that uses a BPF iterator to walk the kernel's TCP socket table. A dry run lists every established connection matching a remote IPv4 address and port; apply mode additionally requires the selected local IPv4 address and port, then destroys only that complete 4-tuple. You will learn how BPF iterators provide safe, locked traversal of kernel data structures, and how kfuncs like `bpf_sock_destroy` expose kernel operations to BPF programs.
+This tutorial builds a command-line tool that uses a BPF iterator to walk the kernel's TCP socket table, find established connections matching a specific IPv4 address and port, and destroy them on demand. You will learn how BPF iterators provide safe, locked traversal of kernel data structures, and how kfuncs like `bpf_sock_destroy` expose kernel operations to BPF programs.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
