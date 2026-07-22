@@ -16,8 +16,6 @@ char LICENSE[] SEC("license") = "GPL";
 #define ELFDATA2LSB 1
 #define ELFDATA2MSB 2
 
-const volatile __u32 probe_offset;
-
 struct inspector_stats stats;
 
 struct {
@@ -27,7 +25,6 @@ struct {
 
 struct exec_work {
 	__u64 scheduled_ns;
-	int direct_probe_error;
 	struct bpf_task_work work;
 };
 
@@ -46,129 +43,63 @@ static __u16 read_elf_u16(const unsigned char *header, int offset, __u8 data)
 	return header[offset] | ((__u16)header[offset + 1] << 8);
 }
 
-static int probe_file_without_sleep(struct file *file)
-{
-	unsigned char sample[EXEC_PROBE_LEN];
-	struct bpf_dynptr dynptr;
-	int err;
-
-	if (!probe_offset)
-		return 0;
-
-	__sync_fetch_and_add(&stats.direct_probes, 1);
-	if (!file) {
-		err = -ENOENT;
-		goto record;
-	}
-
-	err = bpf_dynptr_from_file(file, 0, &dynptr);
-	if (err) {
-		bpf_dynptr_file_discard(&dynptr);
-		goto record;
-	}
-
-	err = bpf_dynptr_read(sample, sizeof(sample), &dynptr, probe_offset, 0);
-	bpf_dynptr_file_discard(&dynptr);
-
-record:
-	if (err)
-		__sync_fetch_and_add(&stats.direct_probe_errors, 1);
-	return err;
-}
-
-static __always_inline void record_header_error(struct exec_event *event, int err)
-{
-	event->header_error = err;
-	__sync_fetch_and_add(&stats.header_errors, 1);
-}
-
-static __always_inline void record_deferred_probe(struct exec_event *event,
-						   int err)
-{
-	if (!probe_offset)
-		return;
-
-	event->deferred_probe_error = err;
-	__sync_fetch_and_add(&stats.deferred_probes, 1);
-	if (err)
-		__sync_fetch_and_add(&stats.deferred_probe_errors, 1);
-}
-
-static __always_inline void parse_elf_header(const unsigned char *header,
-					     struct exec_event *event)
-{
-	if (event->header_error || header[0] != 0x7f || header[1] != 'E' ||
-	    header[2] != 'L' || header[3] != 'F')
-		return;
-
-	event->is_elf = 1;
-	event->elf_class = header[EI_CLASS];
-	event->elf_data = header[EI_DATA];
-	event->elf_type = read_elf_u16(header, 16, event->elf_data);
-	event->elf_machine = read_elf_u16(header, 18, event->elf_data);
-}
-
-static __always_inline void inspect_file(struct file *file,
-					 struct exec_event *event)
-{
-	unsigned char header[64] = {};
-	struct bpf_dynptr dynptr;
-	int err;
-
-	err = bpf_path_d_path(&file->f_path, event->path, sizeof(event->path));
-	if (err < 0) {
-		event->path_error = err;
-		__sync_fetch_and_add(&stats.path_errors, 1);
-	}
-
-	err = bpf_dynptr_from_file(file, 0, &dynptr);
-	if (err) {
-		bpf_dynptr_file_discard(&dynptr);
-		record_header_error(event, err);
-		record_deferred_probe(event, err);
-		return;
-	}
-
-	err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
-	if (err)
-		record_header_error(event, err);
-
-	if (probe_offset) {
-		err = bpf_dynptr_read(event->probe_bytes,
-				      sizeof(event->probe_bytes),
-				      &dynptr, probe_offset, 0);
-		record_deferred_probe(event, err);
-	}
-	bpf_dynptr_file_discard(&dynptr);
-	parse_elf_header(header, event);
-}
-
 static int inspect_executable(struct bpf_map *map, void *key, void *value)
 {
+	unsigned char header[64] = {};
 	struct exec_work *work = value;
 	struct exec_event event = {};
 	struct task_struct *task;
+	struct bpf_dynptr dynptr;
 	struct file *file;
 	__u64 pid_tgid;
+	int err;
 
 	__sync_fetch_and_add(&stats.callbacks, 1);
 	pid_tgid = bpf_get_current_pid_tgid();
 	event.pid = (__u32)pid_tgid;
 	event.tgid = pid_tgid >> 32;
 	event.latency_ns = bpf_ktime_get_ns() - work->scheduled_ns;
-	event.direct_probe_error = work->direct_probe_error;
-	event.probe_offset = probe_offset;
 	bpf_get_current_comm(event.comm, sizeof(event.comm));
 
 	task = bpf_get_current_task_btf();
 	file = bpf_get_task_exe_file(task);
 	if (!file) {
-		record_header_error(&event, -ENOENT);
-		record_deferred_probe(&event, -ENOENT);
+		event.header_error = -ENOENT;
+		__sync_fetch_and_add(&stats.header_errors, 1);
 		goto emit;
 	}
 
-	inspect_file(file, &event);
+	err = bpf_path_d_path(&file->f_path, event.path, sizeof(event.path));
+	if (err < 0) {
+		event.path_error = err;
+		__sync_fetch_and_add(&stats.path_errors, 1);
+	}
+
+	err = bpf_dynptr_from_file(file, 0, &dynptr);
+	if (err) {
+		bpf_dynptr_file_discard(&dynptr);
+		event.header_error = err;
+		__sync_fetch_and_add(&stats.header_errors, 1);
+		goto put_file;
+	}
+
+	err = bpf_dynptr_read(header, sizeof(header), &dynptr, 0, 0);
+	if (err) {
+		event.header_error = err;
+		__sync_fetch_and_add(&stats.header_errors, 1);
+	}
+	bpf_dynptr_file_discard(&dynptr);
+
+	if (!event.header_error && header[0] == 0x7f && header[1] == 'E' &&
+	    header[2] == 'L' && header[3] == 'F') {
+		event.is_elf = 1;
+		event.elf_class = header[EI_CLASS];
+		event.elf_data = header[EI_DATA];
+		event.elf_type = read_elf_u16(header, 16, event.elf_data);
+		event.elf_machine = read_elf_u16(header, 18, event.elf_data);
+	}
+
+put_file:
 	bpf_put_file(file);
 emit:
 	if (bpf_ringbuf_output(&events, &event, sizeof(event), 0))
@@ -189,6 +120,7 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 	__u64 key;
 	int err;
 
+	(void)bprm;
 	pid_tgid = bpf_get_current_pid_tgid();
 	key = pid_tgid;
 	__sync_fetch_and_add(&stats.matched, 1);
@@ -206,7 +138,6 @@ void BPF_PROG(schedule_exec_inspection, struct linux_binprm *bprm)
 	}
 
 	work->scheduled_ns = bpf_ktime_get_ns();
-	work->direct_probe_error = probe_file_without_sleep(bprm->file);
 	task = bpf_get_current_task_btf();
 	err = bpf_task_work_schedule_signal(task, &work->work, &pending,
 					    inspect_executable);

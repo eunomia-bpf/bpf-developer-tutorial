@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 #include <errno.h>
 #include <getopt.h>
-#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -12,22 +11,17 @@
 #include "exec_image_inspector.h"
 #include "exec_image_inspector.skel.h"
 
-struct environment {
-	unsigned long long probe_offset;
-	bool verbose;
-};
-
 struct event_context {
 	unsigned long long seen;
 };
 
-static struct environment env;
+static bool verbose;
 static volatile sig_atomic_t exiting;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 			   va_list args)
 {
-	if (level == LIBBPF_DEBUG && !env.verbose)
+	if (level == LIBBPF_DEBUG && !verbose)
 		return 0;
 	return vfprintf(stderr, format, args);
 }
@@ -35,50 +29,28 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 static void usage(FILE *stream, const char *program)
 {
 	fprintf(stream,
-		"Usage: %s [--probe-offset BYTES] [--verbose]\n\n"
+		"Usage: %s [--verbose]\n\n"
 		"Continuously inspect executable images installed by exec.\n"
 		"Press Ctrl-C to stop and print a summary.\n\n"
 		"Options:\n"
-		"  -p, --probe-offset BYTES  compare reads at a positive offset\n"
 		"  -v, --verbose             print libbpf diagnostics\n"
 		"  -h, --help                show this help\n",
 		program);
 }
 
-static int parse_probe_offset(const char *value)
-{
-	char *end = NULL;
-	unsigned long long parsed;
-
-	errno = 0;
-	parsed = strtoull(value, &end, 10);
-	if (errno || end == value || *end || !parsed ||
-	    parsed > UINT_MAX - EXEC_PROBE_LEN) {
-		fprintf(stderr, "invalid probe offset: %s\n", value);
-		return -EINVAL;
-	}
-	env.probe_offset = parsed;
-	return 0;
-}
-
 static int parse_args(int argc, char **argv)
 {
 	static const struct option options[] = {
-		{ "probe-offset", required_argument, NULL, 'p' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{},
 	};
 	int option;
 
-	while ((option = getopt_long(argc, argv, "+p:vh", options, NULL)) != -1) {
+	while ((option = getopt_long(argc, argv, "+vh", options, NULL)) != -1) {
 		switch (option) {
-		case 'p':
-			if (parse_probe_offset(optarg))
-				return -EINVAL;
-			break;
 		case 'v':
-			env.verbose = true;
+			verbose = true;
 			break;
 		case 'h':
 			usage(stdout, argv[0]);
@@ -185,7 +157,6 @@ static int handle_event(void *context, void *data, size_t size)
 {
 	const struct exec_event *event = data;
 	struct event_context *events = context;
-	unsigned int index;
 
 	if (size < sizeof(*event)) {
 		fprintf(stderr, "short ring-buffer event: %zu bytes\n", size);
@@ -204,14 +175,6 @@ static int handle_event(void *context, void *data, size_t size)
 	       event->header_error, event->path_error,
 	       event->latency_ns / 1000);
 
-	if (event->probe_offset) {
-		printf("PROBE offset=%llu direct_error=%d deferred_error=%d bytes=",
-		       event->probe_offset, event->direct_probe_error,
-		       event->deferred_probe_error);
-		for (index = 0; index < EXEC_PROBE_LEN; index++)
-			printf("%02x", event->probe_bytes[index]);
-		putchar('\n');
-	}
 	fflush(stdout);
 	return 0;
 }
@@ -230,7 +193,6 @@ static int setup_inspector(struct event_context *events,
 		return -ENOMEM;
 	}
 	*skeleton = skel;
-	skel->rodata->probe_offset = env.probe_offset;
 
 	error = exec_image_inspector_bpf__load(skel);
 	if (error) {
@@ -263,7 +225,7 @@ static int monitor_execs(struct ring_buffer *ring_buffer)
 {
 	int error;
 
-	printf("READY scope=system-wide probe_offset=%llu\n", env.probe_offset);
+	printf("READY scope=system-wide\n");
 	fflush(stdout);
 	while (!exiting) {
 		error = ring_buffer__poll(ring_buffer, 100);
@@ -307,15 +269,11 @@ static void report_result(const struct exec_image_inspector_bpf *skel,
 
 	printf("SUMMARY matched=%llu scheduled=%llu schedule_errors=%llu "
 	       "callbacks=%llu completed=%llu header_errors=%llu path_errors=%llu "
-	       "direct_probes=%llu direct_probe_errors=%llu "
-	       "deferred_probes=%llu deferred_probe_errors=%llu dropped=%llu "
-	       "cleanup_errors=%llu events=%llu\n",
+	       "dropped=%llu cleanup_errors=%llu events=%llu\n",
 	       final_stats.matched, final_stats.scheduled,
 	       final_stats.schedule_errors, final_stats.callbacks,
 	       final_stats.completed, final_stats.header_errors,
 	       final_stats.path_errors,
-	       final_stats.direct_probes, final_stats.direct_probe_errors,
-	       final_stats.deferred_probes, final_stats.deferred_probe_errors,
 	       final_stats.dropped, final_stats.cleanup_errors, events->seen);
 }
 

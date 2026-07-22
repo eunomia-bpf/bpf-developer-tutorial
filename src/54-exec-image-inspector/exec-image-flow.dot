@@ -35,7 +35,7 @@ digraph exec_image_flow {
     color="#3182CE"
   ];
   prepare [
-    label="probe_offset\nload LSM + ring buffer",
+    label="load LSM + ring buffer",
     fillcolor="#EBF8FF",
     color="#3182CE"
   ];
@@ -49,21 +49,8 @@ digraph exec_image_flow {
     fillcolor="#FFFAF0",
     color="#DD6B20"
   ];
-  probe [
-    label="probe_offset set?",
-    shape=diamond,
-    style="filled",
-    fillcolor="#FFFAF0",
-    color="#DD6B20",
-    margin="0.10,0.05"
-  ];
-  direct [
-    label="non-sleepable direct probe\nstore result",
-    fillcolor="#FFFAF0",
-    color="#DD6B20"
-  ];
   pending [
-    label="pending[pid_tgid]\nscheduled_ns + direct result",
+    label="pending[pid_tgid]\nscheduled_ns + task work",
     shape=cylinder,
     fillcolor="#FFF5F5",
     color="#C05621"
@@ -84,12 +71,12 @@ digraph exec_image_flow {
     color="#805AD5"
   ];
   read [
-    label="file-backed dynptr\nread ELF header + marker\ndiscard dynptr + put file",
+    label="file-backed dynptr\nread ELF header\ndiscard dynptr + put file",
     fillcolor="#FAF5FF",
     color="#805AD5"
   ];
   event [
-    label="ring buffer event\npath + ELF + probe + latency\ndelete pending entry",
+    label="ring buffer event\npath + ELF + latency\ndelete pending entry",
     fillcolor="#F0FFF4",
     color="#38A169"
   ];
@@ -100,18 +87,14 @@ digraph exec_image_flow {
   ];
 
   { rank=same; start; prepare; exec; }
-  { rank=same; hook; probe; direct; }
-  { rank=same; pending; schedule; }
+  { rank=same; hook; pending; schedule; }
   { rank=same; callback; file; read; }
   { rank=same; event; collect; }
 
   start -> prepare;
   prepare -> exec [label="READY"];
   exec -> hook [label="each committed exec"];
-  hook -> probe;
-  probe -> direct [label="yes"];
-  probe -> pending [label="no"];
-  direct -> pending;
+  hook -> pending;
   pending -> schedule;
   schedule -> callback [label="task work runs"];
   callback -> file;
