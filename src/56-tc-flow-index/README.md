@@ -1,24 +1,51 @@
-# eBPF Tutorial by Example: Index TC Flows in Two Refcounted rbtrees
+# eBPF Tutorial: Building a Top-Flow Monitor with Dual Rbtree Indexing
 
-A flow monitor has two different lookup problems. Every packet needs to find its five-tuple quickly so the counters can be updated. At reporting time, the same records need to appear in traffic order so the busiest flows come first. One ordering cannot answer both questions efficiently, while two independent copies would let counters and lifetimes drift apart.
+Ever tried building a network flow monitor and hit this wall? Every packet needs lightning-fast lookup to update counters, but at report time you want flows sorted by traffic volume. One index can't do both efficiently, and keeping two separate copies means counters drift apart. What if you could have both views of the same data, always in sync?
 
-This tutorial builds a TC egress flow index around one object with two views. Each IPv4 TCP or UDP flow is stored in an identity rbtree and a byte-ranked rbtree at the same time. BPF object allocation creates the record, a BPF refcount gives both trees ownership, and rbtree traversal produces top-flow output without rebuilding the index in user space.
+This tutorial builds a TC egress flow monitor that solves exactly this problem. We'll index each IPv4 TCP or UDP flow in two red-black trees simultaneously: one keyed by five-tuple for fast packet lookup, another sorted by bytes for instant top-flow output. The magic ingredient is BPF refcounting, which lets both trees own the same flow record without duplication.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/56-tc-flow-index>
 
-## Why the Same Object Can Belong to Two Trees
+## The Dual-Index Challenge
 
-eBPF runs verifier-checked programs on kernel data paths such as TC and can keep structured state between invocations. Linux 6.4 added `bpf_refcount_acquire()`, which lets a dynamically allocated BPF object gain another owning reference. Linux 6.16 added `bpf_rbtree_root()`, `bpf_rbtree_left()`, and `bpf_rbtree_right()`, making ordered search and traversal available to BPF programs and completing the feature set used here.
+Network monitoring tools face a fundamental tension. When a packet arrives, you need to find the matching flow record by its five-tuple (source IP, destination IP, source port, destination port, protocol) in microseconds. But when the user asks "show me the top 10 flows," you need those same records sorted by traffic volume.
 
-Each `flow_entry` embeds one `bpf_refcount` and two different `bpf_rb_node` fields. `identity_root` orders `by_identity` by source address, destination address, source port, destination port, and protocol. `traffic_root` orders `by_traffic` by descending bytes, then packets, then the five-tuple for a deterministic tie break. Both nodes lead back to the same counters and timestamps through `container_of()`.
+Traditional solutions either maintain two independent data structures (which can drift out of sync) or rebuild the ranking on demand (which burns CPU and delays output). Neither feels right.
 
-Follow the first packet of a new flow. The TC program searches the identity tree and finds no match. It allocates a `flow_entry`, then calls `bpf_refcount_acquire()` to obtain a second owning reference. The first `bpf_rbtree_add()` transfers one reference to the identity tree, and the second call transfers the other to the traffic tree. Once the critical section ends, no raw pointer escapes; the verifier can prove that both collections own the object.
+The approach we take here is different. Each flow record lives in memory exactly once, but it participates in two different orderings through two embedded tree nodes. When you update the byte counter, both views see the change immediately because they point to the same object. This is possible thanks to three recent eBPF features:
 
-The next packet finds the entry by identity, but adding bytes changes its traffic rank. The program removes only `by_traffic`; removal returns that tree's owning reference. It updates the shared object and inserts the traffic node again at its new position. The identity node stays in place, so lookup order remains valid throughout the update.
+- **BPF object allocation** (`bpf_obj_new`): Create dynamically allocated structures in BPF programs
+- **BPF refcounting** (`bpf_refcount_acquire`): Give multiple owners shared access to one object
+- **Rbtree traversal** (`bpf_rbtree_root/left/right`): Search and walk trees without removing nodes
 
-## Shared Flow and Cursor Types
+Linux 6.4 introduced refcounting, and 6.16 completed the picture with tree traversal. Together, they enable data structures that were previously impossible in BPF.
 
-The shared header defines the five-tuple, the snapshot returned from BPF, and the cursor used to continue an ordered walk.
+## How One Object Joins Two Trees
+
+Let's trace what happens when a new flow appears. The TC program sees a packet with five-tuple (10.0.0.1, 10.0.0.2, 50000, 80, TCP). It searches the identity tree by key and finds nothing. Time to create a new entry.
+
+First, `bpf_obj_new()` allocates a `flow_entry`. This structure embeds a `bpf_refcount` and two `bpf_rb_node` fields, one for each tree. Right after allocation, the object has exactly one owning reference.
+
+Next, `bpf_refcount_acquire()` creates a second owning reference to the same object. Now we have two references pointing to one piece of memory. The first `bpf_rbtree_add()` transfers one reference to the identity tree. The second call transfers the other to the traffic tree. At this point, both trees jointly own the flow entry, and the verifier knows no raw pointers escaped.
+
+When a subsequent packet for this flow arrives, we find the existing entry in the identity tree. But adding bytes changes the traffic ranking. The program removes only the traffic-tree node (which returns its owning reference), updates the counters, and reinserts at the new position. The identity node never moves, so lookup remains valid throughout.
+
+## Architecture Overview
+
+The implementation splits into three files:
+
+| File | Purpose |
+|------|---------|
+| `tc_flow_index.h` | Shared structures: five-tuple, snapshot, and cursor |
+| `bpf_experimental.h` | Kfunc declarations for BPF graph APIs |
+| `tc_flow_index.bpf.c` | BPF program: TC hook and snapshot syscall |
+| `tc_flow_index.c` | User-space loader, demo traffic, and output |
+
+The BPF side handles packet parsing, tree maintenance, and cursor-based snapshot iteration. The user side attaches the TC program, optionally generates test traffic, and queries the index through `BPF_PROG_TEST_RUN`.
+
+## Shared Data Structures
+
+The header file defines the flow key, snapshot result, and traversal cursor:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -55,11 +82,11 @@ struct flow_cursor {
 #endif /* __TC_FLOW_INDEX_H */
 ```
 
-Addresses and ports remain in network byte order inside `flow_key`, which lets the BPF side copy packet fields directly. User space converts them only when formatting the table.
+The `flow_key` keeps addresses and ports in network byte order, so the BPF program can copy packet fields directly without conversion. User space converts to host order only when formatting output.
 
-## Experimental kfunc Declarations
+## Experimental Kfunc Declarations
 
-BPF graph APIs are kfuncs rather than stable UAPI helpers. The small compatibility header declares the exact functions used by the program and wraps the allocator calls with local BTF type IDs.
+BPF graph APIs use kfuncs rather than stable UAPI helpers. This compatibility header declares the functions our program uses:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -104,11 +131,11 @@ bpf_rbtree_right(struct bpf_rb_root *root, struct bpf_rb_node *node) __ksym;
 #endif /* __TC_FLOW_INDEX_EXPERIMENTAL_H */
 ```
 
-`__contains(flow_entry, by_identity)` and its traffic counterpart tell the verifier which containing type and member belong to each root. The verifier combines that type relation with the neighboring spin lock to enforce graph ownership and critical-section rules. These kfunc interfaces can evolve between kernels, which is why the tutorial records a concrete minimum version and keeps the declarations beside the example.
+The `__contains(flow_entry, by_identity)` annotation tells the verifier which containing type and member belong to each root. Combined with the neighboring spin lock, this lets the verifier enforce ownership and critical-section rules. These interfaces may evolve between kernels, which is why we note a concrete minimum version below.
 
-## Maintaining Both Indexes at TC Egress
+## The BPF Program
 
-Here is the complete BPF program.
+Here's the complete BPF implementation. We'll walk through the key parts afterward.
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -399,17 +426,23 @@ int snapshot_next(void *ctx)
 }
 ```
 
-`index_lock`, `identity_root`, and `traffic_root` share one private map value. Every search or mutation holds that lock. A bounded 32-step binary-tree walk keeps verifier-visible control flow finite; with at most 4096 entries, the balanced rbtree needs far fewer levels.
+### Understanding the Flow Entry
 
-Allocation happens after the first locked lookup. The program then locks again and repeats the lookup before insertion. This second check handles two CPUs seeing the same new flow: one object enters both trees, while the loser updates the existing entry and drops both references it allocated. Allocation, refcount, capacity, and re-ranking failures have separate counters so ownership problems remain visible.
+The `flow_entry` structure is the heart of this design. It embeds one `bpf_refcount` for ownership tracking and two `bpf_rb_node` fields for participation in both trees. The lock, `identity_root`, and `traffic_root` share a private map value, ensuring all access is serialized.
 
-`parse_flow()` admits non-fragmented IPv4 TCP and UDP packets and builds the key from Ethernet, IP, and transport headers. `index_egress_flow()` always returns `TC_ACT_OK`; this tool observes and indexes traffic without changing packet delivery.
+### The Packet Path
 
-The `snapshot_next` program reads the traffic tree under the same lock. With an empty cursor it returns `bpf_rbtree_first()`. Later calls search for the first entry after the previous `(bytes, packets, key)` tuple. The result and cursor live in BSS, so user space can request one ranked entry at a time without receiving a per-packet event stream.
+When `index_egress_flow` runs, `parse_flow()` extracts the five-tuple from non-fragmented IPv4 TCP and UDP packets. The main function always returns `TC_ACT_OK` because we're observing, not filtering.
 
-## Attaching TC and Reading a Stable Snapshot
+The `update_flow()` function first searches under lock. If the flow exists, it removes the traffic node, updates counters, and reinserts. If not, it allocates outside the lock, then locks again for a second lookup. This double-check handles two CPUs discovering the same new flow simultaneously: one wins the insertion race, the other updates the existing entry and drops its unused references.
 
-The user-space program attaches the classifier, generates optional demo traffic, detaches before the snapshot, then calls the snapshot program through `BPF_PROG_TEST_RUN`.
+### The Snapshot Mechanism
+
+The `snapshot_next` syscall program reads the traffic tree under the same lock. With an empty cursor, it returns `bpf_rbtree_first()`. Subsequent calls search for the first entry after the previous position. Since the cursor and result live in BSS, user space can fetch one ranked entry at a time without receiving a per-packet event stream.
+
+## The User-Space Program
+
+The loader attaches the TC program, optionally generates demo traffic, detaches before reading, then queries through `BPF_PROG_TEST_RUN`:
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -730,11 +763,9 @@ cleanup:
 }
 ```
 
-Detaching before output freezes packet updates, so the cursor walks one stable traffic ordering. `snapshot_next()` copies each result from BSS and advances the cursor until `found` becomes zero or `--top` entries have been printed. The index itself, including both trees and their object ownership, stays in BPF memory until the skeleton is destroyed.
+Detaching before output freezes packet updates, so the cursor walks a stable traffic ordering. The demo mode creates three UDP flows over loopback: 2 packets at 100 bytes, 4 at 300 bytes, and 6 at 700 bytes. With headers, these become 284, 1368, and 4452 bytes total, producing a deterministic ranking.
 
-Demo mode opens three different UDP socket pairs and sends 2 × 100-byte, 4 × 300-byte, and 6 × 700-byte payloads over loopback. Ethernet, IPv4, and UDP headers make their observed totals 284, 1368, and 4452 bytes. This creates a deterministic ranking while exercising repeated remove-update-reinsert operations.
-
-## Build and Run
+## Building and Running
 
 Build the tool:
 
@@ -743,19 +774,19 @@ cd src/56-tc-flow-index
 make
 ```
 
-Index egress traffic on an interface for 30 seconds and print its ten busiest flows:
+Monitor real egress traffic for 30 seconds:
 
 ```bash
 sudo ./tc_flow_index --interface eth0 --duration 30 --top 10
 ```
 
-Run the deterministic loopback demo:
+Run the deterministic demo:
 
 ```bash
 sudo ./tc_flow_index --demo --top 3
 ```
 
-A real demo run shows the two-tree ordering directly:
+Expected demo output:
 
 ```text
 Indexing IPv4 TCP/UDP egress flows on lo for 0 seconds.
@@ -768,25 +799,30 @@ SOURCE                DESTINATION           PROTO    PACKETS        BYTES COMM
 observed_packets=12 indexed_flows=3 dropped_new=0 allocation_failures=0 refcount_failures=0 rank_update_failures=0
 ```
 
-The table is already descending by `BYTES` when it reaches user space. Twelve packets created three identity entries, and all ownership-related counters remain zero.
+The table arrives pre-sorted by bytes. Twelve packets created three identity entries, and all ownership counters remain zero, confirming correct dual-tree management.
 
 ## Requirements
 
 | Requirement | Details |
-|---|---|
-| Kernel | Linux 6.16 or newer for refcounted BPF objects plus searchable rbtree kfuncs |
-| Kernel config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_DEBUG_INFO_BTF`, `CONFIG_NET_SCHED`, `CONFIG_NET_CLS_BPF` |
-| Privileges | Root, or equivalent BPF and network-administration capabilities |
-| Interface | Any interface that can host a `clsact` egress program |
-| Architecture and hardware | x86-64 is the declared and tested target; an ordinary network interface is sufficient |
+|-------------|---------|
+| Kernel | Linux 6.16+ (refcounted BPF objects + rbtree search kfuncs) |
+| Config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_DEBUG_INFO_BTF`, `CONFIG_NET_SCHED`, `CONFIG_NET_CLS_BPF` |
+| Privileges | Root or CAP_BPF + CAP_NET_ADMIN |
+| Interface | Any interface supporting clsact egress |
+| Architecture | Tested on x86-64 |
 
-## Scope
+## Extending the Design
 
-The index covers non-fragmented IPv4 TCP and UDP egress traffic and remembers the command name observed when a flow is first created. It has a fixed 4096-flow capacity and keeps entries until the program exits, which suits bounded experiments and short observation windows. A long-running service can add idle expiry and remove both nodes before dropping their references.
+This example covers non-fragmented IPv4 TCP/UDP egress with a fixed 4096-entry capacity. For production use, consider:
+
+- **Idle expiry**: Remove flows that haven't seen traffic for N seconds, freeing both tree nodes before dropping references
+- **Ingress indexing**: Add a second TC program for incoming packets
+- **IPv6 support**: Extend the flow key structure
+- **Real-time streaming**: Use a ring buffer alongside the trees for per-packet events
 
 ## Summary
 
-This example uses BPF object ownership to maintain two useful orderings over one flow record. The identity tree handles per-packet updates, the traffic tree supplies top-flow traversal, and refcounts let both collections share the object without duplicating its state.
+This tutorial showed how BPF object ownership enables sophisticated data structures that weren't possible before. The identity tree handles fast five-tuple lookups, the traffic tree provides instant top-flow rankings, and refcounting lets both share one object without state duplication. The technique generalizes to any scenario where you need multiple orderings over the same dataset.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 

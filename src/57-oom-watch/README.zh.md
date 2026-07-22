@@ -1,26 +1,52 @@
-# eBPF 实战教程：在 OOM kill 之前分析 memcg reclaim
+# eBPF 实战教程：在 OOM Kill 之前分析内存回收
 
-一条 OOM 日志回答了内存故障的最后一个问题：内核选择了哪个 task 作为 victim。此前发生的工作却很难从这条记录里看出来，排查时仍然需要知道目标 memory cgroup 进入了多少次 reclaim、每次花了多久、时间主要消耗在哪些内核路径，以及 victim 最终是否退出。
+你是否遇到过容器或服务突然被 Linux OOM killer 杀掉，只留下一行不明所以的内核日志？内核会告诉你它选择了*哪个*进程作为 victim，但对于导致这一结果的内存压力几乎只字未提。系统尝试了多少次内存回收？每次花了多久？哪些内核路径消耗了这些时间？
 
-本课构建 `oom-watch` 保存这段缺失的历史。它把 memcg reclaim 聚合为延迟分布和采样内核栈，再把积累得到的 profile 关联到 OOM victim，并继续跟踪这条 victim 记录直到进程退出。
+本教程构建 `oom-watch`，一个 eBPF 工具，用于捕获 OOM kill *之前*发生的事情。它将每次 memcg 回收尝试记录为延迟直方图和采样的内核调用栈，然后将积累的 profile 附加到 OOM victim 上，并跟踪进程直到它退出。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/57-oom-watch>
 
-## reclaim 是 OOM kill 之前的故事
+## OOM 调试中缺失的一环
 
-memory cgroup 接近上限时，一次内存分配可能进入 reclaim，扫描这个 memcg 中可以释放的页面。多次短暂尝试有时只能回收少量内存，也可能几乎没有进展，最终由 OOM killer 选择 victim。只观察 `oom/mark_victim` 会同时丢失这些尝试的延迟分布和调用路径。
+当 memory cgroup 接近其限制时，任何内存分配都可能触发回收。内核会扫描该 cgroup 中可释放的页面。有时几次短暂的尝试就能成功。有时，回收反复运行却进展甚微，直到 OOM killer 最终介入。
 
-eBPF 可以让经过验证器检查的程序运行在内核事件上，再通过 map 连接不同的时刻。Linux 7.1 为 `mm_vmscan_memcg_reclaim_begin` 和 `mm_vmscan_memcg_reclaim_end` tracepoint 加入目标 `mem_cgroup`。这个参数很重要，因为当前 task 可以通过 `memory.reclaim` 回收另一个 cgroup；现在归因可以跟随真正被扫描的 memcg，而不是碰巧触发工作的 task。
+如果只观察 `oom/mark_victim` tracepoint，你会丢失所有这些上下文。你看到了 victim，却看不到之前的挣扎过程。运维人员需要这些问题的答案：
 
-另一项依赖来自 victim lookup。`oom/mark_victim` 给出被选中线程的 ID，诊断还需要它的 thread-group ID 和 cgroup。`bpf_task_from_pid()` 在 Linux 6.2 引入，普通 tracepoint program 从 Linux 6.12 开始可以调用这类 tracing kfunc。更新的 vmscan tracepoint signature 最终把完整工具的最低内核版本定在 Linux 7.1。
+- OOM kill 之前发生了多少次回收周期？
+- 它们是微秒级的快速扫描，还是毫秒级的长时间停顿？
+- 回收是由 cgroup 内部的分配触发的，还是通过 `memory.reclaim` 从外部主动触发的？
+- 哪些内核函数占用了回收时间？
 
-跟着一次 reclaim interval 走一遍。begin tracepoint 到来时，BPF 程序按当前 `pid_tgid` 保存单调时钟下的开始时间和目标 cgroup，并根据 `--sample-every` 捕获 kernel stack ID。对应的 end tracepoint 计算 duration，增加一个 2 倍区间的微秒直方图 bucket，再累计 reclaimed pages。另一张 map 按 `(cgroup_id, stack_id)` 聚合每条采样路径的样本数、总时间、最长时间和回收页数。
+`oom-watch` 可以回答所有这些问题。它通过 hook 内核的 vmscan tracepoint 来测量每个回收间隔，采样内核调用栈以展示时间花在了哪里，当 OOM 选择 victim 时，它会将累积的 profile 快照与 victim 信息一起输出。
 
-OOM 选中 victim 后，程序把 TID 解析为 TGID 和 cgroup，把这个 cgroup 已积累的 reclaim profile 复制到 ring buffer event，并按 TID 保存 victim state。随后 `sched_process_exit` 消费这份状态并报告 exit code。最终结果会把 kill 之前的回收活动、内核标记的具体线程和之后的进程生命周期连在一起。
+## 为什么用 eBPF 做内存分析？
 
-## profile 与 event 布局
+传统监控方法在这个场景下有严重的局限性。轮询 `/proc/meminfo` 或 cgroup 统计会错过短暂的回收事件。`perf` 可以捕获调用栈，但需要仔细配置和后处理。两种方法都不容易将回收活动与特定的 OOM 事件关联起来。
 
-共享头文件定义 cgroup 级直方图、每 stack aggregate 和携带 OOM snapshot 的事件。
+eBPF 改变了这一切。程序直接在内核中运行，以纳秒级精度响应事件。Map 在事件之间传递状态，让我们可以构建直方图并关联 begin/end 对。Ring buffer 以最小的开销将事件传递给用户空间。而且因为 eBPF 程序在加载前经过验证，不会有崩溃内核的风险。
+
+对于 `oom-watch`，我们使用几个 tracepoint：
+
+- `mm_vmscan_memcg_reclaim_begin`：当特定 memory cgroup 的回收开始时触发
+- `mm_vmscan_memcg_reclaim_end`：当该回收间隔完成时触发
+- `oom/mark_victim`：当 OOM killer 选择 victim 时触发
+- `sched/sched_process_exit`：当 victim 进程退出时触发
+
+Linux 7.1 添加了一个关键特性：vmscan tracepoint 现在包含被扫描的目标 `mem_cgroup`。这很重要，因为一个 cgroup 中的进程可以通过 `memory.reclaim` 触发另一个 cgroup 的回收。有了 tracepoint 中的目标 cgroup，我们可以正确归因这些工作。
+
+## 架构概述
+
+这个工具有三个主要组件协同工作。
+
+**头文件**定义共享数据结构：包含延迟桶和计数器的 per-cgroup 回收 profile，跟踪采样和时间的 per-stack aggregate，以及 OOM 通知的事件结构。
+
+**BPF 程序**在内核中运行。在回收开始时，它记录开始时间并可选地捕获内核调用栈。在回收结束时，它计算持续时间，更新直方图，并存储 stack aggregate。当 OOM 标记 victim 时，它查找 victim 的 cgroup，将累积的 profile 复制到事件中，并发送给用户空间。它还保存 victim 状态，以便在进程退出时进行报告。
+
+**用户空间程序**加载内核符号用于调用栈符号化，管理可选的 cgroup 过滤器，处理来自 ring buffer 的事件，并包含一个自包含的 demo 模式，可以触发 OOM 来验证一切正常工作。
+
+## Profile 数据结构
+
+共享头文件定义了我们测量的内容：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -79,11 +105,13 @@ struct oom_watch_event {
 #endif /* __OOM_WATCH_H */
 ```
 
-`latency_slots` 包含 20 个 base-2 微秒区间。bucket 0 覆盖 0–1 µs，bucket 1 覆盖 2–3 µs，之后依次是 4–7 µs 等范围，最后一个 bucket 收纳所有不小于 524288 µs 的 interval。event 内嵌完整 `reclaim_profile`，因此 victim 旁边打印的数字正是它被选中时的 profile snapshot。
+`latency_slots` 数组是一个 20 个桶的 2 次幂直方图。桶 0 覆盖 0-1 微秒，桶 1 覆盖 2-3 微秒，然后是 4-7 微秒，依此类推。最后一个桶捕获超过半秒的所有内容。这种对数分布可以高效地捕获快速回收周期和罕见的慢速周期。
 
-## 分析 reclaim 并跟踪 victim
+当 OOM 事件触发时，它会嵌入 cgroup profile 的完整副本。与 victim 一起打印的数字准确显示了选择时的状态。
 
-下面是完整 BPF 程序。
+## BPF 程序
+
+下面是完整的 BPF 代码。我们将在代码之后解释它的工作原理：
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -398,776 +426,34 @@ int capture_victim_exit(void *ctx)
 }
 ```
 
-`active_reclaims` 按 `pid_tgid` 关联 begin 与 end。begin callback 从 `memcg->css.cgroup->kn->id` 取得目标 cgroup ID，而不是读取当前 task 的 cgroup。两者比较产生 `cross_cgroup_reclaims`，另一个 cgroup 发起的 proactive reclaim 因此可以被直接观察。
+程序使用多个 BPF map 来维护状态。`active_reclaims` map 通过以 `pid_tgid` 为 key 存储开始时间戳来关联 begin 和 end 事件。`profiles` map 累积每个 cgroup 的统计信息。`stack_traces` map 存储去重后的内核调用栈，而 `stack_profiles` 为每个唯一调用栈聚合时间数据。
 
-stack sampling 发生在 begin，也就是 reclaim 工作开始之前。`sample_every=1` 会捕获每个 interval，设置更大的值可以降低 stack map 与 unwinding 开销，同时 latency histogram 仍会统计所有匹配 interval。flag 低 8 位中的 `2` 会跳过两个 tracing frame，`bpf_get_stackid()` 再把剩余的相同调用栈合并到 `stack_traces`，`stack_profiles` 则为每个 ID 保存 timing 与 reclaimed-page 总计。原子更新让多个 CPU 的 reclaim 可以共同写入同一份 cgroup profile。
+在回收开始时，我们从 `mem_cgroup` 参数而不是当前 task 的 cgroup 中提取目标 cgroup ID。这个区别对于跨 cgroup 回收很重要。如果有人从外部对某个 cgroup 调用 `memory.reclaim`，我们可以正确地将工作归因到目标。`cross_cgroup_reclaims` 计数器跟踪这种情况发生的频率。
 
-`profile_reclaim_end()` 完成统计后删除 active state。它会更新总延迟和最大延迟，选择 histogram bucket，再更新对应的 sampled stack aggregate。active-state 插入失败和 stack-capture 失败都有独立计数，begin 与 end count 的差值也能反映未完成配对的 interval。
+调用栈采样使用 `--sample-every` 设置。默认值为 1 时，我们捕获每个间隔。更大的值可以减少开销，同时仍然在直方图中计算所有间隔。`BPF_F_FAST_STACK_CMP` 标志加速调用栈去重，标志中的 `2` 跳过两个 tracing 帧以获得更清晰的调用栈。
 
-OOM 路径需要谨慎处理进程 identity。tracepoint 中的 `ctx->pid` 保留为 `victim_tid`，`bpf_task_from_pid()` 提供 task 的 TGID 与 cgroup ID，`bpf_task_release()` 释放带引用的 task pointer。victim state 继续按 TID 存储，因为 `sched_process_exit` 会在同一个线程上下文中运行。即使多线程进程的 leader 和被选 victim ID 不同，这条关联仍然有效。
+OOM 处理程序必须仔细解析进程身份。tracepoint 给我们一个线程 ID，但我们还需要线程组 ID（用户空间视角的 PID）和 cgroup。我们使用 `bpf_task_from_pid()` 查找 task，读取所需信息，然后释放引用。victim 状态以 TID 为 key，因为 `sched_process_exit` 在该线程的上下文中触发。
 
-## 符号化并展示 profile
+## 用户空间：符号化和展示
 
-用户态程序加载 kernel symbol、排序 stack aggregate、管理可选 cgroup filter，并提供可重复的 OOM demo。
+用户空间代码负责几项工作：加载内核符号用于调用栈符号化，使用任何 cgroup 过滤器设置 BPF 程序，处理来自 ring buffer 的事件，以及按总耗时对调用栈进行排名。它还包含一个 demo 模式，可以创建一个内存受限的 cgroup 并触发 OOM 来验证工具是否正常工作。
 
-```c
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <poll.h>
-#include <pthread.h>
-#include <signal.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <unistd.h>
-#include <bpf/bpf.h>
-#include <bpf/libbpf.h>
-#include "oom_watch.h"
-#include "oom_watch.skel.h"
+完整的用户空间代码相当长，所以我们重点介绍关键部分。启动时，它读取 `/proc/kallsyms`，按地址排序符号，然后使用二分查找解析每个栈帧。当符号地址受限时（在生产系统上很常见），它仍然打印原始地址——测量结果保持准确。
 
-struct options {
-	const char *cgroup_path;
-	unsigned int duration_seconds;
-	unsigned int sample_every;
-	bool demo;
-};
+调用栈组按累计回收时间排名。这种排名可以展示频繁调用的路径和罕见的慢速间隔。在 OOM 事件之后，打印前五个调用栈及其时间统计。
 
-static volatile sig_atomic_t stop;
-static int victim_events;
-static int exit_events;
-static unsigned long long observed_cgroup_id;
-static unsigned int observed_victim_pid;
-static unsigned int observed_victim_tid;
-static unsigned long long observed_reclaims;
-static unsigned long long observed_cross_cgroup_reclaims;
-static unsigned long long observed_stack_samples;
-
-struct kernel_symbol {
-	unsigned long long address;
-	char *name;
-};
-
-struct kernel_symbols {
-	struct kernel_symbol *items;
-	size_t count;
-	size_t capacity;
-};
-
-struct runtime_context {
-	int profiles_fd;
-	int stack_profiles_fd;
-	int stack_traces_fd;
-	struct kernel_symbols symbols;
-};
-
-struct oom_runtime {
-	struct oom_watch_bpf *skel;
-	struct ring_buffer *ring;
-	struct runtime_context context;
-};
-
-struct selected_cgroup {
-	char demo_path[256];
-	const char *path;
-	struct stat metadata;
-	bool demo_created;
-	bool memory_enabled_by_demo;
-};
-
-struct demo_process {
-	pid_t child;
-	int ready_pipe[2];
-	int continue_pipe[2];
-	int status;
-};
-
-struct ranked_stack {
-	struct reclaim_stack_key key;
-	struct reclaim_stack_profile profile;
-};
-
-struct allocation_context {
-	int ready_fd;
-	int continue_fd;
-};
-
-static struct allocation_context allocation_context;
-
-static void handle_signal(int signal_number)
-{
-	(void)signal_number;
-	stop = 1;
-}
-
-static unsigned long long monotonic_ns(void)
-{
-	struct timespec now;
-
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return (unsigned long long)now.tv_sec * 1000000000ULL + now.tv_nsec;
-}
-
-static int write_text(const char *path, const char *text)
-{
-	int fd = open(path, O_WRONLY | O_CLOEXEC);
-	ssize_t length = strlen(text);
-	int err = 0;
-
-	if (fd < 0)
-		return -1;
-	if (write(fd, text, length) != length)
-		err = -1;
-	close(fd);
-	return err;
-}
-
-static int memory_controller_enabled(bool *enabled)
-{
-	char controllers[4096];
-	ssize_t length;
-	int fd;
-
-	fd = open("/sys/fs/cgroup/cgroup.subtree_control",
-		  O_RDONLY | O_CLOEXEC);
-	if (fd < 0)
-		return -1;
-	length = read(fd, controllers, sizeof(controllers) - 1);
-	close(fd);
-	if (length < 0)
-		return -1;
-	controllers[length] = '\0';
-	*enabled = strstr(controllers, "memory") != NULL;
-	return 0;
-}
-
-static int compare_symbols(const void *left, const void *right)
-{
-	const struct kernel_symbol *a = left;
-	const struct kernel_symbol *b = right;
-
-	return a->address < b->address ? -1 : a->address > b->address ? 1 : 0;
-}
-
-static int load_kernel_symbols(struct kernel_symbols *symbols)
-{
-	char name[256];
-	char type;
-	unsigned long long address;
-	FILE *file = fopen("/proc/kallsyms", "r");
-
-	if (!file)
-		return -1;
-	while (fscanf(file, "%llx %c %255s%*[^\n]\n", &address, &type,
-		      name) == 3) {
-		struct kernel_symbol *item;
-
-		(void)type;
-		if (symbols->count == symbols->capacity) {
-			size_t capacity = symbols->capacity ? symbols->capacity * 2 : 4096;
-			void *items = realloc(symbols->items,
-					      capacity * sizeof(*symbols->items));
-
-			if (!items)
-				goto error;
-			symbols->items = items;
-			symbols->capacity = capacity;
-		}
-		item = &symbols->items[symbols->count++];
-		item->address = address;
-		item->name = strdup(name);
-		if (!item->name)
-			goto error;
-	}
-	fclose(file);
-	qsort(symbols->items, symbols->count, sizeof(*symbols->items),
-	      compare_symbols);
-	return symbols->count ? 0 : -1;
-
-error:
-	fclose(file);
-	return -1;
-}
-
-static void free_kernel_symbols(struct kernel_symbols *symbols)
-{
-	for (size_t i = 0; i < symbols->count; i++)
-		free(symbols->items[i].name);
-	free(symbols->items);
-}
-
-static const struct kernel_symbol *find_kernel_symbol(
-	const struct kernel_symbols *symbols, unsigned long long address)
-{
-	size_t low = 0, high = symbols->count;
-
-	while (low < high) {
-		size_t middle = low + (high - low) / 2;
-
-		if (symbols->items[middle].address <= address)
-			low = middle + 1;
-		else
-			high = middle;
-	}
-	return low ? &symbols->items[low - 1] : NULL;
-}
-
-static void insert_ranked_stack(struct ranked_stack top[5], size_t *count,
-				const struct reclaim_stack_key *key,
-				const struct reclaim_stack_profile *profile)
-{
-	size_t position = 0;
-
-	while (position < *count &&
-	       top[position].profile.total_ns >= profile->total_ns)
-		position++;
-	if (position >= 5)
-		return;
-	if (*count < 5)
-		(*count)++;
-	for (size_t i = *count - 1; i > position; i--)
-		top[i] = top[i - 1];
-	top[position].key = *key;
-	top[position].profile = *profile;
-}
-
-static void print_reclaim_stacks(struct runtime_context *runtime,
-				 __u64 cgroup_id)
-{
-	struct ranked_stack top[5] = {};
-	struct reclaim_stack_key previous, next;
-	bool have_previous = false;
-	size_t count = 0;
-
-	while (!bpf_map_get_next_key(runtime->stack_profiles_fd,
-				     have_previous ? &previous : NULL, &next)) {
-		struct reclaim_stack_profile profile;
-
-		if (next.cgroup_id == cgroup_id &&
-		    !bpf_map_lookup_elem(runtime->stack_profiles_fd, &next,
-					 &profile))
-			insert_ranked_stack(top, &count, &next, &profile);
-		previous = next;
-		have_previous = true;
-	}
-
-	for (size_t rank = 0; rank < count; rank++) {
-		unsigned long long addresses[OOM_STACK_DEPTH] = {};
-
-		printf("reclaim_stack rank=%zu samples=%llu total_ms=%.3f "
-		       "max_ms=%.3f reclaimed_pages=%llu\n",
-		       rank + 1, top[rank].profile.samples,
-		       top[rank].profile.total_ns / 1000000.0,
-		       top[rank].profile.maximum_ns / 1000000.0,
-		       top[rank].profile.reclaimed_pages);
-		if (bpf_map_lookup_elem(runtime->stack_traces_fd,
-					&top[rank].key.stack_id, addresses))
-			continue;
-		for (size_t frame = 0; frame < OOM_STACK_DEPTH && addresses[frame];
-		     frame++) {
-			const struct kernel_symbol *symbol =
-				find_kernel_symbol(&runtime->symbols, addresses[frame]);
-
-			if (symbol && symbol->address)
-				printf("  #%zu %s+0x%llx\n", frame, symbol->name,
-				       addresses[frame] - symbol->address);
-			else
-				printf("  #%zu 0x%llx\n", frame, addresses[frame]);
-		}
-	}
-}
-
-static void print_reclaim_profile(struct runtime_context *runtime,
-				  __u64 cgroup_id,
-				  const struct reclaim_profile *profile)
-{
-	printf("reclaim_profile cgroup_id=%llu cycles=%llu completed=%llu "
-	       "total_ms=%.3f max_ms=%.3f reclaimed_pages=%llu "
-	       "cross_cgroup=%llu stack_samples=%llu stack_failures=%llu\n",
-	       (unsigned long long)cgroup_id, profile->begin_count,
-	       profile->end_count, profile->total_reclaim_ns / 1000000.0,
-	       profile->maximum_reclaim_ns / 1000000.0,
-	       profile->reclaimed_pages, profile->cross_cgroup_reclaims,
-	       profile->stack_samples, profile->stack_failures);
-	for (unsigned int bucket = 0; bucket < OOM_RECLAIM_BUCKETS; bucket++) {
-		unsigned long long low, high;
-
-		if (!profile->latency_slots[bucket])
-			continue;
-		low = bucket ? 1ULL << bucket : 0;
-		high = (1ULL << (bucket + 1)) - 1;
-		if (bucket == OOM_RECLAIM_BUCKETS - 1)
-			printf("reclaim_latency_us=>=%llu count=%llu\n", low,
-			       profile->latency_slots[bucket]);
-		else
-			printf("reclaim_latency_us=%llu-%llu count=%llu\n", low,
-			       high, profile->latency_slots[bucket]);
-	}
-	print_reclaim_stacks(runtime, cgroup_id);
-}
-
-static void print_live_profiles(struct runtime_context *runtime)
-{
-	__u64 previous, next;
-	bool have_previous = false;
-
-	while (!bpf_map_get_next_key(runtime->profiles_fd,
-				     have_previous ? &previous : NULL, &next)) {
-		struct reclaim_profile profile;
-
-		if (!bpf_map_lookup_elem(runtime->profiles_fd, &next, &profile))
-			print_reclaim_profile(runtime, next, &profile);
-		previous = next;
-		have_previous = true;
-	}
-}
-
-static int handle_event(void *ctx, void *data, size_t size)
-{
-	const struct oom_watch_event *event = data;
-	struct runtime_context *runtime = ctx;
-
-	if (size != sizeof(*event))
-		return 0;
-	if (event->type == OOM_VICTIM_MARKED) {
-		victim_events++;
-		observed_cgroup_id = event->cgroup_id;
-		observed_victim_pid = event->victim_pid;
-		observed_reclaims = event->profile.begin_count;
-		observed_victim_tid = event->victim_tid;
-		observed_cross_cgroup_reclaims =
-			event->profile.cross_cgroup_reclaims;
-		observed_stack_samples = event->profile.stack_samples;
-		printf("event=oom-victim pid=%u tid=%u comm=%s trigger_pid=%u cgroup_id=%llu "
-		       "anon_rss_kb=%llu file_rss_kb=%llu total_vm_kb=%llu "
-		       "reclaim_cycles=%llu cross_cgroup_reclaims=%llu "
-		       "reclaimed_pages=%llu\n",
-		       event->victim_pid, event->victim_tid, event->comm,
-		       event->triggering_tgid,
-		       (unsigned long long)event->cgroup_id,
-		       (unsigned long long)event->anon_rss_kb,
-		       (unsigned long long)event->file_rss_kb,
-		       (unsigned long long)event->total_vm_kb,
-		       (unsigned long long)event->profile.begin_count,
-		       (unsigned long long)event->profile.cross_cgroup_reclaims,
-		       (unsigned long long)event->profile.reclaimed_pages);
-		print_reclaim_profile(runtime, event->cgroup_id, &event->profile);
-	} else if (event->type == OOM_VICTIM_EXITED) {
-		exit_events++;
-		printf("event=victim-exit pid=%u tid=%u cgroup_id=%llu exit_code=%d\n",
-		       event->victim_pid, event->victim_tid,
-		       (unsigned long long)event->cgroup_id, event->exit_code);
-	}
-	return 0;
-}
-
-static int parse_uint(const char *text, unsigned int maximum,
-		      unsigned int *value)
-{
-	char *end = NULL;
-	unsigned long parsed;
-
-	errno = 0;
-	parsed = strtoul(text, &end, 10);
-	if (errno || !*text || *end || !parsed || parsed > maximum)
-		return -1;
-	*value = parsed;
-	return 0;
-}
-
-static void usage(const char *program)
-{
-	printf("Usage: %s [--cgroup PATH] [--duration SEC] [--sample-every N]\n"
-	       "       %s --demo [--sample-every N]\n", program, program);
-}
-
-static int parse_options(int argc, char **argv, struct options *options)
-{
-	static const struct option long_options[] = {
-		{ "cgroup", required_argument, NULL, 'c' },
-		{ "duration", required_argument, NULL, 'd' },
-		{ "sample-every", required_argument, NULL, 's' },
-		{ "demo", no_argument, NULL, 'D' },
-		{ "help", no_argument, NULL, 'h' },
-		{},
-	};
-	int option;
-
-	while ((option = getopt_long(argc, argv, "c:d:s:Dh", long_options,
-				     NULL)) != -1) {
-		switch (option) {
-		case 'c': options->cgroup_path = optarg; break;
-		case 'd':
-			if (parse_uint(optarg, 86400, &options->duration_seconds))
-				return -1;
-			break;
-		case 's':
-			if (parse_uint(optarg, 1000000, &options->sample_every))
-				return -1;
-			break;
-		case 'D': options->demo = true; break;
-		case 'h': usage(argv[0]); exit(0);
-		default: return -1;
-		}
-	}
-	return optind == argc && !(options->demo && options->cgroup_path) ? 0 : -1;
-}
-
-static void *allocation_worker(void *argument)
-{
-	struct allocation_context *context = argument;
-	size_t first_stage = 24 * 1024 * 1024;
-	size_t length = 128 * 1024 * 1024;
-	unsigned char *memory;
-	char byte = 'x';
-
-	memory = mmap(NULL, length, PROT_READ | PROT_WRITE,
-		      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (memory == MAP_FAILED)
-		_exit(4);
-	for (size_t offset = 0; offset < first_stage; offset += 4096)
-		memory[offset] = 0xa5;
-	if (write(context->ready_fd, &byte, 1) != 1 ||
-	    read(context->continue_fd, &byte, 1) != 1)
-		_exit(5);
-	for (size_t offset = first_stage; offset < length; offset += 4096)
-		memory[offset] = 0xa5;
-	_exit(6);
-}
-
-static void allocate_until_killed(const char *cgroup_path, int ready_fd,
-				  int continue_fd)
-{
-	char procs_path[512];
-	char pid_text[32];
-	pthread_t worker;
-
-	snprintf(procs_path, sizeof(procs_path), "%s/cgroup.procs", cgroup_path);
-	snprintf(pid_text, sizeof(pid_text), "%d", getpid());
-	if (write_text(procs_path, pid_text))
-		_exit(3);
-	allocation_context.ready_fd = ready_fd;
-	allocation_context.continue_fd = continue_fd;
-	if (pthread_create(&worker, NULL, allocation_worker,
-			   &allocation_context))
-		_exit(4);
-	pthread_detach(worker);
-	pthread_exit(NULL);
-}
-
-static int configure_demo_cgroup(const char *path, bool *created,
-				 bool *enabled_by_demo)
-{
-	bool memory_enabled;
-	char file[512];
-
-	if (memory_controller_enabled(&memory_enabled))
-		return -1;
-	if (!memory_enabled) {
-		if (write_text("/sys/fs/cgroup/cgroup.subtree_control", "+memory"))
-			return -1;
-		*enabled_by_demo = true;
-	}
-	if (mkdir(path, 0755))
-		return -1;
-	*created = true;
-	snprintf(file, sizeof(file), "%s/memory.max", path);
-	if (write_text(file, "33554432"))
-		return -1;
-	snprintf(file, sizeof(file), "%s/memory.swap.max", path);
-	if (write_text(file, "0"))
-		return -1;
-	snprintf(file, sizeof(file), "%s/memory.oom.group", path);
-	return write_text(file, "1");
-}
-
-static int trigger_cross_cgroup_reclaim(const char *cgroup_path)
-{
-	char reclaim_path[512];
-
-	snprintf(reclaim_path, sizeof(reclaim_path), "%s/memory.reclaim",
-		 cgroup_path);
-	if (!write_text(reclaim_path, "8388608") || errno == EAGAIN)
-		return 0;
-	return -1;
-}
-
-static int select_cgroup(const struct options *options,
-			 struct selected_cgroup *selected)
-{
-	if (options->demo) {
-		snprintf(selected->demo_path, sizeof(selected->demo_path),
-			 "/sys/fs/cgroup/ebpf-oom-watch-%d", getpid());
-		if (configure_demo_cgroup(selected->demo_path,
-					  &selected->demo_created,
-					  &selected->memory_enabled_by_demo)) {
-			fprintf(stderr, "failed to configure demo memory cgroup: %s\n",
-				strerror(errno));
-			return -1;
-		}
-		selected->path = selected->demo_path;
-	} else {
-		selected->path = options->cgroup_path;
-	}
-	if (!selected->path)
-		return 0;
-	if (!stat(selected->path, &selected->metadata))
-		return 0;
-	fprintf(stderr, "failed to stat cgroup %s: %s\n", selected->path,
-		strerror(errno));
-	return -1;
-}
-
-static void cleanup_selected_cgroup(struct selected_cgroup *selected,
-				    int *result)
-{
-	if (selected->demo_created && rmdir(selected->demo_path) && !*result)
-		*result = 1;
-	if (selected->memory_enabled_by_demo &&
-	    write_text("/sys/fs/cgroup/cgroup.subtree_control", "-memory") &&
-	    !*result)
-		*result = 1;
-}
-
-static int prepare_runtime(struct oom_runtime *runtime,
-			   const struct options *options,
-			   const struct selected_cgroup *selected)
-{
-	runtime->skel = oom_watch_bpf__open();
-	if (!runtime->skel)
-		return -1;
-	runtime->skel->rodata->target_cgroup_id =
-		selected->path ? selected->metadata.st_ino : 0;
-	runtime->skel->rodata->sample_every = options->sample_every;
-	if (oom_watch_bpf__load(runtime->skel) ||
-	    oom_watch_bpf__attach(runtime->skel)) {
-		fprintf(stderr, "failed to load and attach OOM watcher\n");
-		return -1;
-	}
-	runtime->context.profiles_fd =
-		bpf_map__fd(runtime->skel->maps.profiles);
-	runtime->context.stack_profiles_fd =
-		bpf_map__fd(runtime->skel->maps.stack_profiles);
-	runtime->context.stack_traces_fd =
-		bpf_map__fd(runtime->skel->maps.stack_traces);
-	if (load_kernel_symbols(&runtime->context.symbols))
-		fprintf(stderr, "warning: kernel symbols unavailable; printing raw stack addresses\n");
-	runtime->ring = ring_buffer__new(
-		bpf_map__fd(runtime->skel->maps.events), handle_event,
-		&runtime->context, NULL);
-	return runtime->ring ? 0 : -1;
-}
-
-static void destroy_runtime(struct oom_runtime *runtime)
-{
-	ring_buffer__free(runtime->ring);
-	free_kernel_symbols(&runtime->context.symbols);
-	oom_watch_bpf__destroy(runtime->skel);
-}
-
-static void init_demo_process(struct demo_process *demo)
-{
-	memset(demo, 0, sizeof(*demo));
-	demo->child = -1;
-	demo->ready_pipe[0] = -1;
-	demo->ready_pipe[1] = -1;
-	demo->continue_pipe[0] = -1;
-	demo->continue_pipe[1] = -1;
-}
-
-static void close_demo_pipe(int *fd)
-{
-	if (*fd >= 0)
-		close(*fd);
-	*fd = -1;
-}
-
-static void cleanup_demo_process(struct demo_process *demo)
-{
-	if (demo->child > 0) {
-		kill(demo->child, SIGKILL);
-		waitpid(demo->child, NULL, 0);
-	}
-	close_demo_pipe(&demo->ready_pipe[0]);
-	close_demo_pipe(&demo->ready_pipe[1]);
-	close_demo_pipe(&demo->continue_pipe[0]);
-	close_demo_pipe(&demo->continue_pipe[1]);
-}
-
-static int start_demo_process(struct demo_process *demo,
-			      const char *cgroup_path)
-{
-	struct pollfd ready = { .events = POLLIN };
-	struct timespec leader_exit_delay = { .tv_nsec = 100000000 };
-	char byte = 'x';
-
-	if (pipe(demo->ready_pipe) || pipe(demo->continue_pipe))
-		return -1;
-	demo->child = fork();
-	if (demo->child < 0)
-		return -1;
-	if (!demo->child) {
-		close(demo->ready_pipe[0]);
-		close(demo->continue_pipe[1]);
-		allocate_until_killed(cgroup_path, demo->ready_pipe[1],
-				      demo->continue_pipe[0]);
-	}
-	close_demo_pipe(&demo->ready_pipe[1]);
-	close_demo_pipe(&demo->continue_pipe[0]);
-	ready.fd = demo->ready_pipe[0];
-	if (poll(&ready, 1, 5000) != 1 ||
-	    read(demo->ready_pipe[0], &byte, 1) != 1 ||
-	    trigger_cross_cgroup_reclaim(cgroup_path))
-		return -1;
-	nanosleep(&leader_exit_delay, NULL);
-	if (write(demo->continue_pipe[1], &byte, 1) != 1)
-		return -1;
-	close_demo_pipe(&demo->ready_pipe[0]);
-	close_demo_pipe(&demo->continue_pipe[1]);
-	return 0;
-}
-
-static int collect_demo_events(struct demo_process *demo,
-			       struct ring_buffer *ring)
-{
-	for (int i = 0; i < 200; i++) {
-		pid_t waited;
-
-		ring_buffer__poll(ring, 50);
-		waited = waitpid(demo->child, &demo->status, WNOHANG);
-		if (waited == demo->child) {
-			demo->child = -1;
-			break;
-		}
-	}
-	for (int i = 0; i < 10 && exit_events < 1; i++)
-		ring_buffer__poll(ring, 50);
-	return demo->child < 0 ? 0 : -1;
-}
-
-static bool valid_demo_observation(const struct demo_process *demo,
-				   unsigned long long cgroup_id,
-				   const struct oom_watch_bpf *skel)
-{
-	return WIFSIGNALED(demo->status) &&
-	       WTERMSIG(demo->status) == SIGKILL && victim_events == 1 &&
-	       exit_events == 1 && observed_cgroup_id == cgroup_id &&
-	       observed_victim_pid && observed_victim_tid &&
-	       observed_victim_pid != observed_victim_tid && observed_reclaims &&
-	       observed_cross_cgroup_reclaims && observed_stack_samples &&
-	       !skel->bss->dropped_victim_states &&
-	       !skel->bss->dropped_reclaim_states;
-}
-
-static int run_demo(struct oom_runtime *runtime,
-		    const struct selected_cgroup *selected)
-{
-	struct demo_process demo;
-	int result = -1;
-
-	init_demo_process(&demo);
-	if (start_demo_process(&demo, selected->path) ||
-	    collect_demo_events(&demo, runtime->ring))
-		goto cleanup;
-	printf("demo workload signaled=%d signal=%d\n",
-	       WIFSIGNALED(demo.status),
-	       WIFSIGNALED(demo.status) ? WTERMSIG(demo.status) : 0);
-	if (!valid_demo_observation(&demo, selected->metadata.st_ino,
-				    runtime->skel))
-		goto cleanup;
-	printf("demo result=matched-profile-to-victim\n");
-	result = 0;
-
-cleanup:
-	cleanup_demo_process(&demo);
-	return result;
-}
-
-static int watch_profiles(struct oom_runtime *runtime,
-			  unsigned int duration_seconds)
-{
-	unsigned long long deadline = 0;
-
-	signal(SIGINT, handle_signal);
-	signal(SIGTERM, handle_signal);
-	if (duration_seconds)
-		deadline = monotonic_ns() +
-			   (unsigned long long)duration_seconds * 1000000000ULL;
-	while (!stop && (!deadline || monotonic_ns() < deadline)) {
-		int result = ring_buffer__poll(runtime->ring, 100);
-
-		if (result < 0 && result != -EINTR) {
-			fprintf(stderr, "ring buffer poll failed: %d\n", result);
-			return -1;
-		}
-	}
-	print_live_profiles(&runtime->context);
-	return 0;
-}
-
-int main(int argc, char **argv)
-{
-	struct options options = { .sample_every = 1 };
-	struct selected_cgroup selected = {};
-	struct oom_runtime runtime = {};
-	int err = 1;
-
-	setvbuf(stdout, NULL, _IONBF, 0);
-	if (parse_options(argc, argv, &options)) {
-		usage(argv[0]);
-		return 2;
-	}
-	if (select_cgroup(&options, &selected) ||
-	    prepare_runtime(&runtime, &options, &selected))
-		goto cleanup;
-
-	if (selected.path)
-		printf("oom-watch tracing cgroup=%s cgroup_id=%llu\n",
-		       selected.path,
-		       (unsigned long long)selected.metadata.st_ino);
-	else
-		printf("oom-watch tracing all cgroups\n");
-
-	if ((options.demo && run_demo(&runtime, &selected)) ||
-	    (!options.demo && watch_profiles(&runtime,
-					     options.duration_seconds)))
-		goto cleanup;
-	printf("dropped_victim_states=%llu dropped_reclaim_states=%llu\n",
-	       (unsigned long long)runtime.skel->bss->dropped_victim_states,
-	       (unsigned long long)runtime.skel->bss->dropped_reclaim_states);
-	err = 0;
-
-cleanup:
-	destroy_runtime(&runtime);
-	cleanup_selected_cgroup(&selected, &err);
-	return err;
-}
-```
-
-启动时，loader 读取 `/proc/kallsyms`，按地址排序，再用二分搜索解析 BPF stack-trace map 中的每个地址。symbol address 被隐藏时，同一份 profile 仍然可以输出 raw address。stack group 按累计 reclaim time 排序，因此调用频繁的路径和一次特别慢的 interval 都能反映在排名中。
-
-普通模式可以观察一个 cgroup，也可以覆盖全部 cgroup。跟踪结束后，程序遍历 profile map，即使没有发生 OOM，也会打印仍然存在的 histogram。OOM event 到来时会立即打印 snapshot，并附上累计时间最高的 5 组调用栈和 frame。
-
-demo 模式创建 `memory.max=32 MiB`、无 swap、启用 grouped OOM behavior 的 cgroup。worker 先 fault 24 MiB 并暂停，让 parent 通过 `memory.reclaim` 请求回收 8 MiB；这次有意制造的 cross-cgroup request 会验证 target-memcg attribution。随后 worker 继续 fault 一段 128 MiB mapping，直到 cgroup OOM killer 选中它。进程 leader 会在第二阶段之前退出，因此测试也会验证 TGID 和 victim TID 的独立处理。清理阶段会恢复启动时观察到的 memory controller 状态。
+demo 模式创建一个 `memory.max=32 MiB`、无 swap、启用分组 OOM 行为的 cgroup。一个 worker 进程首先 fault 24 MiB 然后暂停，让父进程从 cgroup 外部通过 `memory.reclaim` 请求 8 MiB。这会测试跨 cgroup 归因。然后 worker 继续 fault 一个 128 MiB 的映射直到 OOM 杀死它。进程 leader 在第二阶段之前退出，测试我们是否正确地独立处理 TGID 和 victim TID。
 
 ## 编译和运行
 
-构建 profiler：
+构建工具：
 
 ```bash
 cd src/57-oom-watch
 make
 ```
 
-分析一个 service cgroup 60 秒，每 10 次 reclaim interval 采样一次 kernel stack：
+分析一个特定的 cgroup 60 秒，每十个回收间隔采样一次内核调用栈：
 
 ```bash
 sudo ./oom_watch \
@@ -1176,13 +462,13 @@ sudo ./oom_watch \
   --sample-every 10
 ```
 
-省略 `--cgroup` 会观察全部 cgroup，省略 `--duration` 则持续运行到收到中断。内置 demo 会捕获每次 reclaim stack：
+省略 `--cgroup` 可以观察所有 cgroup。省略 `--duration` 可以持续运行直到中断。内置 demo 会捕获每次回收调用栈：
 
 ```bash
 sudo ./oom_watch --demo
 ```
 
-PID、cgroup ID、地址和延迟会随运行变化。下面是一次真实运行的节选，保留完整 profile 总计，并缩短 stack frame 便于阅读：
+下面是一次真实 demo 运行的输出。PID、cgroup ID、地址和时间在不同运行之间会有变化：
 
 ```text
 oom-watch tracing cgroup=/sys/fs/cgroup/ebpf-oom-watch-1262 cgroup_id=151
@@ -1206,25 +492,27 @@ demo result=matched-profile-to-victim
 dropped_victim_states=0 dropped_reclaim_states=0
 ```
 
-44 个 completed interval 与 44 个 begin event 一一对应，所有 histogram count 相加也是 44，其中一半由目标 cgroup 之外触发。两条排名路径分别显示 allocation charge reclaim 和显式 `memory.reclaim`，exit event 则确认被标记的 TID 最终收到 `SIGKILL`。
+看看这告诉我们什么：在 kill 之前完成了 44 个回收周期，其中一半是从目标 cgroup 外部触发的。直方图显示大多数周期很快（不到 8 微秒），但有几个花了更长时间。两个排名的调用栈将分配触发的回收与显式的 `memory.reclaim` 请求区分开来。exit 事件确认 victim 收到了 `SIGKILL`。
 
 ## 环境要求
 
 | 要求 | 说明 |
 |---|---|
-| 内核 | Linux 7.1 或更高版本，需要携带 target memcg 的 vmscan tracepoint |
-| 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_BPF_EVENTS`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_MEMCG`，`CONFIG_KALLSYMS` 可以改善符号输出 |
-| cgroup | cgroup v2 与 memory controller，demo 模式还需要 cgroup 管理写权限 |
-| 权限 | root，或者等价的 BPF、tracing 与 cgroup 管理 capability |
-| 架构与硬件 | 当前声明并完成测试的目标是 x86-64，不需要特殊硬件 |
+| 内核 | Linux 7.1 或更高版本（需要 target-memcg vmscan tracepoint） |
+| 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_BPF_EVENTS`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_MEMCG`；`CONFIG_KALLSYMS` 可以改善符号输出 |
+| cgroup | 带 memory controller 的 cgroup v2；demo 模式需要 cgroup 管理权限 |
+| 权限 | root 或等效的 BPF 和 tracing capability |
+| 架构 | 已在 x86-64 上测试；不需要特殊硬件 |
 
 ## 实现范围
 
-profile 从程序挂载开始累计到退出，并使用有界 LRU map：4096 份 cgroup profile、4096 条 active interval、8192 组 stack aggregate 和 1024 个 unique stack。每个 `pid_tgid` 保存一个 active interval，与这里观察的 begin/end 路径一致。工具捕获 kernel stack，symbolization 只负责展示，因此受限的 `kallsyms` 会把名称换成地址，并不会改变测量结果。
+Profile 从程序附加开始累积直到退出，使用有界的 LRU map：4096 个 cgroup profile、4096 个活动间隔、8192 个调用栈聚合和 1024 个唯一调用栈。每个 `pid_tgid` 保留一个活动间隔，与 begin/end 跟踪模式相匹配。工具捕获内核调用栈而不是用户调用栈，并将符号化视为展示——受限的 `kallsyms` 会将名称变为地址，但不影响测量结果。
 
 ## 总结
 
-`oom-watch` 把 OOM kill 之前的阶段变成可以检查的证据。它测量每个匹配的 memcg reclaim interval，采样并排序内核路径，把工作归因到目标 cgroup，再将 profile 与 victim selection 和 exit 关联起来。
+`oom-watch` 将 OOM kill 之前的混乱变成可以检查的证据。它测量每个 memcg 回收间隔，采样并排名消耗时间的内核路径，正确归因工作到目标 cgroup（即使对于跨 cgroup 回收），并将此 profile 与 victim 选择和退出关联起来。
+
+下次容器死掉有人问"发生了什么？"时，你将不仅仅有一行内核日志可以展示。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 

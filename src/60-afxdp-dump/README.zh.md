@@ -1,24 +1,40 @@
-# eBPF 实战教程：用 AF_XDP 在用户态接收 UDP 报文
+# eBPF 实战教程：用 AF_XDP 实现高性能 UDP 抓包
 
-有些报文需要在进入普通 socket stack 之前交给用户态程序。抓包工具、协议原型或专用转发器通常需要一条清晰的接收路径：在驱动入口筛选流量，把报文放入共享内存，完成检查，再把 buffer 交还给下一次接收。
+你有没有好奇过 Suricata 这样的抓包工具或者高频交易系统是如何每秒接收数百万个报文而不被内核开销拖垮的？秘密在于绕过大部分网络协议栈。AF_XDP 让你在网卡驱动入口拦截报文，直接复制到应用程序的内存空间，处理时几乎不需要为每个报文做系统调用。
 
-本课直接使用 AF_XDP ABI 构建这条路径，不用库隐藏 ring 和 UMEM 的细节。最终得到的 `afxdp-dump` 会捕获一个队列上发往指定端口的 IPv4 UDP 报文，打印 payload 预览并循环使用每个 frame。它采用单队列、single-buffer packet 和 copy mode，适合作为 zero-copy 与 multi-buffer 之前的第一个 AF_XDP 例子。
+本教程从零开始，使用原始的 AF_XDP 接口构建一个完整的抓包工具。没有辅助库，没有魔法抽象。你会清楚看到 UMEM 注册、ring buffer 和 XDP 重定向是如何协同工作的。最终成果是 `afxdp-dump`，一个捕获指定端口 IPv4 UDP 报文、打印 payload 预览、并正确回收每个 frame 以持续接收的工具。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/60-afxdp-dump>
 
-## XDP 选择报文，AF_XDP 完成交付
+## 为什么选择 AF_XDP？
 
-eBPF 可以让经过验证器检查的程序运行在内核 hook 上，XDP 则把其中一个 hook 放在 Linux 网络接收路径的最前端。Linux 4.18 引入的 AF_XDP 把 XDP redirect 连接到由用户态注册内存支撑的 socket，XSKMAP 再建立 RX queue number 与对应 AF_XDP socket 之间的关系。
+传统的 `libpcap` 或 raw socket 抓包有一个根本问题：每个报文都要通过昂贵的系统调用跨越内核与用户态的边界。当你抓取 10 Gbps 流量时，这些开销会成为瓶颈，而不是你的处理代码。
 
-两边的职责很明确。XDP 程序只解析足够的信息，判断报文是否属于这个工具；AF_XDP socket 管理共享内存 ring，并把选中的字节交给用户态。本例还会在 redirect 之前用 `bpf_map_lookup_elem()` 检查 XSKMAP，这项能力从 Linux 5.3 开始可用。清理阶段的 compare-and-detach 使用 Linux 5.7 加入的 expected-program FD，因此完整工具的最低内核版本是 5.7。
+AF_XDP 通过在内核和用户态之间建立共享内存来解决这个问题。内核把报文直接写入你的应用程序可以读取的内存，双方通过无锁的 ring buffer 通信，而不是系统调用。一次 `poll()` 就能唤醒你处理数百个报文。这种架构在普通硬件上就能达到每秒数百万报文的接收速率。
 
-跟着一个报文和一个 frame 走一遍。用户态在 UMEM 中分配 64 个 4096 字节 frame，把它们的地址发布到 fill ring。发往指定端口的 UDP 报文到达 XDP hook 后，程序检查 Ethernet、IPv4 与 UDP 长度，通过 `ctx->rx_queue_index` 找到注册 socket，再返回 `XDP_REDIRECT`。copy mode 下，内核把报文复制到一个已发布的 frame，并把 `xdp_desc` 放入 RX ring。用户态读取 descriptor、打印报文、推进 consumer index，最后把同一个地址放回 fill ring。
+这项技术已经在生产环境中使用。Meta 的负载均衡器运行 AF_XDP，Cilium 用它做 Kubernetes 网络，高频交易公司用它来缩短微秒级延迟。即使你永远不会构建交易系统，理解 AF_XDP 也能教会你高性能系统中反复出现的模式：共享内存、无锁数据结构、显式的所有权转移。
 
-最后一步决定了接收循环能否持续。如果 frame 没有回收，最初的 64 个地址会在 64 个报文之后耗尽。集成测试故意接收 65 个报文，用第 65 个报文证明至少有一个 frame 已经走完完整的所有权循环。
+## AF_XDP 架构
 
-## 共享的队列上限
+AF_XDP 通过四个必须精确协调的组件工作：
 
-共享头文件定义 XSKMAP 容量。queue ID 是 map key，因此例子可以表示 0 到 63 号队列，每个进程绑定其中一个。
+**UMEM（User Memory）** 是你分配的、内核和用户态都能访问的内存区域。你把它划分为固定大小的 frame，通常每个 4096 字节。内核送达的每个报文都会放进这些 frame 之一。
+
+**Fill Ring** 是你告诉内核哪些 frame 可用于接收报文的方式。你把 frame 地址发布到这里，内核需要存放报文时就会消费这些地址。
+
+**RX Ring** 是内核通知你已接收报文的地方。每个 entry 包含 frame 地址和报文长度。当你在这里看到 entry 时，你就拥有那个 frame 的所有权，直到你归还它。
+
+**XSKMAP** 是一个 BPF map，用于连接 XDP 程序和 AF_XDP socket。XDP 程序决定重定向哪些报文，在这个 map 中查找当前 RX queue 对应的 socket，然后调用 `bpf_redirect_map()` 来投递报文。
+
+流程是这样的：你向 Fill Ring 发布 64 个 frame 地址。一个 UDP 报文到达。你的 XDP 程序检查目的端口，在 XSKMAP 中查找 socket，然后重定向。内核把报文复制到你的某个 frame 中，并在 RX Ring 上发布一个 descriptor。你读取 descriptor、处理报文，再把这个 frame 地址放回 Fill Ring。循环继续。
+
+这个所有权模型至关重要。一个 frame 开始时属于你。你通过 Fill Ring 借给内核。内核借用它来接收报文。你从 RX Ring 回收它。你必须把它归还到 Fill Ring，否则 64 个报文之后就会耗尽 frame。我们的工具通过成功捕获 65 个报文来证明这个机制有效——这需要至少一个 frame 完成完整的所有权周期。
+
+## XDP 程序：过滤和重定向
+
+内核侧的 BPF 程序很精简，因为它只负责过滤和重定向。buffer 管理的所有复杂性都在用户态。
+
+首先，我们定义一个共享头文件来设置 XSKMAP 容量。queue ID 是 map 的 key，所以这个例子可以寻址 0 到 63 号队列：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -30,9 +46,7 @@ eBPF 可以让经过验证器检查的程序运行在内核 hook 上，XDP 则�
 #endif /* __AFXDP_DUMP_H */
 ```
 
-## 在 XDP 中筛选并重定向
-
-完整 BPF 程序很短，因为 buffer 管理属于 AF_XDP 一侧。
+现在是 XDP 程序本身：
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -99,13 +113,19 @@ int redirect_udp(struct xdp_md *ctx)
 }
 ```
 
-程序在每次 header 访问之前都检查边界或协议长度。它接收 Ethernet IPv4 报文，排除分片，根据 IPv4 header length 找到 UDP，再确认 UDP length 位于 IP payload 内。只有指定目的端口会进入 redirect 路径。
+程序逐层解析报文，在每一步都验证边界。这种仔细的边界检查是 BPF 验证器的要求，同时也确保我们不会误解截断或畸形的报文。
 
-XSKMAP lookup 也是正确性的一部分。队列没有 socket entry 时返回 `XDP_PASS`，无关报文和格式异常的报文同样沿普通网络路径继续；`bpf_redirect_map()` 的 fallback action 也是 pass。一旦 redirect 成功，报文会由 AF_XDP 消费，而不是复制一份镜像，因此普通 UDP socket 不会再收到这条被选中的报文。
+解析从 Ethernet 开始，检查是否有足够空间容纳头部，以及 EtherType 是否表示 IPv4。然后验证 IPv4 头部：正确的版本、UDP 协议、最小头部长度、没有分片（分片报文需要重组，超出了我们的范围）。程序从 IHL 字段计算实际的 IP 头部长度，并用它来定位 UDP 头部。
 
-## 直接使用 ABI 构建 AF_XDP socket
+UDP 验证确保长度字段合理，目的端口与目标匹配。只有这时程序才检查这个 queue 是否真的注册了 socket。这个顺序是刻意的：大多数报文会在更早的检查中失败，所以对不会捕获的报文我们避免了 map lookup 的开销。
 
-下面的用户态程序完成 UMEM 注册、ring 映射、socket bind、XDP 加载和接收循环。
+XSKMAP lookup 也是一个安全检查。如果用户态没有为这个 queue 注册 socket，lookup 返回 NULL，我们就把报文传递给普通协议栈。当所有检查都通过时，`bpf_redirect_map()` 把报文发送到 AF_XDP。第二个参数是 queue index，会成为 map 的 key。第三个参数是出错时的回退 action。
+
+一个重要细节：一旦报文被重定向，它就被 AF_XDP 消费了。普通的 socket 协议栈永远不会看到它。这正是抓包工具需要的，但这意味着你需要小心选择重定向什么。
+
+## 用户态应用程序
+
+用户态代码处理 AF_XDP 需要的一切：内存分配、ring 设置、socket 绑定、XDP 加载和接收循环。以下是完整实现：
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -599,13 +619,41 @@ cleanup:
 }
 ```
 
-`open_xsk()` 创建 256 KiB UMEM，通过 `XDP_UMEM_REG` 注册内存，再向内核申请各 64 个 fill、completion 和 RX entry。`XDP_MMAP_OFFSETS` 描述每个 producer、consumer、flags 和 descriptor array 的位置，程序据此映射页面，并在 redirect 开始前发布全部 frame 地址。
+### 理解 UMEM 和 Ring 设置
 
-ring index 由内核和用户态共享，因此内存顺序很关键。producer 需要先写 descriptor，再用 release 语义发布新 index；consumer 则先 acquire producer index，再读取 descriptor。代码在消费 RX entry 和向 fill ring 归还地址时都遵循这组规则。
+`open_xsk()` 函数创建 AF_XDP socket 及其所有支撑基础设施。它首先映射 256 KiB 的匿名内存作为 UMEM，划分为 64 个 4096 字节的 frame。这块内存在注册后会与内核共享。
 
-socket bind 使用的 `XDP_COPY` 与 XDP attach mode 解决的是两个问题。copy mode 决定报文如何进入 UMEM，不依赖驱动的 zero-copy 支持；XDP 程序本身会先尝试 native driver mode，如果网卡不支持，再回退到 generic SKB mode。`--skb-mode` 可以直接选择 generic 路径。
+用 `AF_XDP` 创建 socket 后，它通过 `XDP_UMEM_REG` 注册 UMEM，告诉内核我们的报文 buffer 在哪里。然后用 `setsockopt` 请求各 64 个 entry 的 fill、completion 和 RX ring。`XDP_MMAP_OFFSETS` getsockopt 揭示了每个 ring 的 producer index、consumer index、flags 和 descriptor 数组在可 mmap 的页面中的位置。
 
-接收循环要求一个 descriptor 对应一个完整报文。遇到 `XDP_PKT_CONTD` 时会返回 `EMSGSIZE`，避免把 multi-buffer packet 的第一个 fragment 当成完整报文打印。地址和长度检查还会保证 descriptor 始终落在已注册 UMEM 内。退出时 compare-and-detach 把当前 program FD 作为 `old_prog_fd`，工具只会移除自己挂载的 XDP 程序。
+Ring 映射有些技巧，因为内核把每个 ring 放在固定的页面偏移。Fill Ring 在 `XDP_UMEM_PGOFF_FILL_RING`，Completion Ring 在 `XDP_UMEM_PGOFF_COMPLETION_RING`，RX Ring 在 `XDP_PGOFF_RX_RING`。每个 ring 包含指向 producer 和 consumer index 的指针，它们是内核和用户态之间的同步点。
+
+bind 之前的最后一步是把所有 64 个 frame 地址发布到 Fill Ring。我们把每个地址写入 descriptor 数组，然后用 release 语义发布 producer index。这告诉内核有 64 个 frame 可用于接收报文。
+
+### Ring 操作中的内存顺序
+
+Ring index 由内核和用户态共享，这使得内存顺序至关重要。模式是一致的：producer 在用 release 语义发布 index 之前先写 descriptor，consumer 在读取 descriptor 之前先 acquire producer index。
+
+在 `recycle_frame()` 中，我们用 relaxed 顺序读取自己的 producer index（只有我们修改它），但要 acquire consumer index，因为内核会写它。如果 ring 有空间，我们写入地址并用 release 发布。内核最终会 acquire 我们的 producer 更新并看到我们写的地址。
+
+同样的模式出现在接收循环中。我们 acquire 内核写的 producer index，读取 descriptor，用 release 发布我们的 consumer 更新。这确保内核知道我们已经完成这些 frame，然后才能复用它们。
+
+### Copy Mode 与 Zero-Copy
+
+Socket 地址中的 `XDP_COPY` 标志告诉 AF_XDP 把报文复制到 UMEM，而不是真正的 zero-copy。Copy mode 在任何接口上都能工作，不需要驱动支持，是学习示例的正确选择。内核为传入报文分配自己的内存，然后复制到我们的 UMEM frame。
+
+XDP 程序的 attach mode 是另一回事。我们首先尝试 native driver mode（`XDP_FLAGS_DRV_MODE`），它在 SKB 分配之前在驱动中运行 XDP 程序。如果因为驱动不支持 XDP 而失败，我们回退到 generic SKB mode（`XDP_FLAGS_SKB_MODE`），它在 SKB 创建之后运行，但仍然让我们重定向到 AF_XDP。`--skb-mode` 标志直接强制使用 generic mode。
+
+### 接收循环
+
+接收循环轮询报文，批量处理它们，并立即回收 frame。250ms 超时确保即使没有报文到达，我们也能响应信号。
+
+当 poll 指示有数据时，我们检查 RX ring 是否有新 descriptor。对于每一个，我们计算实际的数据地址（descriptor 地址可能编码了 offset 信息），验证它在 UMEM 边界内，并检查这不是一个 multi-buffer 报文（那会设置 `XDP_PKT_CONTD`）。Multi-buffer 支持需要累积分片，超出了这个例子的范围。
+
+打印报文后，我们立即通过 `recycle_frame()` 把 frame 归还到 Fill Ring。这至关重要：不回收的话，64 个报文之后就会耗尽 frame。工具通过成功捕获 65 个报文来证明回收有效。
+
+### 清理和安全卸载
+
+退出时，我们使用 compare-and-detach 只移除我们自己的 XDP 程序。`old_prog_fd` 选项告诉 `bpf_xdp_detach` 只在当前挂载的程序与我们的匹配时才卸载。这防止了在我们运行期间如果有人挂载了其他 XDP 程序时，意外卸载别人的程序。
 
 ## 编译和运行
 
@@ -622,44 +670,52 @@ make
 sudo ./afxdp_dump --interface eth0 --queue 0 --port 8080 --count 5
 ```
 
-`--count 0` 会持续运行到收到信号，`--skb-mode` 用于 generic XDP。选中的 queue 必须实际接收这条流量，在多队列网卡上，这取决于 NIC 的 receive-side steering 配置。
+使用 `--count 0` 持续运行直到 Ctrl+C 中断。添加 `--skb-mode` 强制使用 generic XDP mode。选中的 queue 必须实际接收到流量；在多队列网卡上，这取决于 RSS（receive-side scaling）配置。
 
-集成测试会创建隔离的 veth 路径，验证 8081 端口仍能到达普通 UDP socket，再通过 AF_XDP 发送 65 个匹配报文：
+从另一台机器或另一个终端发送测试流量：
 
 ```bash
-sudo make test
+echo "hello-afxdp" | nc -u target-ip 8080
 ```
 
-一次真实测试的输出如下：
+使用 `--count 65` 运行更长时间可以证明 frame 回收有效：
 
 ```text
-afxdp-dump ready interface=axdp1267r queue=0 port=8080 mode=driver count=65
+afxdp-dump ready interface=eth0 queue=0 port=8080 mode=driver count=65
 packet=1 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 packet=65 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 redirected=65
-nonmatching-pass=verified
-AF_XDP dump integration test: PASS
 ```
 
-`packet=65` 证明 frame 已经在最初的 64 个地址之外完成复用，`redirected=65` 来自 BPF 侧计数器，`nonmatching-pass=verified` 则说明 filter 让其他 UDP 流量继续走普通网络路径。
+Packet 65 证明至少有一个 frame 完成了完整的所有权周期：发布到 Fill，用于接收，从 RX 消费，再发布回 Fill。`redirected=65` 计数器来自 BPF 程序，与我们的接收计数一致。
 
 ## 环境要求
 
 | 要求 | 说明 |
 |---|---|
-| 内核 | Linux 5.7 或更高版本，AF_XDP 在 4.18 引入，XDP 对 XSKMAP 的 lookup 在 5.3 引入，安全的 expected-FD detach 在 5.7 引入 |
+| 内核 | Linux 5.7 或更高版本。AF_XDP 在 4.18 引入，XDP 对 XSKMAP 的 lookup 在 5.3 引入，安全的 expected-FD detach 在 5.7 引入 |
 | 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_XDP_SOCKETS`、`CONFIG_DEBUG_INFO_BTF` |
-| 权限 | root，或者等价的 BPF 与网络管理 capability |
-| 网络接口 | 接口包含所选 RX queue，native XDP 可选，工具也支持 generic XDP |
-| 架构与硬件 | 当前声明并完成测试的目标是 x86-64，copy mode 不要求驱动支持 AF_XDP zero-copy |
+| 权限 | root 或等价的 BPF 与网络管理 capability |
+| 网络接口 | 任何包含所选 RX queue 的接口。native XDP 可选，generic mode 处处可用 |
+| 架构 | x86-64 已测试。copy mode 不需要驱动 zero-copy 支持 |
 
-## 实现范围
+## 后续扩展
 
-`afxdp-dump` 是一个 receive-only、单队列、single-buffer 的 IPv4 UDP 工具，使用固定的 64-frame UMEM，最多打印 32 个 payload 字符。它保留了一个实用接收器需要的 buffer 生命周期，TX ring、shared UMEM、zero-copy、multi-buffer 重组和 RX metadata 可以在后续例子中继续展开。
+这个例子有意做得最小化：只接收、单队列、single-buffer 报文、copy mode。真正的生产 AF_XDP 应用会在这个基础上向多个方向扩展：
+
+**TX ring** 让你用同样的零开销模型发送报文。你需要添加 TX ring，发布带有报文数据的 frame 地址，然后轮询 completion 通知。
+
+**Zero-copy mode** 消除了复制到 UMEM 的过程。驱动直接使用你的 UMEM，但这需要驱动支持和仔细的 buffer 对齐。
+
+**Multi-buffer 报文** 处理巨型帧或 UMEM frame 小于 MTU 的情况。你需要累积标记了 `XDP_PKT_CONTD` 的分片，直到最后一个分片。
+
+**Shared UMEM** 让多个 socket 共享同一块内存，对于跨 queue 负载均衡或 RX 和 TX 路径之间共享很有用。
 
 ## 总结
 
-这个例子展示了完整的 AF_XDP 接收契约：XDP 选择一条 UDP 流，XSKMAP 把 RX queue 解析到 socket，内核发布 UMEM descriptor，用户态检查完成后归还 frame。65 个报文的测试进一步证明所有权确实回到了 fill ring。
+AF_XDP 给你提供了具有 eBPF 安全保证的内核旁路报文接收。XDP 程序在驱动边界选择流量，XSKMAP 把报文路由到你的 socket，无锁的 ring buffer 不用系统调用就能传输数据。这个例子展示了完整的接收契约：向 Fill 发布 frame，在 RX 上接收 descriptor，处理报文，把 frame 回收到 Fill。
+
+理解这个流程的价值超越了抓包本身。这里的模式——内核与用户态之间的共享内存、显式的所有权转移、无锁同步——在从数据库到 GPU 驱动的各种高性能系统中反复出现。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
@@ -668,4 +724,5 @@ AF_XDP dump integration test: PASS
 - [Linux AF_XDP 文档](https://docs.kernel.org/networking/af_xdp.html)
 - [AF_XDP 引入 commit](https://github.com/torvalds/linux/commit/c0c77d8fb787cfe0c3fca689c2a30d1dad4eaba7)
 - [XDP 支持 XSKMAP lookup 的 commit](https://github.com/torvalds/linux/commit/fada7fdc83c0)
-- [XDP replace 与 detach 的 expected-program FD](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)
+- [XDP detach 的 expected-program FD](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)
+- [libxdp 库](https://github.com/xdp-project/xdp-tools) - 如果想跳过原始 ABI，这里有更高层的 AF_XDP 辅助函数

@@ -1,24 +1,36 @@
-# eBPF 实战教程：用 cgroup BPF 构建 DNS 派生的 IP 允许列表
+# eBPF 实战教程：用 cgroup BPF 构建基于 DNS 的 IP 允许列表
 
-假设一个服务只能通过 HTTPS 访问 `api.example.com`，其余目的地址都需要拒绝。静态 IP 允许列表很难完成这件事，因为 DNS 应答会变化，也会过期；到了 `connect()` 阶段，内核看到的又只是一个 IP 地址，并不知道它来自哪个域名。这里缺少的是一条短期关联，把应用刚刚完成的 DNS 解析和随后的连接连起来。
+假设你想让一个服务只能连接 `api.example.com`，其他地址一律拒绝。静态 IP 白名单听起来可行，但 DNS 应答会变化，TTL 也会过期。到了 `connect()` 阶段，内核只看到一个 IP 地址，根本不知道它来自哪个域名。这里缺少的是一条短期关联，把应用的 DNS 查询和随后的连接联系起来。
 
-本课会把这条关联做成一个最小可运行的策略工具。它通过指定的 DNS 解析器观察一个域名，只从匹配的查询与响应中学习 IPv4 A 记录，并在 DNS TTL 有效期间允许访问一个 TCP 端口。
+本课就来构建这条关联。我们会观察特定域名的 DNS 流量，只从有效的查询响应对中学习 IP 地址，并在 TTL 有效期间允许连接。这是一个最小但完整的策略工具，展示了 cgroup BPF 如何在多个内核 hook 之间协调工作。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/55-dns-egress>
 
-## eBPF 在哪里执行策略
+## 理解问题：DNS 和 Connect 相互隔离
 
-eBPF 可以让经过验证器检查的程序运行在 Linux 内核 hook 上，通过 map 保留状态，也可以把选出的事件交给用户态。cgroup BPF 让这些 hook 跟随一组工作负载：packet program 可以观察 cgroup 的出入流量，socket-address program 则能在内核发起 IPv4 连接之前允许或拒绝这次请求。
+当你的应用解析 `api.example.com` 时，DNS 响应包含一个 IP 地址和一个 TTL。但这些信息只存在于用户空间——解析器库缓存它，应用用这个 IP 调用 `connect()`，而内核完全不知道这个 IP 是怎么来的。这就形成了一个根本性的安全缺口。
 
-这个例子在同一个 cgroup 上挂载三个程序。`cgroup_skb/egress` 识别指定的 DNS 问题并记录待匹配查询，`cgroup_skb/ingress` 只从与查询对应的响应中接纳地址，`cgroup/connect4` 对受保护的 TCP 端口作最终判断。ring buffer 负责报告 learned、allowed、denied 和 expired 事件，并不参与策略结果。
+考虑一个只应该访问你后端 API 的容器。传统防火墙可以阻止目标 IP，但无法执行"只允许连接最近 60 秒内从 api.example.com 解析出来的 IP"这样的策略。内核级策略和应用级 DNS 解析完全隔离运行。
 
-先跟着一次成功的解析走一遍。应用发送 `lab.test` 的 A 查询，egress hook 保存解析器地址、客户端地址、客户端 UDP 端口和 DNS transaction ID，这份记录有效 5 秒。响应回来后，ingress hook 用反向报文重建同一个 key，检查响应标志与 question，再读取第一个直接 A 应答。通过检查的地址会和 TTL 推导出的过期时间一起进入允许列表，随后发往这个地址和受保护端口的 `connect()` 可以在 TTL 内成功。
+cgroup BPF 弥合了这个缺口。通过在同一个 cgroup 上挂载 packet hook 和 connect hook，我们可以观察 DNS 流量，然后根据观察到的结果执行连接策略。关键洞察是：cgroup BPF 程序通过 map 共享状态，从 DNS 查询到响应再到最终连接形成一条信任链。
 
-待匹配查询就是这里的信任边界。未经请求的响应没有 pending key，transaction ID 不同的响应也会查到另一个 key，因此两者都无法写入允许列表。connect hook 还会再次比较过期时间，即使 LRU map 中仍保留着旧条目，地址也会按 DNS 时间自然失效。
+## 整体架构
 
-## DNS 协议与事件结构
+eBPF 可以在多个内核 hook 上运行经过验证的程序，并通过 map 在它们之间共享状态。cgroup BPF 让这些 hook 跟随工作负载：packet program 可以观察 cgroup 的出入流量，socket-address program 则能在连接建立之前接受或拒绝请求。
 
-共享头文件包含 BPF 程序需要解析的少量 DNS 布局，以及用户态接收的固定事件格式。
+我们的工具在同一个 cgroup 上挂载三个程序：
+
+1. **`cgroup_skb/egress`** 监控出站 DNS 查询，记录我们正在等待响应的请求
+2. **`cgroup_skb/ingress`** 验证入站 DNS 响应，只从匹配的回复中学习 IP 地址
+3. **`cgroup/connect4`** 做最终决策——只允许连接到从有效 DNS 响应中学到的 IP，且仅在 TTL 有效期内
+
+先跟着一次成功的解析走一遍。应用发送 `lab.test` 的 A 查询，egress hook 保存一个关联 key，包含解析器地址、客户端地址、客户端 UDP 端口和 DNS 事务 ID。这份记录有效期 5 秒。响应到达后，ingress hook 重建同一个 key，验证响应内容，并提取 IP 地址和 TTL。之后发往这个地址的 `connect()` 可以成功——但只在 TTL 有效期内。
+
+待匹配查询就是这里的信任边界。未经请求的响应没有待匹配的 key。事务 ID 错误的响应会查找另一个 key 而找不到。两者都无法污染允许列表。即使条目还留在 LRU map 中，connect hook 也会重新检查过期时间，地址会随 DNS 时间自然失效。
+
+## 数据结构详解
+
+在深入代码之前，先理解让这一切工作的数据结构。共享头文件定义了 DNS 协议布局和我们报告给用户空间的事件：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -69,11 +81,13 @@ struct dns_egress_event {
 #endif /* __DNS_EGRESS_H */
 ```
 
-这些协议结构直接描述线上字节，因此使用 packed 布局。事件同时携带 DNS TTL 和内核单调时钟下的绝对过期时间，命令行展示 TTL，BPF 程序则用时间戳作策略判断。
+协议结构使用 `packed` 属性，因为它们直接描述线上字节——不允许任何填充。`dns_header` 直接映射到每个查询和响应开头的 12 字节 DNS 头部。`dns_question` 结构跟在问题名（使用长度前缀标签）后面。`dns_a_answer` 期望常见的压缩格式，其中 name 指针是 `0xc00c`，指回问题部分。
 
-## 三个 BPF hook
+我们发送给用户空间的每个事件同时携带 DNS TTL 和绝对过期时间戳。用户空间打印人类可读的 TTL，而 BPF 侧使用单调时间戳做决策。这种分离保持了内核逻辑的简洁——BPF 代码中不需要时间格式转换。
 
-下面是完整的内核态程序。
+## BPF 程序：完整实现
+
+下面是完整的内核态实现。虽然比某些例子长，但每个部分都有明确的职责。让我们先看完整代码，然后逐步分析关键部分：
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -367,17 +381,43 @@ int enforce_dns_policy(struct bpf_sock_addr *ctx)
 }
 ```
 
-`pending_queries` 和 `allowed_ips` 都是固定容量的 LRU hash map。前者保存最多 5 秒的查询关联状态，后者保存处于 DNS 生命周期内的 IPv4 地址。LRU 淘汰把内存开销限制在确定范围内；当条目超过 1024 个时，最近活跃的查询和地址也会得到优先保留。
+### 理解 Map 设计
 
-egress 路径先验证 IPv4、UDP、分片状态、解析器地址和端口，再检查报文是不是指定名称的单 question A 查询。只有这些字段全部成立，`record_dns_query()` 才会插入四字段关联 key。程序返回 `1`，DNS 报文仍然按正常路径继续传输。
+程序使用三个 BPF map，每个在信任链中都有特定用途。`pending_queries` map 是一个 LRU hash，保存 DNS 查询的关联状态。key 组合了四个字段——服务器 IP、客户端 IP、客户端端口和事务 ID——它们唯一标识一个查询/响应对。value 只存储过期时间戳，因为这就是我们验证时序所需的全部。LRU 淘汰确保即使在 DNS 洪水条件下内存也保持有界。
 
-ingress 路径从反向 transport tuple 开始解析。`parse_response_question()` 补上 transaction ID，要求 pending entry 仍然有效，并验证这是包含指定 question 的成功响应。`parse_direct_a_answer()` 接受常见的 `0xc00c` 压缩 name pointer、IN class、A type、4 字节地址，以及 1 到 86400 秒的 TTL。应答通过以后，pending query 会被消费，解析出的 IP 才获得连接资格。
+`allowed_ips` map 也是 LRU hash，但只用 IPv4 地址作为 key。value 包含过期时间戳、以秒为单位的原始 TTL（用于日志）、对齐填充，以及一个标记是否已报告过期的 flag。这个 flag 防止多个线程在竞争访问过期条目时产生重复的 "expired" 事件。
 
-`enforce_dns_policy()` 的范围很窄。发往其他目的端口的 TCP 连接直接通过；发往受保护端口的连接使用 `ctx->user_ip4` 查表，有效条目返回 `1`，缺失或过期条目返回 `0`，应用会收到 `EPERM`。`expired_reported` 上的 64 位 compare-and-swap 让多个线程同时访问旧地址时只产生一次 expired 通知。BPF atomic compare-and-exchange 在 Linux 5.12 引入，这也确定了工具的最低内核版本。
+`events` ring buffer 向用户空间发送通知。256KB 的大小可以容纳数千个事件而不会阻塞内核路径。Ring buffer 是 perf buffer 的现代替代品——它们更高效，提供更好的顺序保证。
 
-## 加载策略并验证完整信任链
+### 出站路径：记录待处理查询
 
-用户态程序会配置只读 BPF 数据，把三个程序附加到一个 cgroup，再消费 ring buffer 事件。
+当报文离开 cgroup 时，`record_dns_query` 运行。函数首先通过 `parse_query_transport` 验证传输层。这个函数加载 IP 头，检查是否为使用 UDP 协议的 IPv4，拒绝分片报文（需要我们没有实现的重组），并验证目标是否匹配配置的解析器。如果所有检查通过，它计算 DNS 数据的起始位置并填充关联 key。
+
+然后 `parse_dns_query` 函数验证 DNS 层。它检查 flags 是否表示标准查询（不是响应），是否恰好有一个问题，以及问题名是否匹配我们配置的域名。问题类型和类必须是 A（地址）和 IN（互联网）。只有所有验证都通过后，它才提取事务 ID 并插入 `pending_queries`。
+
+注意 `record_dns_query` 始终返回 1。这告诉内核继续正常处理报文——我们是在观察，不是阻断。DNS 查询原样流过。
+
+### 入站路径：从响应中学习
+
+入站程序 `learn_dns_answer` 反转了视角。现在我们看的是从解析器到达的报文，所以 `parse_response_transport` 检查源（不是目标）是否匹配解析器 IP 和端口。关联 key 用相同的字段填充，但从响应的视角来看。
+
+关键的安全检查发生在 `pending_query_is_live`。这个函数在 `pending_queries` 中查找关联 key。如果没有条目存在——意味着我们从未看到匹配的查询——响应被拒绝。如果条目存在但已过期，我们删除它并拒绝响应。只有匹配活跃待处理查询的响应才能继续。
+
+确认我们有合法响应后，`parse_response_question` 验证 DNS 头。它验证这是成功响应（flags 表示"响应"且"无错误"），恰好包含一个匹配我们域名的问题，且至少有一个应答。`parse_direct_a_answer` 然后提取第一个 A 记录，要求常见的 `0xc00c` 压缩 name 格式、正确的 type 和 class，以及 1 到 86400 秒之间的合理 TTL。
+
+验证通过后，待处理查询被删除（已被消费），IP 地址以基于 DNS TTL 的过期时间添加到 `allowed_ips`。`emit_event` 调用向用户空间发送 `DNS_LEARNED` 通知。
+
+### 连接路径：执行策略
+
+`enforce_dns_policy` 函数挂载到 `cgroup/connect4`，在每个 IPv4 TCP 连接之前运行。函数首先应用过滤：如果我们针对特定进程且这不是它，允许连接。如果不是 TCP 或不是受保护端口，允许连接。这些提前返回最小化了无关流量的开销。
+
+对于需要策略执行的连接，我们在 `allowed_ips` 中查找目标 IP。如果找到且未过期，我们发出 `DNS_ALLOWED` 并返回 1（允许）。如果找到但已过期，我们在 `expired_reported` 上使用原子 compare-and-swap，即使在并发访问下也只发出一个 `DNS_EXPIRED` 事件。BPF atomic compare-and-exchange 在 Linux 5.12 引入，这也确定了工具的最低内核版本。
+
+如果 IP 不在 map 中或已过期，我们发出 `DNS_DENIED` 并返回 0。内核将返回值 0 转换为 `EPERM`，应用的 connect() 立即失败。
+
+## 用户态程序
+
+用户态程序配置只读 BPF 数据，把三个程序附加到 cgroup，并处理 ring buffer 事件。它还包含一个自测的 demo 模式，验证完整的信任链。
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -1021,20 +1061,38 @@ cleanup:
 }
 ```
 
-域名会在 BPF object 加载前编码为 DNS label 格式，例如 `lab.test` 会变成 `\x03lab\x04test\x00`，这正是 packet hook 逐字节比较的内容。解析器与端口写入 skeleton 的 `rodata`，验证器可以把它们视为常量。
+### 理解用户态控制流程
 
-普通模式会保持三个 link 存活，直到运行时间结束或收到退出信号。demo 模式用 loopback socket 走完信任链：先证明初始连接会被拒绝，再分别发送未经请求的应答和错误 ID 应答，随后接纳一个 TTL 为 1 秒的正确应答，最后等待它过期。这些检查很重要，因为“解析所有 DNS 响应”的简单实现也能通过成功路径，却很容易被伪造响应污染。
+用户态程序遵循清晰的初始化序列。首先，`parse_options` 处理命令行参数，验证输入并设置默认值。Demo 模式自动配置 loopback 地址和非标准端口，以避免与真实 DNS 和 Web 流量冲突。
+
+`encode_qname` 函数将域名如 `lab.test` 转换为 DNS label 格式：`\x03lab\x04test\x00`。每个 label 以长度字节开头，后跟 label 内容。最后的零字节终止名称。这个编码在启动时只发生一次，并写入 BPF skeleton 的 `rodata` 部分，验证器将其视为常量。
+
+`prepare_runtime` 函数把一切串联起来。它打开目标 cgroup 目录，打开 BPF skeleton，配置所有 `rodata` 值（解析器 IP、端口、域名），加载 BPF 程序，并将每个程序附加到 cgroup。三个独立的 link 允许独立的附加和分离。最后，它创建一个 ring buffer 消费者，为每个内核通知调用 `handle_event`。
+
+普通模式进入 `poll_policy_events`，在 ring buffer 上循环直到持续时间结束或收到信号。每个事件都会打印 IP 地址、PID、TTL 和事件类型。Demo 模式则运行 `run_demo`，用合成的 DNS 流量和 TCP 连接验证完整的信任链。
+
+### Demo 模式：证明安全属性
+
+Demo 模式既是功能测试，也是安全模型的演示。它完全在 loopback 上运行，使用非标准端口（DNS 15353，TCP 19090）以避免干扰真实服务。
+
+测试序列首先验证在任何 DNS 流量之前连接被阻止。然后发送一个未经请求的 DNS 响应——一个没有前置查询就到达的响应。BPF 程序应该拒绝它，因为 `pending_queries` 中没有匹配的条目。Demo 验证连接仍然被阻止。
+
+接下来，它发送一个合法的 DNS 查询并收到一个事务 ID 错误的响应。BPF 程序也应该拒绝它，因为事务 ID 是关联 key 的一部分。同样，demo 验证连接保持阻止状态。
+
+最后，它发送一个事务 ID 正确、TTL 为 1 秒的响应。现在连接应该成功。等待 1.3 秒（超过 TTL）后，demo 验证连接再次被阻止。
+
+这个序列证明了工具正确实现了查询响应关联、拒绝欺骗尝试、遵守 TTL，并正确使允许列表条目过期。
 
 ## 编译和运行
 
-使用仓库内置的 libbpf 与 bpftool 构建示例：
+构建示例：
 
 ```bash
 cd src/55-dns-egress
 make
 ```
 
-将它挂到服务 cgroup，通过服务实际使用的解析器观察一个域名，并保护 TCP 443 端口：
+将它挂到服务 cgroup，通过解析器观察一个域名：
 
 ```bash
 sudo ./dns_egress \
@@ -1044,13 +1102,13 @@ sudo ./dns_egress \
   --port 443
 ```
 
-这个 cgroup 需要包含目标工作负载，让它的 DNS 报文和连接共享同一份策略状态。TCP 443 和 DNS 53 是默认端口，`--dns-port` 可以选择其他解析器端口，`--duration` 则为运行时间设置上限。内置 demo 不依赖外部 DNS 服务器：
+cgroup 需要包含目标工作负载，让它的 DNS 报文和连接共享同一份策略状态。TCP 443 和 DNS 53 是默认端口；`--dns-port` 选择其他解析器端口，`--duration` 设置时间上限。内置 demo 不需要外部 DNS 服务器：
 
 ```bash
 sudo ./dns_egress --demo
 ```
 
-一次真实运行的输出如下：
+示例输出：
 
 ```text
 dns-egress attached cgroup=/sys/fs/cgroup domain=lab.test resolver=127.0.0.1 tcp_port=19090 dns_port=15353
@@ -1068,25 +1126,25 @@ event=denied pid=1246 ip=127.0.0.1 ttl=1
 demo step=expired-answer result=blocked
 ```
 
-前三个 denied 说明，仅仅收到 DNS 格式的流量或者看到正确域名还不足以学习地址。只有关联正确的响应会产生 learned，allowed 覆盖它的有效 TTL，expired 之后的连接则立刻回到 denied。
+前三个 `denied` 说明仅仅收到 DNS 格式的流量或看到正确的域名还不够。只有关联正确的响应才会产生 `learned`，`allowed` 覆盖它的有效 TTL，`expired` 之后的连接立刻回到 denied。
 
 ## 环境要求
 
 | 要求 | 说明 |
 |---|---|
-| 内核 | Linux 5.12 或更高版本，最新依赖来自 BPF atomic compare-and-exchange |
+| 内核 | Linux 5.12+（BPF atomic compare-and-exchange） |
 | 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_CGROUP_BPF`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_INET` |
-| cgroup | cgroup v2，目标工作负载位于挂载目录之下 |
-| 权限 | root，或者等价的 BPF 与网络管理 capability |
-| 架构与硬件 | 当前声明并完成测试的目标是 x86-64，不需要特殊网卡 |
+| cgroup | cgroup v2，工作负载位于挂载目录之下 |
+| 权限 | root，或等价的 BPF 与网络 capability |
+| 架构 | x86-64 已测试；不需要特殊网卡 |
 
-## 实现范围
+## 本例未涵盖的内容
 
-这个工具处理一个精确域名、一个解析器、一个受保护的 TCP 端口、IPv4 UDP DNS 和第一个直接 A 应答，并识别常见的 `0xc00c` owner name。CNAME 链、多种 answer 布局、TCP DNS、IPv6、DoH 和 DoT 需要更多解析逻辑或新的观察位置。这个紧凑范围保留了策略最关键的性质：IP 通过最近一次匹配查询进入允许列表，再按照 DNS 时间退出。
+工具刻意只实现一个精确域名、一个解析器、一个受保护的 TCP 端口、IPv4 UDP DNS 和第一个直接 A 应答。它识别常见的 `0xc00c` 压缩 owner name。CNAME 链、其他 answer 布局、TCP DNS、IPv6、DoH 和 DoT 需要额外的解析器或新的观察点。这个紧凑范围保留了重要属性的可见性：IP 通过最近一次匹配查询进入允许列表，再通过 DNS 时间退出。
 
 ## 总结
 
-这个例子把观察到的 DNS 结果变成有时间边界的 connect 策略。egress 与 ingress hook 建立可信的查询响应关联，TTL 管理地址生命周期，connect hook 则对工作负载的受保护端口执行结果。
+这个例子把观察到的 DNS 结果变成有时间边界的 connect 策略。egress 和 ingress hook 建立可信的查询响应关联，TTL 控制地址生命周期，connect hook 对受保护端口执行结果。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
@@ -1094,6 +1152,6 @@ demo step=expired-answer result=blocked
 
 - [BPF ring buffer](https://docs.kernel.org/bpf/ringbuf.html)
 - [BPF LRU hash map](https://docs.kernel.org/bpf/map_hash.html)
-- [BPF atomic compare-and-exchange 引入 commit](https://github.com/torvalds/linux/commit/5ffa25502b5ab3d639829a2d1e316cff7f59a41e)
+- [BPF atomic compare-and-exchange commit](https://github.com/torvalds/linux/commit/5ffa25502b5ab3d639829a2d1e316cff7f59a41e)
 - [Control Group v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 - [RFC 1035：Domain Names — Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)

@@ -1,24 +1,51 @@
-# eBPF 实战教程：用两棵 refcounted rbtree 索引 TC 流量
+# eBPF 实战教程：用双红黑树索引构建 Top-Flow 监控器
 
-流量监控会遇到两种完全不同的查询。每个报文到来时，需要按五元组快速找到原有 flow 并更新计数；输出报告时，又希望同一批记录按流量大小排列，让最繁忙的 flow 出现在前面。一种排序很难同时高效回答两个问题，两份独立副本又会让计数和生命周期逐渐分叉。
+做过流量监控的人可能都遇到过这个问题：每个报文到达时，需要按五元组快速找到对应的 flow 记录更新计数器；但输出报告时，又希望同一批数据按流量大小排序，让最繁忙的 flow 排在前面。一份索引很难同时满足两种需求，而维护两份独立副本又会让计数器逐渐失去同步。有没有办法让两种视图共享同一份数据，始终保持一致？
 
-本课围绕一个对象的两种视图构建 TC egress flow index。每条 IPv4 TCP 或 UDP 流会同时进入 identity rbtree 和按字节数排序的 traffic rbtree，BPF object allocator 创建记录，BPF refcount 让两棵树共同持有对象，rbtree traversal 则直接产出 top-flow 结果，用户态无需重建索引。
+本教程构建的 TC egress 流量监控器正是为了解决这个问题。我们把每条 IPv4 TCP 或 UDP 流同时索引到两棵红黑树中：一棵按五元组键值排序，用于快速报文查找；另一棵按字节数排序，用于即时输出 top-flow 结果。核心技术是 BPF 引用计数，它让两棵树能够共同拥有同一条 flow 记录，无需复制数据。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/56-tc-flow-index>
 
-## 为什么同一个对象可以进入两棵树
+## 双索引的挑战
 
-eBPF 可以让经过验证器检查的程序运行在 TC 等内核数据路径上，并在多次调用之间保留结构化状态。Linux 6.4 引入 `bpf_refcount_acquire()`，动态分配的 BPF object 可以获得新的 owning reference。Linux 6.16 又加入 `bpf_rbtree_root()`、`bpf_rbtree_left()` 和 `bpf_rbtree_right()`，BPF 程序开始能够搜索并遍历有序树，也补齐了本例使用的整组能力。
+网络监控工具面临一个根本性的矛盾。报文到达时，需要在微秒级别内按五元组（源 IP、目的 IP、源端口、目的端口、协议）找到对应的 flow 记录。但当用户查询"显示前 10 条流量最大的 flow"时，又需要这些记录按流量大小排序。
 
-每个 `flow_entry` 内嵌一个 `bpf_refcount` 和两个不同的 `bpf_rb_node`。`identity_root` 通过 `by_identity` 按源地址、目的地址、源端口、目的端口和协议排序；`traffic_root` 通过 `by_traffic` 按 bytes、packets 和五元组排序，其中 bytes 与 packets 都是降序，五元组负责稳定处理并列项。两个 node 最终都能通过 `container_of()` 回到同一份计数和时间戳。
+传统方案要么维护两份独立的数据结构（可能出现不一致），要么在查询时重新排序（消耗 CPU 并延迟输出）。两种方案都不够理想。
 
-先看一条新 flow 的第一个报文。TC 程序搜索 identity tree，没有发现匹配项，于是分配一个 `flow_entry`，再调用 `bpf_refcount_acquire()` 取得第二个 owning reference。第一次 `bpf_rbtree_add()` 把一个 reference 交给 identity tree，第二次调用把另一个交给 traffic tree。临界区结束以后没有裸指针逃逸，验证器可以证明两棵 collection 都拥有这个对象。
+我们采用的方法完全不同。每条 flow 记录在内存中只存在一份，但通过两个内嵌的树节点参与两种不同的排序。更新字节计数器时，两种视图立即看到变化，因为它们指向同一个对象。这得益于三个最新的 eBPF 特性：
 
-后续报文会在 identity tree 找到条目，但 bytes 增加后，原来的 traffic 顺序已经失效。程序只从 traffic tree 移除 `by_traffic`，remove 返回这棵树持有的 owning reference；计数更新以后，同一个 traffic node 会重新插入正确位置。identity node 始终留在原位，因此查找顺序在整个更新期间保持有效。
+- **BPF 对象分配**（`bpf_obj_new`）：在 BPF 程序中创建动态分配的结构体
+- **BPF 引用计数**（`bpf_refcount_acquire`）：让多个所有者共享同一个对象
+- **红黑树遍历**（`bpf_rbtree_root/left/right`）：不移除节点也能搜索和遍历树
 
-## 共享的 flow 与 cursor 类型
+Linux 6.4 引入了引用计数，6.16 又添加了树遍历功能。两者结合，使得以前在 BPF 中不可能实现的数据结构成为现实。
 
-共享头文件定义五元组、BPF 返回的 snapshot，以及继续有序遍历所需的 cursor。
+## 一个对象如何加入两棵树
+
+我们来追踪一条新 flow 出现时会发生什么。TC 程序看到一个五元组为 (10.0.0.1, 10.0.0.2, 50000, 80, TCP) 的报文。它在 identity 树中按键值搜索，没有找到匹配项。是时候创建新条目了。
+
+首先，`bpf_obj_new()` 分配一个 `flow_entry`。这个结构体内嵌一个 `bpf_refcount` 和两个 `bpf_rb_node` 字段，分别对应两棵树。刚分配时，对象恰好有一个 owning reference。
+
+接下来，`bpf_refcount_acquire()` 为同一个对象创建第二个 owning reference。现在我们有两个引用指向同一块内存。第一次 `bpf_rbtree_add()` 把一个引用交给 identity 树。第二次调用把另一个交给 traffic 树。此时，两棵树共同拥有这个 flow entry，验证器知道没有裸指针逃逸。
+
+当这条 flow 的后续报文到达时，我们在 identity 树中找到已有条目。但增加字节数会改变 traffic 排名。程序只移除 traffic 树节点（返回其 owning reference），更新计数器，然后在新位置重新插入。identity 节点始终不动，所以查找在整个过程中保持有效。
+
+## 架构概览
+
+实现分为三个文件：
+
+| 文件 | 作用 |
+|------|------|
+| `tc_flow_index.h` | 共享结构体：五元组、快照、游标 |
+| `bpf_experimental.h` | BPF graph API 的 kfunc 声明 |
+| `tc_flow_index.bpf.c` | BPF 程序：TC hook 和快照系统调用 |
+| `tc_flow_index.c` | 用户态加载器、演示流量和输出 |
+
+BPF 端负责报文解析、树维护和基于游标的快照迭代。用户端挂载 TC 程序，可选生成测试流量，并通过 `BPF_PROG_TEST_RUN` 查询索引。
+
+## 共享数据结构
+
+头文件定义 flow key、快照结果和遍历游标：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -55,11 +82,11 @@ struct flow_cursor {
 #endif /* __TC_FLOW_INDEX_H */
 ```
 
-`flow_key` 中的地址和端口保留 network byte order，BPF 侧可以直接复制报文字段，只有用户态格式化表格时才作转换。
+`flow_key` 中的地址和端口保留网络字节序，BPF 程序可以直接从报文复制字段。只有用户态格式化输出时才转换为主机字节序。
 
 ## 实验性 kfunc 声明
 
-BPF graph API 使用 kfunc，而不是稳定 UAPI helper。这个兼容头文件声明程序实际调用的函数，并用本地 BTF type ID 包装 object allocator。
+BPF graph API 使用 kfunc 而非稳定的 UAPI helper。这个兼容头文件声明了程序使用的函数：
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -104,11 +131,11 @@ bpf_rbtree_right(struct bpf_rb_root *root, struct bpf_rb_node *node) __ksym;
 #endif /* __TC_FLOW_INDEX_EXPERIMENTAL_H */
 ```
 
-`__contains(flow_entry, by_identity)` 和 traffic tree 对应的声明会告诉验证器，每个 root 关联的 containing type 与 node member。验证器再把这层类型关系和相邻 spin lock 结合起来，检查 graph ownership 与临界区规则。kfunc 接口可能随内核演进，因此本课明确记录最低版本，并把声明放在例子旁边。
+`__contains(flow_entry, by_identity)` 注解告诉验证器每个 root 对应的 containing type 和 member。结合相邻的 spin lock，验证器可以强制检查 ownership 和临界区规则。这些接口可能随内核版本演进，因此我们在下文注明了最低版本要求。
 
-## 在 TC egress 维护两份索引
+## BPF 程序
 
-下面是完整 BPF 程序。
+下面是完整的 BPF 实现，之后我们会逐一讲解关键部分。
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -399,17 +426,23 @@ int snapshot_next(void *ctx)
 }
 ```
 
-`index_lock`、`identity_root` 和 `traffic_root` 位于同一个 private map value，所有搜索与修改都持有这把锁。二叉树搜索最多执行 32 步，让验证器看到确定的控制流；索引最多保存 4096 个 entry，平衡 rbtree 的实际深度远小于这个上限。
+### 理解 Flow Entry
 
-第一次加锁查找失败以后，程序会在锁外分配对象，再次加锁并重新查找。这次 double check 用于处理两个 CPU 同时发现新 flow 的情况：胜者把对象交给两棵树，另一方更新已有条目，并释放自己刚分配的两个 reference。allocation、refcount、capacity 和 re-ranking failure 都有独立计数，ownership 问题可以直接从输出中看到。
+`flow_entry` 结构体是整个设计的核心。它内嵌一个 `bpf_refcount` 用于 ownership 跟踪，以及两个 `bpf_rb_node` 字段用于参与两棵树。lock、`identity_root` 和 `traffic_root` 共享一个 private map value，确保所有访问都是串行化的。
 
-`parse_flow()` 接收未分片的 IPv4 TCP 与 UDP 报文，从 Ethernet、IP 和 transport header 组装 key。`index_egress_flow()` 始终返回 `TC_ACT_OK`，工具只观察并建立索引，不会改变报文传输。
+### 报文处理路径
 
-`snapshot_next` 程序在同一把锁下读取 traffic tree。空 cursor 从 `bpf_rbtree_first()` 开始，之后则搜索前一个 `(bytes, packets, key)` 之后的第一项。result 与 cursor 都放在 BSS，用户态每次取一个有序 entry，不需要接收每报文事件流。
+当 `index_egress_flow` 运行时，`parse_flow()` 从非分片的 IPv4 TCP 和 UDP 报文中提取五元组。主函数始终返回 `TC_ACT_OK`，因为我们只是观察，不是过滤。
 
-## 挂载 TC 并读取稳定 snapshot
+`update_flow()` 函数首先在锁内搜索。如果 flow 存在，它移除 traffic 节点、更新计数器并重新插入。如果不存在，则在锁外分配，然后重新加锁做第二次查找。这个 double-check 处理了两个 CPU 同时发现新 flow 的情况：一个赢得插入竞争，另一个更新已有条目并释放自己未使用的引用。
 
-用户态程序挂载 classifier，按需生成 demo 流量，在 snapshot 之前解除挂载，再通过 `BPF_PROG_TEST_RUN` 调用 snapshot program。
+### 快照机制
+
+`snapshot_next` syscall 程序在同一把锁下读取 traffic 树。空游标时返回 `bpf_rbtree_first()`，后续调用则搜索上一个位置之后的第一个条目。由于游标和结果都在 BSS 中，用户态可以逐个获取排序好的条目，无需接收每报文事件流。
+
+## 用户态程序
+
+加载器挂载 TC 程序，可选生成演示流量，读取前先解挂，然后通过 `BPF_PROG_TEST_RUN` 查询：
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -730,9 +763,7 @@ cleanup:
 }
 ```
 
-输出前解除挂载会冻结所有 packet update，cursor 因此可以遍历一份稳定的 traffic ordering。`snapshot_next()` 从 BSS 复制结果并推进 cursor，直到 `found` 变成 0，或者已经打印 `--top` 指定的数量。包括两棵树和 object ownership 在内的索引仍保存在 BPF 内存中，直到 skeleton 被销毁。
-
-demo 模式创建三组 UDP socket pair，在 loopback 上分别发送 2 × 100 字节、4 × 300 字节和 6 × 700 字节 payload。算上 Ethernet、IPv4 与 UDP header，最终观测到 284、1368 和 4452 字节。这组流量会稳定产生三档排名，同时反复执行 traffic node 的 remove、update 和 reinsert。
+输出前解挂会冻结报文更新，让游标可以遍历一份稳定的 traffic 排序。演示模式创建三条 loopback 上的 UDP 流：2 个报文 100 字节、4 个报文 300 字节、6 个报文 700 字节。加上协议头后，分别是 284、1368 和 4452 字节，产生确定性的排名。
 
 ## 编译和运行
 
@@ -743,19 +774,19 @@ cd src/56-tc-flow-index
 make
 ```
 
-在指定接口上索引 30 秒 egress 流量，并打印最繁忙的 10 条 flow：
+监控真实 egress 流量 30 秒：
 
 ```bash
 sudo ./tc_flow_index --interface eth0 --duration 30 --top 10
 ```
 
-运行可重复的 loopback demo：
+运行确定性演示：
 
 ```bash
 sudo ./tc_flow_index --demo --top 3
 ```
 
-一次真实 demo 会直接展示双树排序结果：
+预期演示输出：
 
 ```text
 Indexing IPv4 TCP/UDP egress flows on lo for 0 seconds.
@@ -768,25 +799,30 @@ SOURCE                DESTINATION           PROTO    PACKETS        BYTES COMM
 observed_packets=12 indexed_flows=3 dropped_new=0 allocation_failures=0 refcount_failures=0 rank_update_failures=0
 ```
 
-表格到达用户态时已经按照 `BYTES` 降序排列，12 个报文创建 3 个 identity entry，所有 ownership 相关失败计数都是 0。
+表格到达用户态时已按字节数降序排列。12 个报文创建了 3 个 identity 条目，所有 ownership 计数器都是 0，确认双树管理正确无误。
 
 ## 环境要求
 
 | 要求 | 说明 |
-|---|---|
-| 内核 | Linux 6.16 或更高版本，需要 refcounted BPF object 与可搜索的 rbtree kfunc |
-| 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_NET_SCHED`、`CONFIG_NET_CLS_BPF` |
-| 权限 | root，或者等价的 BPF 与网络管理 capability |
-| 网络接口 | 可以挂载 `clsact` egress program 的接口 |
-| 架构与硬件 | 当前声明并完成测试的目标是 x86-64，普通网络接口即可 |
+|------|------|
+| 内核 | Linux 6.16+（需要 refcounted BPF object + rbtree search kfunc） |
+| 配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_NET_SCHED`、`CONFIG_NET_CLS_BPF` |
+| 权限 | root 或 CAP_BPF + CAP_NET_ADMIN |
+| 网络接口 | 支持 clsact egress 的任意接口 |
+| 架构 | 已在 x86-64 上测试 |
 
-## 实现范围
+## 扩展方向
 
-这个索引覆盖未分片的 IPv4 TCP 与 UDP egress 流量，并保留 flow 首次创建时观察到的 command name。容量固定为 4096 条 flow，entry 会一直保留到程序退出，适合有边界的实验和短时间观察。长期运行的服务可以继续加入 idle expiry，在释放 reference 之前从两棵树移除对应 node。
+本示例覆盖非分片的 IPv4 TCP/UDP egress 流量，容量固定为 4096 条。对于生产环境，可以考虑：
+
+- **空闲过期**：移除 N 秒内没有流量的 flow，先释放两棵树的节点再 drop reference
+- **入口索引**：为入站报文添加第二个 TC 程序
+- **IPv6 支持**：扩展 flow key 结构
+- **实时流式输出**：在树之外添加 ring buffer 用于每报文事件
 
 ## 总结
 
-这个例子用 BPF object ownership 在同一条 flow 记录上维护两种有用顺序。identity tree 负责每报文更新，traffic tree 提供 top-flow traversal，refcount 则让两棵 collection 共享对象，同时保持状态只有一份。
+本教程展示了 BPF object ownership 如何实现以前不可能的复杂数据结构。identity 树负责快速的五元组查找，traffic 树提供即时的 top-flow 排名，而引用计数让两者共享同一个对象，无需状态复制。这个技术可以推广到任何需要对同一数据集维护多种排序的场景。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
