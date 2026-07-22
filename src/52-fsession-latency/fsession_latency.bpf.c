@@ -4,9 +4,13 @@
 #include "vmlinux.h"
 #undef bpf_session_is_return
 #undef bpf_session_cookie
+#include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "fsession_latency.h"
+
+#define KERNEL_MINOR_BITS 20
+#define KERNEL_MINOR_MASK ((1U << KERNEL_MINOR_BITS) - 1)
 
 char LICENSE[] SEC("license") = "GPL";
 
@@ -35,6 +39,8 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u64 *started = bpf_session_cookie(ctx);
 	struct latency_event *event;
+	struct inode *inode;
+	__u32 device;
 	__u64 latency;
 
 	if (!bpf_session_is_return(ctx)) {
@@ -63,11 +69,20 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 		return 0;
 	}
 
+	__builtin_memset(event, 0, sizeof(*event));
 	event->pid = (__u32)pid_tgid;
 	event->tgid = pid_tgid >> 32;
 	event->requested = count;
 	event->result = ret;
 	event->latency_ns = latency;
+	inode = BPF_CORE_READ(file, f_inode);
+	if (inode) {
+		device = BPF_CORE_READ(inode, i_sb, s_dev);
+		event->device_major = device >> KERNEL_MINOR_BITS;
+		event->device_minor = device & KERNEL_MINOR_MASK;
+		event->inode = BPF_CORE_READ(inode, i_ino);
+		event->mode = BPF_CORE_READ(inode, i_mode);
+	}
 	bpf_get_current_comm(event->comm, sizeof(event->comm));
 	bpf_ringbuf_submit(event, 0);
 	return 0;

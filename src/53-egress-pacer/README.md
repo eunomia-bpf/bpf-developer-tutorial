@@ -384,16 +384,20 @@ The `SEC(".struct_ops")` block at the end registers the callbacks as a `Qdisc_op
 #include <linux/pkt_sched.h>
 #include <net/if.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <bpf/libbpf.h>
 #include "egress_pacer.h"
 #include "egress_pacer.skel.h"
+
+extern char **environ;
 
 static volatile sig_atomic_t exiting;
 
@@ -575,10 +579,137 @@ static int wait_for_duration(void)
 	return 0;
 }
 
+static const char *find_tc_binary(void)
+{
+	static const char *const candidates[] = {
+		"/usr/sbin/tc",
+		"/sbin/tc",
+	};
+	size_t index;
+
+	for (index = 0; index < sizeof(candidates) / sizeof(candidates[0]); index++) {
+		if (!access(candidates[index], X_OK))
+			return candidates[index];
+	}
+	return NULL;
+}
+
+static void print_current_qdisc(void)
+{
+	const char *tc_binary = find_tc_binary();
+	char *const arguments[] = {
+		(char *)"tc", (char *)"qdisc", (char *)"show", (char *)"dev",
+		(char *)env.interface, NULL,
+	};
+	posix_spawn_file_actions_t actions;
+	pid_t child;
+	pid_t waited;
+	int error;
+	int status;
+
+	fprintf(stderr, "current qdisc state:\n");
+	if (!tc_binary) {
+		fprintf(stderr, "tc was not found in /usr/sbin or /sbin\n");
+		goto manual;
+	}
+
+	error = posix_spawn_file_actions_init(&actions);
+	if (error)
+		goto spawn_failed;
+	error = posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO,
+						  STDOUT_FILENO);
+	if (!error)
+		error = posix_spawn(&child, tc_binary, &actions, NULL, arguments,
+				    environ);
+	posix_spawn_file_actions_destroy(&actions);
+	if (error)
+		goto spawn_failed;
+
+	do {
+		waited = waitpid(child, &status, 0);
+	} while (waited < 0 && errno == EINTR);
+	if (waited >= 0 && WIFEXITED(status) && !WEXITSTATUS(status))
+		return;
+	if (waited < 0)
+		error = errno;
+	else
+		error = EIO;
+
+spawn_failed:
+	fprintf(stderr, "failed to run tc: %s\n", strerror(error));
+manual:
+	fprintf(stderr, "run manually: tc qdisc show dev %s\n", env.interface);
+}
+
+static int install_pacer(struct egress_pacer_bpf *skel,
+			 struct bpf_tc_hook *hook)
+{
+	int error;
+
+	error = egress_pacer_bpf__attach(skel);
+	if (error) {
+		if (error == -EEXIST) {
+			fprintf(stderr,
+				"bpf_pacer is already registered; a stale root qdisc may own it\n");
+			print_current_qdisc();
+			fprintf(stderr,
+				"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
+				env.interface);
+		} else {
+			fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
+				strerror(-error));
+		}
+		return error;
+	}
+
+	error = bpf_tc_hook_create(hook);
+	if (!error)
+		return 0;
+	if (error == -EEXIST) {
+		fprintf(stderr, "refusing to replace the existing root qdisc on %s\n",
+			env.interface);
+		print_current_qdisc();
+		fprintf(stderr,
+			"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
+			env.interface);
+	} else {
+		fprintf(stderr, "failed to attach bpf_pacer to %s: %s\n",
+			env.interface, strerror(-error));
+	}
+	return error;
+}
+
+static int cleanup_pacer(struct egress_pacer_bpf *skel,
+			 struct bpf_tc_hook *hook, bool qdisc_created, int error)
+{
+	struct pacer_stats final_stats = {};
+	int cleanup_error;
+
+	if (qdisc_created) {
+		cleanup_error = bpf_tc_hook_destroy(hook);
+		if (cleanup_error) {
+			fprintf(stderr, "failed to remove bpf_pacer from %s: %s\n",
+				env.interface, strerror(-cleanup_error));
+			if (!error)
+				error = cleanup_error;
+		}
+	}
+	if (skel && skel->bss)
+		final_stats = skel->bss->stats;
+	if (qdisc_created) {
+		printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu "
+		       "cleanup_dropped=%llu bytes_dequeued=%llu max_qlen=%llu\n",
+		       final_stats.enqueued, final_stats.dequeued,
+		       final_stats.policy_dropped, final_stats.cleanup_dropped,
+		       final_stats.bytes_dequeued, final_stats.max_qlen);
+	}
+	egress_pacer_bpf__destroy(skel);
+	return error != 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct egress_pacer_bpf *skel = NULL;
-	struct pacer_stats final_stats = {};
 	struct bpf_tc_hook hook = {
 		.sz = sizeof(hook),
 		.attach_point = BPF_TC_QDISC,
@@ -588,7 +719,6 @@ int main(int argc, char **argv)
 	};
 	bool qdisc_created = false;
 	unsigned int ifindex;
-	int cleanup_err;
 	int err;
 
 	err = parse_args(argc, argv);
@@ -626,24 +756,9 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	err = egress_pacer_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
-			strerror(-err));
+	err = install_pacer(skel, &hook);
+	if (err)
 		goto cleanup;
-	}
-
-	err = bpf_tc_hook_create(&hook);
-	if (err) {
-		if (err == -EEXIST)
-			fprintf(stderr,
-				"refusing to replace the existing root qdisc on %s\n",
-				env.interface);
-		else
-			fprintf(stderr, "failed to attach bpf_pacer to %s: %s\n",
-				env.interface, strerror(-err));
-		goto cleanup;
-	}
 	qdisc_created = true;
 
 	printf("READY interface=%s rate_kbps=%llu queue_limit=%u duration=%u\n",
@@ -653,26 +768,7 @@ int main(int argc, char **argv)
 	err = wait_for_duration();
 
 cleanup:
-	if (qdisc_created) {
-		cleanup_err = bpf_tc_hook_destroy(&hook);
-		if (cleanup_err) {
-			fprintf(stderr, "failed to remove bpf_pacer from %s: %s\n",
-				env.interface, strerror(-cleanup_err));
-			if (!err)
-				err = cleanup_err;
-		}
-	}
-	if (skel && skel->bss)
-		final_stats = skel->bss->stats;
-	if (qdisc_created) {
-		printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu "
-		       "cleanup_dropped=%llu bytes_dequeued=%llu max_qlen=%llu\n",
-		       final_stats.enqueued, final_stats.dequeued,
-		       final_stats.policy_dropped, final_stats.cleanup_dropped,
-		       final_stats.bytes_dequeued, final_stats.max_qlen);
-	}
-	egress_pacer_bpf__destroy(skel);
-	return err != 0;
+	return cleanup_pacer(skel, &hook, qdisc_created, err);
 }
 ```
 
@@ -684,7 +780,7 @@ The loader follows a standard libbpf pattern:
 4. Attach the `struct_ops` implementation, making `bpf_pacer` available as a qdisc type.
 5. Create the root qdisc on the target interface with `bpf_tc_hook_create`.
 
-The `bpf_tc_hook_create` call has exclusive semantics: if the interface already has a root qdisc, the kernel returns `-EEXIST` and the program exits without changing anything. This safety measure means the tool is best suited for dedicated test interfaces where you control the configuration.
+The `bpf_tc_hook_create` call has exclusive semantics: if the interface already has a root qdisc, the kernel returns `-EEXIST` and the program exits without changing anything. On either qdisc or `struct_ops` conflict, the loader prints the current `tc qdisc show dev IFACE` result and the explicit recovery command `sudo tc qdisc del dev IFACE root`. It never runs that destructive command automatically; use it only after confirming the displayed qdisc is stale. This safety measure means the tool is best suited for dedicated test interfaces where you control the configuration.
 
 After successful attachment, the program prints `READY`, then polls every 100ms until duration expires or a signal arrives. Cleanup order matters: first `bpf_tc_hook_destroy` (which triggers reset and frees queued packets), then read final statistics, then destroy the skeleton.
 
@@ -698,39 +794,26 @@ make clean
 make -j2
 ```
 
-The easiest way to test is with the included integration test, which creates a temporary veth pair and cleans it up afterward. Root is required for loading BPF and modifying qdiscs:
-
-```bash
-sudo python3 tests/test_egress_pacer.py ./egress_pacer
-```
-
-Here is output from a successful run on x86_64 with kernel `7.0.0-rc2+` (commit `a03114efd0720dff230388f7e160e427e54ea31b`):
-
-```console
-READY interface=epac_tx rate_kbps=64 queue_limit=8 duration=2
-SUMMARY enqueued=9 dequeued=9 policy_dropped=31 cleanup_dropped=0 bytes_dequeued=9216 max_qlen=8
-TEST-SUMMARY attempts=40 received=9 send_errors=31 span_ms=1024 observed_kbps=64.0
-PASS: conflict refusal, bounded drops, pacing, accounting, normal/signal cleanup, and SIGKILL recovery succeeded
-```
-
-What happened: the test sent 40 raw Ethernet frames (1024 bytes each, EtherType `0x88B5`) into a 64 Kbit/s queue limited to 8 packets. Nine packets made it through the queue, spaced over 1024ms, matching the expected rate. The other 31 sends hit the queue limit and went to `policy_dropped`. Exact numbers vary by system timing.
-
-The test also exercises edge cases:
-- Pre-installs a `pfifo` to confirm the loader refuses to replace existing qdiscs.
-- Sends SIGTERM with packets queued, verifying `cleanup_dropped > 0` and that `enqueued = dequeued + cleanup_dropped`.
-- Sends SIGKILL (which skips cleanup), then uses `tc` to manually remove the residual qdisc and confirm the interface recovers.
-
-For manual testing, pick an interface you control and check its current qdisc:
+Pick an interface you control and inspect its current root qdisc before attaching the pacer:
 
 ```bash
 tc qdisc show dev veth-service
 ```
 
-If it shows the default `noqueue` or `pfifo_fast`, you can attach the pacer:
+If the interface is available for this experiment, start the pacer and let normal application traffic pass through it:
 
 ```bash
 sudo ./egress_pacer --interface veth-service --rate-kbps 64000 --queue-limit 256 --duration 30
 ```
+
+The tool prints `READY` only after the qdisc is active. When the duration expires, its output has this shape:
+
+```console
+READY interface=veth-service rate_kbps=64000 queue_limit=256 duration=30
+SUMMARY enqueued=... dequeued=... policy_dropped=... cleanup_dropped=0 bytes_dequeued=... max_qlen=...
+```
+
+`enqueued` counts packets accepted by the qdisc, `dequeued` counts packets released to the device, and `policy_dropped` counts packets rejected when the queue was full. If the process is killed before normal cleanup and leaves `bpf_pacer` behind, the next run prints the current qdisc and the recovery command. Inspect the displayed state first, then remove only the stale root qdisc with `sudo tc qdisc del dev veth-service root`.
 
 Command-line options:
 
@@ -764,7 +847,7 @@ BPF qdisc requires Linux 6.16 or later. Your kernel must have BTF and BPF JIT en
 | libbpf | 1.6.0+ |
 | Privileges | root |
 
-The repository includes libbpf and bpftool in `src/third_party`. The integration test additionally requires Python 3, raw socket capability, and `ip`/`tc` from iproute2. A veth pair is sufficient for testing; verified on x86_64.
+The repository includes libbpf and bpftool in `src/third_party`. Use `tc` from iproute2 to inspect the target interface and recover a stale root qdisc if necessary.
 
 ## Summary
 

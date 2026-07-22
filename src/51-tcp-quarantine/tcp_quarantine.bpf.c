@@ -12,6 +12,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 const volatile __u32 target_addr;
 const volatile __u16 target_port;
+const volatile __u32 target_local_addr;
+const volatile __u16 target_local_port;
 const volatile bool apply;
 
 struct quarantine_stats stats;
@@ -22,8 +24,11 @@ SEC("iter/tcp")
 int quarantine_tcp(struct bpf_iter__tcp *ctx)
 {
 	struct sock_common *sk = ctx->sk_common;
-	__u32 dst_addr;
+	struct seq_file *seq = ctx->meta->seq;
+	__u32 dst_addr, local_addr;
+	__u32 dst_host, local_host;
 	__u16 dst_port;
+	__u16 local_port;
 	__u16 family;
 	__u8 state;
 	int err;
@@ -42,8 +47,21 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 	dst_port = BPF_CORE_READ(sk, skc_dport);
 	if (dst_addr != target_addr || dst_port != bpf_htons(target_port))
 		return 0;
+	local_addr = BPF_CORE_READ(sk, skc_rcv_saddr);
+	local_port = BPF_CORE_READ(sk, skc_num);
+	if (apply && (local_addr != target_local_addr ||
+		      local_port != target_local_port))
+		return 0;
 
 	stats.matched++;
+	local_host = bpf_ntohl(local_addr);
+	dst_host = bpf_ntohl(dst_addr);
+	BPF_SEQ_PRINTF(seq,
+		       "MATCH local=%u.%u.%u.%u:%u remote=%u.%u.%u.%u:%u\n",
+		       local_host >> 24, (local_host >> 16) & 0xff,
+		       (local_host >> 8) & 0xff, local_host & 0xff, local_port,
+		       dst_host >> 24, (dst_host >> 16) & 0xff,
+		       (dst_host >> 8) & 0xff, dst_host & 0xff, target_port);
 	if (!apply)
 		return 0;
 

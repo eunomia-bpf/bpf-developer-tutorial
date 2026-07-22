@@ -162,6 +162,11 @@ def main() -> int:
         )
         assert conflict.returncode != 0, conflict.stdout
         assert "refusing to replace" in conflict.stdout, conflict.stdout
+        assert "current qdisc state:" in conflict.stdout, conflict.stdout
+        assert "pfifo" in conflict.stdout, conflict.stdout
+        assert (
+            f"sudo tc qdisc del dev {TX_INTERFACE} root" in conflict.stdout
+        ), conflict.stdout
         run("tc", "qdisc", "del", "dev", TX_INTERFACE, "root")
 
         receiver_ready = threading.Event()
@@ -263,6 +268,17 @@ def main() -> int:
         assert process.returncode == -signal.SIGKILL, process.returncode
         qdisc_after_kill = run("tc", "qdisc", "show", "dev", TX_INTERFACE).stdout
         assert "bpf_pacer" in qdisc_after_kill, qdisc_after_kill
+        crash_conflict = run(
+            binary,
+            "--interface", TX_INTERFACE,
+            "--duration", "1",
+            check=False,
+        )
+        assert crash_conflict.returncode != 0, crash_conflict.stdout
+        assert "bpf_pacer" in crash_conflict.stdout, crash_conflict.stdout
+        assert (
+            f"sudo tc qdisc del dev {TX_INTERFACE} root" in crash_conflict.stdout
+        ), crash_conflict.stdout
         run("tc", "qdisc", "del", "dev", TX_INTERFACE, "root")
         qdisc_after_recovery = run("tc", "qdisc", "show", "dev", TX_INTERFACE).stdout
         assert "bpf_pacer" not in qdisc_after_recovery, qdisc_after_recovery

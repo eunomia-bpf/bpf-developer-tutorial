@@ -74,7 +74,7 @@ __u32 last_ifindex;
 SEC("tcx/ingress")
 int tcx_stats(struct __sk_buff *skb)
 {
-	stats_hits++;
+	__sync_fetch_and_add(&stats_hits, 1);
 	last_len = skb->len;
 	last_protocol = bpf_ntohs(skb->protocol);
 	last_ifindex = skb->ifindex;
@@ -84,7 +84,7 @@ int tcx_stats(struct __sk_buff *skb)
 SEC("tcx/ingress")
 int tcx_classifier(struct __sk_buff *skb)
 {
-	classifier_hits++;
+	__sync_fetch_and_add(&classifier_hits, 1);
 	return TCX_PASS;
 }
 ```
@@ -107,7 +107,7 @@ int tcx_classifier(struct __sk_buff *skb)
 
 ### 全局变量作为计数器
 
-我们使用全局变量（`stats_hits`、`classifier_hits` 等）而非 BPF map。libbpf skeleton 在 `skel->bss->stats_hits` 暴露这些变量，简化了用户态访问。这种方式适用于单 CPU 演示；生产代码应使用 per-CPU 数组来避免并发更新竞争。
+我们使用全局变量（`stats_hits`、`classifier_hits` 等）而非显式 BPF map。libbpf skeleton 在 `skel->bss->stats_hits` 暴露这些变量，简化了用户态访问。数据包可能在多个 CPU 上到达，因此命中计数使用原子加法；最后一个数据包的元数据仍是尽力而为的快照。
 
 ### 返回码：`TCX_NEXT` 与 `TCX_PASS`
 
@@ -166,18 +166,25 @@ err = bpf_prog_query_opts(ifindex, BPF_TCX_INGRESS, &query);
 
 这种内省能力对调试多程序流水线很有价值，也适用于需要了解当前挂载状态的工具。
 
-### 第四步：发送流量并验证
+### 第四步：保持挂载并观察流量
 
-加载器向 `127.0.0.1:9`（discard 服务）发送一个 UDP 包来触发链，短暂等待后读取全局变量：
+加载器打印 `READY` 和实时链后会保持挂载。请在另一个进程中向目标接口发送流量，然后按 Ctrl-C（或使用 `--duration`）停止。加载器先 detach 两个 link，再读取稳定的最终快照：
 
 ```c
-printf("  tcx_stats hits      : %llu\n",
-       (unsigned long long)skel->bss->stats_hits);
-printf("  tcx_classifier hits : %llu\n",
-       (unsigned long long)skel->bss->classifier_hits);
+bpf_link__destroy(stats_link);
+stats_link = NULL;
+bpf_link__destroy(classifier_link);
+classifier_link = NULL;
+
+printf("COUNTERS stats_hits=%llu classifier_hits=%llu last_ifindex=%u "
+       "last_protocol=0x%04x last_len=%u\n",
+       (unsigned long long)skel->bss->stats_hits,
+       (unsigned long long)skel->bss->classifier_hits,
+       skel->bss->last_ifindex, skel->bss->last_protocol,
+       skel->bss->last_len);
 ```
 
-如果两个计数器都显示 1，说明链按预期执行了：`tcx_stats` 先运行（记录元数据，返回 `TCX_NEXT`），然后 `tcx_classifier` 运行（计数，返回 `TCX_PASS`）。
+相同的命中数说明 `tcx_stats` 先运行（记录元数据并返回 `TCX_NEXT`），随后 `tcx_classifier` 运行并返回 `TCX_PASS`。保持进程运行也能体现 TCX 所有权：退出时关闭 link 文件描述符，程序便会自动卸载。
 
 ## 编译和运行
 
@@ -198,37 +205,32 @@ make
 ### 运行
 
 ```bash
-sudo ./tcx_demo -i lo
+sudo ./tcx_demo
 ```
 
-预期输出：
+默认会持续监控 loopback，直到按 Ctrl-C。可在另一个终端生成普通 loopback 流量，例如 `ping -c 1 127.0.0.1`。监控器先打印就绪状态和链顺序，退出时再打印计数：
 
 ```text
-Attached TCX programs to lo (ifindex=1)
+READY interface=lo ifindex=1 duration=until-signal
 TCX ingress chain revision: 2
   slot 0: prog_id=812 link_id=901
   slot 1: prog_id=811 link_id=900
-
-Counters:
-  tcx_stats hits      : 1
-  tcx_classifier hits : 1
-  last ifindex        : 1
-  last protocol       : 0x0800
-  last length         : 46
+^C
+COUNTERS stats_hits=... classifier_hits=... last_ifindex=1 last_protocol=0x0800 last_len=...
 ```
 
 **输出解读：**
 
 - **Revision 2**：链被修改了两次，`tcx_classifier` 挂载时（revision 1），`tcx_stats` 插入到它前面时（revision 2）。
 - **Slot 顺序**：Slot 0 是 `tcx_stats`（用 `BPF_F_BEFORE` 插入的程序）；slot 1 是 `tcx_classifier`。
-- **Protocol 0x0800**：IPv4（生成的 UDP 包）。
-- **Length 46**：20 字节的载荷 "tcx tutorial packet" 加上报头。
+- **Protocol 0x0800**：IPv4 流量经过了 ingress 链。
+- **相同命中数**：两个程序按预期顺序观察到了相同的数据包。
 
 ### 选项
 
-- `-i IFACE`：挂载到不同的接口（默认：`lo`）
-- `-n`：跳过流量生成（只查看挂载/查询行为）
-- `-v`：启用 libbpf 调试输出，查看底层 BPF syscall 序列
+- `-i, --interface IFACE`：挂载到不同的接口（默认：`lo`）
+- `-d, --duration SEC`：在限定时间后停止；`0` 表示等待信号（默认：`0`）
+- `-v, --verbose`：启用 libbpf 调试输出，查看底层 BPF syscall 序列
 
 ## 与第 20 课（经典 TC）的对比
 

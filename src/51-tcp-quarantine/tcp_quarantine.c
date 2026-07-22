@@ -13,11 +13,17 @@
 #include "tcp_quarantine.skel.h"
 
 static struct env {
-	const char *destination;
-	unsigned int port;
+	const char *remote_argument;
+	const char *local_argument;
 	bool apply;
 	bool verbose;
 } env;
+
+struct endpoint {
+	struct in_addr address;
+	unsigned int port;
+	char text[INET_ADDRSTRLEN + 7];
+};
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 			   va_list args)
@@ -30,15 +36,14 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 static void usage(const char *program)
 {
 	fprintf(stderr,
-		"Usage: %s --destination IPv4 --port PORT [--apply] [--verbose]\n"
+		"Usage: %s [--apply LOCAL_IPV4:PORT] REMOTE_IPV4:PORT [--verbose]\n"
 		"\n"
-		"Find established TCP client connections to an exact destination.\n"
-		"The default is a safe dry run; --apply destroys matching sockets.\n"
+		"List established TCP clients to REMOTE_IPV4:PORT.\n"
+		"The default is a dry run. Copy one listed local endpoint into\n"
+		"--apply to destroy only that exact IPv4 4-tuple.\n"
 		"\n"
 		"Options:\n"
-		"  -d, --destination IPv4  exact remote IPv4 address\n"
-		"  -p, --port PORT         exact remote TCP port (1-65535)\n"
-		"  -a, --apply             destroy matching sockets\n"
+		"  -a, --apply IPv4:PORT   local endpoint selected from dry-run output\n"
 		"  -v, --verbose           print libbpf diagnostics\n"
 		"  -h, --help              show this help\n",
 		program);
@@ -57,31 +62,42 @@ static int parse_port(const char *value, unsigned int *port)
 	return 0;
 }
 
+static int parse_endpoint(const char *value, struct endpoint *endpoint)
+{
+	char address[INET_ADDRSTRLEN];
+	const char *separator = strrchr(value, ':');
+	size_t address_length;
+
+	if (!separator || separator == value)
+		return -EINVAL;
+	address_length = separator - value;
+	if (address_length >= sizeof(address))
+		return -EINVAL;
+	memcpy(address, value, address_length);
+	address[address_length] = '\0';
+	if (inet_pton(AF_INET, address, &endpoint->address) != 1 ||
+	    parse_port(separator + 1, &endpoint->port))
+		return -EINVAL;
+	snprintf(endpoint->text, sizeof(endpoint->text), "%s:%u",
+		 address, endpoint->port);
+	return 0;
+}
+
 static int parse_args(int argc, char **argv)
 {
 	static const struct option options[] = {
-		{ "destination", required_argument, NULL, 'd' },
-		{ "port", required_argument, NULL, 'p' },
-		{ "apply", no_argument, NULL, 'a' },
+		{ "apply", required_argument, NULL, 'a' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{},
 	};
 	int option;
 
-	while ((option = getopt_long(argc, argv, "d:p:avh", options, NULL)) != -1) {
+	while ((option = getopt_long(argc, argv, "a:vh", options, NULL)) != -1) {
 		switch (option) {
-		case 'd':
-			env.destination = optarg;
-			break;
-		case 'p':
-			if (parse_port(optarg, &env.port)) {
-				fprintf(stderr, "invalid TCP port: %s\n", optarg);
-				return -EINVAL;
-			}
-			break;
 		case 'a':
 			env.apply = true;
+			env.local_argument = optarg;
 			break;
 		case 'v':
 			env.verbose = true;
@@ -94,15 +110,16 @@ static int parse_args(int argc, char **argv)
 		}
 	}
 
-	if (!env.destination || !env.port || optind != argc)
+	if (argc - optind != 1)
 		return -EINVAL;
+	env.remote_argument = argv[optind];
 	return 0;
 }
 
 static int run_iterator(struct bpf_program *program)
 {
 	struct bpf_link *link;
-	char buffer[256];
+	char buffer[4096];
 	int iter_fd, length, err;
 
 	link = bpf_program__attach_iter(program, NULL);
@@ -119,8 +136,13 @@ static int run_iterator(struct bpf_program *program)
 		goto cleanup;
 	}
 
-	while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0)
-		;
+	while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0) {
+		if (fwrite(buffer, 1, length, stdout) != (size_t)length) {
+			err = -EIO;
+			fprintf(stderr, "failed to print iterator output\n");
+			break;
+		}
+	}
 	if (length < 0) {
 		err = -errno;
 		fprintf(stderr, "failed while scanning TCP sockets: %s\n", strerror(errno));
@@ -135,7 +157,8 @@ cleanup:
 int main(int argc, char **argv)
 {
 	struct tcp_quarantine_bpf *skel = NULL;
-	struct in_addr destination;
+	struct endpoint remote = {};
+	struct endpoint local = {};
 	int err;
 
 	err = parse_args(argc, argv);
@@ -143,8 +166,14 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		return 1;
 	}
-	if (inet_pton(AF_INET, env.destination, &destination) != 1) {
-		fprintf(stderr, "invalid IPv4 destination: %s\n", env.destination);
+	if (parse_endpoint(env.remote_argument, &remote)) {
+		fprintf(stderr, "invalid remote IPv4 endpoint: %s\n",
+			env.remote_argument);
+		return 1;
+	}
+	if (env.apply && parse_endpoint(env.local_argument, &local)) {
+		fprintf(stderr, "invalid local IPv4 endpoint: %s\n",
+			env.local_argument);
 		return 1;
 	}
 
@@ -155,8 +184,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	skel->rodata->target_addr = destination.s_addr;
-	skel->rodata->target_port = env.port;
+	skel->rodata->target_addr = remote.address.s_addr;
+	skel->rodata->target_port = remote.port;
+	skel->rodata->target_local_addr = local.address.s_addr;
+	skel->rodata->target_local_port = local.port;
 	skel->rodata->apply = env.apply;
 
 	err = tcp_quarantine_bpf__load(skel);
@@ -173,9 +204,10 @@ int main(int argc, char **argv)
 	if (err)
 		goto cleanup;
 
-	printf("mode=%s destination=%s:%u scanned=%llu established=%llu "
+	printf("SUMMARY mode=%s remote=%s%s%s scanned=%llu established=%llu "
 	       "matched=%llu destroyed=%llu failed=%llu\n",
-	       env.apply ? "apply" : "dry-run", env.destination, env.port,
+	       env.apply ? "apply" : "dry-run", remote.text,
+	       env.apply ? " local=" : "", env.apply ? local.text : "",
 	       skel->bss->stats.scanned, skel->bss->stats.established,
 	       skel->bss->stats.matched, skel->bss->stats.destroyed,
 	       skel->bss->stats.failed);
