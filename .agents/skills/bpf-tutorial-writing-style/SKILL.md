@@ -5,6 +5,8 @@ description: Style checklist for English and Chinese bpf-developer-tutorial READ
 
 # BPF Tutorial Writing Style
 
+This checklist is reference material, not a mandatory second pass after `$write-bpf-production-tutorial`. When Claude is the delegated writer, do not use this skill to review or rewrite Claude's result, do not send it to Claude as an additional checklist, and do not ask Claude for another revision. Codex may make local word-choice and punctuation edits after the delegated writing pass while preserving sentence meaning and paragraph structure.
+
 Read the complete guidelines first:
 - [Advanced tutorial guideline](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/scripts/guideline_advance.md) for tutorials 40+
 - [Basic tutorial guideline](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/scripts/guideline_basic.md) for tutorials 0-39
@@ -41,12 +43,14 @@ Use this Chinese paragraph only as a voice reference for connected rhythm, restr
 
 > libbpf 是一个 C/C++ 的 eBPF 用户态加载和控制库，随着内核一起分发，几乎已经成为 eBPF 用户态事实上的 API 标准，libbpf 也支持 CO-RE(Compile Once – Run Everywhere) 的解决方案，即预编译的 bpf 代码可以在不同内核版本上正常工作，而无需为每个特定内核重新编译。
 
-## Teach from complete source
+## Teach from the code that matters
 
-- Introduce one component, show its complete source in an ordinary Markdown fence, then explain the important logic before moving to the next component.
-- Keep every core source file byte-exact and complete, including the user-space loader. Preserve comments and commands; use focused excerpts only after the complete block when they help explain a specific mechanism.
+- Introduce one component, show the code needed to understand it in an ordinary Markdown fence, then explain the important logic before moving to the next component.
+- Show the core kernel-side eBPF program in full when its complete control flow is the lesson. Large or secondary kernel files may use focused excerpts when the omitted parts do not carry the mechanism being taught.
+- Keep the user-space discussion compact. Show the loader, configuration, event loop, and cleanup functions only when they help explain the interaction with BPF. A complete user-space loader is optional, and omitting boilerplate is not a tutorial failure.
+- Keep every included code excerpt faithful to the repository source. Link to the tutorial directory once so readers can inspect the complete implementation.
 - Use neither `<details>` nor HTML synchronization markers.
-- Link to the complete lesson once through its GitHub directory. Avoid an opening catalog of individual files.
+- Avoid an opening catalog of individual files.
 - Every Markdown link uses a stable absolute `https://` target. GitHub, kernel.org, and authoritative documentation sites are all valid; relative links are prohibited.
 - Public prose contains no local path, shared test repository, VM name, copy route, cache, prompt, model, agent, or trace detail.
 
@@ -57,4 +61,4 @@ Use this Chinese paragraph only as a voice reference for connected rhythm, restr
 - End with a compact summary, repository invitation, and primary references.
 - Keep the English and Chinese files aligned on structure, facts, source, commands, output, limits, and references while allowing each language to sound natural.
 
-The final read should answer: what problem is solved, how one event moves through the system, which eBPF mechanism makes it possible, which code matters, how to run it, what success looks like, and where the example stops.
+The final read should answer: what problem is solved, how one event moves through the system, which eBPF mechanism makes it possible, which code matters, how to run it, what success looks like, and where the example stops. It does not need to reproduce every line of user-space implementation.
