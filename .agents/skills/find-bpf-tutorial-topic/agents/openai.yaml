@@ -1,4 +1,4 @@
 interface:
   display_name: "Find BPF Tutorial Topic"
-  short_description: "Rank the next high-value eBPF tutorial topic"
-  default_prompt: "Use $find-bpf-tutorial-topic to audit coverage and recommend the next eBPF tutorial."
+  short_description: "Rank practical, high-value eBPF tutorial topics"
+  default_prompt: "Use $find-bpf-tutorial-topic to audit coverage, practical usability, and recommend the next eBPF tutorial."

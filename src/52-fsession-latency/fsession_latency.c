@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <bpf/libbpf.h>
 #include "fsession_latency.h"
@@ -25,6 +26,25 @@ static struct env {
 };
 
 static unsigned long long events_printed;
+
+static const char *file_type(unsigned int mode)
+{
+	if (S_ISREG(mode))
+		return "regular";
+	if (S_ISDIR(mode))
+		return "directory";
+	if (S_ISCHR(mode))
+		return "character";
+	if (S_ISBLK(mode))
+		return "block";
+	if (S_ISFIFO(mode))
+		return "fifo";
+	if (S_ISLNK(mode))
+		return "symlink";
+	if (S_ISSOCK(mode))
+		return "socket";
+	return "unknown";
+}
 
 static void handle_signal(int signal)
 {
@@ -137,10 +157,12 @@ static int handle_event(void *context, void *data, size_t size)
 	if (size < sizeof(*event))
 		return 0;
 
-	printf("EVENT comm=%-16s tgid=%u pid=%u requested=%llu result=%lld "
-	       "latency_us=%llu\n",
-	       event->comm, event->tgid, event->pid, event->requested,
-	       event->result, event->latency_ns / 1000);
+	printf("EVENT comm=%-16s tgid=%u pid=%u object=%u:%u:%llu type=%s "
+	       "requested=%llu result=%lld latency_us=%llu\n",
+	       event->comm, event->tgid, event->pid,
+	       event->device_major, event->device_minor, event->inode,
+	       file_type(event->mode), event->requested, event->result,
+	       event->latency_ns / 1000);
 	events_printed++;
 	return 0;
 }

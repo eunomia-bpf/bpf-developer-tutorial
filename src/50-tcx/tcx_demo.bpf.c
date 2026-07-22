@@ -22,7 +22,7 @@ __u32 last_ifindex;
 SEC("tcx/ingress")
 int tcx_stats(struct __sk_buff *skb)
 {
-	stats_hits++;
+	__sync_fetch_and_add(&stats_hits, 1);
 	last_len = skb->len;
 	last_protocol = bpf_ntohs(skb->protocol);
 	last_ifindex = skb->ifindex;
@@ -32,6 +32,6 @@ int tcx_stats(struct __sk_buff *skb)
 SEC("tcx/ingress")
 int tcx_classifier(struct __sk_buff *skb)
 {
-	classifier_hits++;
+	__sync_fetch_and_add(&classifier_hits, 1);
 	return TCX_PASS;
 }

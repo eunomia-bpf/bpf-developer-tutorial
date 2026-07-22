@@ -10,6 +10,10 @@ struct latency_event {
 	unsigned long long requested;
 	long long result;
 	unsigned long long latency_ns;
+	unsigned int device_major;
+	unsigned int device_minor;
+	unsigned long long inode;
+	unsigned int mode;
 	char comm[FSESSION_COMM_LEN];
 };
 

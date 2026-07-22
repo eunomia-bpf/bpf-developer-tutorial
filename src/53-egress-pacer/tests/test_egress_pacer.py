@@ -18,6 +18,8 @@ import time
 
 TX_INTERFACE = "epac_tx"
 RX_INTERFACE = "epac_rx"
+ALT_TX_INTERFACE = "epac_alt_tx"
+ALT_RX_INTERFACE = "epac_alt_rx"
 ETHERTYPE = 0x88B5
 MAGIC = b"EPAC"
 FRAME_SIZE = 1024
@@ -41,17 +43,20 @@ def run(*command: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     )
 
 
-def delete_test_link() -> None:
-    run("ip", "link", "del", TX_INTERFACE, check=False)
+def delete_test_link(tx_interface: str = TX_INTERFACE) -> None:
+    run("ip", "link", "del", tx_interface, check=False)
 
 
-def create_test_link() -> None:
-    delete_test_link()
-    run("ip", "link", "add", TX_INTERFACE, "type", "veth", "peer", "name", RX_INTERFACE)
-    run("ip", "link", "set", "dev", TX_INTERFACE, "addrgenmode", "none")
-    run("ip", "link", "set", "dev", RX_INTERFACE, "addrgenmode", "none")
-    run("ip", "link", "set", "dev", TX_INTERFACE, "up")
-    run("ip", "link", "set", "dev", RX_INTERFACE, "up")
+def create_test_link(
+    tx_interface: str = TX_INTERFACE,
+    rx_interface: str = RX_INTERFACE,
+) -> None:
+    delete_test_link(tx_interface)
+    run("ip", "link", "add", tx_interface, "type", "veth", "peer", "name", rx_interface)
+    run("ip", "link", "set", "dev", tx_interface, "addrgenmode", "none")
+    run("ip", "link", "set", "dev", rx_interface, "addrgenmode", "none")
+    run("ip", "link", "set", "dev", tx_interface, "up")
+    run("ip", "link", "set", "dev", rx_interface, "up")
 
 
 def wait_until_ready(process: subprocess.Popen[str]) -> list[str]:
@@ -162,6 +167,11 @@ def main() -> int:
         )
         assert conflict.returncode != 0, conflict.stdout
         assert "refusing to replace" in conflict.stdout, conflict.stdout
+        assert "current qdisc state:" in conflict.stdout, conflict.stdout
+        assert "pfifo" in conflict.stdout, conflict.stdout
+        assert (
+            f"sudo tc qdisc del dev {TX_INTERFACE} root" in conflict.stdout
+        ), conflict.stdout
         run("tc", "qdisc", "del", "dev", TX_INTERFACE, "root")
 
         receiver_ready = threading.Event()
@@ -263,6 +273,39 @@ def main() -> int:
         assert process.returncode == -signal.SIGKILL, process.returncode
         qdisc_after_kill = run("tc", "qdisc", "show", "dev", TX_INTERFACE).stdout
         assert "bpf_pacer" in qdisc_after_kill, qdisc_after_kill
+
+        create_test_link(ALT_TX_INTERFACE, ALT_RX_INTERFACE)
+        cross_interface_conflict = run(
+            binary,
+            "--interface", ALT_TX_INTERFACE,
+            "--duration", "1",
+            check=False,
+        )
+        assert cross_interface_conflict.returncode != 0, cross_interface_conflict.stdout
+        assert "already registered globally" in cross_interface_conflict.stdout, (
+            cross_interface_conflict.stdout
+        )
+        assert "qdisc state across interfaces:" in cross_interface_conflict.stdout, (
+            cross_interface_conflict.stdout
+        )
+        assert "bpf_pacer" in cross_interface_conflict.stdout, cross_interface_conflict.stdout
+        assert TX_INTERFACE in cross_interface_conflict.stdout, cross_interface_conflict.stdout
+        assert (
+            f"sudo tc qdisc del dev {ALT_TX_INTERFACE} root"
+            not in cross_interface_conflict.stdout
+        ), cross_interface_conflict.stdout
+
+        crash_conflict = run(
+            binary,
+            "--interface", TX_INTERFACE,
+            "--duration", "1",
+            check=False,
+        )
+        assert crash_conflict.returncode != 0, crash_conflict.stdout
+        assert "bpf_pacer" in crash_conflict.stdout, crash_conflict.stdout
+        assert (
+            f"sudo tc qdisc del dev {TX_INTERFACE} root" not in crash_conflict.stdout
+        ), crash_conflict.stdout
         run("tc", "qdisc", "del", "dev", TX_INTERFACE, "root")
         qdisc_after_recovery = run("tc", "qdisc", "show", "dev", TX_INTERFACE).stdout
         assert "bpf_pacer" not in qdisc_after_recovery, qdisc_after_recovery
@@ -291,6 +334,7 @@ def main() -> int:
         stop.set()
         if receiver is not None:
             receiver.join(timeout=2)
+        delete_test_link(ALT_TX_INTERFACE)
         delete_test_link()
 
     return 0

@@ -51,6 +51,10 @@ clean:
 	$(Q)rm -rf $(OUTPUT) $(APPS)
 
 test: all
+	@if [ "$$(id -u)" -ne 0 ]; then \
+		echo "test requires root; run it inside the tutorial KVM" >&2; \
+		exit 1; \
+	fi
 	python3 tests/test_tcp_quarantine.py ./tcp_quarantine
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
