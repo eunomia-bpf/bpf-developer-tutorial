@@ -4,7 +4,7 @@
 
 本教程展示如何使用 Linux 7.0 引入的 **fsession** 机制测量 `vfs_read` 调用延迟。fsession 是一种新的 eBPF 程序类型，它在函数进入时执行一次、返回时再执行一次，并提供内置的调用级存储来关联这两个阶段。工具会在函数进入时记录时间戳、返回时计算延迟，按进程和阈值过滤后，通过 ring buffer 上报对象类型和 `major:minor:inode` 身份。
 
-`vfs_read` 不只处理普通文件，pipe、字符设备等文件对象也会经过它。因此慢事件表示某次 `vfs_read` 较慢，并不必然说明存储较慢。下面的确定性测试故意使用 pipe，并将其标成 `type=fifo`；它还会单独检查普通文件读被标成 `type=regular`。
+`vfs_read` 不只处理普通文件，pipe、字符设备等文件对象也会经过它。因此慢事件表示某次 `vfs_read` 较慢，并不必然说明存储较慢。应结合输出中的 `type` 和 `major:minor:inode` 身份，区分普通文件读、FIFO 以及其他 VFS 对象。
 
 > 完整源码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 

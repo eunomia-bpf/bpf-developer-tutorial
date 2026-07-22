@@ -4,7 +4,7 @@ When a file-backed service shows read-latency spikes, application-level timing t
 
 This tutorial demonstrates how to measure `vfs_read` call latency using the **fsession** mechanism introduced in Linux 7.0. fsession is a new eBPF program type that runs once at function entry and once at return, with built-in per-invocation storage for correlating the two phases. The tool timestamps function entry, computes latency at return, filters by process and threshold, and reports the object type plus a `major:minor:inode` identity through a ring buffer.
 
-`vfs_read` is not limited to regular files: pipes, character devices, and other file-backed objects also pass through it. A slow event therefore identifies a slow `vfs_read` call, not necessarily slow storage. The deterministic test below deliberately uses a pipe and labels it `type=fifo`; it separately checks that ordinary file reads are labeled `type=regular`.
+`vfs_read` is not limited to regular files: pipes, character devices, and other file-backed objects also pass through it. A slow event therefore identifies a slow `vfs_read` call, not necessarily slow storage. Use the reported `type` together with the `major:minor:inode` identity to distinguish regular-file reads from FIFOs and other VFS objects.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 

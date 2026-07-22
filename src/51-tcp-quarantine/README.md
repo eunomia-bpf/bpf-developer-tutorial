@@ -431,7 +431,7 @@ When `bpf_sock_destroy` tears down a socket, the kernel executes the protocol's 
 - Writes may produce `EPIPE` with a `SIGPIPE` signal.
 - The exact behavior varies by kernel version and the timing of operations.
 
-The test included with this tutorial accepts any of these as valid indicators that the connection was torn down.
+Treat any of these outcomes as application-visible evidence that the connection was torn down; confirm the exact behavior expected by your application and kernel version.
 
 ## Building and Running
 
