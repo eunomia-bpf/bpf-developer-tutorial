@@ -1,6 +1,6 @@
 ---
 name: bpf-tutorial-writing-style
-description: Style checklist for English and Chinese bpf-developer-tutorial README files. Use while drafting or reviewing a tutorial so it reads like the established series, preserves technical detail, and presents complete source clearly.
+description: Style checklist for English and Chinese bpf-developer-tutorial README files. Use while drafting or reviewing a tutorial so it reads like the established series, preserves technical detail, and presents complete kernel source clearly.
 ---
 
 # BPF Tutorial Writing Style
@@ -32,8 +32,9 @@ For advanced tutorials (40+), follow this exact section order:
 
 5. **Code Implementation**:
    - First introduce the overall processing logic
-   - Show complete source code for each component (header, BPF program, user-space loader)
-   - After each complete code block, explain the key parts with paragraph style (not bullet lists)
+   - Show complete kernel/BPF source and the core headers needed to understand it
+   - Include the complete user-space loader when it is concise; when it is long, use focused excerpts that cover the normal user workflow and link to the lesson directory for the full file
+   - After each code block, explain the key parts with paragraph style (not bullet lists)
    - Focus on logic and advanced features, not basic syntax
 
 6. **Additional Concepts** (if needed): Deeper explanation of specific features, edge cases, or semantics
@@ -87,8 +88,9 @@ Use this Chinese paragraph only as a voice reference for connected rhythm, restr
 
 ## Teach from complete source
 
-- Introduce one component, show its complete source in an ordinary Markdown fence, then explain the important logic before moving to the next component.
-- Keep source byte-exact. Preserve comments and commands; use focused excerpts only after the complete block.
+- Introduce one component, show its complete kernel/BPF source in an ordinary Markdown fence, then explain the important logic before moving to the next component.
+- Show core headers completely. Include a complete user-space file when it remains readable; otherwise use focused excerpts that preserve the public control flow without making the tutorial a source dump.
+- Keep every complete source block byte-exact. Preserve comments and commands in excerpts, and link once to the lesson directory for omitted user-space details.
 - Use neither `<details>` nor HTML synchronization markers.
 - Link to the complete lesson once through its GitHub directory. Avoid an opening catalog of individual files.
 - Every Markdown link uses an absolute `https://github.com/...` target. Omit a link when no stable GitHub target exists.

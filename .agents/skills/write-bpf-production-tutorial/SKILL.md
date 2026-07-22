@@ -1,6 +1,6 @@
 ---
 name: write-bpf-production-tutorial
-description: Design, write, or rewrite one practical bilingual bpf-developer-tutorial lesson with pinned Claude Opus 4.5, then verify the public workflow and prose against the implementation. Use when creating README.md and README.zh.md, checking whether a tutorial tool has a realistic CLI and lifecycle, preserving full source, testing the example, or preparing tutorial changes for review.
+description: Design, write, or rewrite one practical bilingual bpf-developer-tutorial lesson with pinned Claude Opus 4.5, then verify the public workflow and prose against the implementation. Use when creating README.md and README.zh.md, checking whether a tutorial tool has a realistic CLI and lifecycle, preserving complete kernel source, testing the example, or preparing tutorial changes for review.
 ---
 
 # Write a BPF Tutorial
@@ -45,7 +45,7 @@ For advanced tutorials (40+), follow this exact section order as defined in `$bp
 1. **Title + Introduction**: Concrete problem scenario, link to source
 2. **Background / Why This Approach**: Explain traditional approaches and their limitations, then what eBPF enables
 3. **High-Level Mechanism**: How the feature works before showing code
-4. **Code Implementation**: Complete source blocks, then paragraph explanations
+4. **Code Implementation**: Complete kernel/BPF source and core headers, plus a complete user-space loader when concise or focused user-space excerpts when long, then paragraph explanations
 5. **Additional Concepts** (if needed)
 6. **Compilation and Execution**: AFTER code analysis, not before
 7. **Summary + Call to Action**
@@ -82,14 +82,14 @@ Inspect both files and the diff instead of trusting the model's final message. C
 - there is a "Why" section explaining traditional approaches and their limitations;
 - the high-level mechanism is explained BEFORE code sections;
 - compilation/execution is AFTER code analysis;
-- every core source file appears once in a complete ordinary Markdown fence;
+- every kernel/BPF source and core header appears once in a complete ordinary Markdown fence; a concise user-space loader should also be complete, while a long loader may use focused excerpts that cover the normal public control flow;
 - code, commands, output, versions, requirements, cleanup, and limits agree with the repository;
 - sample output comes from the normal public workflow and contains no test-harness or migration/deprecation narration;
 - the opening source link points only to the lesson directory;
 - every published link is an absolute `https://github.com/...` URL;
 - no local infrastructure, prompt, model, agent, or trace detail appears in public text.
 
-Check source blocks with the bundled `sync-source-blocks.py`, then run `git diff --check`, the lesson build, its tests, the exact documented public command, and the relevant runtime test. Treat a functional run as a functional run rather than a benchmark.
+Check the required complete-source inventory with the bundled `sync-source-blocks.py`: always include kernel/BPF sources and core headers, and include user-space files only when the README presents them as complete. Then run `git diff --check`, the lesson build, its tests, the exact documented public command, and the relevant runtime test. Treat a functional run as a functional run rather than a benchmark.
 
 Read the finished pair once as an intermediate eBPF developer. If a concrete problem remains, give Opus a short defect list in the same session and let it revise the whole pair before returning. Keep prompts, responses, partial drafts, and failed runs; never delete real conversation or agent history.
 
