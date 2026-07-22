@@ -1,24 +1,40 @@
-# eBPF Tutorial by Example: Receive UDP Packets with AF_XDP
+# eBPF Tutorial: High-Performance UDP Packet Capture with AF_XDP
 
-Sometimes a packet needs to reach a user-space program before the normal socket stack processes it. A packet recorder, protocol prototype, or specialized forwarder may want a small, explicit receive path: select traffic at the driver boundary, place it in shared memory, inspect it, then return the buffer for another packet.
+Have you ever wondered how packet capture tools like Suricata or high-frequency trading systems receive millions of packets per second without drowning in kernel overhead? The secret is bypassing most of the network stack entirely. AF_XDP lets you intercept packets at the driver boundary, copy them directly into your application's memory, and process them without system calls for every packet.
 
-This tutorial builds that path from the AF_XDP ABI rather than hiding it behind a library. The resulting `afxdp-dump` tool captures IPv4 UDP packets for one port and queue, prints a payload preview, and recycles every frame. It uses one queue, single-buffer packets, and copy mode, which makes it a practical first AF_XDP program before zero-copy and multi-buffer extensions.
+This tutorial builds a complete packet capture tool from scratch using the raw AF_XDP interface. No helper libraries, no magic abstractions. You'll see exactly how UMEM registration, ring buffers, and XDP redirection work together. The result is `afxdp-dump`, a tool that captures IPv4 UDP packets for a specific port, prints a payload preview, and properly recycles every frame to keep receiving indefinitely.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/60-afxdp-dump>
 
-## XDP Selects; AF_XDP Delivers
+## Why AF_XDP?
 
-eBPF runs verifier-checked programs at kernel hooks, and XDP places one of those hooks at the earliest receive point in the Linux network path. AF_XDP, added in Linux 4.18, connects an XDP redirect to a socket backed by user-registered memory. An XSKMAP supplies the missing association between an RX queue number and the AF_XDP socket that serves it.
+Traditional packet capture with `libpcap` or raw sockets has a fundamental problem: every packet crosses the kernel-userspace boundary through expensive system calls. When you're capturing 10 Gbps of traffic, this overhead becomes the bottleneck, not your processing code.
 
-The roles are deliberately separate. The XDP program parses just enough of the packet to decide whether it belongs to the tool. The AF_XDP socket owns the shared-memory rings and carries selected bytes to user space. This example checks XSKMAP with `bpf_map_lookup_elem()` before redirecting, support added in Linux 5.3. Its compare-and-detach cleanup uses the expected-program FD added in Linux 5.7, which sets the complete tool's minimum kernel version.
+AF_XDP solves this by establishing shared memory between kernel and userspace. The kernel writes packets directly into memory your application can read. You communicate through lock-free ring buffers instead of system calls. A single `poll()` can wake you for hundreds of packets. This architecture enables packet rates of millions per second on commodity hardware.
 
-Follow one packet and one frame. User space allocates 64 frames of 4096 bytes in UMEM and posts their addresses to the fill ring. A UDP packet for the configured port reaches the XDP hook. The program validates Ethernet, IPv4, and UDP lengths, finds the socket registered for `ctx->rx_queue_index`, and returns `XDP_REDIRECT`. In copy mode the kernel copies the packet into one posted frame and publishes an `xdp_desc` on the RX ring. User space reads the descriptor, prints the packet, advances the consumer index, and puts the same address back on the fill ring.
+The technology has real production use. Meta runs AF_XDP in their load balancers. Cilium uses it for Kubernetes networking. High-frequency trading firms use it to shave microseconds off their latency. Even if you never build a trading system, understanding AF_XDP teaches you patterns that appear throughout high-performance systems: shared memory, lock-free data structures, and explicit ownership transfer.
 
-That last step is what keeps the receiver alive. Without recycling, the initial 64 addresses would be exhausted after 64 packets. A 65-packet run proves that at least one frame has completed the entire ownership cycle.
+## The AF_XDP Architecture
 
-## Shared Queue Limit
+AF_XDP works through four components that must coordinate precisely:
 
-The shared header sets the XSKMAP capacity. Queue IDs are the map keys, so this example can address queues 0 through 63 while binding one queue per process.
+**UMEM (User Memory)** is a region of memory you allocate that both kernel and userspace can access. You divide it into fixed-size frames, typically 4096 bytes each. Every packet the kernel delivers arrives in one of these frames.
+
+**The Fill Ring** is how you tell the kernel which frames are available for incoming packets. You post frame addresses here. The kernel consumes these addresses when it needs somewhere to put a packet.
+
+**The RX Ring** is where the kernel tells you about received packets. Each entry contains a frame address and packet length. When you see an entry here, you own that frame until you return it.
+
+**XSKMAP** is a BPF map that connects XDP programs to AF_XDP sockets. The XDP program decides which packets to redirect, looks up the socket for the current RX queue in this map, and calls `bpf_redirect_map()` to deliver the packet.
+
+The flow works like this: you post 64 frame addresses to the Fill Ring. A UDP packet arrives. Your XDP program checks the destination port, looks up the socket in XSKMAP, and redirects. The kernel copies the packet into one of your frames and publishes a descriptor on the RX Ring. You read the descriptor, process the packet, and post the frame address back to the Fill Ring. The cycle continues indefinitely.
+
+This ownership model is critical. A frame starts with you. You lend it to the kernel via the Fill Ring. The kernel borrows it to receive a packet. You reclaim it from the RX Ring. You must return it to the Fill Ring or you'll run out of frames after 64 packets. Our tool proves this works by successfully capturing 65 packets, which requires at least one frame to complete the full ownership cycle.
+
+## The XDP Program: Filtering and Redirecting
+
+The kernel-side BPF program is compact because it only handles filtering and redirection. All the complexity of buffer management lives in userspace.
+
+First, we define a shared header that sets the XSKMAP capacity. Queue IDs are map keys, so this example can address queues 0 through 63:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -30,9 +46,7 @@ The shared header sets the XSKMAP capacity. Queue IDs are the map keys, so this 
 #endif /* __AFXDP_DUMP_H */
 ```
 
-## Filtering and Redirecting in XDP
-
-The complete BPF program is small because buffer management belongs to the AF_XDP side.
+Now the XDP program itself:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -99,13 +113,19 @@ int redirect_udp(struct xdp_md *ctx)
 }
 ```
 
-Every header access is preceded by a bounds or length check. The program accepts Ethernet IPv4 packets, excludes fragments, follows the IPv4 header length to UDP, and verifies that the UDP length fits inside the IP payload. Only the configured destination port reaches the redirect path.
+The program parses packets layer by layer, validating boundaries at each step. This careful bounds checking is required by the BPF verifier and also ensures we don't misinterpret truncated or malformed packets.
 
-The XSKMAP lookup is also part of correctness. A queue with no socket entry returns `XDP_PASS`, as do unrelated or malformed packets. `bpf_redirect_map()` uses the same pass action as its fallback. Once a redirect succeeds, the packet is consumed by AF_XDP rather than mirrored; a regular UDP socket will not receive that selected packet.
+The parsing starts with Ethernet, checking that there's room for the header and that the EtherType indicates IPv4. Then it validates the IPv4 header: correct version, UDP protocol, minimum header length, and no fragmentation (fragmented packets would need reassembly, which is beyond our scope). The program computes the actual IP header length from the IHL field and uses it to locate the UDP header.
 
-## Building an AF_XDP Socket from the ABI
+The UDP validation ensures the length field is sane and that the destination port matches our target. Only then does the program check if there's actually a socket registered for this queue. This ordering is deliberate: most packets will fail earlier checks, so we avoid the map lookup cost for packets we won't capture anyway.
 
-The user-space side below performs the UMEM registration, maps the rings, binds the socket, loads XDP, and runs the receive loop.
+The XSKMAP lookup is also a safety check. If userspace hasn't registered a socket for this queue, the lookup returns NULL and we pass the packet to the normal stack. When everything checks out, `bpf_redirect_map()` sends the packet to AF_XDP. The second argument is the queue index, which becomes the map key. The third argument is the fallback action if something goes wrong.
+
+One important detail: once a packet is redirected, it's consumed by AF_XDP. The regular socket stack will never see it. This is exactly what we want for a capture tool, but it means you need to be careful about what you redirect.
+
+## The Userspace Application
+
+The userspace code handles everything AF_XDP needs: memory allocation, ring setup, socket binding, XDP loading, and the receive loop. Here's the complete implementation:
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -599,15 +619,43 @@ cleanup:
 }
 ```
 
-`open_xsk()` creates a 256 KiB UMEM area, registers it through `XDP_UMEM_REG`, and asks the kernel for 64 fill, completion, and RX entries. `XDP_MMAP_OFFSETS` describes where each producer, consumer, flags, and descriptor array lives. The program maps those pages and posts all frame addresses before traffic can be redirected.
+### Understanding UMEM and Ring Setup
 
-The ring indices are shared between kernel and user space, so their memory ordering matters. A producer writes a descriptor before publishing its new index with release semantics. A consumer acquires the producer index before reading descriptors. The code applies that pattern both while consuming RX entries and while returning addresses to the fill ring.
+The `open_xsk()` function creates the AF_XDP socket and all its supporting infrastructure. It starts by mapping 256 KiB of anonymous memory for UMEM, divided into 64 frames of 4096 bytes each. This memory will be shared with the kernel after registration.
 
-`XDP_COPY` on the socket bind and XDP attach mode solve different problems. Copy mode tells AF_XDP how packet data enters UMEM and works without driver zero-copy support. The XDP program itself first tries native driver mode, then falls back to generic SKB mode when the interface rejects native XDP. `--skb-mode` selects the generic path directly.
+After creating the socket with `AF_XDP`, it registers the UMEM with `XDP_UMEM_REG`, telling the kernel where our packet buffers live. Then it requests fill, completion, and RX rings of 64 entries each with `setsockopt`. The `XDP_MMAP_OFFSETS` getsockopt reveals where each ring's producer index, consumer index, flags, and descriptor array are located within pages that can be mmap'd.
 
-The receive loop expects one descriptor per packet. `XDP_PKT_CONTD` therefore produces `EMSGSIZE` instead of silently printing only the first fragment of a multi-buffer packet. Address and packet-length checks also keep every descriptor within the registered UMEM. On shutdown, compare-and-detach supplies the program FD as `old_prog_fd`, so the tool removes only the XDP program it attached.
+The ring mapping is tricky because the kernel lays out each ring at a fixed page offset. The Fill Ring lives at `XDP_UMEM_PGOFF_FILL_RING`, the Completion Ring at `XDP_UMEM_PGOFF_COMPLETION_RING`, and the RX Ring at `XDP_PGOFF_RX_RING`. Each ring contains pointers to the producer and consumer indices, which are the synchronization points between kernel and userspace.
 
-## Build and Run
+The final step before binding is posting all 64 frame addresses to the Fill Ring. We write each address into the descriptor array and then publish the producer index with release semantics. This tells the kernel it has 64 frames available for receiving packets.
+
+### Memory Ordering in Ring Operations
+
+Ring indices are shared between kernel and userspace, which makes memory ordering critical. The pattern is consistent throughout: a producer writes descriptors before publishing its index with release semantics, and a consumer acquires the producer index before reading descriptors.
+
+In `recycle_frame()`, we read our own producer index (which only we modify) with relaxed ordering, but we acquire the consumer index because the kernel writes it. If there's room in the ring, we write the address and publish with release. The kernel will eventually acquire our producer update and see the address we wrote.
+
+The same pattern appears in the receive loop. We acquire the producer index written by the kernel, read descriptors, and publish our consumer update with release. This ensures the kernel knows we're done with those frames before it reuses them.
+
+### Copy Mode vs Zero-Copy
+
+The `XDP_COPY` flag in the socket address tells AF_XDP to copy packets into UMEM rather than doing true zero-copy. Copy mode works on any interface without driver support, making it the right choice for a learning example. The kernel allocates its own memory for incoming packets and copies them into our UMEM frames.
+
+The XDP program attach mode is different. We first try native driver mode (`XDP_FLAGS_DRV_MODE`), which runs the XDP program in the driver before SKB allocation. If that fails because the driver doesn't support XDP, we fall back to generic SKB mode (`XDP_FLAGS_SKB_MODE`), which runs after the SKB is created but still lets us redirect to AF_XDP. The `--skb-mode` flag forces generic mode directly.
+
+### The Receive Loop
+
+The receive loop polls for packets, processes them in batches, and recycles frames immediately. The 250ms timeout ensures we can respond to signals even when no packets arrive.
+
+When poll indicates data, we check the RX ring for new descriptors. For each one, we compute the actual data address (the descriptor address might be encoded with offset information), verify it's within UMEM bounds, and check that this isn't a multi-buffer packet (which would have `XDP_PKT_CONTD` set). Multi-buffer support would require accumulating fragments, which is beyond this example's scope.
+
+After printing the packet, we immediately return the frame to the Fill Ring via `recycle_frame()`. This is critical: without recycling, we'd run out of frames after 64 packets. The tool proves recycling works by successfully capturing 65 packets.
+
+### Cleanup and Safe Detach
+
+On exit, we use compare-and-detach to remove only our XDP program. The `old_prog_fd` option tells `bpf_xdp_detach` to only detach if the currently attached program matches ours. This prevents accidentally detaching someone else's XDP program if they attached one while we were running.
+
+## Compilation and Execution
 
 Build the executable:
 
@@ -616,48 +664,65 @@ cd src/60-afxdp-dump
 make
 ```
 
-Capture five UDP packets arriving on queue 0 and destination port 8080:
+Capture five UDP packets arriving on queue 0 with destination port 8080:
 
 ```bash
 sudo ./afxdp_dump --interface eth0 --queue 0 --port 8080 --count 5
 ```
 
-`--count 0` runs until a signal. Add `--skb-mode` for generic XDP. The selected queue must receive the traffic; on a multi-queue interface this depends on the NIC's receive-side steering configuration.
+Use `--count 0` to run until interrupted with Ctrl+C. Add `--skb-mode` to force generic XDP mode. The selected queue must actually receive the traffic; on multi-queue NICs, this depends on RSS (receive-side scaling) configuration.
 
-A longer run with `--count 65` makes frame recycling visible. One real run produced:
+Send test traffic from another machine or terminal:
+
+```bash
+echo "hello-afxdp" | nc -u target-ip 8080
+```
+
+A longer run with `--count 65` demonstrates that frame recycling works:
 
 ```text
-afxdp-dump ready interface=axdp1267r queue=0 port=8080 mode=driver count=65
+afxdp-dump ready interface=eth0 queue=0 port=8080 mode=driver count=65
 packet=1 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 packet=65 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 redirected=65
 ```
 
-`packet=65` demonstrates frame reuse beyond the 64 initially posted frames. `redirected=65` comes from the BPF-side counter. The XDP path returns `XDP_PASS` for other destination ports, so they remain on the normal network path.
+Packet 65 proves that at least one frame completed the full ownership cycle: posted to Fill, used for receive, consumed from RX, and posted back to Fill. The `redirected=65` counter comes from the BPF program and matches our receive count.
 
 ## Requirements
 
 | Requirement | Details |
 |---|---|
-| Kernel | Linux 5.7 or newer; AF_XDP arrived in 4.18, XSKMAP lookup from XDP in 5.3, and safe expected-FD detach in 5.7 |
+| Kernel | Linux 5.7 or newer. AF_XDP arrived in 4.18, XSKMAP lookup from XDP in 5.3, and safe expected-FD detach in 5.7 |
 | Kernel config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_XDP_SOCKETS`, `CONFIG_DEBUG_INFO_BTF` |
-| Privileges | Root, or equivalent BPF and network-administration capabilities |
-| Interface | An interface with the selected RX queue; native XDP is optional because generic XDP is available |
-| Architecture and hardware | x86-64 is the declared and tested target; copy mode needs no AF_XDP zero-copy driver support |
+| Privileges | Root or equivalent BPF and network-admin capabilities |
+| Interface | Any interface with the selected RX queue. Native XDP is optional since generic mode works everywhere |
+| Architecture | x86-64 is tested. Copy mode works without driver zero-copy support |
 
-## Scope
+## What's Next
 
-`afxdp-dump` is a receive-only, single-queue, single-buffer IPv4 UDP tool. It uses a fixed 64-frame UMEM and prints at most 32 payload characters. It provides the buffer lifecycle needed for a useful packet receiver while keeping TX rings, shared UMEM, zero-copy setup, multi-buffer reconstruction, and RX metadata for later examples.
+This example is deliberately minimal: receive-only, single-queue, single-buffer packets, copy mode. Real production AF_XDP applications extend this foundation in several directions:
+
+**TX rings** let you send packets with the same zero-overhead model. You'd add a TX ring, post frame addresses with packet data, and poll for completion notifications.
+
+**Zero-copy mode** eliminates the copy into UMEM. The driver uses your UMEM directly, but this requires driver support and careful buffer alignment.
+
+**Multi-buffer packets** handle jumbo frames or when UMEM frames are smaller than the MTU. You'd accumulate fragments marked with `XDP_PKT_CONTD` until the final fragment.
+
+**Shared UMEM** lets multiple sockets share the same memory, useful for load-balancing across queues or between RX and TX paths.
 
 ## Summary
 
-This example exposes the complete AF_XDP receive contract. XDP selects one UDP flow, XSKMAP resolves the RX queue to a socket, the kernel publishes a UMEM descriptor, and user space returns the frame after inspection. The 65-packet run closes the loop by proving that ownership really comes back to the fill ring.
+AF_XDP gives you kernel-bypass packet reception with eBPF's safety guarantees. The XDP program selects traffic at the driver boundary, the XSKMAP routes packets to your socket, and lock-free ring buffers transfer data without system calls. This example showed the complete receive contract: post frames to Fill, receive descriptors on RX, process packets, recycle frames back to Fill.
+
+Understanding this flow is valuable beyond packet capture. The patterns here, shared memory between kernel and userspace, explicit ownership transfer, lock-free synchronization, appear throughout high-performance systems from databases to GPU drivers.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 
 ## References
 
-- [Linux AF_XDP documentation](https://docs.kernel.org/networking/af_xdp.html)
-- [AF_XDP introduction commit](https://github.com/torvalds/linux/commit/c0c77d8fb787cfe0c3fca689c2a30d1dad4eaba7)
-- [XSKMAP lookup from XDP commit](https://github.com/torvalds/linux/commit/fada7fdc83c0)
-- [Expected-program FD for XDP replacement and detach](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)
+- [Linux AF_XDP Documentation](https://docs.kernel.org/networking/af_xdp.html)
+- [AF_XDP Introduction Commit](https://github.com/torvalds/linux/commit/c0c77d8fb787cfe0c3fca689c2a30d1dad4eaba7)
+- [XSKMAP Lookup from XDP](https://github.com/torvalds/linux/commit/fada7fdc83c0)
+- [Expected-Program FD for XDP Detach](https://github.com/torvalds/linux/commit/92234c8f15c8d96ad7e52afdc5994cba6be68eb9)
+- [libxdp Library](https://github.com/xdp-project/xdp-tools) - Higher-level AF_XDP helpers if you want to skip the raw ABI

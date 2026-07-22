@@ -1,24 +1,36 @@
-# eBPF Tutorial by Example: Build a DNS-Derived IP Allowlist with cgroup BPF
+# eBPF Tutorial: Building a DNS-Derived IP Allowlist with cgroup BPF
 
-Suppose a service may open HTTPS connections to `api.example.com`, while direct connections to every other address should be rejected. A static IP allowlist is a poor fit because DNS answers change and expire. A connect hook sees an IP address rather than the name that produced it. The missing piece is a short-lived link between the application's DNS exchange and its later `connect()` call.
+Ever tried to restrict a service so it can only connect to `api.example.com`? You might reach for an IP allowlist, but DNS answers change constantly and TTLs expire. By the time your application calls `connect()`, the kernel only sees an IP address—it has no idea which domain produced it. What's missing is a short-lived link between the DNS lookup and the subsequent connection.
 
-This tutorial builds that link as a minimal working policy tool. It watches one domain through one configured DNS resolver, learns a direct IPv4 A record only from a matching query and response, and allows connections to one TCP port until the DNS TTL expires.
+This tutorial builds that link. We'll watch DNS traffic for a specific domain, learn IP addresses only from valid query-response pairs, and allow connections until the TTL expires. It's a minimal but complete policy tool that shows how cgroup BPF can coordinate across multiple kernel hooks.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/55-dns-egress>
 
-## Where eBPF Enforces the Decision
+## Understanding the Problem: DNS and Connect Are Disconnected
 
-eBPF runs verifier-checked programs at Linux kernel hooks and can retain state in maps or send selected events to user space. cgroup BPF makes those hooks follow a workload: packet programs can inspect traffic entering and leaving a cgroup, while a socket-address program can accept or reject an IPv4 connection before the kernel sends it.
+When your application resolves `api.example.com`, the DNS response contains an IP address and a TTL. But this information lives only in userspace—the resolver library caches it, your application calls `connect()` with the IP, and the kernel has no idea where that IP came from. This creates a fundamental security gap.
 
-This example attaches three programs to the same cgroup. `cgroup_skb/egress` recognizes the configured DNS question and records a pending query. `cgroup_skb/ingress` accepts an address into the allowlist only after the response matches that query. `cgroup/connect4` makes the final decision for the protected TCP port. The ring buffer reports learned, allowed, denied, and expired decisions without participating in enforcement.
+Consider a container that should only talk to your backend API. Traditional firewalls can block destination IPs, but they can't enforce "only connect to IPs that came from resolving api.example.com within the last 60 seconds." The kernel-level policy and the application-level DNS resolution operate in complete isolation.
 
-Follow one successful exchange. The application sends an A query for `lab.test`. The egress hook saves the resolver address, client address, client UDP port, and DNS transaction ID for five seconds. When the reply returns, the ingress hook reconstructs the same key, checks the response flags and question, and reads the first direct A answer. It stores the returned address with an expiration time derived from the TTL. A later `connect()` to that address and the protected port succeeds while the entry is live.
+cgroup BPF bridges this gap. By attaching programs to packet hooks and connect hooks on the same cgroup, we can observe DNS traffic and later enforce connection policy based on what we learned. The key insight is that cgroup BPF programs share state through maps, creating a trust chain from DNS query through response to eventual connection.
 
-The query record is the trust boundary. An unsolicited response has no pending key, and a response with a different transaction ID searches for a different key. Neither can populate the allowlist. Expiration is checked again at connect time, so an address naturally stops working even if its LRU entry is still present.
+## How the Pieces Fit Together
 
-## Shared Protocol and Event Types
+eBPF lets us run verified programs at multiple kernel hooks and share state between them through maps. cgroup BPF makes these hooks follow a workload: packet programs can inspect traffic entering and leaving a cgroup, while socket-address programs can accept or reject connections before they're established.
 
-The shared header contains the small DNS layouts parsed by the BPF programs and the fixed event format consumed in user space.
+Our tool attaches three programs to the same cgroup:
+
+1. **`cgroup_skb/egress`** watches outgoing DNS queries and records which ones we're expecting answers for
+2. **`cgroup_skb/ingress`** validates incoming DNS responses and learns IP addresses only from matching replies
+3. **`cgroup/connect4`** makes the final decision—allowing connections only to IPs learned from valid DNS responses, and only while their TTL is still valid
+
+Let's walk through a successful exchange. Your application sends an A query for `lab.test`. The egress hook saves a correlation key containing the resolver address, client address, client UDP port, and DNS transaction ID. This record lives for five seconds. When the reply arrives, the ingress hook reconstructs the same key, verifies the response, and extracts the IP address along with its TTL. A later `connect()` to that address succeeds—but only while the TTL is valid.
+
+The query record is the trust boundary here. An unsolicited response has no pending key to match. A response with the wrong transaction ID looks for a different key and finds nothing. Neither can pollute the allowlist. And even if an entry lingers in the LRU map, the connect hook re-checks expiration time, so addresses naturally stop working when their DNS time runs out.
+
+## The Data Structures
+
+Before diving into code, let's understand the data structures that make this work. The shared header defines DNS protocol layouts and the events we report to userspace:
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -69,11 +81,13 @@ struct dns_egress_event {
 #endif /* __DNS_EGRESS_H */
 ```
 
-The protocol structs are packed because they describe bytes on the wire. The event carries both the learned TTL and the absolute kernel expiration timestamp. The command prints the TTL, while the BPF side uses the monotonic timestamp for its decision.
+The protocol structs use the `packed` attribute because they describe bytes on the wire—no padding allowed. The `dns_header` maps directly to the 12-byte DNS header that starts every query and response. The `dns_question` struct follows the question name (which uses length-prefixed labels). The `dns_a_answer` expects the common compressed format where the name pointer is `0xc00c`, pointing back to the question section.
 
-## The Three BPF Hooks
+Each event we send to userspace carries both the DNS TTL and the absolute expiration timestamp. User space prints the human-readable TTL, while the BPF side uses the monotonic timestamp for its decisions. This separation keeps the kernel logic clean—no time format conversions in BPF code.
 
-Here is the complete kernel-side program.
+## The BPF Programs: Complete Implementation
+
+Here's the complete kernel-side implementation. It's longer than some of our examples, but each piece has a clear job. Let's look at it in full, then walk through the key sections:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -367,17 +381,43 @@ int enforce_dns_policy(struct bpf_sock_addr *ctx)
 }
 ```
 
-`pending_queries` and `allowed_ips` are LRU hash maps with fixed capacities. The first map holds correlation state for at most five seconds. The second holds admitted IPv4 addresses for their DNS lifetime. LRU eviction keeps memory bounded; it also means this example favors recently active queries and addresses when either map reaches 1024 entries.
+### Understanding the Map Design
 
-The egress path first validates IPv4, UDP, fragmentation state, resolver address, and resolver port. It then checks a standard one-question A query for the exact encoded name. Only after those checks does `record_dns_query()` insert the four-field correlation key. Packet observation itself returns `1`, so DNS traffic continues normally.
+The program uses three BPF maps, each serving a specific purpose in the trust chain. The `pending_queries` map is an LRU hash that holds correlation state for DNS queries. The key combines four fields—server IP, client IP, client port, and transaction ID—that uniquely identify a query/response pair. The value stores only the expiration timestamp because that's all we need to validate timing. LRU eviction ensures memory stays bounded even under DNS flood conditions.
 
-On ingress, parsing starts with the reverse transport tuple. `parse_response_question()` adds the transaction ID, requires a live pending entry, and verifies a successful response containing the configured question. `parse_direct_a_answer()` accepts the compact `0xc00c` name pointer, class IN, type A, four-byte address, and a TTL from 1 to 86400 seconds. Once the answer passes, the pending query is consumed and the IP becomes eligible for connections.
+The `allowed_ips` map is also an LRU hash, but keyed simply by IPv4 address. The value contains the expiration timestamp, the original TTL in seconds (for logging), padding for alignment, and a flag to track whether we've already reported expiration. This flag prevents duplicate "expired" events when multiple threads race on a stale entry.
 
-`enforce_dns_policy()` stays narrow. TCP connects to other destination ports pass immediately. A connect to the protected port looks up `ctx->user_ip4`; a live entry returns `1`, while a missing or expired entry returns `0`, which surfaces to the application as `EPERM`. A 64-bit compare-and-swap on `expired_reported` keeps the expiry notification to one event even when several threads race on the stale address. BPF atomic compare-and-exchange arrived in Linux 5.12, which sets this tool's minimum kernel version.
+The `events` ring buffer sends notifications to userspace. At 256KB, it can hold thousands of events without blocking the kernel path. Ring buffers are the modern replacement for perf buffers—they're more efficient and provide better ordering guarantees.
 
-## Loading the Policy and Exercising Its Trust Chain
+### The Egress Path: Recording Pending Queries
 
-The complete user-space program configures the read-only BPF data, attaches all three programs to one cgroup, and consumes ring-buffer events.
+When a packet leaves the cgroup, `record_dns_query` runs. The function first validates the transport layer through `parse_query_transport`. This function loads the IP header, checks for IPv4 with UDP protocol, rejects fragmented packets (which would require reassembly we don't implement), and verifies the destination matches our configured resolver. If all checks pass, it calculates where DNS data begins and populates the correlation key.
+
+The `parse_dns_query` function then validates the DNS layer. It checks that the flags indicate a standard query (not a response), that exactly one question exists, and that the question name matches our configured domain. The question type and class must be A (address) and IN (internet). Only after all validation passes does it extract the transaction ID and insert into `pending_queries`.
+
+Notice that `record_dns_query` always returns 1. This tells the kernel to continue processing the packet normally—we're observing, not blocking. DNS queries flow through unchanged.
+
+### The Ingress Path: Learning from Responses
+
+The ingress program `learn_dns_answer` reverses the perspective. Now we're looking at packets arriving from the resolver, so `parse_response_transport` checks that the source (not destination) matches the resolver IP and port. The correlation key gets populated with the same fields, but from the response's viewpoint.
+
+The critical security check happens in `pending_query_is_live`. This function looks up the correlation key in `pending_queries`. If no entry exists—meaning we never saw a matching query—the response is rejected. If an entry exists but has expired, we delete it and reject the response. Only responses that match a live pending query proceed.
+
+After confirming we have a legitimate response, `parse_response_question` validates the DNS header. It verifies this is a successful response (flags indicate "response" and "no error"), contains exactly one question matching our domain, and has at least one answer. `parse_direct_a_answer` then extracts the first A record, requiring the common `0xc00c` compressed name format, correct type and class, and a sane TTL between 1 and 86400 seconds.
+
+When validation passes, the pending query gets deleted (it's been consumed), and the IP address gets added to `allowed_ips` with an expiration based on the DNS TTL. The `emit_event` call sends a `DNS_LEARNED` notification to userspace.
+
+### The Connect Path: Enforcing Policy
+
+The `enforce_dns_policy` function attaches to `cgroup/connect4`, which runs before every IPv4 TCP connect. The function first applies filtering: if we're targeting a specific process and this isn't it, allow the connection. If it's not TCP or not the protected port, allow the connection. These early returns minimize overhead for irrelevant traffic.
+
+For connections that need policy enforcement, we look up the destination IP in `allowed_ips`. If found and not expired, we emit `DNS_ALLOWED` and return 1 (allow). If found but expired, we use an atomic compare-and-swap on `expired_reported` to emit exactly one `DNS_EXPIRED` event even under concurrent access. BPF atomic compare-and-exchange arrived in Linux 5.12, which sets this tool's minimum kernel version.
+
+If the IP isn't in the map or is expired, we emit `DNS_DENIED` and return 0. The kernel translates return value 0 into `EPERM`, and the application's connect() fails immediately.
+
+## The User-Space Program
+
+The user-space side configures the read-only BPF data, attaches all three programs to a cgroup, and processes ring-buffer events. It also includes a self-test demo mode that exercises the complete trust chain.
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -1021,20 +1061,38 @@ cleanup:
 }
 ```
 
-The domain is converted to DNS label form before the BPF object is loaded. For example, `lab.test` becomes `\x03lab\x04test\x00`, the exact byte sequence compared in the packet hooks. The configured resolver and ports are written into skeleton `rodata`, which makes them constants from the verifier's point of view.
+### Understanding the User-Space Control Flow
 
-Normal mode keeps the links alive and prints policy decisions until the duration ends or a signal arrives. Demo mode runs the whole trust chain with loopback sockets. It first proves that a connection is blocked, sends an unsolicited answer and a wrong-ID answer, admits a correctly correlated one-second answer, then waits for that TTL to expire. These are useful checks because a simple “parse every DNS response” implementation would pass the happy path while remaining easy to poison.
+The user-space program follows a clear initialization sequence. First, `parse_options` handles command-line arguments, validating inputs and setting defaults. Demo mode automatically configures loopback addresses and non-standard ports to avoid conflicts with real DNS and web traffic.
 
-## Build and Run
+The `encode_qname` function converts a domain name like `lab.test` into DNS label format: `\x03lab\x04test\x00`. Each label starts with a length byte followed by the label content. The final zero byte terminates the name. This encoding happens once at startup and gets written into the BPF skeleton's `rodata` section, where the verifier treats it as a constant.
 
-Build the example with the repository's vendored libbpf and bpftool:
+The `prepare_runtime` function ties everything together. It opens the target cgroup directory, opens the BPF skeleton, configures all the `rodata` values (resolver IP, ports, domain name), loads the BPF programs, and attaches each program to the cgroup. The three separate links allow independent attachment and detachment. Finally, it creates a ring buffer consumer that calls `handle_event` for each notification from the kernel.
+
+Normal mode enters `poll_policy_events`, which loops on the ring buffer until the duration expires or a signal arrives. Each event gets printed with the IP address, PID, TTL, and event type. Demo mode instead runs `run_demo`, which exercises the complete trust chain with synthetic DNS traffic and TCP connections.
+
+### The Demo Mode: Proving the Security Properties
+
+Demo mode serves as both a functional test and a demonstration of the security model. It runs entirely on loopback, using non-standard ports (15353 for DNS, 19090 for TCP) to avoid interfering with real services.
+
+The test sequence starts by verifying that connections are blocked before any DNS traffic. Then it sends an unsolicited DNS response—a response that arrives without a preceding query. The BPF program should reject this because there's no matching entry in `pending_queries`. The demo verifies the connection is still blocked.
+
+Next, it sends a legitimate DNS query and receives a response with the wrong transaction ID. The BPF program should also reject this because the transaction ID is part of the correlation key. Again, the demo verifies the connection remains blocked.
+
+Finally, it sends a response with the correct transaction ID and a 1-second TTL. Now the connection should succeed. After waiting 1.3 seconds (longer than the TTL), the demo verifies the connection is blocked again.
+
+This sequence proves that the tool correctly implements query-response correlation, rejects spoofing attempts, honors TTLs, and properly expires allowlist entries.
+
+## Compilation and Execution
+
+Build the example:
 
 ```bash
 cd src/55-dns-egress
 make
 ```
 
-Attach it to a service cgroup, watch one domain through its actual resolver, and protect TCP port 443:
+Attach it to a service cgroup and watch one domain through its resolver:
 
 ```bash
 sudo ./dns_egress \
@@ -1044,13 +1102,13 @@ sudo ./dns_egress \
   --port 443
 ```
 
-The cgroup must contain the workload whose DNS packets and connections should share the policy state. TCP port 443 and DNS port 53 are the defaults; `--dns-port` selects another resolver port, and `--duration` adds a time limit. The built-in demo needs no external DNS server:
+The cgroup must contain the workload whose DNS packets and connections should share the policy state. TCP 443 and DNS 53 are defaults; `--dns-port` selects another resolver port, and `--duration` adds a time limit. The built-in demo needs no external DNS server:
 
 ```bash
 sudo ./dns_egress --demo
 ```
 
-A real demo run looks like this:
+Example output:
 
 ```text
 dns-egress attached cgroup=/sys/fs/cgroup domain=lab.test resolver=127.0.0.1 tcp_port=19090 dns_port=15353
@@ -1068,25 +1126,25 @@ event=denied pid=1246 ip=127.0.0.1 ttl=1
 demo step=expired-answer result=blocked
 ```
 
-The three early `denied` events show that neither receiving DNS-shaped traffic nor seeing the right name is sufficient. `learned` appears only for the correlated response, `allowed` covers its live TTL, and `expired` is immediately followed by the denied connect.
+The three early `denied` events show that merely receiving DNS-shaped traffic or seeing the right domain name isn't enough. `learned` appears only for the correlated response, `allowed` covers its live TTL, and `expired` is immediately followed by a denied connect.
 
 ## Requirements
 
 | Requirement | Details |
 |---|---|
-| Kernel | Linux 5.12 or newer; the newest dependency is BPF atomic compare-and-exchange |
+| Kernel | Linux 5.12+ (BPF atomic compare-and-exchange) |
 | Kernel config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_CGROUP_BPF`, `CONFIG_DEBUG_INFO_BTF`, `CONFIG_INET` |
-| cgroup | cgroup v2, with the target workload placed below the attached directory |
-| Privileges | Root, or an equivalent set of BPF and network-administration capabilities |
-| Architecture and hardware | x86-64 is the declared and tested target; no special network hardware |
+| cgroup | cgroup v2, with workload placed below the attached directory |
+| Privileges | Root, or equivalent BPF and network capabilities |
+| Architecture | x86-64 tested; no special network hardware required |
 
-## Scope
+## What This Example Doesn't Cover
 
-The tool deliberately implements one exact domain, one resolver, one protected TCP port, IPv4 UDP DNS, and the first direct A answer. It understands the common compressed owner name `0xc00c`. CNAME chains, several answer layouts, TCP DNS, IPv6, DoH, and DoT need additional parsers or observation points. This compact scope keeps the important policy property visible: an IP enters the allowlist through a recent matching query and leaves it through DNS time.
+The tool deliberately implements one exact domain, one resolver, one protected TCP port, IPv4 UDP DNS, and the first direct A answer. It understands the common `0xc00c` compressed owner name. CNAME chains, alternate answer layouts, TCP DNS, IPv6, DoH, and DoT would need additional parsers or observation points. This compact scope keeps the important property visible: an IP enters the allowlist through a recent matching query and leaves through DNS time.
 
 ## Summary
 
-This example turns an observed DNS result into a time-bounded connect policy. The egress and ingress hooks establish a trustworthy query-response relation, the TTL controls the address lifetime, and the connect hook enforces the result for the workload's protected port.
+This example turns observed DNS results into a time-bounded connect policy. The egress and ingress hooks establish a trustworthy query-response relation, the TTL controls address lifetime, and the connect hook enforces the result for the protected port.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 
