@@ -214,20 +214,25 @@ static const char *find_tc_binary(void)
 	return NULL;
 }
 
-static void print_current_qdisc(void)
+static void print_qdisc_state(bool all_interfaces)
 {
 	const char *tc_binary = find_tc_binary();
-	char *const arguments[] = {
+	char *const all_arguments[] = {
+		(char *)"tc", (char *)"qdisc", (char *)"show", NULL,
+	};
+	char *const interface_arguments[] = {
 		(char *)"tc", (char *)"qdisc", (char *)"show", (char *)"dev",
 		(char *)env.interface, NULL,
 	};
+	char *const *arguments = all_interfaces ? all_arguments : interface_arguments;
 	posix_spawn_file_actions_t actions;
 	pid_t child;
 	pid_t waited;
 	int error;
 	int status;
 
-	fprintf(stderr, "current qdisc state:\n");
+	fprintf(stderr, "%s:\n",
+		all_interfaces ? "qdisc state across interfaces" : "current qdisc state");
 	if (!tc_binary) {
 		fprintf(stderr, "tc was not found in /usr/sbin or /sbin\n");
 		goto manual;
@@ -258,7 +263,11 @@ static void print_current_qdisc(void)
 spawn_failed:
 	fprintf(stderr, "failed to run tc: %s\n", strerror(error));
 manual:
-	fprintf(stderr, "run manually: tc qdisc show dev %s\n", env.interface);
+	if (all_interfaces)
+		fprintf(stderr, "run manually: tc qdisc show\n");
+	else
+		fprintf(stderr, "run manually: tc qdisc show dev %s\n",
+			env.interface);
 }
 
 static int install_pacer(struct egress_pacer_bpf *skel,
@@ -270,11 +279,10 @@ static int install_pacer(struct egress_pacer_bpf *skel,
 	if (error) {
 		if (error == -EEXIST) {
 			fprintf(stderr,
-				"bpf_pacer is already registered; a stale root qdisc may own it\n");
-			print_current_qdisc();
+				"bpf_pacer is already registered globally; another interface may own it\n");
+			print_qdisc_state(true);
 			fprintf(stderr,
-				"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
-				env.interface);
+				"inspect the bpf_pacer owner above before removing any root qdisc\n");
 		} else {
 			fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
 				strerror(-error));
@@ -288,7 +296,7 @@ static int install_pacer(struct egress_pacer_bpf *skel,
 	if (error == -EEXIST) {
 		fprintf(stderr, "refusing to replace the existing root qdisc on %s\n",
 			env.interface);
-		print_current_qdisc();
+		print_qdisc_state(false);
 		fprintf(stderr,
 			"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
 			env.interface);

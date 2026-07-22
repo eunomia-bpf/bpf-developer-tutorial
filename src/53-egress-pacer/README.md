@@ -594,20 +594,25 @@ static const char *find_tc_binary(void)
 	return NULL;
 }
 
-static void print_current_qdisc(void)
+static void print_qdisc_state(bool all_interfaces)
 {
 	const char *tc_binary = find_tc_binary();
-	char *const arguments[] = {
+	char *const all_arguments[] = {
+		(char *)"tc", (char *)"qdisc", (char *)"show", NULL,
+	};
+	char *const interface_arguments[] = {
 		(char *)"tc", (char *)"qdisc", (char *)"show", (char *)"dev",
 		(char *)env.interface, NULL,
 	};
+	char *const *arguments = all_interfaces ? all_arguments : interface_arguments;
 	posix_spawn_file_actions_t actions;
 	pid_t child;
 	pid_t waited;
 	int error;
 	int status;
 
-	fprintf(stderr, "current qdisc state:\n");
+	fprintf(stderr, "%s:\n",
+		all_interfaces ? "qdisc state across interfaces" : "current qdisc state");
 	if (!tc_binary) {
 		fprintf(stderr, "tc was not found in /usr/sbin or /sbin\n");
 		goto manual;
@@ -638,7 +643,11 @@ static void print_current_qdisc(void)
 spawn_failed:
 	fprintf(stderr, "failed to run tc: %s\n", strerror(error));
 manual:
-	fprintf(stderr, "run manually: tc qdisc show dev %s\n", env.interface);
+	if (all_interfaces)
+		fprintf(stderr, "run manually: tc qdisc show\n");
+	else
+		fprintf(stderr, "run manually: tc qdisc show dev %s\n",
+			env.interface);
 }
 
 static int install_pacer(struct egress_pacer_bpf *skel,
@@ -650,11 +659,10 @@ static int install_pacer(struct egress_pacer_bpf *skel,
 	if (error) {
 		if (error == -EEXIST) {
 			fprintf(stderr,
-				"bpf_pacer is already registered; a stale root qdisc may own it\n");
-			print_current_qdisc();
+				"bpf_pacer is already registered globally; another interface may own it\n");
+			print_qdisc_state(true);
 			fprintf(stderr,
-				"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
-				env.interface);
+				"inspect the bpf_pacer owner above before removing any root qdisc\n");
 		} else {
 			fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
 				strerror(-error));
@@ -668,7 +676,7 @@ static int install_pacer(struct egress_pacer_bpf *skel,
 	if (error == -EEXIST) {
 		fprintf(stderr, "refusing to replace the existing root qdisc on %s\n",
 			env.interface);
-		print_current_qdisc();
+		print_qdisc_state(false);
 		fprintf(stderr,
 			"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
 			env.interface);
@@ -780,7 +788,7 @@ The loader follows a standard libbpf pattern:
 4. Attach the `struct_ops` implementation, making `bpf_pacer` available as a qdisc type.
 5. Create the root qdisc on the target interface with `bpf_tc_hook_create`.
 
-The `bpf_tc_hook_create` call has exclusive semantics: if the interface already has a root qdisc, the kernel returns `-EEXIST` and the program exits without changing anything. On either qdisc or `struct_ops` conflict, the loader prints the current `tc qdisc show dev IFACE` result and the explicit recovery command `sudo tc qdisc del dev IFACE root`. It never runs that destructive command automatically; use it only after confirming the displayed qdisc is stale. This safety measure means the tool is best suited for dedicated test interfaces where you control the configuration.
+The `bpf_tc_hook_create` call has exclusive semantics: if the interface already has a root qdisc, the kernel returns `-EEXIST` and the program exits without changing anything. For a root-qdisc conflict on the requested interface, the loader prints `tc qdisc show dev IFACE` and the recovery command `sudo tc qdisc del dev IFACE root`. A `struct_ops` name conflict is global rather than interface-local, so the loader instead prints `tc qdisc show` for every interface and does not guess which interface to modify. It never runs a destructive command automatically; remove a root qdisc only after confirming that the displayed `bpf_pacer` entry is stale. This safety measure means the tool is best suited for dedicated interfaces where you control the configuration.
 
 After successful attachment, the program prints `READY`, then polls every 100ms until duration expires or a signal arrives. Cleanup order matters: first `bpf_tc_hook_destroy` (which triggers reset and frees queued packets), then read final statistics, then destroy the skeleton.
 
@@ -813,7 +821,7 @@ READY interface=veth-service rate_kbps=64000 queue_limit=256 duration=30
 SUMMARY enqueued=... dequeued=... policy_dropped=... cleanup_dropped=0 bytes_dequeued=... max_qlen=...
 ```
 
-`enqueued` counts packets accepted by the qdisc, `dequeued` counts packets released to the device, and `policy_dropped` counts packets rejected when the queue was full. If the process is killed before normal cleanup and leaves `bpf_pacer` behind, the next run prints the current qdisc and the recovery command. Inspect the displayed state first, then remove only the stale root qdisc with `sudo tc qdisc del dev veth-service root`.
+`enqueued` counts packets accepted by the qdisc, `dequeued` counts packets released to the device, and `policy_dropped` counts packets rejected when the queue was full. If the process is killed before normal cleanup and leaves `bpf_pacer` behind, the next run prints qdisc state across all interfaces. Find the interface whose line contains `bpf_pacer`, confirm that it is the stale instance, and then remove that actual root qdisc with `sudo tc qdisc del dev ACTUAL_IFACE root`.
 
 Command-line options:
 
