@@ -29,41 +29,28 @@ digraph exec_image_flow {
     arrowsize=0.75
   ];
 
-  fork [
-    label="User space\nfork child\nchild waits on pipe",
+  start [
+    label="User space\nstart system-wide monitor",
     fillcolor="#EBF8FF",
     color="#3182CE"
   ];
   prepare [
-    label="target_tgid + probe_offset\nload LSM + ring buffer",
+    label="load LSM + ring buffer",
     fillcolor="#EBF8FF",
     color="#3182CE"
   ];
   exec [
-    label="release pipe\nchild calls execvp",
+    label="any process calls exec",
     fillcolor="#EBF8FF",
     color="#3182CE"
   ];
   hook [
-    label="bprm_committed_creds\nmatch target_tgid",
-    fillcolor="#FFFAF0",
-    color="#DD6B20"
-  ];
-  probe [
-    label="probe_offset set?",
-    shape=diamond,
-    style="filled",
-    fillcolor="#FFFAF0",
-    color="#DD6B20",
-    margin="0.10,0.05"
-  ];
-  direct [
-    label="non-sleepable direct probe\nstore result",
+    label="bprm_committed_creds\nobserve every committed exec",
     fillcolor="#FFFAF0",
     color="#DD6B20"
   ];
   pending [
-    label="pending[0]\nscheduled_ns + direct result",
+    label="pending[pid_tgid]\nscheduled_ns + task work",
     shape=cylinder,
     fillcolor="#FFF5F5",
     color="#C05621"
@@ -84,38 +71,35 @@ digraph exec_image_flow {
     color="#805AD5"
   ];
   read [
-    label="file-backed dynptr\nread ELF header + marker\ndiscard dynptr + put file",
+    label="file-backed dynptr\nread ELF header\ndiscard dynptr + put file",
     fillcolor="#FAF5FF",
     color="#805AD5"
   ];
   event [
-    label="ring buffer event\npath + ELF + probe + latency",
+    label="ring buffer event\npath + ELF + latency\ndelete pending entry",
     fillcolor="#F0FFF4",
     color="#38A169"
   ];
   collect [
-    label="User space\npoll + waitpid\nfinal drain + stats",
+    label="User space\nstream events until SIGINT/SIGTERM\nfinal drain + stats",
     fillcolor="#EBF8FF",
     color="#3182CE"
   ];
 
-  { rank=same; fork; prepare; exec; }
-  { rank=same; hook; probe; direct; }
-  { rank=same; pending; schedule; }
+  { rank=same; start; prepare; exec; }
+  { rank=same; hook; pending; schedule; }
   { rank=same; callback; file; read; }
   { rank=same; event; collect; }
 
-  fork -> prepare [label="parent knows child TGID"];
-  prepare -> exec [label="attach completes"];
+  start -> prepare;
+  prepare -> exec [label="READY"];
   exec -> hook [label="each committed exec"];
-  hook -> probe;
-  probe -> direct [label="yes"];
-  probe -> pending [label="no"];
-  direct -> pending;
+  hook -> pending;
   pending -> schedule;
   schedule -> callback [label="task work runs"];
   callback -> file;
   file -> read;
   read -> event;
   event -> collect;
+  collect -> exec [label="keep monitoring", style=dashed];
 }
