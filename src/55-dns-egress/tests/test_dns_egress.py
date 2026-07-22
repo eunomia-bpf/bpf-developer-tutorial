@@ -22,7 +22,7 @@ def main():
     assert "event=expired" in output, output
     assert "demo step=expired-answer result=blocked" in output, output
     assert output.count("event=denied") == 4, output
-    print("DNS-aware egress integration test: PASS")
+    print("DNS-derived allowlist integration test: PASS")
 
 
 if __name__ == "__main__":

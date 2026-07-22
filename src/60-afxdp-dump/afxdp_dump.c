@@ -199,43 +199,73 @@ static int recycle_frame(struct xsk_state *xsk, unsigned long long address)
 	return 0;
 }
 
+static const struct iphdr *parse_ipv4(const void *packet, unsigned int length,
+				      unsigned int *ip_header_length,
+				      unsigned int *ip_length)
+{
+	const struct ethhdr *ethernet = packet;
+	const struct iphdr *ip;
+	unsigned int available_ip;
+
+	if (length < sizeof(*ethernet) + sizeof(*ip) ||
+	    ethernet->h_proto != htons(ETH_P_IP))
+		return NULL;
+	ip = packet + sizeof(*ethernet);
+	*ip_header_length = ip->ihl * 4;
+	if (ip->version != 4 || ip->protocol != IPPROTO_UDP ||
+	    (ntohs(ip->frag_off) &
+	     (IPV4_MORE_FRAGMENTS | IPV4_FRAGMENT_OFFSET)) ||
+	    *ip_header_length < sizeof(*ip) ||
+	    length < sizeof(*ethernet) + *ip_header_length)
+		return NULL;
+	*ip_length = ntohs(ip->tot_len);
+	available_ip = length - sizeof(*ethernet);
+	if (*ip_length < *ip_header_length + sizeof(struct udphdr) ||
+	    *ip_length > available_ip)
+		return NULL;
+	return ip;
+}
+
+static const struct udphdr *parse_udp(const void *packet,
+				      unsigned int length,
+				      unsigned int ip_header_length,
+				      unsigned int ip_length,
+				      const unsigned char **payload,
+				      unsigned int *payload_length)
+{
+	const struct udphdr *udp = packet + sizeof(struct ethhdr) +
+				    ip_header_length;
+	unsigned int available_payload;
+	unsigned int udp_length;
+
+	*payload = (const unsigned char *)(udp + 1);
+	udp_length = ntohs(udp->len);
+	available_payload = length - (*payload - (const unsigned char *)packet);
+	if (udp_length < sizeof(*udp) ||
+	    udp_length > ip_length - ip_header_length ||
+	    udp_length - sizeof(*udp) > available_payload)
+		return NULL;
+	*payload_length = udp_length - sizeof(*udp);
+	return udp;
+}
+
 static void dump_packet(const void *packet, unsigned int length,
 			unsigned int packet_number)
 {
-	const struct ethhdr *ethernet = packet;
 	const struct iphdr *ip;
 	const struct udphdr *udp;
 	const unsigned char *payload;
 	char source[INET_ADDRSTRLEN], destination[INET_ADDRSTRLEN];
 	char preview[PAYLOAD_PREVIEW + 1];
-	unsigned int available_ip, available_payload, ip_header_length;
-	unsigned int ip_length, payload_length, preview_length, udp_length;
+	unsigned int ip_header_length, ip_length, payload_length, preview_length;
 
-	if (length < sizeof(*ethernet) + sizeof(*ip) ||
-	    ethernet->h_proto != htons(ETH_P_IP))
+	ip = parse_ipv4(packet, length, &ip_header_length, &ip_length);
+	if (!ip)
 		return;
-	ip = packet + sizeof(*ethernet);
-	ip_header_length = ip->ihl * 4;
-	if (ip->version != 4 || ip->protocol != IPPROTO_UDP ||
-	    (ntohs(ip->frag_off) &
-	     (IPV4_MORE_FRAGMENTS | IPV4_FRAGMENT_OFFSET)) ||
-	    ip_header_length < sizeof(*ip) ||
-	    length < sizeof(*ethernet) + ip_header_length + sizeof(*udp))
+	udp = parse_udp(packet, length, ip_header_length, ip_length, &payload,
+			&payload_length);
+	if (!udp)
 		return;
-	ip_length = ntohs(ip->tot_len);
-	available_ip = length - sizeof(*ethernet);
-	if (ip_length < ip_header_length + sizeof(*udp) ||
-	    ip_length > available_ip)
-		return;
-	udp = packet + sizeof(*ethernet) + ip_header_length;
-	payload = (const unsigned char *)(udp + 1);
-	udp_length = ntohs(udp->len);
-	available_payload = length - (payload - (const unsigned char *)packet);
-	if (udp_length < sizeof(*udp) ||
-	    udp_length > ip_length - ip_header_length ||
-	    udp_length - sizeof(*udp) > available_payload)
-		return;
-	payload_length = udp_length - sizeof(*udp);
 	preview_length = payload_length < PAYLOAD_PREVIEW ?
 			 payload_length : PAYLOAD_PREVIEW;
 	for (unsigned int i = 0; i < preview_length; i++)

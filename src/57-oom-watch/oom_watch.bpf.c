@@ -8,16 +8,16 @@
 char LICENSE[] SEC("license") = "GPL";
 
 const volatile __u64 target_cgroup_id;
+const volatile __u32 sample_every = 1;
 
 extern struct task_struct *bpf_task_from_pid(__s32 pid) __ksym;
 extern void bpf_task_release(struct task_struct *task) __ksym;
 
-struct reclaim_profile {
-	__u64 begin_count;
-	__u64 end_count;
-	__u64 reclaimed_pages;
-	__u64 cross_cgroup_reclaims;
-	__u64 last_reclaim_ns;
+struct active_reclaim {
+	__u64 started_ns;
+	__u64 cgroup_id;
+	__s32 stack_id;
+	__u32 padding;
 };
 
 struct victim_state {
@@ -34,6 +34,27 @@ struct {
 } profiles SEC(".maps");
 
 struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 4096);
+	__type(key, __u64);
+	__type(value, struct active_reclaim);
+} active_reclaims SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(max_entries, 1024);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, OOM_STACK_DEPTH * sizeof(__u64));
+} stack_traces SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 8192);
+	__type(key, struct reclaim_stack_key);
+	__type(value, struct reclaim_stack_profile);
+} stack_profiles SEC(".maps");
+
+struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 1024);
 	__type(key, __u32);
@@ -46,6 +67,7 @@ struct {
 } events SEC(".maps");
 
 __u64 dropped_victim_states;
+__u64 dropped_reclaim_states;
 
 static __always_inline bool selected_cgroup(__u64 cgroup_id)
 {
@@ -89,12 +111,68 @@ static __always_inline struct reclaim_profile *get_profile(__u64 cgroup_id)
 	return bpf_map_lookup_elem(&profiles, &cgroup_id);
 }
 
+static __always_inline __u32 latency_bucket(__u64 duration_ns)
+{
+	__u64 microseconds = duration_ns / 1000;
+	__u32 bucket = 0;
+
+	for (int i = 0; i < OOM_RECLAIM_BUCKETS - 1; i++) {
+		if (microseconds < 2)
+			break;
+		microseconds >>= 1;
+		bucket++;
+	}
+	return bucket;
+}
+
+static __always_inline void update_maximum(__u64 *maximum, __u64 value)
+{
+	__u64 previous = *maximum;
+
+	for (int i = 0; i < 8 && previous < value; i++) {
+		__u64 observed = __sync_val_compare_and_swap(maximum, previous,
+							 value);
+
+		if (observed == previous)
+			break;
+		previous = observed;
+	}
+}
+
+static __always_inline void update_stack_profile(__u64 cgroup_id,
+						 __s32 stack_id,
+						 __u64 duration_ns,
+						 __u64 reclaimed)
+{
+	struct reclaim_stack_key key = {
+		.cgroup_id = cgroup_id,
+		.stack_id = stack_id,
+	};
+	struct reclaim_stack_profile initial = {};
+	struct reclaim_stack_profile *profile;
+
+	profile = bpf_map_lookup_elem(&stack_profiles, &key);
+	if (!profile) {
+		bpf_map_update_elem(&stack_profiles, &key, &initial, BPF_NOEXIST);
+		profile = bpf_map_lookup_elem(&stack_profiles, &key);
+	}
+	if (!profile)
+		return;
+	__sync_fetch_and_add(&profile->samples, 1);
+	__sync_fetch_and_add(&profile->total_ns, duration_ns);
+	__sync_fetch_and_add(&profile->reclaimed_pages, reclaimed);
+	update_maximum(&profile->maximum_ns, duration_ns);
+}
+
 SEC("tp_btf/mm_vmscan_memcg_reclaim_begin")
-int BPF_PROG(track_reclaim_begin, gfp_t gfp_flags, int order,
+int BPF_PROG(profile_reclaim_begin, gfp_t gfp_flags, int order,
 	     struct mem_cgroup *memcg)
 {
+	struct active_reclaim active = { .stack_id = -1 };
 	struct reclaim_profile *profile;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u64 cgroup_id = memcg_cgroup_id(memcg);
+	__u64 sequence;
 
 	(void)gfp_flags;
 	(void)order;
@@ -103,28 +181,56 @@ int BPF_PROG(track_reclaim_begin, gfp_t gfp_flags, int order,
 	profile = get_profile(cgroup_id);
 	if (!profile)
 		return 0;
-	__sync_fetch_and_add(&profile->begin_count, 1);
+	sequence = __sync_fetch_and_add(&profile->begin_count, 1);
 	if (bpf_get_current_cgroup_id() != cgroup_id)
 		__sync_fetch_and_add(&profile->cross_cgroup_reclaims, 1);
 	profile->last_reclaim_ns = bpf_ktime_get_ns();
+	active.started_ns = profile->last_reclaim_ns;
+	active.cgroup_id = cgroup_id;
+	if (!sample_every || sequence % sample_every == 0) {
+		active.stack_id = bpf_get_stackid(ctx, &stack_traces,
+						  BPF_F_FAST_STACK_CMP | 2);
+		if (active.stack_id >= 0)
+			__sync_fetch_and_add(&profile->stack_samples, 1);
+		else
+			__sync_fetch_and_add(&profile->stack_failures, 1);
+	}
+	if (bpf_map_update_elem(&active_reclaims, &pid_tgid, &active, BPF_ANY))
+		__sync_fetch_and_add(&dropped_reclaim_states, 1);
 	return 0;
 }
 
 SEC("tp_btf/mm_vmscan_memcg_reclaim_end")
-int BPF_PROG(track_reclaim_end, unsigned long reclaimed,
+int BPF_PROG(profile_reclaim_end, unsigned long reclaimed,
 	     struct mem_cgroup *memcg)
 {
+	struct active_reclaim *active;
 	struct reclaim_profile *profile;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u64 cgroup_id = memcg_cgroup_id(memcg);
+	__u64 duration_ns;
+	__s32 stack_id;
 
 	if (!selected_cgroup(cgroup_id))
 		return 0;
-	profile = get_profile(cgroup_id);
-	if (!profile)
+	active = bpf_map_lookup_elem(&active_reclaims, &pid_tgid);
+	if (!active || active->cgroup_id != cgroup_id)
 		return 0;
-	__sync_fetch_and_add(&profile->end_count, 1);
-	__sync_fetch_and_add(&profile->reclaimed_pages, reclaimed);
-	profile->last_reclaim_ns = bpf_ktime_get_ns();
+	duration_ns = bpf_ktime_get_ns() - active->started_ns;
+	stack_id = active->stack_id;
+	profile = get_profile(cgroup_id);
+	if (profile) {
+		__sync_fetch_and_add(&profile->end_count, 1);
+		__sync_fetch_and_add(&profile->reclaimed_pages, reclaimed);
+		__sync_fetch_and_add(&profile->total_reclaim_ns, duration_ns);
+		__sync_fetch_and_add(&profile->latency_slots[latency_bucket(duration_ns)],
+				     1);
+		update_maximum(&profile->maximum_reclaim_ns, duration_ns);
+		profile->last_reclaim_ns = bpf_ktime_get_ns();
+	}
+	if (stack_id >= 0)
+		update_stack_profile(cgroup_id, stack_id, duration_ns, reclaimed);
+	bpf_map_delete_elem(&active_reclaims, &pid_tgid);
 	return 0;
 }
 
@@ -166,13 +272,8 @@ int capture_oom_victim(struct trace_event_raw_mark_victim *ctx)
 				  (void *)ctx + (ctx->__data_loc_comm & 0xffff));
 
 	profile = bpf_map_lookup_elem(&profiles, &cgroup_id);
-	if (profile) {
-		event->reclaim_begin_count = profile->begin_count;
-		event->reclaim_end_count = profile->end_count;
-		event->reclaimed_pages = profile->reclaimed_pages;
-		event->cross_cgroup_reclaims = profile->cross_cgroup_reclaims;
-		event->last_reclaim_ns = profile->last_reclaim_ns;
-	}
+	if (profile)
+		__builtin_memcpy(&event->profile, profile, sizeof(event->profile));
 	bpf_ringbuf_submit(event, 0);
 	return 0;
 }

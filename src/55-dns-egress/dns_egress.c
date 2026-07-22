@@ -31,6 +31,15 @@ struct options {
 	bool demo;
 };
 
+struct dns_runtime {
+	struct dns_egress_bpf *skel;
+	struct bpf_link *query_link;
+	struct bpf_link *ingress_link;
+	struct bpf_link *connect_link;
+	struct ring_buffer *ring;
+	int cgroup_fd;
+};
+
 static int event_counts[5];
 static volatile sig_atomic_t stop;
 
@@ -87,6 +96,42 @@ static void usage(const char *program)
 	       "       %s --demo\n", program, program);
 }
 
+static int apply_option(int option, const char *program,
+			struct options *options)
+{
+	switch (option) {
+	case 'c': options->cgroup_path = optarg; return 0;
+	case 'n': options->domain = optarg; return 0;
+	case 'r': options->dns_server = optarg; return 0;
+	case 'p':
+		return parse_uint(optarg, 65535, &options->port) || !options->port ?
+		       -1 : 0;
+	case 's':
+		return parse_uint(optarg, 65535, &options->dns_port) ||
+		       !options->dns_port ? -1 : 0;
+	case 'd':
+		return parse_uint(optarg, 86400, &options->duration_seconds);
+	case 'D': options->demo = true; return 0;
+	case 'h': usage(program); exit(0);
+	default: return -1;
+	}
+}
+
+static int finish_options(struct options *options)
+{
+	if (!options->demo)
+		return options->cgroup_path && options->domain &&
+		       options->dns_server ? 0 : -1;
+	if (options->cgroup_path || options->domain || options->dns_server)
+		return -1;
+	options->cgroup_path = "/sys/fs/cgroup";
+	options->domain = "lab.test";
+	options->dns_server = "127.0.0.1";
+	options->port = DEMO_TCP_PORT;
+	options->dns_port = DEMO_DNS_PORT;
+	return 0;
+}
+
 static int parse_options(int argc, char **argv, struct options *options)
 {
 	static const struct option long_options[] = {
@@ -103,45 +148,10 @@ static int parse_options(int argc, char **argv, struct options *options)
 	int option;
 
 	while ((option = getopt_long(argc, argv, "c:n:r:p:s:d:Dh", long_options,
-				     NULL)) != -1) {
-		switch (option) {
-		case 'c': options->cgroup_path = optarg; break;
-		case 'n': options->domain = optarg; break;
-		case 'r': options->dns_server = optarg; break;
-		case 'p':
-			if (parse_uint(optarg, 65535, &options->port) ||
-			    !options->port)
-				return -1;
-			break;
-		case 's':
-			if (parse_uint(optarg, 65535, &options->dns_port) ||
-			    !options->dns_port)
-				return -1;
-			break;
-		case 'd':
-			if (parse_uint(optarg, 86400,
-				       &options->duration_seconds))
-				return -1;
-			break;
-		case 'D': options->demo = true; break;
-		case 'h': usage(argv[0]); exit(0);
-		default: return -1;
-		}
-	}
-	if (optind != argc)
-		return -1;
-	if (options->demo) {
-		if (options->cgroup_path || options->domain || options->dns_server)
+				     NULL)) != -1)
+		if (apply_option(option, argv[0], options))
 			return -1;
-		options->cgroup_path = "/sys/fs/cgroup";
-		options->domain = "lab.test";
-		options->dns_server = "127.0.0.1";
-		options->port = DEMO_TCP_PORT;
-		options->dns_port = DEMO_DNS_PORT;
-		return 0;
-	}
-	return options->cgroup_path && options->domain && options->dns_server ?
-	       0 : -1;
+	return optind == argc ? finish_options(options) : -1;
 }
 
 static int encode_qname(const char *domain, unsigned char output[DNS_QNAME_MAX],
@@ -341,16 +351,62 @@ static int complete_tcp(int listener, int client)
 {
 	int accepted = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
 	char byte = 'x';
+	int result = 0;
 
-	if (accepted < 0)
-		return -1;
-	if (write(accepted, &byte, 1) != 1 || read(client, &byte, 1) != 1) {
-		close(accepted);
+	if (accepted < 0) {
+		close(client);
 		return -1;
 	}
+	if (write(accepted, &byte, 1) != 1 || read(client, &byte, 1) != 1)
+		result = -1;
 	close(accepted);
 	close(client);
+	return result;
+}
+
+static int poll_demo_events(struct ring_buffer *ring)
+{
+	int result = ring_buffer__poll(ring, 100);
+
+	return result < 0 && result != -EINTR ? -1 : 0;
+}
+
+static int expect_blocked_connect(struct ring_buffer *ring,
+				  unsigned int port, const char *step)
+{
+	int client;
+
+	errno = 0;
+	client = connect_tcp(port);
+	if (client >= 0) {
+		close(client);
+		return -1;
+	}
+	if (errno != EPERM || poll_demo_events(ring))
+		return -1;
+	printf("demo step=%s result=blocked\n", step);
 	return 0;
+}
+
+static int expect_allowed_connect(struct ring_buffer *ring, int listener,
+				  unsigned int port)
+{
+	int client = connect_tcp(port);
+
+	if (client < 0 || complete_tcp(listener, client))
+		return -1;
+	if (poll_demo_events(ring))
+		return -1;
+	printf("demo step=live-answer result=allowed\n");
+	return 0;
+}
+
+static int expected_demo_events(void)
+{
+	return event_counts[DNS_LEARNED] == 1 &&
+	       event_counts[DNS_ALLOWED] == 1 &&
+	       event_counts[DNS_DENIED] == 4 &&
+	       event_counts[DNS_EXPIRED] == 1 ? 0 : -1;
 }
 
 static int run_demo(struct ring_buffer *ring, const struct options *options,
@@ -369,7 +425,7 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	struct sockaddr_in response_client_address;
 	unsigned char dns_message[512];
 	size_t query_length;
-	int dns_server = -1, dns_client = -1, listener = -1, client = -1;
+	int dns_server = -1, dns_client = -1, listener = -1;
 	int err = -1;
 
 	dns_server = bind_udp(&server_address);
@@ -378,22 +434,14 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	if (dns_server < 0 || dns_client < 0 || listener < 0)
 		goto cleanup;
 
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (expect_blocked_connect(ring, options->port, "before-dns"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=before-dns result=blocked\n");
 
 	if (send_unsolicited_dns(dns_server, dns_client, qname, qname_length))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "unsolicited-response"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=unsolicited-response result=blocked\n");
 
 	if (begin_dns_exchange(dns_server, dns_client, &server_address, qname,
 			       qname_length, dns_message, &query_length,
@@ -401,59 +449,128 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	    send_dns_answer(dns_server, dns_client, &response_client_address,
 			    dns_message, query_length, DNS_ID + 1, 30))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "wrong-transaction-id"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=wrong-transaction-id result=blocked\n");
 
 	if (send_dns_answer(dns_server, dns_client, &response_client_address,
 			    dns_message, query_length, DNS_ID, 1))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	client = connect_tcp(options->port);
-	if (client < 0 || complete_tcp(listener, client))
+	if (poll_demo_events(ring) ||
+	    expect_allowed_connect(ring, listener, options->port))
 		goto cleanup;
-	client = -1;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=live-answer result=allowed\n");
 
 	nanosleep(&wait_time, NULL);
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "expired-answer"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=expired-answer result=blocked\n");
 
-	if (event_counts[DNS_LEARNED] != 1 || event_counts[DNS_ALLOWED] != 1 ||
-	    event_counts[DNS_DENIED] != 4 || event_counts[DNS_EXPIRED] != 1)
+	if (expected_demo_events())
 		goto cleanup;
 	err = 0;
 
 cleanup:
-	if (client >= 0) close(client);
 	if (listener >= 0) close(listener);
 	if (dns_client >= 0) close(dns_client);
 	if (dns_server >= 0) close(dns_server);
 	return err;
 }
 
+static bool link_failed(struct bpf_link **link)
+{
+	if (!libbpf_get_error(*link))
+		return false;
+	*link = NULL;
+	return true;
+}
+
+static int prepare_runtime(struct dns_runtime *runtime,
+			   const struct options *options,
+			   const struct in_addr *dns_server,
+			   const unsigned char *qname,
+			   unsigned int qname_length)
+{
+	bool failed;
+
+	runtime->cgroup_fd = open(options->cgroup_path,
+				  O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (runtime->cgroup_fd < 0) {
+		fprintf(stderr, "failed to open cgroup %s: %s\n",
+			options->cgroup_path, strerror(errno));
+		return -1;
+	}
+	runtime->skel = dns_egress_bpf__open();
+	if (!runtime->skel)
+		return -1;
+	runtime->skel->rodata->target_tgid = options->demo ? getpid() : 0;
+	runtime->skel->rodata->dns_server_ip = dns_server->s_addr;
+	runtime->skel->rodata->dns_server_port = options->dns_port;
+	runtime->skel->rodata->protected_tcp_port = options->port;
+	runtime->skel->rodata->configured_qname_length = qname_length;
+	memcpy((void *)runtime->skel->rodata->configured_qname, qname,
+	       qname_length);
+	if (dns_egress_bpf__load(runtime->skel)) {
+		fprintf(stderr, "failed to load DNS egress BPF programs\n");
+		return -1;
+	}
+	runtime->query_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.record_dns_query, runtime->cgroup_fd);
+	runtime->ingress_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.learn_dns_answer, runtime->cgroup_fd);
+	runtime->connect_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.enforce_dns_policy, runtime->cgroup_fd);
+	failed = link_failed(&runtime->query_link);
+	failed |= link_failed(&runtime->ingress_link);
+	failed |= link_failed(&runtime->connect_link);
+	if (failed) {
+		fprintf(stderr, "failed to attach programs to cgroup %s\n",
+			options->cgroup_path);
+		return -1;
+	}
+	runtime->ring = ring_buffer__new(
+		bpf_map__fd(runtime->skel->maps.events), handle_event, NULL, NULL);
+	return runtime->ring ? 0 : -1;
+}
+
+static int poll_policy_events(struct ring_buffer *ring,
+			      unsigned int duration_seconds)
+{
+	unsigned long long deadline = 0;
+
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
+	if (duration_seconds)
+		deadline = monotonic_ns() +
+			   (unsigned long long)duration_seconds * 1000000000ULL;
+	while (!stop && (!deadline || monotonic_ns() < deadline)) {
+		int result = ring_buffer__poll(ring, 100);
+
+		if (result < 0 && result != -EINTR) {
+			fprintf(stderr, "ring buffer poll failed: %d\n", result);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static void destroy_runtime(struct dns_runtime *runtime)
+{
+	ring_buffer__free(runtime->ring);
+	bpf_link__destroy(runtime->connect_link);
+	bpf_link__destroy(runtime->ingress_link);
+	bpf_link__destroy(runtime->query_link);
+	if (runtime->cgroup_fd >= 0)
+		close(runtime->cgroup_fd);
+	dns_egress_bpf__destroy(runtime->skel);
+}
+
 int main(int argc, char **argv)
 {
 	struct options options = { .port = 443, .dns_port = 53 };
-	struct dns_egress_bpf *skel = NULL;
-	struct bpf_link *query_link = NULL, *ingress_link = NULL;
-	struct bpf_link *connect_link = NULL;
-	struct ring_buffer *ring = NULL;
+	struct dns_runtime runtime = { .cgroup_fd = -1 };
 	struct in_addr dns_server = {};
 	unsigned char qname[DNS_QNAME_MAX] = {};
-	unsigned long long deadline = 0;
 	unsigned int qname_length = 0;
-	int cgroup_fd = -1;
 	int err = 1;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -463,78 +580,21 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		return 2;
 	}
-	cgroup_fd = open(options.cgroup_path,
-			 O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-	if (cgroup_fd < 0) {
-		fprintf(stderr, "failed to open cgroup %s: %s\n",
-			options.cgroup_path, strerror(errno));
-		goto cleanup;
-	}
-
-	skel = dns_egress_bpf__open();
-	if (!skel)
-		goto cleanup;
-	skel->rodata->target_tgid = options.demo ? getpid() : 0;
-	skel->rodata->dns_server_ip = dns_server.s_addr;
-	skel->rodata->dns_server_port = options.dns_port;
-	skel->rodata->protected_tcp_port = options.port;
-	skel->rodata->configured_qname_length = qname_length;
-	memcpy((void *)skel->rodata->configured_qname, qname, qname_length);
-	if (dns_egress_bpf__load(skel)) {
-		fprintf(stderr, "failed to load DNS egress BPF programs\n");
-		goto cleanup;
-	}
-	query_link = bpf_program__attach_cgroup(skel->progs.record_dns_query,
-					       cgroup_fd);
-	ingress_link = bpf_program__attach_cgroup(skel->progs.learn_dns_answer,
-						 cgroup_fd);
-	connect_link = bpf_program__attach_cgroup(skel->progs.enforce_dns_policy,
-						 cgroup_fd);
-	if (libbpf_get_error(query_link) || libbpf_get_error(ingress_link) ||
-	    libbpf_get_error(connect_link)) {
-		fprintf(stderr, "failed to attach programs to cgroup %s\n",
-			options.cgroup_path);
-		query_link = libbpf_get_error(query_link) ? NULL : query_link;
-		ingress_link = libbpf_get_error(ingress_link) ? NULL : ingress_link;
-		connect_link = libbpf_get_error(connect_link) ? NULL : connect_link;
-		goto cleanup;
-	}
-	ring = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event,
-				NULL, NULL);
-	if (!ring)
+	if (prepare_runtime(&runtime, &options, &dns_server, qname,
+			    qname_length))
 		goto cleanup;
 
 	printf("dns-egress attached cgroup=%s domain=%s resolver=%s tcp_port=%u dns_port=%u\n",
 	       options.cgroup_path, options.domain, options.dns_server,
 	       options.port, options.dns_port);
 	if (options.demo) {
-		if (run_demo(ring, &options, qname, qname_length))
+		if (run_demo(runtime.ring, &options, qname, qname_length))
 			goto cleanup;
-	} else {
-		signal(SIGINT, handle_signal);
-		signal(SIGTERM, handle_signal);
-		if (options.duration_seconds)
-			deadline = monotonic_ns() +
-				   (unsigned long long)options.duration_seconds *
-				   1000000000ULL;
-		while (!stop && (!deadline || monotonic_ns() < deadline)) {
-			int poll_result = ring_buffer__poll(ring, 100);
-
-			if (poll_result < 0 && poll_result != -EINTR) {
-				fprintf(stderr, "ring buffer poll failed: %d\n",
-					poll_result);
-				goto cleanup;
-			}
-		}
-	}
+	} else if (poll_policy_events(runtime.ring, options.duration_seconds))
+		goto cleanup;
 	err = 0;
 
 cleanup:
-	ring_buffer__free(ring);
-	bpf_link__destroy(connect_link);
-	bpf_link__destroy(ingress_link);
-	bpf_link__destroy(query_link);
-	if (cgroup_fd >= 0) close(cgroup_fd);
-	dns_egress_bpf__destroy(skel);
+	destroy_runtime(&runtime);
 	return err;
 }

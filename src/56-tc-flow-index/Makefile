@@ -17,7 +17,7 @@ VMLINUX := ../third_party/vmlinux/$(ARCH)/vmlinux.h
 INCLUDES := -I$(OUTPUT) -I../third_party/libbpf/include/uapi -I$(dir $(VMLINUX)) -I.
 CFLAGS := -g -Wall -Wextra -D_GNU_SOURCE
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
-APPS = slow_syscall_index
+APPS = tc_flow_index
 
 CLANG_BPF_SYS_INCLUDES ?= $(shell $(CLANG) -v -E - </dev/null 2>&1 \
 	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
@@ -53,7 +53,7 @@ test: all
 		echo "test requires root; run inside the documented KVM guest" >&2; \
 		exit 1; \
 	fi
-	python3 tests/test_slow_syscall_index.py ./slow_syscall_index
+	python3 tests/test_tc_flow_index.py ./tc_flow_index
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)

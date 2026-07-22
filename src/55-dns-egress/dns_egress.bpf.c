@@ -90,6 +90,53 @@ static __noinline bool matches_qname(struct __sk_buff *skb, __u32 offset)
 	return true;
 }
 
+static __always_inline bool parse_query_transport(
+	struct __sk_buff *skb, __u32 *dns_offset, struct dns_query_key *key)
+{
+	struct udphdr udp;
+	struct iphdr ip;
+	__u32 ip_header_len;
+
+	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
+		return false;
+	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
+	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
+	    ip.daddr != dns_server_ip)
+		return false;
+	ip_header_len = ip.ihl * 4;
+	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
+	    bpf_ntohs(udp.dest) != dns_server_port)
+		return false;
+	*dns_offset = ip_header_len + sizeof(udp);
+	key->server_ip = ip.daddr;
+	key->client_ip = ip.saddr;
+	key->client_port = udp.source;
+	return true;
+}
+
+static __always_inline bool parse_dns_query(struct __sk_buff *skb,
+					     __u32 dns_offset,
+					     struct dns_query_key *key)
+{
+	struct dns_question question;
+	struct dns_header header;
+	__u16 flags;
+
+	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
+		return false;
+	flags = bpf_ntohs(header.flags);
+	if ((flags & 0xf800) || bpf_ntohs(header.questions) != 1)
+		return false;
+	if (!matches_qname(skb, dns_offset + sizeof(header)))
+		return false;
+	dns_offset += sizeof(header) + configured_qname_length;
+	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
+	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
+		return false;
+	key->transaction_id = header.id;
+	return true;
+}
+
 SEC("cgroup_skb/egress")
 int record_dns_query(struct __sk_buff *skb)
 {
@@ -97,107 +144,110 @@ int record_dns_query(struct __sk_buff *skb)
 		.expires_ns = bpf_ktime_get_ns() + DNS_QUERY_LIFETIME_NS,
 	};
 	struct dns_query_key key = {};
-	struct dns_question question;
-	struct dns_header header;
+	__u32 dns_offset;
+
+	if (!parse_query_transport(skb, &dns_offset, &key) ||
+	    !parse_dns_query(skb, dns_offset, &key))
+		return 1;
+	bpf_map_update_elem(&pending_queries, &key, &state, BPF_ANY);
+	return 1;
+}
+
+static __always_inline bool parse_response_transport(
+	struct __sk_buff *skb, __u32 *dns_offset, struct dns_query_key *query_key)
+{
 	struct udphdr udp;
 	struct iphdr ip;
 	__u32 ip_header_len;
-	__u32 dns_offset;
-	__u16 flags;
 
 	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
-		return 1;
+		return false;
 	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
 	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
-	    ip.daddr != dns_server_ip)
-		return 1;
+	    ip.saddr != dns_server_ip)
+		return false;
 	ip_header_len = ip.ihl * 4;
 	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
-	    bpf_ntohs(udp.dest) != dns_server_port)
-		return 1;
-	dns_offset = ip_header_len + sizeof(udp);
+	    bpf_ntohs(udp.source) != dns_server_port)
+		return false;
+	*dns_offset = ip_header_len + sizeof(udp);
+	query_key->server_ip = ip.saddr;
+	query_key->client_ip = ip.daddr;
+	query_key->client_port = udp.dest;
+	return true;
+}
+
+static __always_inline bool pending_query_is_live(
+	struct dns_query_key *query_key)
+{
+	struct dns_query_state *query;
+
+	query = bpf_map_lookup_elem(&pending_queries, query_key);
+	if (!query)
+		return false;
+	if (bpf_ktime_get_ns() >= query->expires_ns) {
+		bpf_map_delete_elem(&pending_queries, query_key);
+		return false;
+	}
+	return true;
+}
+
+static __always_inline bool parse_response_question(
+	struct __sk_buff *skb, __u32 dns_offset,
+	struct dns_query_key *query_key, __u32 *answer_offset)
+{
+	struct dns_question question;
+	struct dns_header header;
+
 	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
-		return 1;
-	flags = bpf_ntohs(header.flags);
-	if ((flags & 0xf800) || bpf_ntohs(header.questions) != 1)
-		return 1;
+		return false;
+	query_key->transaction_id = header.id;
+	if (!pending_query_is_live(query_key))
+		return false;
+	if ((bpf_ntohs(header.flags) & 0xf80f) != 0x8000 ||
+	    bpf_ntohs(header.questions) != 1 || !bpf_ntohs(header.answers))
+		return false;
 	if (!matches_qname(skb, dns_offset + sizeof(header)))
-		return 1;
+		return false;
 	dns_offset += sizeof(header) + configured_qname_length;
 	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
 	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
-		return 1;
+		return false;
+	*answer_offset = dns_offset + sizeof(question);
+	return true;
+}
 
-	key.server_ip = ip.daddr;
-	key.client_ip = ip.saddr;
-	key.client_port = udp.source;
-	key.transaction_id = header.id;
-	bpf_map_update_elem(&pending_queries, &key, &state, BPF_ANY);
-	return 1;
+static __always_inline bool parse_direct_a_answer(struct __sk_buff *skb,
+						   __u32 answer_offset,
+						   __u32 *key, __u32 *ttl)
+{
+	struct dns_a_answer answer;
+
+	if (bpf_skb_load_bytes(skb, answer_offset, &answer, sizeof(answer)) ||
+	    bpf_ntohs(answer.name) != 0xc00c || bpf_ntohs(answer.type) != 1 ||
+	    bpf_ntohs(answer.class) != 1 ||
+	    bpf_ntohs(answer.address_length) != 4)
+		return false;
+	*key = answer.address;
+	*ttl = bpf_ntohl(answer.ttl);
+	return *ttl && *ttl <= 86400;
 }
 
 SEC("cgroup_skb/ingress")
 int learn_dns_answer(struct __sk_buff *skb)
 {
-	struct dns_a_answer answer;
-	struct dns_question question;
-	struct dns_header header;
 	struct dns_query_key query_key = {};
-	struct dns_query_state *query;
 	struct dns_state state = {};
-	struct udphdr udp;
-	struct iphdr ip;
 	__u64 ttl_ns, expires;
-	__u32 ip_header_len;
-	__u32 dns_offset;
-	__u32 key;
-	__u32 ttl;
+	__u32 dns_offset, answer_offset;
+	__u32 key, ttl;
 
-	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
-		return 1;
-	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
-	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
-	    ip.saddr != dns_server_ip)
-		return 1;
-	ip_header_len = ip.ihl * 4;
-	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
-	    bpf_ntohs(udp.source) != dns_server_port)
-		return 1;
-	dns_offset = ip_header_len + sizeof(udp);
-	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
-		return 1;
-	query_key.server_ip = ip.saddr;
-	query_key.client_ip = ip.daddr;
-	query_key.client_port = udp.dest;
-	query_key.transaction_id = header.id;
-	query = bpf_map_lookup_elem(&pending_queries, &query_key);
-	if (!query)
-		return 1;
-	if (bpf_ktime_get_ns() >= query->expires_ns) {
-		bpf_map_delete_elem(&pending_queries, &query_key);
-		return 1;
-	}
-	if ((bpf_ntohs(header.flags) & 0xf80f) != 0x8000 ||
-	    bpf_ntohs(header.questions) != 1 || !bpf_ntohs(header.answers))
-		return 1;
-	if (!matches_qname(skb, dns_offset + sizeof(header)))
-		return 1;
-	dns_offset += sizeof(header) + configured_qname_length;
-	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
-	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
-		return 1;
-	dns_offset += sizeof(question);
-	if (bpf_skb_load_bytes(skb, dns_offset, &answer, sizeof(answer)) ||
-	    bpf_ntohs(answer.name) != 0xc00c || bpf_ntohs(answer.type) != 1 ||
-	    bpf_ntohs(answer.class) != 1 ||
-	    bpf_ntohs(answer.address_length) != 4)
+	if (!parse_response_transport(skb, &dns_offset, &query_key) ||
+	    !parse_response_question(skb, dns_offset, &query_key,
+				     &answer_offset) ||
+	    !parse_direct_a_answer(skb, answer_offset, &key, &ttl))
 		return 1;
 	bpf_map_delete_elem(&pending_queries, &query_key);
-
-	key = answer.address;
-	ttl = bpf_ntohl(answer.ttl);
-	if (!ttl || ttl > 86400)
-		return 1;
 	ttl_ns = (__u64)ttl * 1000000000ULL;
 	expires = bpf_ktime_get_ns() + ttl_ns;
 	state.expires_ns = expires;
