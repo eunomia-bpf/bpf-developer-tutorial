@@ -69,6 +69,8 @@ Networking:
 - [lesson 46-xdp-test](46-xdp-test/README.md) Building a High-Performance XDP Packet Generator
 - [lesson 50-tcx](50-tcx/README.md) Composable Traffic Control with TCX Links
 - [lesson 53-egress-pacer](53-egress-pacer/README.md) Building an Egress Pacer with BPF Qdisc
+- [lesson 56-tc-flow-index](56-tc-flow-index/README.md) Index TC Flows in Two Refcounted rbtrees
+- [lesson 60-afxdp-dump](60-afxdp-dump/README.md) Receive UDP Packets with AF_XDP
 
 
 Tracing:
@@ -81,6 +83,7 @@ Tracing:
 - [lesson 40-mysql](40-mysql/README.md) Using eBPF to Trace MySQL Queries
 - [lesson 48-energy](48-energy/README.md) Energy Monitoring for Process-Level Power Analysis
 - [lesson 52-fsession-latency](52-fsession-latency/README.md) Tracing Slow vfs_read Calls with fsession
+- [lesson 57-oom-watch](57-oom-watch/README.md) Profile memcg Reclaim Before an OOM Kill
 
 
 Security:
@@ -93,6 +96,7 @@ Security:
 - [lesson 34-syscall](34-syscall/README.md) Modifying System Call Arguments with eBPF
 - [lesson 51-tcp-quarantine](51-tcp-quarantine/README.md) Precisely Isolating Established TCP Connections
 - [lesson 54-exec-image-inspector](54-exec-image-inspector/README.md) Inspecting the Executable Image After exec
+- [lesson 55-dns-egress](55-dns-egress/README.md) Build a DNS-Derived IP Allowlist with cgroup BPF
 
 
 Features:

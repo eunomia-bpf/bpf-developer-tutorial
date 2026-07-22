@@ -1,18 +1,24 @@
-# eBPF 实战教程：DNS 感知的出口策略执行
+# eBPF 实战教程：用 cgroup BPF 构建 DNS 派生的 IP 允许列表
 
-如何让一个受保护端口只连接到应用程序刚通过 DNS 解析的 IP 地址？本教程构建一个基于 cgroup 的出口过滤器，从 DNS 响应中学习 IP 地址，在 DNS TTL 有效期间允许匹配的 TCP 连接，并拒绝这个端口上的其他目的地址，策略在 connect 时由内核执行。
+假设一个服务只能通过 HTTPS 访问 `api.example.com`，其余目的地址都需要拒绝。静态 IP 允许列表很难完成这件事，因为 DNS 应答会变化，也会过期；到了 `connect()` 阶段，内核看到的又只是一个 IP 地址，并不知道它来自哪个域名。这里缺少的是一条短期关联，把应用刚刚完成的 DNS 解析和随后的连接连起来。
+
+本课会把这条关联做成一个最小可运行的策略工具。它通过指定的 DNS 解析器观察一个域名，只从匹配的查询与响应中学习 IPv4 A 记录，并在 DNS TTL 有效期间允许访问一个 TCP 端口。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/55-dns-egress>
 
-## eBPF 与 cgroup 钩子
+## eBPF 在哪里执行策略
 
-eBPF 让经过验证器检查的程序运行在 Linux 内核 hook 上，并把选出的状态发送到用户态。本教程使用 cgroup BPF hook 拦截一个 cgroup 的网络报文和连接请求，`cgroup_skb/egress` 与 `cgroup_skb/ingress` 观察 DNS 流量，`cgroup/connect4` 拦截 IPv4 connect 调用。LRU 哈希映射让查询和地址条目保持在固定容量内，Linux 5.8 引入的 BPF ring buffer 则把策略事件交给用户态，因此本例需要 Linux 5.8 或更高版本。
+eBPF 可以让经过验证器检查的程序运行在 Linux 内核 hook 上，通过 map 保留状态，也可以把选出的事件交给用户态。cgroup BPF 让这些 hook 跟随一组工作负载：packet program 可以观察 cgroup 的出入流量，socket-address program 则能在内核发起 IPv4 连接之前允许或拒绝这次请求。
 
-## 实现原理
+这个例子在同一个 cgroup 上挂载三个程序。`cgroup_skb/egress` 识别指定的 DNS 问题并记录待匹配查询，`cgroup_skb/ingress` 只从与查询对应的响应中接纳地址，`cgroup/connect4` 对受保护的 TCP 端口作最终判断。ring buffer 负责报告 learned、allowed、denied 和 expired 事件，并不参与策略结果。
 
-该工具将三个 BPF 程序附加到 cgroup。出口程序把事务 ID、客户端端口和服务器 IP 保存为待处理查询，用于记录出站 DNS 请求，5 秒内没有匹配响应的查询会过期。入口程序验证响应与待处理查询的关联，再提取 A 记录 IP 和 TTL。对于发往受保护端口的 TCP 连接，connect hook 检查目标 IP 是否在允许列表中并且仍然有效，其他目的端口保持原有行为。
+先跟着一次成功的解析走一遍。应用发送 `lab.test` 的 A 查询，egress hook 保存解析器地址、客户端地址、客户端 UDP 端口和 DNS transaction ID，这份记录有效 5 秒。响应回来后，ingress hook 用反向报文重建同一个 key，检查响应标志与 question，再读取第一个直接 A 应答。通过检查的地址会和 TTL 推导出的过期时间一起进入允许列表，随后发往这个地址和受保护端口的 `connect()` 可以在 TTL 内成功。
 
-## 头文件
+待匹配查询就是这里的信任边界。未经请求的响应没有 pending key，transaction ID 不同的响应也会查到另一个 key，因此两者都无法写入允许列表。connect hook 还会再次比较过期时间，即使 LRU map 中仍保留着旧条目，地址也会按 DNS 时间自然失效。
+
+## DNS 协议与事件结构
+
+共享头文件包含 BPF 程序需要解析的少量 DNS 布局，以及用户态接收的固定事件格式。
 
 ```c
 /* SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause) */
@@ -63,9 +69,11 @@ struct dns_egress_event {
 #endif /* __DNS_EGRESS_H */
 ```
 
-头文件定义了用于解析数据包的 DNS 协议结构。`dns_header` 结构匹配 DNS 消息头格式。`dns_question` 和 `dns_a_answer` 结构解析查询和应答部分。`dns_egress_event` 结构通过 ring buffer 将策略事件（learned、allowed、denied、expired）传递给用户空间。
+这些协议结构直接描述线上字节，因此使用 packed 布局。事件同时携带 DNS TTL 和内核单调时钟下的绝对过期时间，命令行展示 TTL，BPF 程序则用时间戳作策略判断。
 
-## BPF 程序
+## 三个 BPF hook
+
+下面是完整的内核态程序。
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -160,6 +168,53 @@ static __noinline bool matches_qname(struct __sk_buff *skb, __u32 offset)
 	return true;
 }
 
+static __always_inline bool parse_query_transport(
+	struct __sk_buff *skb, __u32 *dns_offset, struct dns_query_key *key)
+{
+	struct udphdr udp;
+	struct iphdr ip;
+	__u32 ip_header_len;
+
+	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
+		return false;
+	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
+	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
+	    ip.daddr != dns_server_ip)
+		return false;
+	ip_header_len = ip.ihl * 4;
+	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
+	    bpf_ntohs(udp.dest) != dns_server_port)
+		return false;
+	*dns_offset = ip_header_len + sizeof(udp);
+	key->server_ip = ip.daddr;
+	key->client_ip = ip.saddr;
+	key->client_port = udp.source;
+	return true;
+}
+
+static __always_inline bool parse_dns_query(struct __sk_buff *skb,
+					     __u32 dns_offset,
+					     struct dns_query_key *key)
+{
+	struct dns_question question;
+	struct dns_header header;
+	__u16 flags;
+
+	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
+		return false;
+	flags = bpf_ntohs(header.flags);
+	if ((flags & 0xf800) || bpf_ntohs(header.questions) != 1)
+		return false;
+	if (!matches_qname(skb, dns_offset + sizeof(header)))
+		return false;
+	dns_offset += sizeof(header) + configured_qname_length;
+	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
+	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
+		return false;
+	key->transaction_id = header.id;
+	return true;
+}
+
 SEC("cgroup_skb/egress")
 int record_dns_query(struct __sk_buff *skb)
 {
@@ -167,107 +222,110 @@ int record_dns_query(struct __sk_buff *skb)
 		.expires_ns = bpf_ktime_get_ns() + DNS_QUERY_LIFETIME_NS,
 	};
 	struct dns_query_key key = {};
-	struct dns_question question;
-	struct dns_header header;
+	__u32 dns_offset;
+
+	if (!parse_query_transport(skb, &dns_offset, &key) ||
+	    !parse_dns_query(skb, dns_offset, &key))
+		return 1;
+	bpf_map_update_elem(&pending_queries, &key, &state, BPF_ANY);
+	return 1;
+}
+
+static __always_inline bool parse_response_transport(
+	struct __sk_buff *skb, __u32 *dns_offset, struct dns_query_key *query_key)
+{
 	struct udphdr udp;
 	struct iphdr ip;
 	__u32 ip_header_len;
-	__u32 dns_offset;
-	__u16 flags;
 
 	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
-		return 1;
+		return false;
 	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
 	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
-	    ip.daddr != dns_server_ip)
-		return 1;
+	    ip.saddr != dns_server_ip)
+		return false;
 	ip_header_len = ip.ihl * 4;
 	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
-	    bpf_ntohs(udp.dest) != dns_server_port)
-		return 1;
-	dns_offset = ip_header_len + sizeof(udp);
+	    bpf_ntohs(udp.source) != dns_server_port)
+		return false;
+	*dns_offset = ip_header_len + sizeof(udp);
+	query_key->server_ip = ip.saddr;
+	query_key->client_ip = ip.daddr;
+	query_key->client_port = udp.dest;
+	return true;
+}
+
+static __always_inline bool pending_query_is_live(
+	struct dns_query_key *query_key)
+{
+	struct dns_query_state *query;
+
+	query = bpf_map_lookup_elem(&pending_queries, query_key);
+	if (!query)
+		return false;
+	if (bpf_ktime_get_ns() >= query->expires_ns) {
+		bpf_map_delete_elem(&pending_queries, query_key);
+		return false;
+	}
+	return true;
+}
+
+static __always_inline bool parse_response_question(
+	struct __sk_buff *skb, __u32 dns_offset,
+	struct dns_query_key *query_key, __u32 *answer_offset)
+{
+	struct dns_question question;
+	struct dns_header header;
+
 	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
-		return 1;
-	flags = bpf_ntohs(header.flags);
-	if ((flags & 0xf800) || bpf_ntohs(header.questions) != 1)
-		return 1;
+		return false;
+	query_key->transaction_id = header.id;
+	if (!pending_query_is_live(query_key))
+		return false;
+	if ((bpf_ntohs(header.flags) & 0xf80f) != 0x8000 ||
+	    bpf_ntohs(header.questions) != 1 || !bpf_ntohs(header.answers))
+		return false;
 	if (!matches_qname(skb, dns_offset + sizeof(header)))
-		return 1;
+		return false;
 	dns_offset += sizeof(header) + configured_qname_length;
 	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
 	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
-		return 1;
+		return false;
+	*answer_offset = dns_offset + sizeof(question);
+	return true;
+}
 
-	key.server_ip = ip.daddr;
-	key.client_ip = ip.saddr;
-	key.client_port = udp.source;
-	key.transaction_id = header.id;
-	bpf_map_update_elem(&pending_queries, &key, &state, BPF_ANY);
-	return 1;
+static __always_inline bool parse_direct_a_answer(struct __sk_buff *skb,
+						   __u32 answer_offset,
+						   __u32 *key, __u32 *ttl)
+{
+	struct dns_a_answer answer;
+
+	if (bpf_skb_load_bytes(skb, answer_offset, &answer, sizeof(answer)) ||
+	    bpf_ntohs(answer.name) != 0xc00c || bpf_ntohs(answer.type) != 1 ||
+	    bpf_ntohs(answer.class) != 1 ||
+	    bpf_ntohs(answer.address_length) != 4)
+		return false;
+	*key = answer.address;
+	*ttl = bpf_ntohl(answer.ttl);
+	return *ttl && *ttl <= 86400;
 }
 
 SEC("cgroup_skb/ingress")
 int learn_dns_answer(struct __sk_buff *skb)
 {
-	struct dns_a_answer answer;
-	struct dns_question question;
-	struct dns_header header;
 	struct dns_query_key query_key = {};
-	struct dns_query_state *query;
 	struct dns_state state = {};
-	struct udphdr udp;
-	struct iphdr ip;
 	__u64 ttl_ns, expires;
-	__u32 ip_header_len;
-	__u32 dns_offset;
-	__u32 key;
-	__u32 ttl;
+	__u32 dns_offset, answer_offset;
+	__u32 key, ttl;
 
-	if (bpf_skb_load_bytes(skb, 0, &ip, sizeof(ip)))
-		return 1;
-	if (ip.version != 4 || ip.protocol != IPPROTO_UDP || ip.ihl < 5 ||
-	    (bpf_ntohs(ip.frag_off) & (IP_MF | IP_OFFSET)) ||
-	    ip.saddr != dns_server_ip)
-		return 1;
-	ip_header_len = ip.ihl * 4;
-	if (bpf_skb_load_bytes(skb, ip_header_len, &udp, sizeof(udp)) ||
-	    bpf_ntohs(udp.source) != dns_server_port)
-		return 1;
-	dns_offset = ip_header_len + sizeof(udp);
-	if (bpf_skb_load_bytes(skb, dns_offset, &header, sizeof(header)))
-		return 1;
-	query_key.server_ip = ip.saddr;
-	query_key.client_ip = ip.daddr;
-	query_key.client_port = udp.dest;
-	query_key.transaction_id = header.id;
-	query = bpf_map_lookup_elem(&pending_queries, &query_key);
-	if (!query)
-		return 1;
-	if (bpf_ktime_get_ns() >= query->expires_ns) {
-		bpf_map_delete_elem(&pending_queries, &query_key);
-		return 1;
-	}
-	if ((bpf_ntohs(header.flags) & 0xf80f) != 0x8000 ||
-	    bpf_ntohs(header.questions) != 1 || !bpf_ntohs(header.answers))
-		return 1;
-	if (!matches_qname(skb, dns_offset + sizeof(header)))
-		return 1;
-	dns_offset += sizeof(header) + configured_qname_length;
-	if (bpf_skb_load_bytes(skb, dns_offset, &question, sizeof(question)) ||
-	    bpf_ntohs(question.type) != 1 || bpf_ntohs(question.class) != 1)
-		return 1;
-	dns_offset += sizeof(question);
-	if (bpf_skb_load_bytes(skb, dns_offset, &answer, sizeof(answer)) ||
-	    bpf_ntohs(answer.name) != 0xc00c || bpf_ntohs(answer.type) != 1 ||
-	    bpf_ntohs(answer.class) != 1 ||
-	    bpf_ntohs(answer.address_length) != 4)
+	if (!parse_response_transport(skb, &dns_offset, &query_key) ||
+	    !parse_response_question(skb, dns_offset, &query_key,
+				     &answer_offset) ||
+	    !parse_direct_a_answer(skb, answer_offset, &key, &ttl))
 		return 1;
 	bpf_map_delete_elem(&pending_queries, &query_key);
-
-	key = answer.address;
-	ttl = bpf_ntohl(answer.ttl);
-	if (!ttl || ttl > 86400)
-		return 1;
 	ttl_ns = (__u64)ttl * 1000000000ULL;
 	expires = bpf_ktime_get_ns() + ttl_ns;
 	state.expires_ns = expires;
@@ -309,15 +367,17 @@ int enforce_dns_policy(struct bpf_sock_addr *ctx)
 }
 ```
 
-BPF 程序使用三个映射。`pending_queries` LRU 哈希使用服务器 IP、客户端 IP、客户端端口和事务 ID 的组合键跟踪出站 DNS 查询。`allowed_ips` LRU 哈希存储学习到的 IP 及其过期时间戳。`events` ring buffer 将策略决策发送到用户空间。
+`pending_queries` 和 `allowed_ips` 都是固定容量的 LRU hash map。前者保存最多 5 秒的查询关联状态，后者保存处于 DNS 生命周期内的 IPv4 地址。LRU 淘汰把内存开销限制在确定范围内；当条目超过 1024 个时，最近活跃的查询和地址也会得到优先保留。
 
-`record_dns_query` 函数在 cgroup 出口运行，捕获发往配置的解析器的 DNS 查询。它验证数据包是发往正确服务器和端口的 IPv4 UDP，检查查询名称是否匹配，并存储带有 5 秒过期时间的查询。
+egress 路径先验证 IPv4、UDP、分片状态、解析器地址和端口，再检查报文是不是指定名称的单 question A 查询。只有这些字段全部成立，`record_dns_query()` 才会插入四字段关联 key。程序返回 `1`，DNS 报文仍然按正常路径继续传输。
 
-`learn_dns_answer` 函数在 cgroup 入口运行，解析 DNS 响应。它查找匹配的待处理查询，验证响应格式，从第一个 A 记录提取 IP 地址和 TTL，并将 IP 存储到允许列表中，设置基于 TTL 的过期时间。
+ingress 路径从反向 transport tuple 开始解析。`parse_response_question()` 补上 transaction ID，要求 pending entry 仍然有效，并验证这是包含指定 question 的成功响应。`parse_direct_a_answer()` 接受常见的 `0xc00c` 压缩 name pointer、IN class、A type、4 字节地址，以及 1 到 86400 秒的 TTL。应答通过以后，pending query 会被消费，解析出的 IP 才获得连接资格。
 
-`enforce_dns_policy` 函数在进程调用 `connect()` 时运行，发往受保护端口的 IPv4 TCP 连接会查询允许列表和过期时间。命中的条目返回 1 继续连接，缺失或过期的条目返回 0，让 `connect()` 以 `EPERM` 失败，其他端口则直接返回 1。
+`enforce_dns_policy()` 的范围很窄。发往其他目的端口的 TCP 连接直接通过；发往受保护端口的连接使用 `ctx->user_ip4` 查表，有效条目返回 `1`，缺失或过期条目返回 `0`，应用会收到 `EPERM`。`expired_reported` 上的 compare-and-swap 让多个线程同时访问旧地址时只产生一次 expired 通知。
 
-## 用户空间程序
+## 加载策略并验证完整信任链
+
+用户态程序会配置只读 BPF 数据，把三个程序附加到一个 cgroup，再消费 ring buffer 事件。
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
@@ -351,6 +411,15 @@ struct options {
 	unsigned int dns_port;
 	unsigned int duration_seconds;
 	bool demo;
+};
+
+struct dns_runtime {
+	struct dns_egress_bpf *skel;
+	struct bpf_link *query_link;
+	struct bpf_link *ingress_link;
+	struct bpf_link *connect_link;
+	struct ring_buffer *ring;
+	int cgroup_fd;
 };
 
 static int event_counts[5];
@@ -409,6 +478,42 @@ static void usage(const char *program)
 	       "       %s --demo\n", program, program);
 }
 
+static int apply_option(int option, const char *program,
+			struct options *options)
+{
+	switch (option) {
+	case 'c': options->cgroup_path = optarg; return 0;
+	case 'n': options->domain = optarg; return 0;
+	case 'r': options->dns_server = optarg; return 0;
+	case 'p':
+		return parse_uint(optarg, 65535, &options->port) || !options->port ?
+		       -1 : 0;
+	case 's':
+		return parse_uint(optarg, 65535, &options->dns_port) ||
+		       !options->dns_port ? -1 : 0;
+	case 'd':
+		return parse_uint(optarg, 86400, &options->duration_seconds);
+	case 'D': options->demo = true; return 0;
+	case 'h': usage(program); exit(0);
+	default: return -1;
+	}
+}
+
+static int finish_options(struct options *options)
+{
+	if (!options->demo)
+		return options->cgroup_path && options->domain &&
+		       options->dns_server ? 0 : -1;
+	if (options->cgroup_path || options->domain || options->dns_server)
+		return -1;
+	options->cgroup_path = "/sys/fs/cgroup";
+	options->domain = "lab.test";
+	options->dns_server = "127.0.0.1";
+	options->port = DEMO_TCP_PORT;
+	options->dns_port = DEMO_DNS_PORT;
+	return 0;
+}
+
 static int parse_options(int argc, char **argv, struct options *options)
 {
 	static const struct option long_options[] = {
@@ -425,45 +530,10 @@ static int parse_options(int argc, char **argv, struct options *options)
 	int option;
 
 	while ((option = getopt_long(argc, argv, "c:n:r:p:s:d:Dh", long_options,
-				     NULL)) != -1) {
-		switch (option) {
-		case 'c': options->cgroup_path = optarg; break;
-		case 'n': options->domain = optarg; break;
-		case 'r': options->dns_server = optarg; break;
-		case 'p':
-			if (parse_uint(optarg, 65535, &options->port) ||
-			    !options->port)
-				return -1;
-			break;
-		case 's':
-			if (parse_uint(optarg, 65535, &options->dns_port) ||
-			    !options->dns_port)
-				return -1;
-			break;
-		case 'd':
-			if (parse_uint(optarg, 86400,
-				       &options->duration_seconds))
-				return -1;
-			break;
-		case 'D': options->demo = true; break;
-		case 'h': usage(argv[0]); exit(0);
-		default: return -1;
-		}
-	}
-	if (optind != argc)
-		return -1;
-	if (options->demo) {
-		if (options->cgroup_path || options->domain || options->dns_server)
+				     NULL)) != -1)
+		if (apply_option(option, argv[0], options))
 			return -1;
-		options->cgroup_path = "/sys/fs/cgroup";
-		options->domain = "lab.test";
-		options->dns_server = "127.0.0.1";
-		options->port = DEMO_TCP_PORT;
-		options->dns_port = DEMO_DNS_PORT;
-		return 0;
-	}
-	return options->cgroup_path && options->domain && options->dns_server ?
-	       0 : -1;
+	return optind == argc ? finish_options(options) : -1;
 }
 
 static int encode_qname(const char *domain, unsigned char output[DNS_QNAME_MAX],
@@ -663,16 +733,62 @@ static int complete_tcp(int listener, int client)
 {
 	int accepted = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
 	char byte = 'x';
+	int result = 0;
 
-	if (accepted < 0)
-		return -1;
-	if (write(accepted, &byte, 1) != 1 || read(client, &byte, 1) != 1) {
-		close(accepted);
+	if (accepted < 0) {
+		close(client);
 		return -1;
 	}
+	if (write(accepted, &byte, 1) != 1 || read(client, &byte, 1) != 1)
+		result = -1;
 	close(accepted);
 	close(client);
+	return result;
+}
+
+static int poll_demo_events(struct ring_buffer *ring)
+{
+	int result = ring_buffer__poll(ring, 100);
+
+	return result < 0 && result != -EINTR ? -1 : 0;
+}
+
+static int expect_blocked_connect(struct ring_buffer *ring,
+				  unsigned int port, const char *step)
+{
+	int client;
+
+	errno = 0;
+	client = connect_tcp(port);
+	if (client >= 0) {
+		close(client);
+		return -1;
+	}
+	if (errno != EPERM || poll_demo_events(ring))
+		return -1;
+	printf("demo step=%s result=blocked\n", step);
 	return 0;
+}
+
+static int expect_allowed_connect(struct ring_buffer *ring, int listener,
+				  unsigned int port)
+{
+	int client = connect_tcp(port);
+
+	if (client < 0 || complete_tcp(listener, client))
+		return -1;
+	if (poll_demo_events(ring))
+		return -1;
+	printf("demo step=live-answer result=allowed\n");
+	return 0;
+}
+
+static int expected_demo_events(void)
+{
+	return event_counts[DNS_LEARNED] == 1 &&
+	       event_counts[DNS_ALLOWED] == 1 &&
+	       event_counts[DNS_DENIED] == 4 &&
+	       event_counts[DNS_EXPIRED] == 1 ? 0 : -1;
 }
 
 static int run_demo(struct ring_buffer *ring, const struct options *options,
@@ -691,7 +807,7 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	struct sockaddr_in response_client_address;
 	unsigned char dns_message[512];
 	size_t query_length;
-	int dns_server = -1, dns_client = -1, listener = -1, client = -1;
+	int dns_server = -1, dns_client = -1, listener = -1;
 	int err = -1;
 
 	dns_server = bind_udp(&server_address);
@@ -700,22 +816,14 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	if (dns_server < 0 || dns_client < 0 || listener < 0)
 		goto cleanup;
 
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (expect_blocked_connect(ring, options->port, "before-dns"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=before-dns result=blocked\n");
 
 	if (send_unsolicited_dns(dns_server, dns_client, qname, qname_length))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "unsolicited-response"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=unsolicited-response result=blocked\n");
 
 	if (begin_dns_exchange(dns_server, dns_client, &server_address, qname,
 			       qname_length, dns_message, &query_length,
@@ -723,59 +831,128 @@ static int run_demo(struct ring_buffer *ring, const struct options *options,
 	    send_dns_answer(dns_server, dns_client, &response_client_address,
 			    dns_message, query_length, DNS_ID + 1, 30))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "wrong-transaction-id"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=wrong-transaction-id result=blocked\n");
 
 	if (send_dns_answer(dns_server, dns_client, &response_client_address,
 			    dns_message, query_length, DNS_ID, 1))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	client = connect_tcp(options->port);
-	if (client < 0 || complete_tcp(listener, client))
+	if (poll_demo_events(ring) ||
+	    expect_allowed_connect(ring, listener, options->port))
 		goto cleanup;
-	client = -1;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=live-answer result=allowed\n");
 
 	nanosleep(&wait_time, NULL);
-	ring_buffer__poll(ring, 100);
-	errno = 0;
-	client = connect_tcp(options->port);
-	if (client >= 0 || errno != EPERM)
+	if (poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port, "expired-answer"))
 		goto cleanup;
-	ring_buffer__poll(ring, 100);
-	printf("demo step=expired-answer result=blocked\n");
 
-	if (event_counts[DNS_LEARNED] != 1 || event_counts[DNS_ALLOWED] != 1 ||
-	    event_counts[DNS_DENIED] != 4 || event_counts[DNS_EXPIRED] != 1)
+	if (expected_demo_events())
 		goto cleanup;
 	err = 0;
 
 cleanup:
-	if (client >= 0) close(client);
 	if (listener >= 0) close(listener);
 	if (dns_client >= 0) close(dns_client);
 	if (dns_server >= 0) close(dns_server);
 	return err;
 }
 
+static bool link_failed(struct bpf_link **link)
+{
+	if (!libbpf_get_error(*link))
+		return false;
+	*link = NULL;
+	return true;
+}
+
+static int prepare_runtime(struct dns_runtime *runtime,
+			   const struct options *options,
+			   const struct in_addr *dns_server,
+			   const unsigned char *qname,
+			   unsigned int qname_length)
+{
+	bool failed;
+
+	runtime->cgroup_fd = open(options->cgroup_path,
+				  O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (runtime->cgroup_fd < 0) {
+		fprintf(stderr, "failed to open cgroup %s: %s\n",
+			options->cgroup_path, strerror(errno));
+		return -1;
+	}
+	runtime->skel = dns_egress_bpf__open();
+	if (!runtime->skel)
+		return -1;
+	runtime->skel->rodata->target_tgid = options->demo ? getpid() : 0;
+	runtime->skel->rodata->dns_server_ip = dns_server->s_addr;
+	runtime->skel->rodata->dns_server_port = options->dns_port;
+	runtime->skel->rodata->protected_tcp_port = options->port;
+	runtime->skel->rodata->configured_qname_length = qname_length;
+	memcpy((void *)runtime->skel->rodata->configured_qname, qname,
+	       qname_length);
+	if (dns_egress_bpf__load(runtime->skel)) {
+		fprintf(stderr, "failed to load DNS egress BPF programs\n");
+		return -1;
+	}
+	runtime->query_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.record_dns_query, runtime->cgroup_fd);
+	runtime->ingress_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.learn_dns_answer, runtime->cgroup_fd);
+	runtime->connect_link = bpf_program__attach_cgroup(
+		runtime->skel->progs.enforce_dns_policy, runtime->cgroup_fd);
+	failed = link_failed(&runtime->query_link);
+	failed |= link_failed(&runtime->ingress_link);
+	failed |= link_failed(&runtime->connect_link);
+	if (failed) {
+		fprintf(stderr, "failed to attach programs to cgroup %s\n",
+			options->cgroup_path);
+		return -1;
+	}
+	runtime->ring = ring_buffer__new(
+		bpf_map__fd(runtime->skel->maps.events), handle_event, NULL, NULL);
+	return runtime->ring ? 0 : -1;
+}
+
+static int poll_policy_events(struct ring_buffer *ring,
+			      unsigned int duration_seconds)
+{
+	unsigned long long deadline = 0;
+
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
+	if (duration_seconds)
+		deadline = monotonic_ns() +
+			   (unsigned long long)duration_seconds * 1000000000ULL;
+	while (!stop && (!deadline || monotonic_ns() < deadline)) {
+		int result = ring_buffer__poll(ring, 100);
+
+		if (result < 0 && result != -EINTR) {
+			fprintf(stderr, "ring buffer poll failed: %d\n", result);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static void destroy_runtime(struct dns_runtime *runtime)
+{
+	ring_buffer__free(runtime->ring);
+	bpf_link__destroy(runtime->connect_link);
+	bpf_link__destroy(runtime->ingress_link);
+	bpf_link__destroy(runtime->query_link);
+	if (runtime->cgroup_fd >= 0)
+		close(runtime->cgroup_fd);
+	dns_egress_bpf__destroy(runtime->skel);
+}
+
 int main(int argc, char **argv)
 {
 	struct options options = { .port = 443, .dns_port = 53 };
-	struct dns_egress_bpf *skel = NULL;
-	struct bpf_link *query_link = NULL, *ingress_link = NULL;
-	struct bpf_link *connect_link = NULL;
-	struct ring_buffer *ring = NULL;
+	struct dns_runtime runtime = { .cgroup_fd = -1 };
 	struct in_addr dns_server = {};
 	unsigned char qname[DNS_QNAME_MAX] = {};
-	unsigned long long deadline = 0;
 	unsigned int qname_length = 0;
-	int cgroup_fd = -1;
 	int err = 1;
 
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -785,109 +962,56 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		return 2;
 	}
-	cgroup_fd = open(options.cgroup_path,
-			 O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-	if (cgroup_fd < 0) {
-		fprintf(stderr, "failed to open cgroup %s: %s\n",
-			options.cgroup_path, strerror(errno));
-		goto cleanup;
-	}
-
-	skel = dns_egress_bpf__open();
-	if (!skel)
-		goto cleanup;
-	skel->rodata->target_tgid = options.demo ? getpid() : 0;
-	skel->rodata->dns_server_ip = dns_server.s_addr;
-	skel->rodata->dns_server_port = options.dns_port;
-	skel->rodata->protected_tcp_port = options.port;
-	skel->rodata->configured_qname_length = qname_length;
-	memcpy((void *)skel->rodata->configured_qname, qname, qname_length);
-	if (dns_egress_bpf__load(skel)) {
-		fprintf(stderr, "failed to load DNS egress BPF programs\n");
-		goto cleanup;
-	}
-	query_link = bpf_program__attach_cgroup(skel->progs.record_dns_query,
-					       cgroup_fd);
-	ingress_link = bpf_program__attach_cgroup(skel->progs.learn_dns_answer,
-						 cgroup_fd);
-	connect_link = bpf_program__attach_cgroup(skel->progs.enforce_dns_policy,
-						 cgroup_fd);
-	if (libbpf_get_error(query_link) || libbpf_get_error(ingress_link) ||
-	    libbpf_get_error(connect_link)) {
-		fprintf(stderr, "failed to attach programs to cgroup %s\n",
-			options.cgroup_path);
-		query_link = libbpf_get_error(query_link) ? NULL : query_link;
-		ingress_link = libbpf_get_error(ingress_link) ? NULL : ingress_link;
-		connect_link = libbpf_get_error(connect_link) ? NULL : connect_link;
-		goto cleanup;
-	}
-	ring = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event,
-				NULL, NULL);
-	if (!ring)
+	if (prepare_runtime(&runtime, &options, &dns_server, qname,
+			    qname_length))
 		goto cleanup;
 
 	printf("dns-egress attached cgroup=%s domain=%s resolver=%s tcp_port=%u dns_port=%u\n",
 	       options.cgroup_path, options.domain, options.dns_server,
 	       options.port, options.dns_port);
 	if (options.demo) {
-		if (run_demo(ring, &options, qname, qname_length))
+		if (run_demo(runtime.ring, &options, qname, qname_length))
 			goto cleanup;
-	} else {
-		signal(SIGINT, handle_signal);
-		signal(SIGTERM, handle_signal);
-		if (options.duration_seconds)
-			deadline = monotonic_ns() +
-				   (unsigned long long)options.duration_seconds *
-				   1000000000ULL;
-		while (!stop && (!deadline || monotonic_ns() < deadline)) {
-			int poll_result = ring_buffer__poll(ring, 100);
-
-			if (poll_result < 0 && poll_result != -EINTR) {
-				fprintf(stderr, "ring buffer poll failed: %d\n",
-					poll_result);
-				goto cleanup;
-			}
-		}
-	}
+	} else if (poll_policy_events(runtime.ring, options.duration_seconds))
+		goto cleanup;
 	err = 0;
 
 cleanup:
-	ring_buffer__free(ring);
-	bpf_link__destroy(connect_link);
-	bpf_link__destroy(ingress_link);
-	bpf_link__destroy(query_link);
-	if (cgroup_fd >= 0) close(cgroup_fd);
-	dns_egress_bpf__destroy(skel);
+	destroy_runtime(&runtime);
 	return err;
 }
 ```
 
-用户空间程序加载并将 BPF 程序附加到 cgroup。它将域名编码为 DNS 标签格式，配置 BPF 程序的目标解析器和受保护端口，并轮询 ring buffer 获取策略事件。
+域名会在 BPF object 加载前编码为 DNS label 格式，例如 `lab.test` 会变成 `\x03lab\x04test\x00`，这正是 packet hook 逐字节比较的内容。解析器与端口写入 skeleton 的 `rodata`，验证器可以把它们视为常量。
 
-演示模式运行一个独立测试：它创建本地 UDP 和 TCP 套接字，模拟 DNS 解析，并验证策略是否正确工作。它测试 DNS 之前的连接阻止、拒绝未经请求的响应、拒绝错误的事务 ID、有效 DNS 后允许连接，以及 TTL 过期后阻止连接。
+普通模式会保持三个 link 存活，直到运行时间结束或收到退出信号。demo 模式用 loopback socket 走完信任链：先证明初始连接会被拒绝，再分别发送未经请求的应答和错误 ID 应答，随后接纳一个 TTL 为 1 秒的正确应答，最后等待它过期。这些检查很重要，因为“解析所有 DNS 响应”的简单实现也能通过成功路径，却很容易被伪造响应污染。
 
-## 编译和执行
+## 编译和运行
 
-构建示例：
+使用仓库内置的 libbpf 与 bpftool 构建示例：
 
 ```bash
 cd src/55-dns-egress
 make
 ```
 
-使用必需参数运行：
+将它挂到服务 cgroup，通过服务实际使用的解析器观察一个域名，并保护 TCP 443 端口：
 
 ```bash
-sudo ./dns_egress --cgroup /sys/fs/cgroup/my-service --domain api.example.com --dns-server 127.0.0.53 --port 443
+sudo ./dns_egress \
+  --cgroup /sys/fs/cgroup/my-service \
+  --domain api.example.com \
+  --dns-server 127.0.0.53 \
+  --port 443
 ```
 
-或运行内置演示：
+这个 cgroup 需要包含目标工作负载，让它的 DNS 报文和连接共享同一份策略状态。TCP 443 和 DNS 53 是默认端口，`--dns-port` 可以选择其他解析器端口，`--duration` 则为运行时间设置上限。内置 demo 不依赖外部 DNS 服务器：
 
 ```bash
 sudo ./dns_egress --demo
 ```
 
-示例演示输出：
+一次真实运行的输出如下：
 
 ```text
 dns-egress attached cgroup=/sys/fs/cgroup domain=lab.test resolver=127.0.0.1 tcp_port=19090 dns_port=15353
@@ -905,27 +1029,31 @@ event=denied pid=1246 ip=127.0.0.1 ttl=1
 demo step=expired-answer result=blocked
 ```
 
+前三个 denied 说明，仅仅收到 DNS 格式的流量或者看到正确域名还不足以学习地址。只有关联正确的响应会产生 learned，allowed 覆盖它的有效 TTL，expired 之后的连接则立刻回到 denied。
+
 ## 环境要求
 
-| 要求 | 详情 |
-|------|------|
-| 内核 | Linux 5.8+（BPF ring buffer） |
-| 配置 | `CONFIG_BPF_SYSCALL`、`CONFIG_CGROUP_BPF`、`CONFIG_DEBUG_INFO_BTF` |
-| 权限 | Root |
-| cgroup | cgroup v2 已挂载 |
+| 要求 | 说明 |
+|---|---|
+| 内核 | Linux 5.8 或更高版本，最新依赖来自 BPF ring buffer |
+| 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_CGROUP_BPF`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_INET` |
+| cgroup | cgroup v2，目标工作负载位于挂载目录之下 |
+| 权限 | root，或者等价的 BPF 与网络管理 capability |
+| 架构与硬件 | 当前声明并完成测试的目标是 x86-64，不需要特殊网卡 |
 
-## 范围和限制
+## 实现范围
 
-此实现保护一个配置好的 TCP 目的端口，其他端口保持不变。它支持启动时配置的一个精确查询名称，仅支持 IPv4 UDP DNS，并解析直接的第一个 A 记录应答。待处理查询在 5 秒后过期，允许的 IP 使用带有 DNS TTL 的 1024 条目 LRU 哈希。它不处理 CNAME 链、多应答布局、TCP DNS、IPv6、DNS-over-HTTPS 或 DNS-over-TLS。
+这个工具处理一个精确域名、一个解析器、一个受保护的 TCP 端口、IPv4 UDP DNS 和第一个直接 A 应答，并识别常见的 `0xc00c` owner name。CNAME 链、多种 answer 布局、TCP DNS、IPv6、DoH 和 DoT 需要更多解析逻辑或新的观察位置。这个紧凑范围保留了策略最关键的性质：IP 通过最近一次匹配查询进入允许列表，再按照 DNS 时间退出。
 
 ## 总结
 
-这个例子把 DNS 响应与最近的查询关联起来，再把 TTL 带到 connect 阶段的策略判断中，从而把一个域名变成内核中的短期允许列表。三个 cgroup hook 分别负责 DNS 观察和连接执行，ring buffer 事件则让用户态能够看到每一次策略决定。
+这个例子把观察到的 DNS 结果变成有时间边界的 connect 策略。egress 与 ingress hook 建立可信的查询响应关联，TTL 管理地址生命周期，connect hook 则对工作负载的受保护端口执行结果。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
 ## 参考资料
 
-- [BPF ring buffer 文档](https://docs.kernel.org/6.6/bpf/ringbuf.html)
-- [BPF hash map 文档](https://docs.kernel.org/bpf/map_hash.html)
-- [cgroup BPF commit](https://github.com/torvalds/linux/commit/d74bad4e74ee)
+- [BPF ring buffer](https://docs.kernel.org/bpf/ringbuf.html)
+- [BPF LRU hash map](https://docs.kernel.org/bpf/map_hash.html)
+- [Control Group v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+- [RFC 1035：Domain Names — Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)
