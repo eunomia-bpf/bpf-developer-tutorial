@@ -373,7 +373,7 @@ The egress path first validates IPv4, UDP, fragmentation state, resolver address
 
 On ingress, parsing starts with the reverse transport tuple. `parse_response_question()` adds the transaction ID, requires a live pending entry, and verifies a successful response containing the configured question. `parse_direct_a_answer()` accepts the compact `0xc00c` name pointer, class IN, type A, four-byte address, and a TTL from 1 to 86400 seconds. Once the answer passes, the pending query is consumed and the IP becomes eligible for connections.
 
-`enforce_dns_policy()` stays narrow. TCP connects to other destination ports pass immediately. A connect to the protected port looks up `ctx->user_ip4`; a live entry returns `1`, while a missing or expired entry returns `0`, which surfaces to the application as `EPERM`. The compare-and-swap on `expired_reported` keeps the expiry notification to one event even when several threads race on the stale address.
+`enforce_dns_policy()` stays narrow. TCP connects to other destination ports pass immediately. A connect to the protected port looks up `ctx->user_ip4`; a live entry returns `1`, while a missing or expired entry returns `0`, which surfaces to the application as `EPERM`. A 64-bit compare-and-swap on `expired_reported` keeps the expiry notification to one event even when several threads race on the stale address. BPF atomic compare-and-exchange arrived in Linux 5.12, which sets this tool's minimum kernel version.
 
 ## Loading the Policy and Exercising Its Trust Chain
 
@@ -791,70 +791,109 @@ static int expected_demo_events(void)
 	       event_counts[DNS_EXPIRED] == 1 ? 0 : -1;
 }
 
-static int run_demo(struct ring_buffer *ring, const struct options *options,
-		    const unsigned char *qname, unsigned int qname_length)
+struct demo_context {
+	struct sockaddr_in server_address;
+	struct sockaddr_in response_client_address;
+	unsigned char dns_message[512];
+	size_t query_length;
+	int dns_server;
+	int dns_client;
+	int listener;
+};
+
+static int open_demo_sockets(struct demo_context *demo,
+			     const struct options *options)
 {
-	struct sockaddr_in server_address = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
-		.sin_port = htons(options->dns_port),
-	};
 	struct sockaddr_in client_address = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
 	};
-	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
-	struct sockaddr_in response_client_address;
-	unsigned char dns_message[512];
-	size_t query_length;
-	int dns_server = -1, dns_client = -1, listener = -1;
-	int err = -1;
 
-	dns_server = bind_udp(&server_address);
-	dns_client = bind_udp(&client_address);
-	listener = create_tcp_listener(options->port);
-	if (dns_server < 0 || dns_client < 0 || listener < 0)
-		goto cleanup;
+	demo->server_address = (struct sockaddr_in) {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+		.sin_port = htons(options->dns_port),
+	};
+	demo->dns_server = bind_udp(&demo->server_address);
+	demo->dns_client = bind_udp(&client_address);
+	demo->listener = create_tcp_listener(options->port);
+	return demo->dns_server < 0 || demo->dns_client < 0 || demo->listener < 0 ?
+		-1 : 0;
+}
 
+static int test_rejected_dns_answers(struct ring_buffer *ring,
+				     const struct options *options,
+				     const unsigned char *qname,
+				     unsigned int qname_length,
+				     struct demo_context *demo)
+{
 	if (expect_blocked_connect(ring, options->port, "before-dns"))
-		goto cleanup;
-
-	if (send_unsolicited_dns(dns_server, dns_client, qname, qname_length))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_blocked_connect(ring, options->port, "unsolicited-response"))
-		goto cleanup;
-
-	if (begin_dns_exchange(dns_server, dns_client, &server_address, qname,
-			       qname_length, dns_message, &query_length,
-			       &response_client_address) ||
-	    send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID + 1, 30))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
+		return -1;
+	if (send_unsolicited_dns(demo->dns_server, demo->dns_client, qname,
+				   qname_length) ||
+	    poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port,
+				   "unsolicited-response"))
+		return -1;
+	if (begin_dns_exchange(demo->dns_server, demo->dns_client,
+			       &demo->server_address, qname, qname_length,
+			       demo->dns_message, &demo->query_length,
+			       &demo->response_client_address) ||
+	    send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID + 1, 30) ||
+	    poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "wrong-transaction-id"))
-		goto cleanup;
+		return -1;
+	return 0;
+}
 
-	if (send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID, 1))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_allowed_connect(ring, listener, options->port))
-		goto cleanup;
+static int test_live_and_expired_answer(struct ring_buffer *ring,
+					const struct options *options,
+					struct demo_context *demo)
+{
+	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
 
+	if (send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID, 1) ||
+	    poll_demo_events(ring) ||
+	    expect_allowed_connect(ring, demo->listener, options->port))
+		return -1;
 	nanosleep(&wait_time, NULL);
 	if (poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "expired-answer"))
-		goto cleanup;
+		return -1;
+	return expected_demo_events();
+}
 
-	if (expected_demo_events())
-		goto cleanup;
-	err = 0;
+static void close_demo_sockets(struct demo_context *demo)
+{
+	if (demo->listener >= 0)
+		close(demo->listener);
+	if (demo->dns_client >= 0)
+		close(demo->dns_client);
+	if (demo->dns_server >= 0)
+		close(demo->dns_server);
+}
 
-cleanup:
-	if (listener >= 0) close(listener);
-	if (dns_client >= 0) close(dns_client);
-	if (dns_server >= 0) close(dns_server);
+static int run_demo(struct ring_buffer *ring, const struct options *options,
+		    const unsigned char *qname, unsigned int qname_length)
+{
+	struct demo_context demo = {
+		.dns_server = -1,
+		.dns_client = -1,
+		.listener = -1,
+	};
+	int err;
+
+	err = open_demo_sockets(&demo, options);
+	if (!err)
+		err = test_rejected_dns_answers(ring, options, qname,
+						qname_length, &demo);
+	if (!err)
+		err = test_live_and_expired_answer(ring, options, &demo);
+	close_demo_sockets(&demo);
 	return err;
 }
 
@@ -1035,7 +1074,7 @@ The three early `denied` events show that neither receiving DNS-shaped traffic n
 
 | Requirement | Details |
 |---|---|
-| Kernel | Linux 5.8 or newer; the newest dependency is BPF ring buffer support |
+| Kernel | Linux 5.12 or newer; the newest dependency is BPF atomic compare-and-exchange |
 | Kernel config | `CONFIG_BPF`, `CONFIG_BPF_SYSCALL`, `CONFIG_BPF_JIT`, `CONFIG_CGROUP_BPF`, `CONFIG_DEBUG_INFO_BTF`, `CONFIG_INET` |
 | cgroup | cgroup v2, with the target workload placed below the attached directory |
 | Privileges | Root, or an equivalent set of BPF and network-administration capabilities |
@@ -1055,5 +1094,6 @@ This example turns an observed DNS result into a time-bounded connect policy. Th
 
 - [BPF ring buffer](https://docs.kernel.org/bpf/ringbuf.html)
 - [BPF LRU hash maps](https://docs.kernel.org/bpf/map_hash.html)
+- [BPF atomic compare-and-exchange commit](https://github.com/torvalds/linux/commit/5ffa25502b5ab3d639829a2d1e316cff7f59a41e)
 - [Control Group v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 - [RFC 1035: Domain Names — Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)

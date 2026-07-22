@@ -373,7 +373,7 @@ egress 路径先验证 IPv4、UDP、分片状态、解析器地址和端口，�
 
 ingress 路径从反向 transport tuple 开始解析。`parse_response_question()` 补上 transaction ID，要求 pending entry 仍然有效，并验证这是包含指定 question 的成功响应。`parse_direct_a_answer()` 接受常见的 `0xc00c` 压缩 name pointer、IN class、A type、4 字节地址，以及 1 到 86400 秒的 TTL。应答通过以后，pending query 会被消费，解析出的 IP 才获得连接资格。
 
-`enforce_dns_policy()` 的范围很窄。发往其他目的端口的 TCP 连接直接通过；发往受保护端口的连接使用 `ctx->user_ip4` 查表，有效条目返回 `1`，缺失或过期条目返回 `0`，应用会收到 `EPERM`。`expired_reported` 上的 compare-and-swap 让多个线程同时访问旧地址时只产生一次 expired 通知。
+`enforce_dns_policy()` 的范围很窄。发往其他目的端口的 TCP 连接直接通过；发往受保护端口的连接使用 `ctx->user_ip4` 查表，有效条目返回 `1`，缺失或过期条目返回 `0`，应用会收到 `EPERM`。`expired_reported` 上的 64 位 compare-and-swap 让多个线程同时访问旧地址时只产生一次 expired 通知。BPF atomic compare-and-exchange 在 Linux 5.12 引入，这也确定了工具的最低内核版本。
 
 ## 加载策略并验证完整信任链
 
@@ -791,70 +791,109 @@ static int expected_demo_events(void)
 	       event_counts[DNS_EXPIRED] == 1 ? 0 : -1;
 }
 
-static int run_demo(struct ring_buffer *ring, const struct options *options,
-		    const unsigned char *qname, unsigned int qname_length)
+struct demo_context {
+	struct sockaddr_in server_address;
+	struct sockaddr_in response_client_address;
+	unsigned char dns_message[512];
+	size_t query_length;
+	int dns_server;
+	int dns_client;
+	int listener;
+};
+
+static int open_demo_sockets(struct demo_context *demo,
+			     const struct options *options)
 {
-	struct sockaddr_in server_address = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
-		.sin_port = htons(options->dns_port),
-	};
 	struct sockaddr_in client_address = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
 	};
-	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
-	struct sockaddr_in response_client_address;
-	unsigned char dns_message[512];
-	size_t query_length;
-	int dns_server = -1, dns_client = -1, listener = -1;
-	int err = -1;
 
-	dns_server = bind_udp(&server_address);
-	dns_client = bind_udp(&client_address);
-	listener = create_tcp_listener(options->port);
-	if (dns_server < 0 || dns_client < 0 || listener < 0)
-		goto cleanup;
+	demo->server_address = (struct sockaddr_in) {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+		.sin_port = htons(options->dns_port),
+	};
+	demo->dns_server = bind_udp(&demo->server_address);
+	demo->dns_client = bind_udp(&client_address);
+	demo->listener = create_tcp_listener(options->port);
+	return demo->dns_server < 0 || demo->dns_client < 0 || demo->listener < 0 ?
+		-1 : 0;
+}
 
+static int test_rejected_dns_answers(struct ring_buffer *ring,
+				     const struct options *options,
+				     const unsigned char *qname,
+				     unsigned int qname_length,
+				     struct demo_context *demo)
+{
 	if (expect_blocked_connect(ring, options->port, "before-dns"))
-		goto cleanup;
-
-	if (send_unsolicited_dns(dns_server, dns_client, qname, qname_length))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_blocked_connect(ring, options->port, "unsolicited-response"))
-		goto cleanup;
-
-	if (begin_dns_exchange(dns_server, dns_client, &server_address, qname,
-			       qname_length, dns_message, &query_length,
-			       &response_client_address) ||
-	    send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID + 1, 30))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
+		return -1;
+	if (send_unsolicited_dns(demo->dns_server, demo->dns_client, qname,
+				   qname_length) ||
+	    poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port,
+				   "unsolicited-response"))
+		return -1;
+	if (begin_dns_exchange(demo->dns_server, demo->dns_client,
+			       &demo->server_address, qname, qname_length,
+			       demo->dns_message, &demo->query_length,
+			       &demo->response_client_address) ||
+	    send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID + 1, 30) ||
+	    poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "wrong-transaction-id"))
-		goto cleanup;
+		return -1;
+	return 0;
+}
 
-	if (send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID, 1))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_allowed_connect(ring, listener, options->port))
-		goto cleanup;
+static int test_live_and_expired_answer(struct ring_buffer *ring,
+					const struct options *options,
+					struct demo_context *demo)
+{
+	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
 
+	if (send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID, 1) ||
+	    poll_demo_events(ring) ||
+	    expect_allowed_connect(ring, demo->listener, options->port))
+		return -1;
 	nanosleep(&wait_time, NULL);
 	if (poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "expired-answer"))
-		goto cleanup;
+		return -1;
+	return expected_demo_events();
+}
 
-	if (expected_demo_events())
-		goto cleanup;
-	err = 0;
+static void close_demo_sockets(struct demo_context *demo)
+{
+	if (demo->listener >= 0)
+		close(demo->listener);
+	if (demo->dns_client >= 0)
+		close(demo->dns_client);
+	if (demo->dns_server >= 0)
+		close(demo->dns_server);
+}
 
-cleanup:
-	if (listener >= 0) close(listener);
-	if (dns_client >= 0) close(dns_client);
-	if (dns_server >= 0) close(dns_server);
+static int run_demo(struct ring_buffer *ring, const struct options *options,
+		    const unsigned char *qname, unsigned int qname_length)
+{
+	struct demo_context demo = {
+		.dns_server = -1,
+		.dns_client = -1,
+		.listener = -1,
+	};
+	int err;
+
+	err = open_demo_sockets(&demo, options);
+	if (!err)
+		err = test_rejected_dns_answers(ring, options, qname,
+						qname_length, &demo);
+	if (!err)
+		err = test_live_and_expired_answer(ring, options, &demo);
+	close_demo_sockets(&demo);
 	return err;
 }
 
@@ -1035,7 +1074,7 @@ demo step=expired-answer result=blocked
 
 | 要求 | 说明 |
 |---|---|
-| 内核 | Linux 5.8 或更高版本，最新依赖来自 BPF ring buffer |
+| 内核 | Linux 5.12 或更高版本，最新依赖来自 BPF atomic compare-and-exchange |
 | 内核配置 | `CONFIG_BPF`、`CONFIG_BPF_SYSCALL`、`CONFIG_BPF_JIT`、`CONFIG_CGROUP_BPF`、`CONFIG_DEBUG_INFO_BTF`、`CONFIG_INET` |
 | cgroup | cgroup v2，目标工作负载位于挂载目录之下 |
 | 权限 | root，或者等价的 BPF 与网络管理 capability |
@@ -1055,5 +1094,6 @@ demo step=expired-answer result=blocked
 
 - [BPF ring buffer](https://docs.kernel.org/bpf/ringbuf.html)
 - [BPF LRU hash map](https://docs.kernel.org/bpf/map_hash.html)
+- [BPF atomic compare-and-exchange 引入 commit](https://github.com/torvalds/linux/commit/5ffa25502b5ab3d639829a2d1e316cff7f59a41e)
 - [Control Group v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 - [RFC 1035：Domain Names — Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)

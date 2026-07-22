@@ -409,70 +409,109 @@ static int expected_demo_events(void)
 	       event_counts[DNS_EXPIRED] == 1 ? 0 : -1;
 }
 
-static int run_demo(struct ring_buffer *ring, const struct options *options,
-		    const unsigned char *qname, unsigned int qname_length)
+struct demo_context {
+	struct sockaddr_in server_address;
+	struct sockaddr_in response_client_address;
+	unsigned char dns_message[512];
+	size_t query_length;
+	int dns_server;
+	int dns_client;
+	int listener;
+};
+
+static int open_demo_sockets(struct demo_context *demo,
+			     const struct options *options)
 {
-	struct sockaddr_in server_address = {
-		.sin_family = AF_INET,
-		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
-		.sin_port = htons(options->dns_port),
-	};
 	struct sockaddr_in client_address = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
 	};
-	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
-	struct sockaddr_in response_client_address;
-	unsigned char dns_message[512];
-	size_t query_length;
-	int dns_server = -1, dns_client = -1, listener = -1;
-	int err = -1;
 
-	dns_server = bind_udp(&server_address);
-	dns_client = bind_udp(&client_address);
-	listener = create_tcp_listener(options->port);
-	if (dns_server < 0 || dns_client < 0 || listener < 0)
-		goto cleanup;
+	demo->server_address = (struct sockaddr_in) {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+		.sin_port = htons(options->dns_port),
+	};
+	demo->dns_server = bind_udp(&demo->server_address);
+	demo->dns_client = bind_udp(&client_address);
+	demo->listener = create_tcp_listener(options->port);
+	return demo->dns_server < 0 || demo->dns_client < 0 || demo->listener < 0 ?
+		-1 : 0;
+}
 
+static int test_rejected_dns_answers(struct ring_buffer *ring,
+				     const struct options *options,
+				     const unsigned char *qname,
+				     unsigned int qname_length,
+				     struct demo_context *demo)
+{
 	if (expect_blocked_connect(ring, options->port, "before-dns"))
-		goto cleanup;
-
-	if (send_unsolicited_dns(dns_server, dns_client, qname, qname_length))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_blocked_connect(ring, options->port, "unsolicited-response"))
-		goto cleanup;
-
-	if (begin_dns_exchange(dns_server, dns_client, &server_address, qname,
-			       qname_length, dns_message, &query_length,
-			       &response_client_address) ||
-	    send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID + 1, 30))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
+		return -1;
+	if (send_unsolicited_dns(demo->dns_server, demo->dns_client, qname,
+				   qname_length) ||
+	    poll_demo_events(ring) ||
+	    expect_blocked_connect(ring, options->port,
+				   "unsolicited-response"))
+		return -1;
+	if (begin_dns_exchange(demo->dns_server, demo->dns_client,
+			       &demo->server_address, qname, qname_length,
+			       demo->dns_message, &demo->query_length,
+			       &demo->response_client_address) ||
+	    send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID + 1, 30) ||
+	    poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "wrong-transaction-id"))
-		goto cleanup;
+		return -1;
+	return 0;
+}
 
-	if (send_dns_answer(dns_server, dns_client, &response_client_address,
-			    dns_message, query_length, DNS_ID, 1))
-		goto cleanup;
-	if (poll_demo_events(ring) ||
-	    expect_allowed_connect(ring, listener, options->port))
-		goto cleanup;
+static int test_live_and_expired_answer(struct ring_buffer *ring,
+					const struct options *options,
+					struct demo_context *demo)
+{
+	struct timespec wait_time = { .tv_sec = 1, .tv_nsec = 300000000 };
 
+	if (send_dns_answer(demo->dns_server, demo->dns_client,
+			    &demo->response_client_address, demo->dns_message,
+			    demo->query_length, DNS_ID, 1) ||
+	    poll_demo_events(ring) ||
+	    expect_allowed_connect(ring, demo->listener, options->port))
+		return -1;
 	nanosleep(&wait_time, NULL);
 	if (poll_demo_events(ring) ||
 	    expect_blocked_connect(ring, options->port, "expired-answer"))
-		goto cleanup;
+		return -1;
+	return expected_demo_events();
+}
 
-	if (expected_demo_events())
-		goto cleanup;
-	err = 0;
+static void close_demo_sockets(struct demo_context *demo)
+{
+	if (demo->listener >= 0)
+		close(demo->listener);
+	if (demo->dns_client >= 0)
+		close(demo->dns_client);
+	if (demo->dns_server >= 0)
+		close(demo->dns_server);
+}
 
-cleanup:
-	if (listener >= 0) close(listener);
-	if (dns_client >= 0) close(dns_client);
-	if (dns_server >= 0) close(dns_server);
+static int run_demo(struct ring_buffer *ring, const struct options *options,
+		    const unsigned char *qname, unsigned int qname_length)
+{
+	struct demo_context demo = {
+		.dns_server = -1,
+		.dns_client = -1,
+		.listener = -1,
+	};
+	int err;
+
+	err = open_demo_sockets(&demo, options);
+	if (!err)
+		err = test_rejected_dns_answers(ring, options, qname,
+						qname_length, &demo);
+	if (!err)
+		err = test_live_and_expired_answer(ring, options, &demo);
+	close_demo_sockets(&demo);
 	return err;
 }
 
