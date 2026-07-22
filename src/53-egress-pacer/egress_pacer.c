@@ -4,16 +4,20 @@
 #include <linux/pkt_sched.h>
 #include <net/if.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <bpf/libbpf.h>
 #include "egress_pacer.h"
 #include "egress_pacer.skel.h"
+
+extern char **environ;
 
 static volatile sig_atomic_t exiting;
 
@@ -195,10 +199,145 @@ static int wait_for_duration(void)
 	return 0;
 }
 
+static const char *find_tc_binary(void)
+{
+	static const char *const candidates[] = {
+		"/usr/sbin/tc",
+		"/sbin/tc",
+	};
+	size_t index;
+
+	for (index = 0; index < sizeof(candidates) / sizeof(candidates[0]); index++) {
+		if (!access(candidates[index], X_OK))
+			return candidates[index];
+	}
+	return NULL;
+}
+
+static void print_qdisc_state(bool all_interfaces)
+{
+	const char *tc_binary = find_tc_binary();
+	char *const all_arguments[] = {
+		(char *)"tc", (char *)"qdisc", (char *)"show", NULL,
+	};
+	char *const interface_arguments[] = {
+		(char *)"tc", (char *)"qdisc", (char *)"show", (char *)"dev",
+		(char *)env.interface, NULL,
+	};
+	char *const *arguments = all_interfaces ? all_arguments : interface_arguments;
+	posix_spawn_file_actions_t actions;
+	pid_t child;
+	pid_t waited;
+	int error;
+	int status;
+
+	fprintf(stderr, "%s:\n",
+		all_interfaces ? "qdisc state across interfaces" : "current qdisc state");
+	if (!tc_binary) {
+		fprintf(stderr, "tc was not found in /usr/sbin or /sbin\n");
+		goto manual;
+	}
+
+	error = posix_spawn_file_actions_init(&actions);
+	if (error)
+		goto spawn_failed;
+	error = posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO,
+						  STDOUT_FILENO);
+	if (!error)
+		error = posix_spawn(&child, tc_binary, &actions, NULL, arguments,
+				    environ);
+	posix_spawn_file_actions_destroy(&actions);
+	if (error)
+		goto spawn_failed;
+
+	do {
+		waited = waitpid(child, &status, 0);
+	} while (waited < 0 && errno == EINTR);
+	if (waited >= 0 && WIFEXITED(status) && !WEXITSTATUS(status))
+		return;
+	if (waited < 0)
+		error = errno;
+	else
+		error = EIO;
+
+spawn_failed:
+	fprintf(stderr, "failed to run tc: %s\n", strerror(error));
+manual:
+	if (all_interfaces)
+		fprintf(stderr, "run manually: tc qdisc show\n");
+	else
+		fprintf(stderr, "run manually: tc qdisc show dev %s\n",
+			env.interface);
+}
+
+static int install_pacer(struct egress_pacer_bpf *skel,
+			 struct bpf_tc_hook *hook)
+{
+	int error;
+
+	error = egress_pacer_bpf__attach(skel);
+	if (error) {
+		if (error == -EEXIST) {
+			fprintf(stderr,
+				"bpf_pacer is already registered globally; another interface may own it\n");
+			print_qdisc_state(true);
+			fprintf(stderr,
+				"inspect the bpf_pacer owner above before removing any root qdisc\n");
+		} else {
+			fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
+				strerror(-error));
+		}
+		return error;
+	}
+
+	error = bpf_tc_hook_create(hook);
+	if (!error)
+		return 0;
+	if (error == -EEXIST) {
+		fprintf(stderr, "refusing to replace the existing root qdisc on %s\n",
+			env.interface);
+		print_qdisc_state(false);
+		fprintf(stderr,
+			"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
+			env.interface);
+	} else {
+		fprintf(stderr, "failed to attach bpf_pacer to %s: %s\n",
+			env.interface, strerror(-error));
+	}
+	return error;
+}
+
+static int cleanup_pacer(struct egress_pacer_bpf *skel,
+			 struct bpf_tc_hook *hook, bool qdisc_created, int error)
+{
+	struct pacer_stats final_stats = {};
+	int cleanup_error;
+
+	if (qdisc_created) {
+		cleanup_error = bpf_tc_hook_destroy(hook);
+		if (cleanup_error) {
+			fprintf(stderr, "failed to remove bpf_pacer from %s: %s\n",
+				env.interface, strerror(-cleanup_error));
+			if (!error)
+				error = cleanup_error;
+		}
+	}
+	if (skel && skel->bss)
+		final_stats = skel->bss->stats;
+	if (qdisc_created) {
+		printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu "
+		       "cleanup_dropped=%llu bytes_dequeued=%llu max_qlen=%llu\n",
+		       final_stats.enqueued, final_stats.dequeued,
+		       final_stats.policy_dropped, final_stats.cleanup_dropped,
+		       final_stats.bytes_dequeued, final_stats.max_qlen);
+	}
+	egress_pacer_bpf__destroy(skel);
+	return error != 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct egress_pacer_bpf *skel = NULL;
-	struct pacer_stats final_stats = {};
 	struct bpf_tc_hook hook = {
 		.sz = sizeof(hook),
 		.attach_point = BPF_TC_QDISC,
@@ -208,7 +347,6 @@ int main(int argc, char **argv)
 	};
 	bool qdisc_created = false;
 	unsigned int ifindex;
-	int cleanup_err;
 	int err;
 
 	err = parse_args(argc, argv);
@@ -246,24 +384,9 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	err = egress_pacer_bpf__attach(skel);
-	if (err) {
-		fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
-			strerror(-err));
+	err = install_pacer(skel, &hook);
+	if (err)
 		goto cleanup;
-	}
-
-	err = bpf_tc_hook_create(&hook);
-	if (err) {
-		if (err == -EEXIST)
-			fprintf(stderr,
-				"refusing to replace the existing root qdisc on %s\n",
-				env.interface);
-		else
-			fprintf(stderr, "failed to attach bpf_pacer to %s: %s\n",
-				env.interface, strerror(-err));
-		goto cleanup;
-	}
 	qdisc_created = true;
 
 	printf("READY interface=%s rate_kbps=%llu queue_limit=%u duration=%u\n",
@@ -273,24 +396,5 @@ int main(int argc, char **argv)
 	err = wait_for_duration();
 
 cleanup:
-	if (qdisc_created) {
-		cleanup_err = bpf_tc_hook_destroy(&hook);
-		if (cleanup_err) {
-			fprintf(stderr, "failed to remove bpf_pacer from %s: %s\n",
-				env.interface, strerror(-cleanup_err));
-			if (!err)
-				err = cleanup_err;
-		}
-	}
-	if (skel && skel->bss)
-		final_stats = skel->bss->stats;
-	if (qdisc_created) {
-		printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu "
-		       "cleanup_dropped=%llu bytes_dequeued=%llu max_qlen=%llu\n",
-		       final_stats.enqueued, final_stats.dequeued,
-		       final_stats.policy_dropped, final_stats.cleanup_dropped,
-		       final_stats.bytes_dequeued, final_stats.max_qlen);
-	}
-	egress_pacer_bpf__destroy(skel);
-	return err != 0;
+	return cleanup_pacer(skel, &hook, qdisc_created, err);
 }

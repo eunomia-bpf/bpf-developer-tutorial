@@ -1,6 +1,6 @@
 ---
 name: bpf-tutorial-writing-style
-description: Style checklist for English and Chinese bpf-developer-tutorial README files. Use while drafting or reviewing a tutorial so it reads like the established series, preserves technical detail, and presents complete source clearly.
+description: Style checklist for English and Chinese bpf-developer-tutorial README files. Use while drafting or reviewing a tutorial so it reads like the established series, preserves technical detail, and presents complete kernel source clearly.
 ---
 
 # BPF Tutorial Writing Style
@@ -44,7 +44,7 @@ Use this Chinese paragraph only as a voice reference for connected rhythm, restr
 ## Teach from complete source
 
 - Introduce one component, show its complete source in an ordinary Markdown fence, then explain the important logic before moving to the next component.
-- Keep source byte-exact. Preserve comments and commands; use focused excerpts only after the complete block.
+- Keep every core source file byte-exact and complete, including the user-space loader. Preserve comments and commands; use focused excerpts only after the complete block when they help explain a specific mechanism.
 - Use neither `<details>` nor HTML synchronization markers.
 - Link to the complete lesson once through its GitHub directory. Avoid an opening catalog of individual files.
 - Every Markdown link uses a stable absolute `https://` target. GitHub, kernel.org, and authoritative documentation sites are all valid; relative links are prohibited.

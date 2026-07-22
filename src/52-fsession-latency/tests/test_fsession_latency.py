@@ -17,8 +17,8 @@ SUMMARY = re.compile(
     r"SUMMARY calls=(\d+) slow=(\d+) errors=(\d+) dropped=(\d+) events=(\d+)"
 )
 EVENT = re.compile(
-    r"^EVENT comm=.{16} tgid=(\d+) pid=(\d+) requested=(\d+) "
-    r"result=(-?\d+) latency_us=(\d+)$",
+    r"^EVENT comm=.{16} tgid=(\d+) pid=(\d+) object=(\d+):(\d+):(\d+) "
+    r"type=(\w+) requested=(\d+) result=(-?\d+) latency_us=(\d+)$",
     re.MULTILINE,
 )
 
@@ -174,17 +174,19 @@ def main() -> int:
     assert slow["calls"] >= 65, slow
     assert 1 <= slow["slow"] < slow["calls"], slow
     assert slow["events"] > 0, slow
-    event_records = [tuple(map(int, match.groups())) for match in EVENT.finditer(slow_output)]
+    event_records = [match.groups() for match in EVENT.finditer(slow_output)]
     assert any(
-        tgid == os.getpid()
-        and thread_pid == os.getpid()
-        and requested == 1
-        and result == 1
-        and latency_us >= 10000
-        for tgid, thread_pid, requested, result, latency_us in event_records
+        int(record[0]) == os.getpid()
+        and int(record[1]) == os.getpid()
+        and int(record[4]) > 0
+        and record[5] == "fifo"
+        and int(record[6]) == 1
+        and int(record[7]) == 1
+        and int(record[8]) >= 10000
+        for record in event_records
     ), slow_output
 
-    deadline, _ = run_trace(
+    deadline, deadline_output = run_trace(
         binary,
         "--duration", "1",
         "--threshold-us", "0",
@@ -195,6 +197,14 @@ def main() -> int:
     assert deadline["calls"] > 0, deadline
     assert deadline["events"] > 0, deadline
     assert deadline["slow"] == deadline["events"] + deadline["dropped"], deadline
+    source_stat = pathlib.Path(__file__).stat()
+    assert any(
+        int(match.group(3)) == os.major(source_stat.st_dev)
+        and int(match.group(4)) == os.minor(source_stat.st_dev)
+        and int(match.group(5)) == source_stat.st_ino
+        and match.group(6) == "regular"
+        for match in EVENT.finditer(deadline_output)
+    ), deadline_output
 
     tracing_line = next(line for line in slow_output.splitlines() if line.startswith("Tracing "))
     first_event = next(line for line in slow_output.splitlines() if line.startswith("EVENT "))
@@ -209,7 +219,10 @@ def main() -> int:
         f"threshold_calls={slow['calls']} threshold_slow={slow['slow']} "
         f"events={slow['events']} dropped={slow['dropped']}"
     )
-    print("PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected")
+    print(
+        "PASS: PID filtering, threshold miss, and regular/fifo object identity "
+        "behaved as expected"
+    )
     return 0
 
 

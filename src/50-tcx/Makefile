@@ -44,8 +44,15 @@ endef
 $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
-.PHONY: all
+.PHONY: all test
 all: $(APPS)
+
+test: all
+	@if [ "$$(id -u)" -ne 0 ]; then \
+		echo "test requires root; run it inside the tutorial KVM" >&2; \
+		exit 1; \
+	fi
+	python3 tests/test_tcx_demo.py ./tcx_demo
 
 .PHONY: clean
 clean:

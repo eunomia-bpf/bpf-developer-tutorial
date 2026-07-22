@@ -74,7 +74,7 @@ __u32 last_ifindex;
 SEC("tcx/ingress")
 int tcx_stats(struct __sk_buff *skb)
 {
-	stats_hits++;
+	__sync_fetch_and_add(&stats_hits, 1);
 	last_len = skb->len;
 	last_protocol = bpf_ntohs(skb->protocol);
 	last_ifindex = skb->ifindex;
@@ -84,7 +84,7 @@ int tcx_stats(struct __sk_buff *skb)
 SEC("tcx/ingress")
 int tcx_classifier(struct __sk_buff *skb)
 {
-	classifier_hits++;
+	__sync_fetch_and_add(&classifier_hits, 1);
 	return TCX_PASS;
 }
 ```
@@ -107,7 +107,7 @@ For packet data access, you would use `bpf_skb_load_bytes()` or direct packet po
 
 ### Global Variables as Counters
 
-We use global variables (`stats_hits`, `classifier_hits`, etc.) rather than BPF maps. The libbpf skeleton exposes these at `skel->bss->stats_hits`, simplifying user-space access. This approach works for single-CPU demonstrations; production code should use per-CPU arrays to avoid concurrent update races.
+We use global variables (`stats_hits`, `classifier_hits`, etc.) rather than explicit BPF maps. The libbpf skeleton exposes these at `skel->bss->stats_hits`, simplifying user-space access. The hit counters use atomic additions because packets can arrive on multiple CPUs; the last-packet metadata remains a best-effort snapshot.
 
 ### Return Codes: `TCX_NEXT` vs `TCX_PASS`
 
@@ -166,18 +166,25 @@ After attachment, the loader queries the kernel for the live chain state. The re
 
 This introspection capability is valuable for debugging multi-program pipelines and for tools that need to understand the current attachment state.
 
-### Step 4: Generate Traffic and Verify
+### Step 4: Stay Attached and Observe Traffic
 
-The loader sends a UDP packet to `127.0.0.1:9` (the discard service) to trigger the chain, waits briefly, then reads the global variables:
+After printing `READY` and the live chain, the loader stays attached. Generate traffic independently on the monitored interface, then press Ctrl-C (or use `--duration`) to stop. The loader detaches both links before reading a stable final snapshot:
 
 ```c
-printf("  tcx_stats hits      : %llu\n",
-       (unsigned long long)skel->bss->stats_hits);
-printf("  tcx_classifier hits : %llu\n",
-       (unsigned long long)skel->bss->classifier_hits);
+bpf_link__destroy(stats_link);
+stats_link = NULL;
+bpf_link__destroy(classifier_link);
+classifier_link = NULL;
+
+printf("COUNTERS stats_hits=%llu classifier_hits=%llu last_ifindex=%u "
+       "last_protocol=0x%04x last_len=%u\n",
+       (unsigned long long)skel->bss->stats_hits,
+       (unsigned long long)skel->bss->classifier_hits,
+       skel->bss->last_ifindex, skel->bss->last_protocol,
+       skel->bss->last_len);
 ```
 
-If both counters show 1, the chain executed as intended: `tcx_stats` ran first (recording metadata, returning `TCX_NEXT`), then `tcx_classifier` ran (counting the hit, returning `TCX_PASS`).
+Matching hit counts show that `tcx_stats` ran first (recording metadata and returning `TCX_NEXT`) and `tcx_classifier` then ran and returned `TCX_PASS`. Keeping the process alive also demonstrates TCX ownership: closing the link file descriptors on exit automatically detaches the programs.
 
 ## Building and Running
 
@@ -198,37 +205,32 @@ make
 ### Run
 
 ```bash
-sudo ./tcx_demo -i lo
+sudo ./tcx_demo
 ```
 
-Expected output:
+The default monitors loopback until Ctrl-C. In another terminal, generate ordinary loopback traffic, for example `ping -c 1 127.0.0.1`. The monitor first prints readiness and chain order, then prints counters when it exits:
 
 ```text
-Attached TCX programs to lo (ifindex=1)
+READY interface=lo ifindex=1 duration=until-signal
 TCX ingress chain revision: 2
   slot 0: prog_id=812 link_id=901
   slot 1: prog_id=811 link_id=900
-
-Counters:
-  tcx_stats hits      : 1
-  tcx_classifier hits : 1
-  last ifindex        : 1
-  last protocol       : 0x0800
-  last length         : 46
+^C
+COUNTERS stats_hits=... classifier_hits=... last_ifindex=1 last_protocol=0x0800 last_len=...
 ```
 
 **Reading the output:**
 
 - **Revision 2**: The chain was modified twice: once when `tcx_classifier` attached (revision 1), and once when `tcx_stats` was inserted before it (revision 2).
 - **Slot ordering**: Slot 0 is `tcx_stats` (the program we inserted with `BPF_F_BEFORE`); slot 1 is `tcx_classifier`.
-- **Protocol 0x0800**: IPv4 (the generated UDP packet).
-- **Length 46**: The 20-byte payload "tcx tutorial packet" plus headers.
+- **Protocol 0x0800**: IPv4 traffic traversed the ingress chain.
+- **Matching hit counts**: Both programs observed the same packets in the intended order.
 
 ### Options
 
-- `-i IFACE`: Attach to a different interface (default: `lo`)
-- `-n`: Skip traffic generation (useful for examining attach/query behavior only)
-- `-v`: Enable libbpf debug output to see the underlying BPF syscall sequence
+- `-i, --interface IFACE`: Attach to a different interface (default: `lo`)
+- `-d, --duration SEC`: Stop after a bounded interval; `0` waits for a signal (default: `0`)
+- `-v, --verbose`: Enable libbpf debug output to see the underlying BPF syscall sequence
 
 ## Comparison with Lesson 20 (Classic TC)
 

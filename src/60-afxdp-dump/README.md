@@ -14,7 +14,7 @@ The roles are deliberately separate. The XDP program parses just enough of the p
 
 Follow one packet and one frame. User space allocates 64 frames of 4096 bytes in UMEM and posts their addresses to the fill ring. A UDP packet for the configured port reaches the XDP hook. The program validates Ethernet, IPv4, and UDP lengths, finds the socket registered for `ctx->rx_queue_index`, and returns `XDP_REDIRECT`. In copy mode the kernel copies the packet into one posted frame and publishes an `xdp_desc` on the RX ring. User space reads the descriptor, prints the packet, advances the consumer index, and puts the same address back on the fill ring.
 
-That last step is what keeps the receiver alive. Without recycling, the initial 64 addresses would be exhausted after 64 packets. The integration test deliberately receives 65 packets to prove that at least one frame has completed the entire ownership cycle.
+That last step is what keeps the receiver alive. Without recycling, the initial 64 addresses would be exhausted after 64 packets. A 65-packet run proves that at least one frame has completed the entire ownership cycle.
 
 ## Shared Queue Limit
 
@@ -624,24 +624,16 @@ sudo ./afxdp_dump --interface eth0 --queue 0 --port 8080 --count 5
 
 `--count 0` runs until a signal. Add `--skb-mode` for generic XDP. The selected queue must receive the traffic; on a multi-queue interface this depends on the NIC's receive-side steering configuration.
 
-The integration test creates an isolated veth path, verifies that port 8081 still reaches a normal UDP socket, and sends 65 matching packets through AF_XDP:
-
-```bash
-sudo make test
-```
-
-A real test run produces:
+A longer run with `--count 65` makes frame recycling visible. One real run produced:
 
 ```text
 afxdp-dump ready interface=axdp1267r queue=0 port=8080 mode=driver count=65
 packet=1 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 packet=65 10.77.0.1:60414 -> 10.77.0.2:8080 bytes=53 payload="hello-afxdp"
 redirected=65
-nonmatching-pass=verified
-AF_XDP dump integration test: PASS
 ```
 
-`packet=65` demonstrates frame reuse beyond the 64 initially posted frames. `redirected=65` comes from the BPF-side counter, while `nonmatching-pass=verified` confirms that the filter leaves other UDP traffic on the normal network path.
+`packet=65` demonstrates frame reuse beyond the 64 initially posted frames. `redirected=65` comes from the BPF-side counter. The XDP path returns `XDP_PASS` for other destination ports, so they remain on the normal network path.
 
 ## Requirements
 
@@ -659,7 +651,7 @@ AF_XDP dump integration test: PASS
 
 ## Summary
 
-This example exposes the complete AF_XDP receive contract. XDP selects one UDP flow, XSKMAP resolves the RX queue to a socket, the kernel publishes a UMEM descriptor, and user space returns the frame after inspection. The 65-packet test closes the loop by proving that ownership really comes back to the fill ring.
+This example exposes the complete AF_XDP receive contract. XDP selects one UDP flow, XSKMAP resolves the RX queue to a socket, the kernel publishes a UMEM descriptor, and user space returns the frame after inspection. The 65-packet run closes the loop by proving that ownership really comes back to the fill ring.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 

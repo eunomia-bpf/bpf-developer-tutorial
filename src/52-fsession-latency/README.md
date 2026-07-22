@@ -1,8 +1,10 @@
 # eBPF Tutorial: Tracing Slow vfs_read Calls with fsession
 
-When a file-backed service shows read-latency spikes, application-level timing tells you that requests slowed down, but it cannot distinguish whether the kernel blocked on I/O or user-space logic took too long. The useful questions are: which thread issued the read, how many bytes did it request, what did the call return, and how long did that single `vfs_read` invocation take?
+When a file-backed service shows read-latency spikes, application-level timing tells you that requests slowed down, but it cannot distinguish whether the kernel spent time inside `vfs_read` or user-space logic took too long. The useful questions are: which thread issued the read, which VFS object was involved, how many bytes did it request, what did the call return, and how long did that single `vfs_read` invocation take?
 
-This tutorial demonstrates how to measure `vfs_read` call latency using the **fsession** mechanism introduced in Linux 7.0. fsession is a new eBPF program type that runs once at function entry and once at return, with built-in per-invocation storage for correlating the two phases. The tool we build timestamps function entry, computes latency at return, filters by process and threshold, and reports slow-read events through a ring buffer.
+This tutorial demonstrates how to measure `vfs_read` call latency using the **fsession** mechanism introduced in Linux 7.0. fsession is a new eBPF program type that runs once at function entry and once at return, with built-in per-invocation storage for correlating the two phases. The tool timestamps function entry, computes latency at return, filters by process and threshold, and reports the object type plus a `major:minor:inode` identity through a ring buffer.
+
+`vfs_read` is not limited to regular files: pipes, character devices, and other file-backed objects also pass through it. A slow event therefore identifies a slow `vfs_read` call, not necessarily slow storage. Use the reported `type` together with the `major:minor:inode` identity to distinguish regular-file reads from FIFOs and other VFS objects.
 
 > Complete source: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/52-fsession-latency>
 
@@ -110,6 +112,10 @@ struct latency_event {
 	unsigned long long requested;
 	long long result;
 	unsigned long long latency_ns;
+	unsigned int device_major;
+	unsigned int device_minor;
+	unsigned long long inode;
+	unsigned int mode;
 	char comm[FSESSION_COMM_LEN];
 };
 
@@ -131,9 +137,11 @@ The four counters track:
 
 `FSESSION_COMM_LEN` is 16 to match the kernel's `TASK_COMM_LEN`.
 
+Each event also carries `device_major`, `device_minor`, `inode`, and `mode`. The BPF program splits the kernel's raw `s_dev` encoding into its 12-bit major and 20-bit minor fields. Combined with `i_ino`, this gives a stable VFS object identity; `i_mode` lets user space print `regular`, `fifo`, `character`, and other object types.
+
 ### BPF Program
 
-`fsession_latency.bpf.c` is the core of the tool. Let's walk through it section by section.
+`fsession_latency.bpf.c` is the core of the tool. Here is the complete kernel-side program:
 
 ```c
 // SPDX-License-Identifier: GPL-2.0
@@ -142,9 +150,107 @@ The four counters track:
 #include "vmlinux.h"
 #undef bpf_session_is_return
 #undef bpf_session_cookie
+#include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "fsession_latency.h"
+
+#define KERNEL_MINOR_BITS 20
+#define KERNEL_MINOR_MASK ((1U << KERNEL_MINOR_BITS) - 1)
+
+char LICENSE[] SEC("license") = "GPL";
+
+const volatile __u64 threshold_ns;
+const volatile __u32 target_tgid;
+
+struct latency_stats stats;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+} events SEC(".maps");
+
+/*
+ * The repository vmlinux.h snapshot predates the ctx argument on these
+ * kfunc prototypes. Rename those stale declarations while including the
+ * snapshot, then provide the Linux 7.0 signatures below.
+ */
+extern bool bpf_session_is_return(void *ctx) __ksym;
+extern __u64 *bpf_session_cookie(void *ctx) __ksym;
+
+SEC("fsession/vfs_read")
+int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
+	     loff_t *pos, ssize_t ret)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u64 *started = bpf_session_cookie(ctx);
+	struct latency_event *event;
+	struct inode *inode;
+	__u32 device;
+	__u64 latency;
+
+	if (!bpf_session_is_return(ctx)) {
+		if (target_tgid && pid_tgid >> 32 != target_tgid) {
+			*started = 0;
+			return 0;
+		}
+		*started = bpf_ktime_get_ns();
+		return 0;
+	}
+
+	if (!*started)
+		return 0;
+
+	latency = bpf_ktime_get_ns() - *started;
+	__sync_fetch_and_add(&stats.calls, 1);
+	if (ret < 0)
+		__sync_fetch_and_add(&stats.errors, 1);
+	if (latency < threshold_ns)
+		return 0;
+
+	__sync_fetch_and_add(&stats.slow, 1);
+	event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+	if (!event) {
+		__sync_fetch_and_add(&stats.dropped, 1);
+		return 0;
+	}
+
+	__builtin_memset(event, 0, sizeof(*event));
+	event->pid = (__u32)pid_tgid;
+	event->tgid = pid_tgid >> 32;
+	event->requested = count;
+	event->result = ret;
+	event->latency_ns = latency;
+	inode = BPF_CORE_READ(file, f_inode);
+	if (inode) {
+		device = BPF_CORE_READ(inode, i_sb, s_dev);
+		event->device_major = device >> KERNEL_MINOR_BITS;
+		event->device_minor = device & KERNEL_MINOR_MASK;
+		event->inode = BPF_CORE_READ(inode, i_ino);
+		event->mode = BPF_CORE_READ(inode, i_mode);
+	}
+	bpf_get_current_comm(event->comm, sizeof(event->comm));
+	bpf_ringbuf_submit(event, 0);
+	return 0;
+}
+```
+
+The walkthrough below explains the same program section by section.
+
+```c
+// SPDX-License-Identifier: GPL-2.0
+#define bpf_session_is_return bpf_session_is_return_vmlinux_snapshot
+#define bpf_session_cookie bpf_session_cookie_vmlinux_snapshot
+#include "vmlinux.h"
+#undef bpf_session_is_return
+#undef bpf_session_cookie
+#include <bpf/bpf_core_read.h>
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include "fsession_latency.h"
+
+#define KERNEL_MINOR_BITS 20
+#define KERNEL_MINOR_MASK ((1U << KERNEL_MINOR_BITS) - 1)
 
 char LICENSE[] SEC("license") = "GPL";
 ```
@@ -189,6 +295,8 @@ int BPF_PROG(measure_vfs_read, struct file *file, char *buf, size_t count,
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u64 *started = bpf_session_cookie(ctx);
 	struct latency_event *event;
+	struct inode *inode;
+	__u32 device;
 	__u64 latency;
 ```
 
@@ -235,20 +343,29 @@ If the latency is below the threshold, we're done - the call is counted but no e
 		return 0;
 	}
 
+	__builtin_memset(event, 0, sizeof(*event));
 	event->pid = (__u32)pid_tgid;
 	event->tgid = pid_tgid >> 32;
 	event->requested = count;
 	event->result = ret;
 	event->latency_ns = latency;
+	inode = BPF_CORE_READ(file, f_inode);
+	if (inode) {
+		device = BPF_CORE_READ(inode, i_sb, s_dev);
+		event->device_major = device >> KERNEL_MINOR_BITS;
+		event->device_minor = device & KERNEL_MINOR_MASK;
+		event->inode = BPF_CORE_READ(inode, i_ino);
+		event->mode = BPF_CORE_READ(inode, i_mode);
+	}
 	bpf_get_current_comm(event->comm, sizeof(event->comm));
 	bpf_ringbuf_submit(event, 0);
 	return 0;
 }
 ```
 
-For slow calls, increment the `slow` counter and try to reserve space in the ring buffer. If the reservation fails (buffer full), increment `dropped` so the user knows events were lost. On success, fill in the event fields and submit.
+For slow calls, increment the `slow` counter and try to reserve space in the ring buffer. If the reservation fails (buffer full), increment `dropped` so the user knows events were lost. On success, zero the event, copy call fields, and read object identity from `file->f_inode` before submitting it.
 
-Note that `count` (the requested byte count) is available directly - no need to have stored it at entry. This is the fsession advantage: function arguments persist to the return phase.
+Note that both `count` and `file` are available directly - no need to store either at entry. This is the fsession advantage: function arguments persist to the return phase. The tool intentionally does not resolve a path; paths can be renamed or have multiple aliases. For a regular file, use the device to identify the mount and search it by inode, for example `find /mount -xdev -inum INODE -print`.
 
 ### User-Space Loader
 
@@ -268,16 +385,18 @@ static int handle_event(void *context, void *data, size_t size)
 {
 	const struct latency_event *event = data;
 
-	printf("EVENT comm=%-16s tgid=%u pid=%u requested=%llu result=%lld "
-	       "latency_us=%llu\n",
-	       event->comm, event->tgid, event->pid, event->requested,
-	       event->result, event->latency_ns / 1000);
+	printf("EVENT comm=%-16s tgid=%u pid=%u object=%u:%u:%llu type=%s "
+	       "requested=%llu result=%lld latency_us=%llu\n",
+	       event->comm, event->tgid, event->pid,
+	       event->device_major, event->device_minor, event->inode,
+	       file_type(event->mode), event->requested, event->result,
+	       event->latency_ns / 1000);
 	events_printed++;
 	return 0;
 }
 ```
 
-Each event is printed with the process name, IDs, requested bytes, return value, and latency in microseconds.
+Each event is printed with the process name, IDs, VFS identity and type, requested bytes, return value, and latency in microseconds.
 
 **Clean shutdown sequence**:
 ```c
@@ -332,14 +451,12 @@ Options:
 
 ### Example Output
 
-The following output was captured on x86_64 with kernel `7.0.0-rc2+`. The integration test performs 64 ordinary file reads plus one pipe read delayed by 50 ms. The pipe read exceeds the 10 ms threshold and appears in the event stream:
+For example, a Python service waiting on a FIFO can produce this output when the writer responds after 50 ms:
 
 ```console
 Tracing vfs_read for 1 seconds; threshold=10000 us; pid=selected
-EVENT comm=python3          tgid=1257 pid=1257 requested=1 result=1 latency_us=50160
+EVENT comm=python3          tgid=1245 pid=1245 object=0:16:784 type=fifo requested=1 result=1 latency_us=50246
 SUMMARY calls=66 slow=1 errors=0 dropped=0 events=1
-TEST-SUMMARY miss_calls=0 high_threshold_calls=66 high_threshold_slow=0 threshold_calls=66 threshold_slow=1 events=1 dropped=0
-PASS: PID filtering, threshold miss, and slow-read reporting behaved as expected
 ```
 
 The `SUMMARY` line shows:
@@ -348,18 +465,6 @@ The `SUMMARY` line shows:
 - 0 returned errors
 - 0 events were dropped
 - 1 event was printed
-
-### Running the Tests
-
-```bash
-sudo make test
-```
-
-The integration test validates:
-- **PID filtering**: Targeting a nonexistent TGID produces zero calls
-- **Threshold filtering**: A very high threshold (10 seconds) produces zero slow events from fast reads
-- **Event reporting**: A deliberately slow pipe read (50ms) triggers an event under a 10ms threshold
-- **Accounting invariant**: With threshold=0, `slow == events + dropped` (every threshold-matching call is either delivered or counted as dropped)
 
 ## Environment Requirements
 
@@ -372,7 +477,7 @@ The integration test validates:
 | Architecture | Tested on x86_64 |
 | Privilege | root |
 
-Runtime behavior was tested on x86_64 with kernel `7.0.0-rc2+`. The upstream merge commit is `f17b474e36647c23801ef8fdaf2255ab66dd2973`.
+The upstream merge commit is `f17b474e36647c23801ef8fdaf2255ab66dd2973`.
 
 ## Extending This Tool
 
@@ -394,6 +499,8 @@ This tutorial demonstrated how to measure kernel function latency using the fses
 2. **Built-in correlation**: The 8-byte session cookie replaces the external hash map for passing data between phases
 3. **No state leaks**: The kernel manages cookie lifecycle - no cleanup required, no leaks possible
 4. **Arguments available at return**: Function parameters persist to the return phase without explicit storage
+
+For this `vfs_read` example, that last property also lets the return phase report the VFS object's device, inode, and type. Treat the result as generic VFS-call latency; use the object identity for follow-up rather than assuming every slow event is a disk problem.
 
 The pattern is simple: check `bpf_session_is_return()`, use `bpf_session_cookie()` for per-invocation state, and access arguments/return value directly. This applies wherever you need to correlate function entry and exit.
 

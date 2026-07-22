@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
-#include <arpa/inet.h>
 #include <errno.h>
+#include <getopt.h>
 #include <net/if.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
@@ -14,11 +15,19 @@
 
 static struct env {
 	const char *ifname;
+	unsigned int duration;
 	bool verbose;
-	bool no_trigger;
 } env = {
 	.ifname = "lo",
 };
+
+static volatile sig_atomic_t exiting;
+
+static void handle_signal(int signal)
+{
+	(void)signal;
+	exiting = 1;
+}
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -30,57 +39,63 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"Usage: %s [-i IFACE] [-v] [-n]\n"
-		"  -i IFACE  attach TCX programs to interface (default: lo)\n"
-		"  -v        enable libbpf debug logs\n"
-		"  -n        do not generate loopback traffic automatically\n",
+		"Usage: %s [--interface IFACE] [--duration SEC] [--verbose]\n\n"
+		"Monitor a TCX ingress chain until Ctrl-C.\n\n"
+		"Options:\n"
+		"  -i, --interface IFACE  interface to monitor (default: lo)\n"
+		"  -d, --duration SEC     stop after SEC; 0 waits for a signal (default: 0)\n"
+		"  -v, --verbose          enable libbpf debug logs\n"
+		"  -h, --help             show this help\n",
 		prog);
+}
+
+static int parse_duration(const char *value)
+{
+	char *end = NULL;
+	unsigned long parsed;
+
+	errno = 0;
+	parsed = strtoul(value, &end, 10);
+	if (errno || end == value || *end || parsed > 86400) {
+		fprintf(stderr, "invalid duration in seconds: %s\n", value);
+		return -EINVAL;
+	}
+	env.duration = parsed;
+	return 0;
 }
 
 static int parse_args(int argc, char **argv)
 {
+	static const struct option options[] = {
+		{ "interface", required_argument, NULL, 'i' },
+		{ "duration", required_argument, NULL, 'd' },
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{},
+	};
 	int opt;
 
-	while ((opt = getopt(argc, argv, "i:vn")) != -1) {
+	while ((opt = getopt_long(argc, argv, "i:d:vh", options, NULL)) != -1) {
 		switch (opt) {
 		case 'i':
 			env.ifname = optarg;
 			break;
+		case 'd':
+			if (parse_duration(optarg))
+				return -EINVAL;
+			break;
 		case 'v':
 			env.verbose = true;
 			break;
-		case 'n':
-			env.no_trigger = true;
-			break;
+		case 'h':
+			usage(argv[0]);
+			exit(0);
 		default:
 			return -EINVAL;
 		}
 	}
 
-	return 0;
-}
-
-static int generate_loopback_traffic(void)
-{
-	struct sockaddr_in addr = {
-		.sin_family = AF_INET,
-		.sin_port = htons(9),
-	};
-	const char payload[] = "tcx tutorial packet";
-	int fd, err = 0;
-
-	if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1)
-		return -EINVAL;
-
-	fd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (fd < 0)
-		return -errno;
-
-	if (sendto(fd, payload, sizeof(payload), 0, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-		err = -errno;
-
-	close(fd);
-	return err;
+	return optind == argc ? 0 : -EINVAL;
 }
 
 static void print_tcx_chain(int ifindex)
@@ -109,6 +124,43 @@ static void print_tcx_chain(int ifindex)
 	}
 }
 
+static long long monotonic_milliseconds(void)
+{
+	struct timespec timestamp;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &timestamp))
+		return -errno;
+	return timestamp.tv_sec * 1000LL + timestamp.tv_nsec / 1000000;
+}
+
+static int wait_until_done(void)
+{
+	struct timespec interval = { .tv_nsec = 100000000 };
+	long long deadline = 0;
+	long long now;
+
+	if (env.duration) {
+		now = monotonic_milliseconds();
+		if (now < 0)
+			return (int)now;
+		deadline = now + env.duration * 1000LL;
+	}
+
+	while (!exiting) {
+		if (deadline) {
+			now = monotonic_milliseconds();
+			if (now < 0)
+				return (int)now;
+			if (now >= deadline)
+				break;
+		}
+		if (nanosleep(&interval, NULL) && errno != EINTR)
+			return -errno;
+	}
+
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct tcx_demo_bpf *skel = NULL;
@@ -128,6 +180,8 @@ int main(int argc, char **argv)
 	}
 
 	libbpf_set_print(libbpf_print_fn);
+	signal(SIGINT, handle_signal);
+	signal(SIGTERM, handle_signal);
 
 	skel = tcx_demo_bpf__open_and_load();
 	if (!skel) {
@@ -161,28 +215,23 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("Attached TCX programs to %s (ifindex=%d)\n", env.ifname, ifindex);
+	printf("READY interface=%s ifindex=%d duration=%s\n", env.ifname, ifindex,
+	       env.duration ? "limited" : "until-signal");
+	fflush(stdout);
 	print_tcx_chain(ifindex);
 
-	if (!env.no_trigger && strcmp(env.ifname, "lo") == 0) {
-		err = generate_loopback_traffic();
-		if (err)
-			fprintf(stderr, "failed to generate loopback traffic: %s\n",
-				strerror(-err));
-		usleep(200000);
-	} else if (!env.no_trigger) {
-		printf("Generate traffic on %s and re-run with -n if you only want attach/query.\n",
-		       env.ifname);
-	}
+	err = wait_until_done();
+	bpf_link__destroy(stats_link);
+	stats_link = NULL;
+	bpf_link__destroy(classifier_link);
+	classifier_link = NULL;
 
-	printf("\nCounters:\n");
-	printf("  tcx_stats hits      : %llu\n",
-	       (unsigned long long)skel->bss->stats_hits);
-	printf("  tcx_classifier hits : %llu\n",
-	       (unsigned long long)skel->bss->classifier_hits);
-	printf("  last ifindex        : %u\n", skel->bss->last_ifindex);
-	printf("  last protocol       : 0x%04x\n", skel->bss->last_protocol);
-	printf("  last length         : %u\n", skel->bss->last_len);
+	printf("COUNTERS stats_hits=%llu classifier_hits=%llu last_ifindex=%u "
+	       "last_protocol=0x%04x last_len=%u\n",
+	       (unsigned long long)skel->bss->stats_hits,
+	       (unsigned long long)skel->bss->classifier_hits,
+	       skel->bss->last_ifindex, skel->bss->last_protocol,
+	       skel->bss->last_len);
 
 cleanup:
 	bpf_link__destroy(stats_link);

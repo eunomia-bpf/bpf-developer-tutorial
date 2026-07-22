@@ -14,7 +14,7 @@ This seemingly simple requirement is surprisingly difficult to achieve with trad
 
 What we need is a kernel-level mechanism that can identify and destroy specific sockets atomically, with no race window. This is exactly what Linux 6.5 introduced with the `bpf_sock_destroy` kernel function (kfunc).
 
-This tutorial builds a command-line tool that uses a BPF iterator to walk the kernel's TCP socket table, find established connections matching a specific IPv4 address and port, and destroy them on demand. You will learn how BPF iterators provide safe, locked traversal of kernel data structures, and how kfuncs like `bpf_sock_destroy` expose kernel operations to BPF programs.
+This tutorial builds a command-line tool that uses a BPF iterator to walk the kernel's TCP socket table. A dry run lists every established connection matching a remote IPv4 address and port; apply mode additionally requires the selected local IPv4 address and port, then destroys only that complete 4-tuple. You will learn how BPF iterators provide safe, locked traversal of kernel data structures, and how kfuncs like `bpf_sock_destroy` expose kernel operations to BPF programs.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/51-tcp-quarantine>
 
@@ -40,14 +40,14 @@ The `bpf_sock_destroy` kfunc, introduced in Linux 6.5 (commit `4ddbcb886268af8d1
 
 The `tcp_quarantine` tool combines these two features into a practical workflow:
 
-1. User space specifies a target IPv4 address and port, plus whether to actually destroy matches or just count them (dry-run mode).
+1. User space specifies a remote IPv4 address and port. By default this is a dry run; apply mode also requires one local IPv4 address and port copied from the dry-run output.
 2. The BPF program is loaded with these parameters baked into its read-only data section.
 3. User space opens an iterator file descriptor and reads from it, triggering the kernel to invoke the BPF callback for each TCP socket.
-4. For each socket, the BPF callback checks: Is this an IPv4 socket? Is it in the ESTABLISHED state? Does its destination match the target?
-5. Matching sockets are counted. In apply mode, `bpf_sock_destroy` is called to tear them down.
+4. For each socket, the BPF callback checks: Is this an IPv4 socket? Is it in the ESTABLISHED state? Does its remote endpoint match? In apply mode, does its local endpoint also match?
+5. Matching sockets are printed and counted. Only an apply scan with all four endpoint fields equal calls `bpf_sock_destroy`.
 6. After traversal completes, user space reads statistics from the BPF program's BSS section and reports results.
 
-The entire matching-and-destroy sequence happens inside the kernel, with no window where socket state could change between inspection and action.
+The final match and destroy happen in one iterator callback on the same socket. Dry-run and apply are separate scans, so a connection can disappear between them; in that case apply safely reports `matched=0`.
 
 ## Code Walkthrough
 
@@ -73,7 +73,7 @@ struct quarantine_stats {
 #endif /* __TCP_QUARANTINE_H */
 ```
 
-These five counters track: total sockets examined, how many were IPv4 and ESTABLISHED, how many matched the target destination, how many were successfully destroyed (apply mode only), and how many `bpf_sock_destroy` calls failed.
+These five counters track: total sockets examined, how many were IPv4 and ESTABLISHED, how many matched the active selector, how many were successfully destroyed (apply mode only), and how many `bpf_sock_destroy` calls failed.
 
 ### BPF Iterator Program
 
@@ -94,6 +94,8 @@ char LICENSE[] SEC("license") = "GPL";
 
 const volatile __u32 target_addr;
 const volatile __u16 target_port;
+const volatile __u32 target_local_addr;
+const volatile __u16 target_local_port;
 const volatile bool apply;
 
 struct quarantine_stats stats;
@@ -104,8 +106,11 @@ SEC("iter/tcp")
 int quarantine_tcp(struct bpf_iter__tcp *ctx)
 {
 	struct sock_common *sk = ctx->sk_common;
-	__u32 dst_addr;
+	struct seq_file *seq = ctx->meta->seq;
+	__u32 dst_addr, local_addr;
+	__u32 dst_host, local_host;
 	__u16 dst_port;
+	__u16 local_port;
 	__u16 family;
 	__u8 state;
 	int err;
@@ -124,8 +129,21 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 	dst_port = BPF_CORE_READ(sk, skc_dport);
 	if (dst_addr != target_addr || dst_port != bpf_htons(target_port))
 		return 0;
+	local_addr = BPF_CORE_READ(sk, skc_rcv_saddr);
+	local_port = BPF_CORE_READ(sk, skc_num);
+	if (apply && (local_addr != target_local_addr ||
+		      local_port != target_local_port))
+		return 0;
 
 	stats.matched++;
+	local_host = bpf_ntohl(local_addr);
+	dst_host = bpf_ntohl(dst_addr);
+	BPF_SEQ_PRINTF(seq,
+		       "MATCH local=%u.%u.%u.%u:%u remote=%u.%u.%u.%u:%u\n",
+		       local_host >> 24, (local_host >> 16) & 0xff,
+		       (local_host >> 8) & 0xff, local_host & 0xff, local_port,
+		       dst_host >> 24, (dst_host >> 16) & 0xff,
+		       (dst_host >> 8) & 0xff, dst_host & 0xff, target_port);
 	if (!apply)
 		return 0;
 
@@ -141,15 +159,15 @@ int quarantine_tcp(struct bpf_iter__tcp *ctx)
 
 Let's break down the key elements:
 
-**Configuration variables**: The three `const volatile` variables (`target_addr`, `target_port`, `apply`) live in the BPF program's read-only data section (`.rodata`). User space writes to them after opening the skeleton but before loading the program. The `const volatile` pattern tells the BPF verifier these are compile-time constants while still allowing user space to set them. This enables the verifier to optimize code paths; for example, when `apply` is false, the entire destruction branch can be eliminated.
+**Configuration variables**: The five `const volatile` variables hold the remote endpoint, optional local endpoint, and apply mode in the BPF program's read-only data section (`.rodata`). User space writes them after opening the skeleton but before loading the program. The verifier can eliminate the local-match and destruction path when `apply` is false.
 
 **Kfunc declaration**: The line `extern int bpf_sock_destroy(struct sock_common *sock) __ksym;` declares `bpf_sock_destroy` as an external kernel symbol. The `__ksym` annotation tells the loader to resolve this at load time by looking up the kernel function.
 
 **CO-RE field access**: `BPF_CORE_READ(sk, skc_family)` reads the `skc_family` field from the socket structure using BTF (BPF Type Format) information. This is part of CO-RE (Compile Once, Run Everywhere): the compiled BPF program contains relocation records that the loader patches based on the running kernel's BTF data. A program compiled on one kernel version will work on others even if structure field offsets differ.
 
-**Byte order handling**: The destination address is stored in network byte order (big-endian), which matches what `inet_pton` produces, so we compare directly. The port is also stored in network byte order, so we convert our host-byte-order target port with `bpf_htons()` before comparing.
+**Byte order handling**: Remote and local addresses match the network byte order produced by `inet_pton`. The remote `skc_dport` is in network byte order and is compared with `bpf_htons(target_port)`; local `skc_num` is already in host byte order.
 
-**Three-stage filtering**: The callback applies progressively tighter filters. First it counts all sockets (`scanned`), then narrows to IPv4 ESTABLISHED sockets (`established`), then to those matching the exact destination (`matched`). This funnel structure lets you see at a glance whether the tool is scanning the right population.
+**Progressive filtering**: The callback first counts all sockets (`scanned`), then IPv4 ESTABLISHED sockets (`established`), then remote matches. Dry-run prints every candidate as `MATCH local=... remote=...`. Apply mode rechecks the selected local endpoint before incrementing `matched` or destroying anything. There is deliberately no option that destroys every remote match.
 
 ### User-Space Loader
 
@@ -171,11 +189,17 @@ Let's break down the key elements:
 #include "tcp_quarantine.skel.h"
 
 static struct env {
-	const char *destination;
-	unsigned int port;
+	const char *remote_argument;
+	const char *local_argument;
 	bool apply;
 	bool verbose;
 } env;
+
+struct endpoint {
+	struct in_addr address;
+	unsigned int port;
+	char text[INET_ADDRSTRLEN + 7];
+};
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 			   va_list args)
@@ -188,15 +212,14 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
 static void usage(const char *program)
 {
 	fprintf(stderr,
-		"Usage: %s --destination IPv4 --port PORT [--apply] [--verbose]\n"
+		"Usage: %s [--apply LOCAL_IPV4:PORT] REMOTE_IPV4:PORT [--verbose]\n"
 		"\n"
-		"Find established TCP client connections to an exact destination.\n"
-		"The default is a safe dry run; --apply destroys matching sockets.\n"
+		"List established TCP clients to REMOTE_IPV4:PORT.\n"
+		"The default is a dry run. Copy one listed local endpoint into\n"
+		"--apply to destroy only that exact IPv4 4-tuple.\n"
 		"\n"
 		"Options:\n"
-		"  -d, --destination IPv4  exact remote IPv4 address\n"
-		"  -p, --port PORT         exact remote TCP port (1-65535)\n"
-		"  -a, --apply             destroy matching sockets\n"
+		"  -a, --apply IPv4:PORT   local endpoint selected from dry-run output\n"
 		"  -v, --verbose           print libbpf diagnostics\n"
 		"  -h, --help              show this help\n",
 		program);
@@ -215,31 +238,42 @@ static int parse_port(const char *value, unsigned int *port)
 	return 0;
 }
 
+static int parse_endpoint(const char *value, struct endpoint *endpoint)
+{
+	char address[INET_ADDRSTRLEN];
+	const char *separator = strrchr(value, ':');
+	size_t address_length;
+
+	if (!separator || separator == value)
+		return -EINVAL;
+	address_length = separator - value;
+	if (address_length >= sizeof(address))
+		return -EINVAL;
+	memcpy(address, value, address_length);
+	address[address_length] = '\0';
+	if (inet_pton(AF_INET, address, &endpoint->address) != 1 ||
+	    parse_port(separator + 1, &endpoint->port))
+		return -EINVAL;
+	snprintf(endpoint->text, sizeof(endpoint->text), "%s:%u",
+		 address, endpoint->port);
+	return 0;
+}
+
 static int parse_args(int argc, char **argv)
 {
 	static const struct option options[] = {
-		{ "destination", required_argument, NULL, 'd' },
-		{ "port", required_argument, NULL, 'p' },
-		{ "apply", no_argument, NULL, 'a' },
+		{ "apply", required_argument, NULL, 'a' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{},
 	};
 	int option;
 
-	while ((option = getopt_long(argc, argv, "d:p:avh", options, NULL)) != -1) {
+	while ((option = getopt_long(argc, argv, "a:vh", options, NULL)) != -1) {
 		switch (option) {
-		case 'd':
-			env.destination = optarg;
-			break;
-		case 'p':
-			if (parse_port(optarg, &env.port)) {
-				fprintf(stderr, "invalid TCP port: %s\n", optarg);
-				return -EINVAL;
-			}
-			break;
 		case 'a':
 			env.apply = true;
+			env.local_argument = optarg;
 			break;
 		case 'v':
 			env.verbose = true;
@@ -252,15 +286,16 @@ static int parse_args(int argc, char **argv)
 		}
 	}
 
-	if (!env.destination || !env.port || optind != argc)
+	if (argc - optind != 1)
 		return -EINVAL;
+	env.remote_argument = argv[optind];
 	return 0;
 }
 
 static int run_iterator(struct bpf_program *program)
 {
 	struct bpf_link *link;
-	char buffer[256];
+	char buffer[4096];
 	int iter_fd, length, err;
 
 	link = bpf_program__attach_iter(program, NULL);
@@ -277,8 +312,13 @@ static int run_iterator(struct bpf_program *program)
 		goto cleanup;
 	}
 
-	while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0)
-		;
+	while ((length = read(iter_fd, buffer, sizeof(buffer))) > 0) {
+		if (fwrite(buffer, 1, length, stdout) != (size_t)length) {
+			err = -EIO;
+			fprintf(stderr, "failed to print iterator output\n");
+			break;
+		}
+	}
 	if (length < 0) {
 		err = -errno;
 		fprintf(stderr, "failed while scanning TCP sockets: %s\n", strerror(errno));
@@ -293,7 +333,8 @@ cleanup:
 int main(int argc, char **argv)
 {
 	struct tcp_quarantine_bpf *skel = NULL;
-	struct in_addr destination;
+	struct endpoint remote = {};
+	struct endpoint local = {};
 	int err;
 
 	err = parse_args(argc, argv);
@@ -301,8 +342,14 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		return 1;
 	}
-	if (inet_pton(AF_INET, env.destination, &destination) != 1) {
-		fprintf(stderr, "invalid IPv4 destination: %s\n", env.destination);
+	if (parse_endpoint(env.remote_argument, &remote)) {
+		fprintf(stderr, "invalid remote IPv4 endpoint: %s\n",
+			env.remote_argument);
+		return 1;
+	}
+	if (env.apply && parse_endpoint(env.local_argument, &local)) {
+		fprintf(stderr, "invalid local IPv4 endpoint: %s\n",
+			env.local_argument);
 		return 1;
 	}
 
@@ -313,8 +360,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	skel->rodata->target_addr = destination.s_addr;
-	skel->rodata->target_port = env.port;
+	skel->rodata->target_addr = remote.address.s_addr;
+	skel->rodata->target_port = remote.port;
+	skel->rodata->target_local_addr = local.address.s_addr;
+	skel->rodata->target_local_port = local.port;
 	skel->rodata->apply = env.apply;
 
 	err = tcp_quarantine_bpf__load(skel);
@@ -331,9 +380,10 @@ int main(int argc, char **argv)
 	if (err)
 		goto cleanup;
 
-	printf("mode=%s destination=%s:%u scanned=%llu established=%llu "
+	printf("SUMMARY mode=%s remote=%s%s%s scanned=%llu established=%llu "
 	       "matched=%llu destroyed=%llu failed=%llu\n",
-	       env.apply ? "apply" : "dry-run", env.destination, env.port,
+	       env.apply ? "apply" : "dry-run", remote.text,
+	       env.apply ? " local=" : "", env.apply ? local.text : "",
 	       skel->bss->stats.scanned, skel->bss->stats.established,
 	       skel->bss->stats.matched, skel->bss->stats.destroyed,
 	       skel->bss->stats.failed);
@@ -350,7 +400,7 @@ The key workflow:
 
 1. **Open the skeleton**: `tcp_quarantine_bpf__open()` parses the embedded BPF object but doesn't load it yet.
 
-2. **Configure parameters**: We write to `skel->rodata->*` to set the target address, port, and apply flag. This must happen before `load()`.
+2. **Configure parameters**: We write the parsed remote endpoint, optional local endpoint, and apply flag to `skel->rodata->*` before `load()`.
 
 3. **Load the program**: `tcp_quarantine_bpf__load()` loads the BPF program into the kernel. The verifier runs, BTF relocations are applied, and kfuncs are resolved.
 
@@ -358,7 +408,7 @@ The key workflow:
 
 5. **Read results**: After iteration, we read statistics from `skel->bss->stats`. The BSS section is automatically memory-mapped, so these reads just access shared memory.
 
-The iterator's `read()` loop discards the buffer contents because this tool doesn't produce output through the iterator interface; it only uses the traversal to drive the BPF callback. Other iterator programs might write data to the iterator (e.g., formatted socket information), but ours communicates exclusively through the BSS statistics.
+The iterator callback writes each candidate with `BPF_SEQ_PRINTF`. The `read()` loop copies that iterator output to stdout, making the dry run actionable; aggregate results still come from BSS statistics.
 
 ## Network Namespace Boundary
 
@@ -368,7 +418,7 @@ If you need to close a connection inside a container or another namespace, first
 
 ```bash
 sudo nsenter --net=/proc/<target-pid>/ns/net -- ./tcp_quarantine \
-  --destination 203.0.113.99 --port 443 --apply
+  203.0.113.99:443
 ```
 
 Here `<target-pid>` is the PID of any process in the target network namespace. The `--net` flag changes only the network namespace while keeping the mount namespace intact, so the tool binary remains accessible.
@@ -381,7 +431,7 @@ When `bpf_sock_destroy` tears down a socket, the kernel executes the protocol's 
 - Writes may produce `EPIPE` with a `SIGPIPE` signal.
 - The exact behavior varies by kernel version and the timing of operations.
 
-The test included with this tutorial accepts any of these as valid indicators that the connection was torn down.
+Treat any of these outcomes as application-visible evidence that the connection was torn down; confirm the exact behavior expected by your application and kernel version.
 
 ## Building and Running
 
@@ -396,45 +446,39 @@ make -j2
 **Dry-run mode** (the default) scans for matches but doesn't destroy anything:
 
 ```bash
-sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063
+sudo ./tcp_quarantine 127.0.0.1:42063
 ```
 
-**Apply mode** destroys matching sockets:
+Copy one `MATCH` line's local endpoint into apply mode. This destroys only that complete 4-tuple:
 
 ```bash
-sudo ./tcp_quarantine --destination 127.0.0.1 --port 42063 --apply
+sudo ./tcp_quarantine --apply 127.0.0.1:55490 127.0.0.1:42063
 ```
 
 Command-line reference:
 
 ```text
-Usage: ./tcp_quarantine --destination IPv4 --port PORT [--apply] [--verbose]
+Usage: ./tcp_quarantine [--apply LOCAL_IPV4:PORT] REMOTE_IPV4:PORT [--verbose]
 
 Options:
-  -d, --destination IPv4  exact remote IPv4 address
-  -p, --port PORT         exact remote TCP port (1-65535)
-  -a, --apply             destroy matching sockets
+  -a, --apply IPv4:PORT   local endpoint selected from dry-run output
   -v, --verbose           print libbpf diagnostics
   -h, --help              show this help
 ```
 
 ### Example Session
 
-The following output was captured on x86_64 running kernel `7.0.0-rc2+`. The automated test creates two loopback TCP connections: a target (which we'll destroy) and a control (which should survive). It verifies that traffic flows on both connections before running the tool:
+Suppose a service has two established connections to the same remote listener. A normal dry-run lists both candidates; copying one local endpoint into the apply command selects only that connection:
 
 ```console
-mode=dry-run destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=0 failed=0
-mode=apply destination=127.0.0.1:42063 scanned=6 established=4 matched=1 destroyed=1 failed=0
-PASS: dry-run preserved both connections; apply destroyed only the target
+MATCH local=127.0.0.1:55490 remote=127.0.0.1:42063
+MATCH local=127.0.0.1:55494 remote=127.0.0.1:42063
+SUMMARY mode=dry-run remote=127.0.0.1:42063 scanned=8 established=6 matched=2 destroyed=0 failed=0
+MATCH local=127.0.0.1:55490 remote=127.0.0.1:42063
+SUMMARY mode=apply remote=127.0.0.1:42063 local=127.0.0.1:55490 scanned=7 established=5 matched=1 destroyed=1 failed=0
 ```
 
-The socket counts and port numbers vary between runs. What matters is: exactly one socket matched, dry-run left it intact, apply destroyed it successfully, and the control connection continued working.
-
-Run the automated test:
-
-```bash
-sudo make test
-```
+Socket counts and ports vary. What matters is that dry-run lists both remote matches without changing them, while apply reports `matched=1 destroyed=1` for the copied 4-tuple and leaves the other socket intact.
 
 ### Requirements
 
@@ -451,14 +495,14 @@ If loading fails, the tool prints both the kernel error and a checklist of prere
 
 ## Summary
 
-This tutorial demonstrated how to use BPF iterators and the `bpf_sock_destroy` kfunc to surgically terminate specific TCP connections. Unlike process killing, firewall rules, or user-space RST injection, this approach:
+This tutorial demonstrated how to use BPF iterators and the `bpf_sock_destroy` kfunc to surgically terminate one selected TCP connection. Unlike process killing, firewall rules, or user-space RST injection, this approach:
 
 - Works atomically with no race window between inspection and action
 - Does not require guessing TCP sequence numbers
 - Does not disrupt unrelated connections on the same process
 - Is not affected by encryption or unusual network configurations
 
-The tool as written handles single-pass traversal with exact matching on one IPv4 destination. Possible extensions include IPv6 support, wildcard matching, continuous monitoring mode, process/cgroup attribution, multi-namespace orchestration, and integration with threat-intelligence feeds.
+The tool uses the complete IPv4 4-tuple as its smallest safe destructive selector. Possible extensions include IPv6 support, process/cgroup attribution, multi-namespace orchestration, and integration with threat-intelligence feeds; broad wildcard destruction is intentionally outside this tutorial.
 
 > To learn more about eBPF, visit our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or our website at <https://eunomia.dev/tutorials/>.
 

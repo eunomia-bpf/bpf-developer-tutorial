@@ -1,6 +1,6 @@
 ---
 name: find-bpf-tutorial-topic
-description: Audit bpf-developer-tutorial coverage, research current Linux BPF work and real open-source eBPF projects, maintain the repository tutorial candidate registry, and rank the next lesson by reader value, eBPF leverage, reproducibility, distinctness, teaching clarity, ecosystem evidence, maturity, and maintenance cost. Use when deciding what eBPF tutorial to write next, checking whether an idea is already covered, comparing feature-driven and scenario-driven topics, refreshing the topic roadmap, or asking which candidate has the highest value.
+description: Audit bpf-developer-tutorial coverage, research current Linux BPF work and real open-source eBPF projects, maintain the repository tutorial candidate registry, and rank the next lesson by reader value, operational usefulness, eBPF leverage, reproducibility, distinctness, teaching clarity, ecosystem evidence, maturity, and maintenance cost. Use when deciding what eBPF tutorial to write next, checking whether an idea is already covered or practically usable, comparing feature-driven and scenario-driven topics, refreshing the topic roadmap, or asking which candidate has the highest value.
 ---
 
 # Find the Next BPF Tutorial Topic
@@ -43,11 +43,13 @@ Convert each project feature into a small independent lesson. Teach the mechanis
 
 ## Define the runnable lesson before scoring
 
-For every serious candidate, write five short fields:
+For every serious candidate, write seven short fields:
 
 - the concrete question a reader can reproduce;
 - the event, packet, request, task, or workload followed end to end;
 - the BPF hook, map, helper, kfunc, or program type that makes the answer possible;
+- the exact command a reader would realistically run and the decision or action its output enables;
+- the natural lifecycle: single-pass action, bounded diagnostic, or persistent monitor, including how it stops and cleans up;
 - the deterministic fixture and observable success output;
 - the closest existing lesson and the new knowledge this candidate adds.
 
@@ -55,16 +57,30 @@ Defer an idea when these fields remain vague. A helper name alone is not a tutor
 
 Before marking a feature-driven candidate ready, verify the complete API path against the target kernel. Check the intended BPF program type, map fields, helpers or kfunc sets, sleepability, locking, and verifier restrictions together; a selftest using another program type is not evidence that the proposed hook can use the same API. Build and load the smallest representative probe in KVM when static inspection leaves doubt. If the target program type cannot use the feature, choose a scenario where it can instead of routing data through user space solely to make the API appear in the example.
 
+## Apply the practicality gate before scoring
+
+Walk through the proposed public workflow as an operator, separately from the deterministic test harness:
+
+- A naturally one-shot operation, such as an iterator scan or atomic state change, may run once and exit. An observability or enforcement monitor must attach before independent workloads, remain useful for its natural lifetime, and stop cleanly by signal, duration, or an explicit completion condition.
+- The fixture may be artificial, but the public command must not exist only to launch `/bin/true` or another toy trigger. A launch-scoped command is acceptable only when launch scoping is itself the lesson's real use case.
+- Require an explicit readiness signal before an independent workload starts; fixed sleeps do not prove that attachment or setup finished.
+- Define target scope and filters, concurrent-event or admission behavior, failure and drop visibility, cleanup after normal exit and signals, and what a reader does with the result.
+- For asynchronous work, define shutdown as: stop admission, wait for completed work rather than merely started callbacks, drain output, report stable health, then destroy resources.
+- Reject a design whose output merely proves that a helper ran. The output must answer the stated operational question or drive the stated action.
+
+Redesign or defer a candidate when the fixture is its only plausible user, when the lifecycle contradicts the scenario, or when safe cleanup and bounded resource behavior cannot be explained and tested.
+
 ## Score value
 
 Score from evidence, then subtract costs. Keep the breakdown in working notes and place the final score in `TUTORIAL_IDEAS.md`.
 
 | Dimension | Maximum | Question |
 |---|---:|---|
-| Reader problem | 25 | Does it answer a recurring, consequential question? |
-| eBPF leverage | 20 | Does eBPF provide visibility or control that ordinary tools cannot provide as cleanly? |
+| Reader problem | 20 | Does it answer a recurring, consequential question? |
+| Operational usefulness | 15 | Is the public command and lifecycle useful outside the test fixture? |
+| eBPF leverage | 15 | Does eBPF provide visibility or control that ordinary tools cannot provide as cleanly? |
 | Coverage gap | 15 | Does it add a distinct mechanism or scenario to this repository? |
-| Reproducibility | 15 | Can one bounded local or KVM fixture prove the result? |
+| Reproducibility | 10 | Can one bounded local or KVM fixture prove the result? |
 | Teaching clarity | 10 | Can the lesson follow one understandable path and show decisive output? |
 | Ecosystem evidence | 10 | Do maintained projects or upstream tests validate the use case? |
 | Maturity | 5 | Are the required kernel and userspace interfaces stable enough to maintain? |
@@ -78,6 +94,8 @@ Newness breaks close ties; it does not replace reader value. Favor a stable less
 A candidate can become `ready` only when:
 
 - it has a concrete reproducible problem and expected output;
+- its documented invocation and lifecycle match how a reader would use the tool outside the fixture;
+- its target scope, concurrency or admission bound, failure visibility, and cleanup path are explicit;
 - eBPF is central to the solution;
 - the repository does not already teach the same flow;
 - the example can fit one coherent tutorial;
