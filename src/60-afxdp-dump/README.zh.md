@@ -28,7 +28,7 @@ AF_XDP 通过四个必须精确协调的组件工作：
 
 流程是这样的：你向 Fill Ring 发布 64 个 frame 地址。一个 UDP 报文到达。你的 XDP 程序检查目的端口，在 XSKMAP 中查找 socket，然后重定向。内核把报文复制到你的某个 frame 中，并在 RX Ring 上发布一个 descriptor。你读取 descriptor、处理报文，再把这个 frame 地址放回 Fill Ring。循环继续。
 
-这个所有权模型至关重要。一个 frame 开始时属于你。你通过 Fill Ring 借给内核。内核借用它来接收报文。你从 RX Ring 回收它。你必须把它归还到 Fill Ring，否则 64 个报文之后就会耗尽 frame。我们的工具通过成功捕获 65 个报文来证明这个机制有效——这需要至少一个 frame 完成完整的所有权周期。
+这个所有权模型至关重要。一个 frame 开始时属于你。你通过 Fill Ring 借给内核。内核借用它来接收报文。你从 RX Ring 回收它。你必须把它归还到 Fill Ring，否则 64 个报文之后就会耗尽 frame。我们的工具通过成功捕获 65 个报文来证明这个机制有效，这需要至少一个 frame 完成完整的所有权周期。
 
 ## XDP 程序：过滤和重定向
 
@@ -715,7 +715,7 @@ Packet 65 证明至少有一个 frame 完成了完整的所有权周期：发布
 
 AF_XDP 给你提供了具有 eBPF 安全保证的内核旁路报文接收。XDP 程序在驱动边界选择流量，XSKMAP 把报文路由到你的 socket，无锁的 ring buffer 不用系统调用就能传输数据。这个例子展示了完整的接收契约：向 Fill 发布 frame，在 RX 上接收 descriptor，处理报文，把 frame 回收到 Fill。
 
-理解这个流程的价值超越了抓包本身。这里的模式——内核与用户态之间的共享内存、显式的所有权转移、无锁同步——在从数据库到 GPU 驱动的各种高性能系统中反复出现。
+理解这个流程的价值超越了抓包本身。这里的模式包括内核与用户态之间的共享内存、显式的所有权转移和无锁同步，这些模式在从数据库到 GPU 驱动的各种高性能系统中反复出现。
 
 > 如果你想深入了解 eBPF，请查看我们的教程代码仓库 <https://github.com/eunomia-bpf/bpf-developer-tutorial> 或访问我们的网站 <https://eunomia.dev/tutorials/>。
 
