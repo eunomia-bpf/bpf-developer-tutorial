@@ -5,7 +5,7 @@ description: Style checklist for English and Chinese bpf-developer-tutorial READ
 
 # BPF Tutorial Writing Style
 
-This checklist is reference material, not a mandatory second pass after `$write-bpf-production-tutorial`. When Claude is the delegated writer, do not use this skill to review or rewrite Claude's result, do not send it to Claude as an additional checklist, and do not ask Claude for another revision. Codex may make local word-choice and punctuation edits after the delegated writing pass while preserving sentence meaning and paragraph structure.
+This checklist is reference material, not a mandatory second pass after `$write-bpf-production-tutorial`. When Claude is the delegated writer, do not use this skill to review or rewrite Claude's result, do not send it to Claude as an additional checklist, and do not ask Claude for another revision. Codex must make local word-choice and punctuation edits after the delegated writing pass while preserving sentence meaning and paragraph structure.
 
 Read the complete guidelines first:
 - [Advanced tutorial guideline](https://github.com/eunomia-bpf/bpf-developer-tutorial/blob/main/scripts/guideline_advance.md) for tutorials 40+
@@ -35,13 +35,14 @@ Introduce information at the point where the reader needs it. Compilation follow
 - Use prose for the main explanation and lists for genuinely parallel items.
 - Keep each paragraph focused on one job. Connect facts through cause, sequence, or contrast instead of listing them like a specification.
 - Write Chinese naturally from the same facts instead of translating English sentence by sentence. Use restrained punctuation and spaces between Chinese text and Latin letters or numbers.
+- Do not use em dashes, doubled Chinese em dashes, or en dashes as sentence punctuation in either language. Use commas, semicolons, colons, parentheses, or separate sentences instead. Codex checks every target README pair after Claude returns.
 - Keep technical names, code identifiers, commands, numbers, output, versions, and references exact.
 - Match operational terms to behavior. Call a tool a profiler when it collects a profile such as sampled call paths or a distribution, an index when it maintains a searchable or ordered index, and a policy tool when it actually enforces a decision.
 - For a stateful policy, teach the complete trust chain: which event creates candidate state, which fields correlate later events, which checks admit state, how time or deletion retires it, and which hook makes the final decision. Give poisoning, stale-state, and bypass resistance the space required to explain the mechanism.
 
 Use this Chinese paragraph only as a voice reference for connected rhythm, restrained symbols, and technical density:
 
-> libbpf 是一个 C/C++ 的 eBPF 用户态加载和控制库，随着内核一起分发，几乎已经成为 eBPF 用户态事实上的 API 标准，libbpf 也支持 CO-RE(Compile Once – Run Everywhere) 的解决方案，即预编译的 bpf 代码可以在不同内核版本上正常工作，而无需为每个特定内核重新编译。
+> libbpf 是一个 C/C++ 的 eBPF 用户态加载和控制库，随着内核一起分发，几乎已经成为 eBPF 用户态事实上的 API 标准，libbpf 也支持 CO-RE(Compile Once, Run Everywhere) 的解决方案，即预编译的 bpf 代码可以在不同内核版本上正常工作，而无需为每个特定内核重新编译。
 
 ## Teach from the code that matters
 
