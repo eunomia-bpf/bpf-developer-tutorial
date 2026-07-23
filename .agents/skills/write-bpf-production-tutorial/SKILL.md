@@ -19,13 +19,15 @@ Keep the prompt to that request. Do not add a paragraph plan, fact inventory, st
 
 ## 2. Preserve single-writer ownership
 
-Treat Claude as the sole author of sentences, headings, paragraph order, explanations, and translations. After Claude returns, Codex may make local word-choice and punctuation edits. Keep those edits within the existing sentence meaning and paragraph structure. Codex must not add or remove information, rewrite sentences, reorder paragraphs, change headings, shorten or expand explanations, or alter translations substantively.
+Treat Claude as the sole author of sentences, headings, paragraph order, explanations, and translations. After Claude returns, Codex must make a local word-choice and punctuation pass. Keep those edits within the existing sentence meaning and paragraph structure. Codex must not add or remove information, rewrite sentences, reorder paragraphs, change headings, shorten or expand explanations, or alter translations substantively.
+
+Reader-facing prose must not use em dashes, doubled Chinese em dashes, or en dashes as sentence punctuation. After every Claude writing pass, run `rg -n '[—–]'` on the target README pair and inspect every match outside source code. Replace prose matches with commas, semicolons, colons, parentheses, or separate sentences. Hyphens that belong to code identifiers, command options, URLs, or established technical names remain unchanged.
 
 Use exactly one Claude writing pass per tutorial. Do not ask Claude to review its result, respond to a defect list, polish selected paragraphs, or rewrite the tutorial again. Do not invoke another model, subagent, or independent reviewer for the prose. When the result needs another writing pass, report that fact to the user and wait for an explicit request.
 
 ## 3. Perform mechanical checks only
 
-Check only that the intended files exist, remain nonempty, stay within the requested file scope, contain no merge markers, and expose no local paths, usernames, secrets, prompts, or private infrastructure. Do not count lines or code fences as a quality proxy. Never run `sync-source-blocks.py` or compare README code fences against a complete repository source inventory as writing acceptance. Do not require the README to contain a byte-exact copy of every source file, and do not treat an omitted complete user-space loader as a failure. These checks establish basic file integrity; they are not a prose, style, structure, factual, or technical review.
+Check only that the intended files exist, remain nonempty, stay within the requested file scope, contain no merge markers, and expose no local paths, usernames, secrets, prompts, or private infrastructure. The mandatory dash scan in the previous section is part of Codex's punctuation pass. Do not count lines or code fences as a quality proxy. Never run `sync-source-blocks.py` or compare README code fences against a complete repository source inventory as writing acceptance. Do not require the README to contain a byte-exact copy of every source file, and do not treat an omitted complete user-space loader as a failure. These checks establish basic file integrity; they are not a prose, style, structure, factual, or technical review.
 
 Run repository formatting or documentation validation only when it does not rewrite the text. Report mechanical failures without repairing words or asking Claude to revise them. Preserve prompts, responses, drafts, and failed runs; never delete real conversation or agent history.
 

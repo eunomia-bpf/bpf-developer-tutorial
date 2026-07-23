@@ -76,6 +76,7 @@ You should include the important references and resources that used in the tutor
 - **Focus on Advanced Concepts:** Assume readers have basic eBPF knowledge; skip elementary explanations.
 - **Engagement:** Encourage readers to think critically and engage with the material.
 - **Consistency:** Keep a consistent style and formatting throughout.
+- **Punctuation:** Do not use em dashes, doubled Chinese em dashes, or en dashes as sentence punctuation. Use commas, semicolons, colons, parentheses, or separate sentences.
 - **Code Formatting:** Ensure code snippets are well-formatted and highlight key parts. Keep every included excerpt and command faithful to the implementation. The tutorial does not need to embed the complete user-space loader.
 - **Proofreading:** Double-check for errors and ensure technical accuracy.
 - **Accessibility:** Make the content valuable for readers with advanced expertise, avoiding unnecessary simplifications.
