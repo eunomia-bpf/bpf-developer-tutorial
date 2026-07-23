@@ -385,7 +385,7 @@ int enforce_dns_policy(struct bpf_sock_addr *ctx)
 
 The program uses three BPF maps, each serving a distinct role in the trust chain.
 
-**`pending_queries`** is an LRU hash that holds correlation state for DNS queries. The key combines four fields—server IP, client IP, client port, and transaction ID—that together uniquely identify a query-response pair. The value stores only the expiration timestamp, which is all we need for timing validation. LRU eviction keeps memory bounded even under heavy DNS traffic.
+**`pending_queries`** is an LRU hash that holds correlation state for DNS queries. The key combines four fields: server IP, client IP, client port, and transaction ID. Together, they uniquely identify a query-response pair. The value stores only the expiration timestamp, which is all we need for timing validation. LRU eviction keeps memory bounded even under heavy DNS traffic.
 
 **`allowed_ips`** is also an LRU hash, keyed simply by IPv4 address. The value contains the expiration timestamp, the original TTL in seconds (for logging), padding for alignment, and a flag indicating whether we have already reported expiration. This flag prevents duplicate "expired" events when multiple threads race on a stale entry.
 
@@ -403,7 +403,7 @@ Note that `record_dns_query` always returns 1, telling the kernel to continue pr
 
 The ingress program `learn_dns_answer` reverses the perspective. Now we examine packets arriving from the resolver, so `parse_response_transport` checks that the *source* (not destination) matches the resolver IP and port. The correlation key gets populated with the same fields, but from the response's viewpoint.
 
-The critical security check happens in `pending_query_is_live`. This function looks up the correlation key in `pending_queries`. If no entry exists—meaning we never saw a matching query—the response is rejected. If an entry exists but has expired, we delete it and reject the response. Only responses that match a live pending query proceed.
+The critical security check happens in `pending_query_is_live`. This function looks up the correlation key in `pending_queries`. If no entry exists, meaning we never saw a matching query, the response is rejected. If an entry exists but has expired, we delete it and reject the response. Only responses that match a live pending query proceed.
 
 After confirming we have a legitimate response, `parse_response_question` validates the DNS header. It checks that flags indicate a successful response with no errors, that exactly one question matches our domain, and that at least one answer exists. Then `parse_direct_a_answer` extracts the first A record, requiring the common `0xc00c` compressed name format, correct type and class, and a TTL between 1 and 86400 seconds.
 
@@ -1077,7 +1077,7 @@ In normal mode, `poll_policy_events` loops on the ring buffer until the duration
 
 Demo mode functions as both an integration test and a demonstration of the security model. It runs entirely on loopback using non-standard ports (15353 for DNS, 19090 for TCP) to avoid interfering with real services.
 
-The test sequence begins by verifying that connections are blocked before any DNS traffic occurs. It then sends an unsolicited DNS response—one that arrives without a preceding query. The BPF program rejects this because `pending_queries` contains no matching entry. The test confirms the connection remains blocked.
+The test sequence begins by verifying that connections are blocked before any DNS traffic occurs. It then sends an unsolicited DNS response, one that arrives without a preceding query. The BPF program rejects this because `pending_queries` contains no matching entry. The test confirms the connection remains blocked.
 
 Next, it sends a legitimate DNS query but responds with the wrong transaction ID. The BPF program rejects this too, because the transaction ID is part of the correlation key. Again, the test confirms the connection stays blocked.
 
@@ -1158,4 +1158,4 @@ This example transforms observed DNS results into a time-bounded connection poli
 - [BPF LRU hash maps](https://docs.kernel.org/bpf/map_hash.html)
 - [BPF atomic compare-and-exchange commit](https://github.com/torvalds/linux/commit/5ffa25502b5ab3d639829a2d1e316cff7f59a41e)
 - [Control Group v2](https://docs.kernel.org/admin-guide/cgroup-v2.html)
-- [RFC 1035: Domain Names — Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)
+- [RFC 1035: Domain Names: Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035.html)
