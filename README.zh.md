@@ -77,6 +77,8 @@ GPU:
 - [lesson 46-xdp-test](src/46-xdp-test/README.zh.md) eBPF 实例教程：构建高性能 XDP 数据包生成器
 - [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
 - [lesson 53-egress-pacer](src/53-egress-pacer/README.zh.md) eBPF 教程：用 BPF Qdisc 实现出口限速
+- [lesson 56-tc-flow-index](src/56-tc-flow-index/README.zh.md) eBPF 实战教程：用双红黑树索引构建 Top-Flow 监控器
+- [lesson 60-afxdp-dump](src/60-afxdp-dump/README.zh.md) eBPF 实战教程：用 AF_XDP 实现高性能 UDP 抓包
 
 
 追踪:
@@ -89,6 +91,7 @@ GPU:
 - [lesson 40-mysql](src/40-mysql/README.zh.md) 使用 eBPF 跟踪 MySQL 查询
 - [lesson 48-energy](src/48-energy/README.zh.md) eBPF 教程：进程级能源监控与功耗分析
 - [lesson 52-fsession-latency](src/52-fsession-latency/README.zh.md) eBPF 教程：使用 fsession 追踪慢速 vfs_read 调用
+- [lesson 57-oom-watch](src/57-oom-watch/README.zh.md) eBPF 实战教程：在 OOM Kill 之前分析内存回收
 
 
 安全:
@@ -101,6 +104,7 @@ GPU:
 - [lesson 34-syscall](src/34-syscall/README.zh.md) eBPF 开发实践：使用 eBPF 修改系统调用参数
 - [lesson 51-tcp-quarantine](src/51-tcp-quarantine/README.zh.md) eBPF 教程：精准隔离已建立的 TCP 连接
 - [lesson 54-exec-image-inspector](src/54-exec-image-inspector/README.zh.md) eBPF 教程：检查 exec 后实际安装的可执行镜像
+- [lesson 55-dns-egress](src/55-dns-egress/README.zh.md) eBPF 实战教程：用 cgroup BPF 构建基于 DNS 的 IP 允许列表
 
 
 特性:

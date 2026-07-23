@@ -197,6 +197,22 @@ jobs:
       run: |
           make -C src/54-exec-image-inspector
 
+    - name: test 55 DNS-derived allowlist
+      run: |
+          make -C src/55-dns-egress
+
+    - name: test 56 TC flow index
+      run: |
+          make -C src/56-tc-flow-index
+
+    - name: test 57 OOM reclaim profiler
+      run: |
+          make -C src/57-oom-watch
+
+    - name: test 60 AF_XDP dump
+      run: |
+          make -C src/60-afxdp-dump
+
     - name: test features bpf_token
       run: |
           make -C src/features/bpf_token
