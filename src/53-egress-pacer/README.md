@@ -131,28 +131,8 @@ These helpers let BPF code manage kernel objects safely:
 #include "bpf_experimental.h"
 #include "egress_pacer.h"
 
-char LICENSE[] SEC("license") = "GPL";
-
-#define NET_XMIT_SUCCESS 0x00
-#define NET_XMIT_DROP 0x01
-#define private(name) SEC(".data." #name) __hidden __attribute__((aligned(8)))
-
-struct bpf_sk_buff_ptr {
-	struct sk_buff *skb;
-};
-
-extern void bpf_qdisc_skb_drop(struct sk_buff *skb,
-				       struct bpf_sk_buff_ptr *to_free) __ksym;
-extern void bpf_qdisc_watchdog_schedule(struct Qdisc *sch, __u64 expire,
-					__u64 delta_ns) __ksym;
-extern void bpf_qdisc_bstats_update(struct Qdisc *sch,
-				    const struct sk_buff *skb) __ksym;
-extern void bpf_kfree_skb(struct sk_buff *skb) __ksym;
-
 const volatile __u64 rate_kbps = 1024;
 const volatile __u32 queue_limit = 256;
-
-struct pacer_stats stats;
 
 struct packet_node {
 	__u64 eligible_ns;
@@ -165,40 +145,24 @@ private(A) struct bpf_spin_lock queue_lock;
 private(A) struct bpf_list_head packet_queue __contains(packet_node, node);
 private(A) __u64 next_departure_ns;
 
-static struct qdisc_skb_cb *qdisc_skb_cb(const struct sk_buff *skb)
-{
-	return (struct qdisc_skb_cb *)skb->cb;
-}
-
-static __u32 qdisc_packet_len(const struct sk_buff *skb)
-{
-	return qdisc_skb_cb(skb)->pkt_len;
-}
-
 SEC("struct_ops/egress_pacer_enqueue")
 int BPF_PROG(egress_pacer_enqueue, struct sk_buff *skb, struct Qdisc *sch,
 	     struct bpf_sk_buff_ptr *to_free)
 {
 	struct packet_node *packet;
 	__u64 eligible_ns, interval_ns, now;
-	__u32 packet_len;
+	__u32 packet_len = qdisc_packet_len(skb);
 
-	packet_len = qdisc_packet_len(skb);
 	if (sch->q.qlen >= sch->limit)
 		goto drop;
-
 	packet = bpf_obj_new(typeof(*packet));
 	if (!packet)
 		goto drop;
 
 	now = bpf_ktime_get_ns();
 	interval_ns = (__u64)packet_len * 8 * 1000000ULL / rate_kbps;
-	if (!interval_ns)
-		interval_ns = 1;
 	packet->packet_len = packet_len;
 	skb = bpf_kptr_xchg(&packet->skb, skb);
-	if (skb)
-		bpf_qdisc_skb_drop(skb, to_free);
 
 	bpf_spin_lock(&queue_lock);
 	eligible_ns = next_departure_ns > now ? next_departure_ns : now;
@@ -207,15 +171,11 @@ int BPF_PROG(egress_pacer_enqueue, struct sk_buff *skb, struct Qdisc *sch,
 	bpf_list_push_back(&packet_queue, &packet->node);
 	sch->q.qlen++;
 	sch->qstats.backlog += packet_len;
-	__sync_fetch_and_add(&stats.enqueued, 1);
-	if (sch->q.qlen > stats.max_qlen)
-		stats.max_qlen = sch->q.qlen;
 	bpf_spin_unlock(&queue_lock);
 	return NET_XMIT_SUCCESS;
 
 drop:
 	bpf_qdisc_skb_drop(skb, to_free);
-	__sync_fetch_and_add(&stats.policy_dropped, 1);
 	return NET_XMIT_DROP;
 }
 
@@ -225,93 +185,31 @@ struct sk_buff *BPF_PROG(egress_pacer_dequeue, struct Qdisc *sch)
 	struct bpf_list_node *node;
 	struct packet_node *packet;
 	struct sk_buff *skb = NULL;
-	__u64 expire, now;
-	__u32 packet_len;
+	__u64 now = bpf_ktime_get_ns();
 
 	bpf_spin_lock(&queue_lock);
 	node = bpf_list_pop_front(&packet_queue);
 	bpf_spin_unlock(&queue_lock);
-	if (!node) {
+	if (!node)
 		return NULL;
-	}
 
 	packet = container_of(node, struct packet_node, node);
-	now = bpf_ktime_get_ns();
 	if (now < packet->eligible_ns) {
-		expire = packet->eligible_ns;
 		bpf_spin_lock(&queue_lock);
 		bpf_list_push_front(&packet_queue, &packet->node);
 		bpf_spin_unlock(&queue_lock);
-		bpf_qdisc_watchdog_schedule(sch, expire, 0);
+		bpf_qdisc_watchdog_schedule(sch, packet->eligible_ns, 0);
 		return NULL;
 	}
 
-	packet_len = packet->packet_len;
 	skb = bpf_kptr_xchg(&packet->skb, skb);
-	bpf_spin_lock(&queue_lock);
 	sch->q.qlen--;
-	sch->qstats.backlog -= packet_len;
-	bpf_spin_unlock(&queue_lock);
+	sch->qstats.backlog -= packet->packet_len;
 	bpf_obj_drop(packet);
-
-	if (!skb)
-		return NULL;
-
-	bpf_qdisc_bstats_update(sch, skb);
-	__sync_fetch_and_add(&stats.dequeued, 1);
-	__sync_fetch_and_add(&stats.bytes_dequeued, packet_len);
 	return skb;
 }
 
-SEC("struct_ops/egress_pacer_init")
-int BPF_PROG(egress_pacer_init, struct Qdisc *sch, struct nlattr *opt,
-	     struct netlink_ext_ack *extack)
-{
-	(void)opt;
-	(void)extack;
-	sch->limit = queue_limit;
-	return 0;
-}
-
-SEC("struct_ops/egress_pacer_reset")
-void BPF_PROG(egress_pacer_reset, struct Qdisc *sch)
-{
-	int queued = sch->q.qlen;
-	int i;
-
-	bpf_for(i, 0, queued) {
-		struct bpf_list_node *node;
-		struct packet_node *packet;
-		struct sk_buff *skb = NULL;
-
-		bpf_spin_lock(&queue_lock);
-		node = bpf_list_pop_front(&packet_queue);
-		bpf_spin_unlock(&queue_lock);
-		if (!node)
-			break;
-
-		packet = container_of(node, struct packet_node, node);
-		skb = bpf_kptr_xchg(&packet->skb, skb);
-		if (skb) {
-			bpf_kfree_skb(skb);
-			__sync_fetch_and_add(&stats.cleanup_dropped, 1);
-		}
-		bpf_obj_drop(packet);
-	}
-
-	bpf_spin_lock(&queue_lock);
-	next_departure_ns = 0;
-	sch->q.qlen = 0;
-	sch->qstats.backlog = 0;
-	bpf_spin_unlock(&queue_lock);
-}
-
-SEC("struct_ops/egress_pacer_destroy")
-void BPF_PROG(egress_pacer_destroy, struct Qdisc *sch)
-{
-	(void)sch;
-}
-
+/* reset drains packet_queue and frees every remaining skb. */
 SEC(".struct_ops")
 struct Qdisc_ops pacer = {
 	.enqueue = (void *)egress_pacer_enqueue,
@@ -379,345 +277,28 @@ The `SEC(".struct_ops")` block at the end registers the callbacks as a `Qdisc_op
 
 ```c
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-#include <errno.h>
-#include <getopt.h>
-#include <linux/pkt_sched.h>
 #include <net/if.h>
-#include <signal.h>
-#include <spawn.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <unistd.h>
 #include <bpf/libbpf.h>
-#include "egress_pacer.h"
 #include "egress_pacer.skel.h"
 
-extern char **environ;
-
-static volatile sig_atomic_t exiting;
-
-static struct env {
+static struct {
 	const char *interface;
 	unsigned long long rate_kbps;
 	unsigned int queue_limit;
 	unsigned int duration;
-	bool verbose;
 } env = {
 	.rate_kbps = 1024,
 	.queue_limit = 256,
 	.duration = 10,
 };
 
-static void handle_signal(int signal)
-{
-	(void)signal;
-	exiting = 1;
-}
-
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format,
-			   va_list args)
-{
-	if (level == LIBBPF_DEBUG && !env.verbose)
-		return 0;
-	return vfprintf(stderr, format, args);
-}
-
-static void usage(const char *program)
-{
-	fprintf(stderr,
-		"Usage: %s --interface IFACE [--rate-kbps KBPS] "
-		"[--queue-limit PACKETS] [--duration SEC] [--verbose]\n\n"
-		"Temporarily pace one interface with a bounded BPF qdisc.\n\n"
-		"Options:\n"
-		"  -i, --interface IFACE       interface to control (required)\n"
-		"  -r, --rate-kbps KBPS       egress rate, 8-100000000 "
-		"(default: 1024)\n"
-		"  -q, --queue-limit PACKETS  queue capacity, 1-65535 "
-		"(default: 256)\n"
-		"  -d, --duration SEC         control window, 1-86400 "
-		"(default: 10)\n"
-		"  -v, --verbose              print libbpf diagnostics\n"
-		"  -h, --help                 show this help\n",
-		program);
-}
-
-static int parse_u64(const char *value, unsigned long long maximum,
-			     unsigned long long *result)
-{
-	char *end = NULL;
-	unsigned long long parsed;
-
-	errno = 0;
-	parsed = strtoull(value, &end, 10);
-	if (errno || end == value || *end || parsed > maximum)
-		return -EINVAL;
-	*result = parsed;
-	return 0;
-}
-
-static int parse_rate(const char *value)
-{
-	unsigned long long parsed;
-
-	if (parse_u64(value, 100000000, &parsed) || parsed < 8) {
-		fprintf(stderr, "invalid rate in Kbit/s: %s\n", value);
-		return -EINVAL;
-	}
-	env.rate_kbps = parsed;
-	return 0;
-}
-
-static int parse_queue_limit(const char *value)
-{
-	unsigned long long parsed;
-
-	if (parse_u64(value, 65535, &parsed) || parsed == 0) {
-		fprintf(stderr, "invalid queue limit: %s\n", value);
-		return -EINVAL;
-	}
-	env.queue_limit = parsed;
-	return 0;
-}
-
-static int parse_duration(const char *value)
-{
-	unsigned long long parsed;
-
-	if (parse_u64(value, 86400, &parsed) || parsed == 0) {
-		fprintf(stderr, "invalid duration in seconds: %s\n", value);
-		return -EINVAL;
-	}
-	env.duration = parsed;
-	return 0;
-}
-
-static int parse_option(int option, const char *program)
-{
-	switch (option) {
-	case 'i':
-		env.interface = optarg;
-		return 0;
-	case 'r':
-		return parse_rate(optarg);
-	case 'q':
-		return parse_queue_limit(optarg);
-	case 'd':
-		return parse_duration(optarg);
-	case 'v':
-		env.verbose = true;
-		return 0;
-	case 'h':
-		usage(program);
-		exit(0);
-	default:
-		return -EINVAL;
-	}
-}
-
-static int parse_args(int argc, char **argv)
-{
-	static const struct option options[] = {
-		{ "interface", required_argument, NULL, 'i' },
-		{ "rate-kbps", required_argument, NULL, 'r' },
-		{ "queue-limit", required_argument, NULL, 'q' },
-		{ "duration", required_argument, NULL, 'd' },
-		{ "verbose", no_argument, NULL, 'v' },
-		{ "help", no_argument, NULL, 'h' },
-		{},
-	};
-	int error, option;
-
-	while ((option = getopt_long(argc, argv, "i:r:q:d:vh", options, NULL)) != -1) {
-		error = parse_option(option, argv[0]);
-		if (error)
-			return error;
-	}
-
-	if (!env.interface) {
-		fprintf(stderr, "--interface is required\n");
-		return -EINVAL;
-	}
-	if (optind != argc)
-		return -EINVAL;
-	return 0;
-}
-
-static long long monotonic_milliseconds(void)
-{
-	struct timespec timestamp;
-
-	if (clock_gettime(CLOCK_MONOTONIC, &timestamp))
-		return -errno;
-	return timestamp.tv_sec * 1000LL + timestamp.tv_nsec / 1000000;
-}
-
-static int wait_for_duration(void)
-{
-	struct timespec interval = { .tv_nsec = 100000000 };
-	long long deadline, now;
-
-	now = monotonic_milliseconds();
-	if (now < 0)
-		return (int)now;
-	deadline = now + env.duration * 1000LL;
-
-	while (!exiting) {
-		now = monotonic_milliseconds();
-		if (now < 0)
-			return (int)now;
-		if (now >= deadline)
-			break;
-		if (nanosleep(&interval, NULL) && errno != EINTR)
-			return -errno;
-	}
-
-	return 0;
-}
-
-static const char *find_tc_binary(void)
-{
-	static const char *const candidates[] = {
-		"/usr/sbin/tc",
-		"/sbin/tc",
-	};
-	size_t index;
-
-	for (index = 0; index < sizeof(candidates) / sizeof(candidates[0]); index++) {
-		if (!access(candidates[index], X_OK))
-			return candidates[index];
-	}
-	return NULL;
-}
-
-static void print_qdisc_state(bool all_interfaces)
-{
-	const char *tc_binary = find_tc_binary();
-	char *const all_arguments[] = {
-		(char *)"tc", (char *)"qdisc", (char *)"show", NULL,
-	};
-	char *const interface_arguments[] = {
-		(char *)"tc", (char *)"qdisc", (char *)"show", (char *)"dev",
-		(char *)env.interface, NULL,
-	};
-	char *const *arguments = all_interfaces ? all_arguments : interface_arguments;
-	posix_spawn_file_actions_t actions;
-	pid_t child;
-	pid_t waited;
-	int error;
-	int status;
-
-	fprintf(stderr, "%s:\n",
-		all_interfaces ? "qdisc state across interfaces" : "current qdisc state");
-	if (!tc_binary) {
-		fprintf(stderr, "tc was not found in /usr/sbin or /sbin\n");
-		goto manual;
-	}
-
-	error = posix_spawn_file_actions_init(&actions);
-	if (error)
-		goto spawn_failed;
-	error = posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO,
-						  STDOUT_FILENO);
-	if (!error)
-		error = posix_spawn(&child, tc_binary, &actions, NULL, arguments,
-				    environ);
-	posix_spawn_file_actions_destroy(&actions);
-	if (error)
-		goto spawn_failed;
-
-	do {
-		waited = waitpid(child, &status, 0);
-	} while (waited < 0 && errno == EINTR);
-	if (waited >= 0 && WIFEXITED(status) && !WEXITSTATUS(status))
-		return;
-	if (waited < 0)
-		error = errno;
-	else
-		error = EIO;
-
-spawn_failed:
-	fprintf(stderr, "failed to run tc: %s\n", strerror(error));
-manual:
-	if (all_interfaces)
-		fprintf(stderr, "run manually: tc qdisc show\n");
-	else
-		fprintf(stderr, "run manually: tc qdisc show dev %s\n",
-			env.interface);
-}
-
-static int install_pacer(struct egress_pacer_bpf *skel,
-			 struct bpf_tc_hook *hook)
-{
-	int error;
-
-	error = egress_pacer_bpf__attach(skel);
-	if (error) {
-		if (error == -EEXIST) {
-			fprintf(stderr,
-				"bpf_pacer is already registered globally; another interface may own it\n");
-			print_qdisc_state(true);
-			fprintf(stderr,
-				"inspect the bpf_pacer owner above before removing any root qdisc\n");
-		} else {
-			fprintf(stderr, "failed to register bpf_pacer qdisc: %s\n",
-				strerror(-error));
-		}
-		return error;
-	}
-
-	error = bpf_tc_hook_create(hook);
-	if (!error)
-		return 0;
-	if (error == -EEXIST) {
-		fprintf(stderr, "refusing to replace the existing root qdisc on %s\n",
-			env.interface);
-		print_qdisc_state(false);
-		fprintf(stderr,
-			"if it is stale, recover with: sudo tc qdisc del dev %s root\n",
-			env.interface);
-	} else {
-		fprintf(stderr, "failed to attach bpf_pacer to %s: %s\n",
-			env.interface, strerror(-error));
-	}
-	return error;
-}
-
-static int cleanup_pacer(struct egress_pacer_bpf *skel,
-			 struct bpf_tc_hook *hook, bool qdisc_created, int error)
-{
-	struct pacer_stats final_stats = {};
-	int cleanup_error;
-
-	if (qdisc_created) {
-		cleanup_error = bpf_tc_hook_destroy(hook);
-		if (cleanup_error) {
-			fprintf(stderr, "failed to remove bpf_pacer from %s: %s\n",
-				env.interface, strerror(-cleanup_error));
-			if (!error)
-				error = cleanup_error;
-		}
-	}
-	if (skel && skel->bss)
-		final_stats = skel->bss->stats;
-	if (qdisc_created) {
-		printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu "
-		       "cleanup_dropped=%llu bytes_dequeued=%llu max_qlen=%llu\n",
-		       final_stats.enqueued, final_stats.dequeued,
-		       final_stats.policy_dropped, final_stats.cleanup_dropped,
-		       final_stats.bytes_dequeued, final_stats.max_qlen);
-	}
-	egress_pacer_bpf__destroy(skel);
-	return error != 0;
-}
+/* Argument parsing, signal handling, and diagnostics are omitted here. */
+static int parse_args(int argc, char **argv);
+static int wait_for_duration(void);
 
 int main(int argc, char **argv)
 {
-	struct egress_pacer_bpf *skel = NULL;
+	struct egress_pacer_bpf *skel;
 	struct bpf_tc_hook hook = {
 		.sz = sizeof(hook),
 		.attach_point = BPF_TC_QDISC,
@@ -726,57 +307,30 @@ int main(int argc, char **argv)
 		.qdisc = "bpf_pacer",
 	};
 	bool qdisc_created = false;
-	unsigned int ifindex;
-	int err;
 
-	err = parse_args(argc, argv);
-	if (err) {
-		usage(argv[0]);
-		return 1;
-	}
-
-	ifindex = if_nametoindex(env.interface);
-	if (!ifindex) {
-		fprintf(stderr, "interface does not exist: %s\n", env.interface);
-		return 1;
-	}
-	hook.ifindex = ifindex;
-
-	libbpf_set_print(libbpf_print_fn);
-	signal(SIGINT, handle_signal);
-	signal(SIGTERM, handle_signal);
+	parse_args(argc, argv);
+	hook.ifindex = if_nametoindex(env.interface);
 
 	skel = egress_pacer_bpf__open();
-	if (!skel) {
-		fprintf(stderr, "failed to open BPF skeleton\n");
-		return 1;
-	}
 	skel->rodata->rate_kbps = env.rate_kbps;
 	skel->rodata->queue_limit = env.queue_limit;
+	egress_pacer_bpf__load(skel);
+	egress_pacer_bpf__attach(skel);
 
-	err = egress_pacer_bpf__load(skel);
-	if (err) {
-		fprintf(stderr,
-			"failed to load BPF qdisc: %s\n"
-			"This tool requires Linux 6.16+, CONFIG_NET_SCH_BPF, "
-			"BTF, and BPF JIT.\n",
-			strerror(-err));
-		goto cleanup;
-	}
-
-	err = install_pacer(skel, &hook);
-	if (err)
-		goto cleanup;
-	qdisc_created = true;
+	if (!bpf_tc_hook_create(&hook))
+		qdisc_created = true;
 
 	printf("READY interface=%s rate_kbps=%llu queue_limit=%u duration=%u\n",
 	       env.interface, env.rate_kbps, env.queue_limit, env.duration);
-	fflush(stdout);
+	wait_for_duration();
 
-	err = wait_for_duration();
-
-cleanup:
-	return cleanup_pacer(skel, &hook, qdisc_created, err);
+	if (qdisc_created)
+		bpf_tc_hook_destroy(&hook);
+	printf("SUMMARY enqueued=%llu dequeued=%llu policy_dropped=%llu\n",
+	       skel->bss->stats.enqueued,
+	       skel->bss->stats.dequeued,
+	       skel->bss->stats.policy_dropped);
+	egress_pacer_bpf__destroy(skel);
 }
 ```
 
