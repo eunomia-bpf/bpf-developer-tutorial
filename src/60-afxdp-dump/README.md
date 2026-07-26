@@ -1,8 +1,8 @@
-# eBPF Tutorial: High-Performance UDP Packet Capture with AF_XDP
+# eBPF Tutorial: High-Performance UDP Receiving with AF_XDP
 
-Have you ever wondered how packet capture tools like Suricata or high-frequency trading systems receive millions of packets per second without drowning in kernel overhead? The secret is bypassing most of the network stack entirely. AF_XDP lets you intercept packets at the driver boundary, copy them directly into your application's memory, and process them without system calls for every packet.
+Have you ever wondered how high-performance network applications receive millions of packets per second without drowning in kernel overhead? The key is bypassing most of the network stack. AF_XDP lets you select packets at the driver boundary, copy them directly into your application's memory, and process them without a system call for every packet.
 
-This tutorial builds a complete packet capture tool from scratch using the raw AF_XDP interface. No helper libraries, no magic abstractions. You'll see exactly how UMEM registration, ring buffers, and XDP redirection work together. The result is `afxdp-dump`, a tool that captures IPv4 UDP packets for a specific port, prints a payload preview, and properly recycles every frame to keep receiving indefinitely.
+This tutorial builds an exclusive packet receiver from scratch using the raw AF_XDP interface. No helper libraries, no magic abstractions. You'll see exactly how UMEM registration, ring buffers, and XDP redirection work together. The result is `afxdp-dump`, a tool that redirects IPv4 UDP packets for a specific port away from the normal socket stack, prints a payload preview, and properly recycles every frame to keep receiving indefinitely.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/60-afxdp-dump>
 
@@ -12,7 +12,7 @@ Traditional packet capture with `libpcap` or raw sockets has a fundamental probl
 
 AF_XDP solves this by establishing shared memory between kernel and userspace. The kernel writes packets directly into memory your application can read. You communicate through lock-free ring buffers instead of system calls. A single `poll()` can wake you for hundreds of packets. This architecture enables packet rates of millions per second on commodity hardware.
 
-The technology has real production use. Meta runs AF_XDP in their load balancers. Cilium uses it for Kubernetes networking. High-frequency trading firms use it to shave microseconds off their latency. Even if you never build a trading system, understanding AF_XDP teaches you patterns that appear throughout high-performance systems: shared memory, lock-free data structures, and explicit ownership transfer.
+Understanding AF_XDP also teaches patterns that appear throughout high-performance systems: shared memory, lock-free data structures, and explicit ownership transfer.
 
 ## The AF_XDP Architecture
 
@@ -121,7 +121,7 @@ The UDP validation ensures the length field is sane and that the destination por
 
 The XSKMAP lookup is also a safety check. If userspace hasn't registered a socket for this queue, the lookup returns NULL and we pass the packet to the normal stack. When everything checks out, `bpf_redirect_map()` sends the packet to AF_XDP. The second argument is the queue index, which becomes the map key. The third argument is the fallback action if something goes wrong.
 
-One important detail: once a packet is redirected, it's consumed by AF_XDP. The regular socket stack will never see it. This is exactly what we want for a capture tool, but it means you need to be careful about what you redirect.
+One important detail: once a packet is redirected, it's consumed by AF_XDP. The regular socket stack will never see it. This is expected for this exclusive receiver, but it means you need to be careful about what you redirect.
 
 ## The Userspace Application
 
@@ -713,9 +713,9 @@ This example is deliberately minimal: receive-only, single-queue, single-buffer 
 
 ## Summary
 
-AF_XDP gives you kernel-bypass packet reception with eBPF's safety guarantees. The XDP program selects traffic at the driver boundary, the XSKMAP routes packets to your socket, and lock-free ring buffers transfer data without system calls. This example showed the complete receive contract: post frames to Fill, receive descriptors on RX, process packets, recycle frames back to Fill.
+AF_XDP lets packet reception bypass the normal network stack while retaining eBPF's safety checks. The XDP program selects traffic at the driver boundary, the XSKMAP routes packets to your socket, and lock-free ring buffers transfer data without system calls. This example showed the complete receive contract: post frames to Fill, receive descriptors on RX, process packets, recycle frames back to Fill.
 
-Understanding this flow is valuable beyond packet capture. The patterns here, shared memory between kernel and userspace, explicit ownership transfer, lock-free synchronization, appear throughout high-performance systems from databases to GPU drivers.
+Understanding this flow is valuable beyond packet reception. The patterns here, shared memory between kernel and userspace, explicit ownership transfer, lock-free synchronization, appear throughout high-performance systems from databases to GPU drivers.
 
 > If you'd like to dive deeper into eBPF, check out our tutorial repository at <https://github.com/eunomia-bpf/bpf-developer-tutorial> or visit our website at <https://eunomia.dev/tutorials/>.
 

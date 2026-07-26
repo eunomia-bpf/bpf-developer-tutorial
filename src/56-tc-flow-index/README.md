@@ -32,7 +32,7 @@ When a subsequent packet for this flow arrives, we find the existing entry in th
 
 ## Architecture Overview
 
-The implementation splits into three files:
+The implementation splits into four files:
 
 | File | Purpose |
 |------|---------|
