@@ -430,7 +430,7 @@ int capture_victim_exit(void *ctx)
 
 在回收开始时，我们从 `mem_cgroup` 参数而不是当前 task 的 cgroup 中提取目标 cgroup ID。这个区别对于跨 cgroup 回收很重要。如果有人从外部对某个 cgroup 调用 `memory.reclaim`，我们可以正确地将工作归因到目标。`cross_cgroup_reclaims` 计数器跟踪这种情况发生的频率。
 
-调用栈采样使用 `--sample-every` 设置。默认值为 1 时，我们捕获每个间隔。更大的值可以减少开销，同时仍然在直方图中计算所有间隔。`BPF_F_FAST_STACK_CMP` 标志加速调用栈去重，标志中的 `2` 跳过两个 tracing 帧以获得更清晰的调用栈。
+调用栈采样使用 `--sample-every` 设置。默认值为 1 时，我们会为每个记录到的 begin 事件尝试捕获调用栈。更大的值可以减少开销，而每个成功匹配的间隔仍会计入直方图。`BPF_F_FAST_STACK_CMP` 标志加速调用栈去重，标志中的 `2` 跳过两个 tracing 帧以获得更清晰的调用栈。
 
 OOM 处理程序必须仔细解析进程身份。tracepoint 给我们一个线程 ID，但我们还需要线程组 ID（用户空间视角的 PID）和 cgroup。我们使用 `bpf_task_from_pid()` 查找 task，读取所需信息，然后释放引用。victim 状态以 TID 为 key，因为 `sched_process_exit` 在该线程的上下文中触发。
 
