@@ -430,7 +430,7 @@ The program uses several BPF maps to maintain state. The `active_reclaims` map j
 
 At reclaim begin, we extract the target cgroup ID from the `mem_cgroup` parameter, not from the current task's cgroup. This distinction matters for cross-cgroup reclaim. If someone calls `memory.reclaim` on a cgroup from outside, we correctly attribute the work to the target. The `cross_cgroup_reclaims` counter tracks how often this happens.
 
-Stack sampling uses the `--sample-every` setting. With the default value of 1, we capture every interval. Higher values reduce overhead while still counting all intervals in the histogram. The `BPF_F_FAST_STACK_CMP` flag speeds up stack deduplication, and the `2` in the flags skips two tracing frames to get cleaner stacks.
+Stack sampling uses the `--sample-every` setting. With the default value of 1, we attempt to capture a stack for each recorded begin event. Higher values reduce overhead, while every successfully matched interval still contributes to the histogram. The `BPF_F_FAST_STACK_CMP` flag speeds up stack deduplication, and the `2` in the flags skips two tracing frames to get cleaner stacks.
 
 The OOM handler has to resolve process identity carefully. The tracepoint gives us a thread ID, but we also need the thread group ID (PID from userspace perspective) and the cgroup. We use `bpf_task_from_pid()` to look up the task, read what we need, then release the reference. Victim state is keyed by TID because `sched_process_exit` fires in that thread's context.
 

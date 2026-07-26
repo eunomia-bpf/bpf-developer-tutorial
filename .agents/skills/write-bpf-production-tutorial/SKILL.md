@@ -1,6 +1,6 @@
 ---
 name: write-bpf-production-tutorial
-description: Write or rewrite bilingual bpf-developer-tutorial lessons by assigning each tutorial's English and Chinese README pair to its own pinned Claude Opus 4.5 process. Use when creating or revising README.md and README.zh.md while requiring Claude to edit one tutorial paragraph by paragraph from the reader's perspective, allowing Codex to make local word and punctuation edits only and forbidding an additional prose review or rewrite request.
+description: Write or rewrite bilingual bpf-developer-tutorial lessons by assigning each tutorial's English and Chinese README pair to its own pinned Claude Opus 4.5 process. Use when creating or revising README.md and README.zh.md while requiring Claude to edit one tutorial paragraph by paragraph from the reader's perspective, allowing Codex only local word and punctuation edits plus the smallest evidence-backed factual corrections, and forbidding an additional prose review or rewrite request.
 ---
 
 # Write a BPF Tutorial
@@ -19,7 +19,7 @@ Keep the prompt to that request. Do not add a paragraph plan, fact inventory, st
 
 ## 2. Preserve single-writer ownership
 
-Treat Claude as the sole author of sentences, headings, paragraph order, explanations, and translations. After Claude returns, Codex must make a local word-choice and punctuation pass. Keep those edits within the existing sentence meaning and paragraph structure. Codex must not add or remove information, rewrite sentences, reorder paragraphs, change headings, shorten or expand explanations, or alter translations substantively.
+Treat Claude as the sole author of sentences, headings, paragraph order, explanations, and translations. After Claude returns, Codex must make a local word-choice and punctuation pass. Except for the smallest evidence-backed factual corrections allowed by section 3, keep those edits within the existing sentence meaning and paragraph structure. Codex must not add or remove information, rewrite sentences, reorder paragraphs, change headings, shorten or expand explanations, or alter translations substantively.
 
 Reader-facing prose must not use em dashes, doubled Chinese em dashes, or en dashes as sentence punctuation. After every Claude writing pass, run `rg -n '[—–]'` on the target README pair and inspect every match outside source code. Replace prose matches with commas, semicolons, colons, parentheses, or separate sentences. Hyphens that belong to code identifiers, command options, URLs, or established technical names remain unchanged.
 
