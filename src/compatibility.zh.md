@@ -64,7 +64,7 @@
 | [eBPF 实战教程：用 cgroup BPF 构建基于 DNS 的 IP 允许列表](55-dns-egress/README.zh.md) | 5.12 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_CGROUP_BPF=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_INET=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 实战教程：用双红黑树索引构建 Top-Flow 监控器](56-tc-flow-index/README.zh.md) | 6.16 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_NET_SCHED=y, CONFIG_NET_CLS_BPF=y | 网络接口 | 需要 | CI 构建测试 |
 | [eBPF 实战教程：在 OOM Kill 之前分析内存回收](57-oom-watch/README.zh.md) | 7.1 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_BPF_EVENTS=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_MEMCG=y | 无 | 需要 | CI 构建测试 |
-| [eBPF 实战教程：用 AF_XDP 实现高性能 UDP 抓包](60-afxdp-dump/README.zh.md) | 5.7 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_XDP_SOCKETS=y | 网络接口 | 需要 | CI 构建测试 |
+| [eBPF 实战教程：用 AF_XDP 高性能接收 UDP 报文](60-afxdp-dump/README.zh.md) | 5.7 | 必需特性 | x86_64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y, CONFIG_XDP_SOCKETS=y | 网络接口 | 需要 | CI 构建测试 |
 | [eBPF 实例教程：基于 cgroup 的策略控制](cgroup/README.zh.md) | 5.8 | 必需特性 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_CGROUPS=y, CONFIG_CGROUP_BPF=y, CONFIG_CGROUP_DEVICE=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 实例教程：BPF Arena 零拷贝共享内存](features/bpf_arena/README.zh.md) | 6.9 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_BPF_JIT=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |
 | [eBPF 教程：BPF 迭代器用于内核数据导出](features/bpf_iters/README.zh.md) | 5.8 | 教程文档 | x86_64, arm64 | 需要 | CONFIG_BPF=y, CONFIG_BPF_SYSCALL=y, CONFIG_DEBUG_INFO_BTF=y | 无 | 需要 | CI 构建测试 |

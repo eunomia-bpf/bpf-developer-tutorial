@@ -70,7 +70,7 @@ Networking:
 - [lesson 50-tcx](50-tcx/README.md) Composable Traffic Control with TCX Links
 - [lesson 53-egress-pacer](53-egress-pacer/README.md) Building an Egress Pacer with BPF Qdisc
 - [lesson 56-tc-flow-index](56-tc-flow-index/README.md) Building a Top-Flow Monitor with Dual Rbtree Indexing
-- [lesson 60-afxdp-dump](60-afxdp-dump/README.md) High-Performance UDP Packet Capture with AF_XDP
+- [lesson 60-afxdp-dump](60-afxdp-dump/README.md) High-Performance UDP Receiving with AF_XDP
 
 
 Tracing:

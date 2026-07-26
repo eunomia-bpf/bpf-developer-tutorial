@@ -2,7 +2,7 @@
 
 你是否遇到过容器或服务突然被 Linux OOM killer 杀掉，只留下一行不明所以的内核日志？内核会告诉你它选择了*哪个*进程作为 victim，但对于导致这一结果的内存压力几乎只字未提。系统尝试了多少次内存回收？每次花了多久？哪些内核路径消耗了这些时间？
 
-本教程构建 `oom-watch`，一个 eBPF 工具，用于捕获 OOM kill *之前*发生的事情。它将每次 memcg 回收尝试记录为延迟直方图和采样的内核调用栈，然后将积累的 profile 附加到 OOM victim 上，并跟踪进程直到它退出。
+本教程构建 `oom-watch`，一个 eBPF 工具，用于捕获 OOM kill *之前*发生的事情。它将记录到的 memcg 回收间隔汇总为延迟直方图和采样的内核调用栈，然后将积累的 profile 附加到 OOM victim 上，并跟踪进程直到它退出。
 
 > 完整源代码：<https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/57-oom-watch>
 
@@ -17,13 +17,13 @@
 - 回收是由 cgroup 内部的分配触发的，还是通过 `memory.reclaim` 从外部主动触发的？
 - 哪些内核函数占用了回收时间？
 
-`oom-watch` 可以回答所有这些问题。它通过 hook 内核的 vmscan tracepoint 来测量每个回收间隔，采样内核调用栈以展示时间花在了哪里，当 OOM 选择 victim 时，它会将累积的 profile 快照与 victim 信息一起输出。
+`oom-watch` 可以回答所有这些问题。它通过 hook 内核的 vmscan tracepoint 来测量成功匹配的回收间隔，采样内核调用栈以展示时间花在了哪里，当 OOM 选择 victim 时，它会将累积的 profile 快照与 victim 信息一起输出。对于有界状态 map 未能保留的间隔，工具会通过 drop 计数器明确报告。
 
 ## 为什么用 eBPF 做内存分析？
 
 传统监控方法在这个场景下有严重的局限性。轮询 `/proc/meminfo` 或 cgroup 统计会错过短暂的回收事件。`perf` 可以捕获调用栈，但需要仔细配置和后处理。两种方法都不容易将回收活动与特定的 OOM 事件关联起来。
 
-eBPF 改变了这一切。程序直接在内核中运行，以纳秒级精度响应事件。Map 在事件之间传递状态，让我们可以构建直方图并关联 begin/end 对。Ring buffer 以最小的开销将事件传递给用户空间。而且因为 eBPF 程序在加载前经过验证，不会有崩溃内核的风险。
+eBPF 改变了这一切。程序直接在内核中运行，以纳秒级精度响应事件。Map 在事件之间传递状态，让我们可以构建直方图并关联 begin/end 对。Ring buffer 以最小的开销将事件传递给用户空间。验证器会在加载前拒绝不安全的程序，与未经检查的内核模块相比，这显著降低了破坏内核内存的风险。
 
 对于 `oom-watch`，我们使用几个 tracepoint：
 
@@ -510,7 +510,7 @@ Profile 从程序附加开始累积直到退出，使用有界的 LRU map：4096
 
 ## 总结
 
-`oom-watch` 将 OOM kill 之前的混乱变成可以检查的证据。它测量每个 memcg 回收间隔，采样并排名消耗时间的内核路径，正确归因工作到目标 cgroup（即使对于跨 cgroup 回收），并将此 profile 与 victim 选择和退出关联起来。
+`oom-watch` 将 OOM kill 之前的混乱变成可以检查的证据。它测量记录到的 memcg 回收间隔，采样并排名消耗时间的内核路径，正确归因工作到目标 cgroup（即使对于跨 cgroup 回收），并将此 profile 与 victim 选择和退出关联起来。
 
 下次容器死掉有人问"发生了什么？"时，你将不仅仅有一行内核日志可以展示。
 

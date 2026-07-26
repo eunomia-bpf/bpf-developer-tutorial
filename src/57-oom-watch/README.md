@@ -2,7 +2,7 @@
 
 Have you ever had a container or service suddenly killed by the Linux OOM killer, leaving you with nothing but a cryptic log message? The kernel tells you *which* process it chose as a victim, but says almost nothing about the memory pressure that led there. How many times did the system try to reclaim memory? How long did each attempt take? Which kernel code paths consumed all that time?
 
-This tutorial builds `oom-watch`, an eBPF tool that captures what happens *before* the kill. It profiles every memcg reclaim attempt as a latency histogram and a set of sampled kernel stacks, then attaches this accumulated profile to the OOM victim and tracks the process until it exits.
+This tutorial builds `oom-watch`, an eBPF tool that captures what happens *before* the kill. It profiles recorded memcg reclaim intervals as a latency histogram and a set of sampled kernel stacks, then attaches this accumulated profile to the OOM victim and tracks the process until it exits.
 
 > Complete source code: <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/57-oom-watch>
 
@@ -17,13 +17,13 @@ Looking only at the `oom/mark_victim` tracepoint loses all this context. You see
 - Did reclaim come from allocations inside the cgroup, or from external proactive reclaim via `memory.reclaim`?
 - Which kernel functions dominated the reclaim time?
 
-`oom-watch` answers all of these. It hooks into the kernel's vmscan tracepoints to measure every reclaim interval, samples kernel stacks to show where time was spent, and when OOM selects a victim, it snapshots the accumulated profile right alongside the victim information.
+`oom-watch` answers all of these. It hooks into the kernel's vmscan tracepoints to measure matched reclaim intervals, samples kernel stacks to show where time was spent, and when OOM selects a victim, it snapshots the accumulated profile right alongside the victim information. Its drop counters expose intervals that could not be retained in the bounded state maps.
 
 ## Why eBPF for Memory Profiling?
 
 Traditional monitoring approaches have serious limitations for this use case. Polling `/proc/meminfo` or cgroup stats misses short-lived reclaim events. `perf` can capture stack traces but requires careful setup and post-processing. Neither approach easily connects reclaim activity to a specific OOM event.
 
-eBPF changes the game. Programs run directly in the kernel, triggered by events with nanosecond precision. Maps carry state between events, letting us build histograms and correlate begin/end pairs. The ring buffer delivers events to userspace with minimal overhead. And because eBPF programs are verified before loading, there's no risk of crashing the kernel.
+eBPF changes the game. Programs run directly in the kernel, triggered by events with nanosecond precision. Maps carry state between events, letting us build histograms and correlate begin/end pairs. The ring buffer delivers events to userspace with minimal overhead. The verifier rejects unsafe programs before loading, substantially reducing the risk of kernel memory corruption compared with an unchecked kernel module.
 
 For `oom-watch`, we use several tracepoints:
 
@@ -510,7 +510,7 @@ Profiles accumulate from program attach until exit, using bounded LRU maps: 4096
 
 ## Summary
 
-`oom-watch` turns the chaos before an OOM kill into evidence you can examine. It measures every memcg reclaim interval, samples and ranks the kernel paths that consumed time, correctly attributes work to the target cgroup (even for cross-cgroup reclaim), and connects this profile to the victim selection and exit.
+`oom-watch` turns the chaos before an OOM kill into evidence you can examine. It measures recorded memcg reclaim intervals, samples and ranks the kernel paths that consumed time, correctly attributes work to the target cgroup (even for cross-cgroup reclaim), and connects this profile to the victim selection and exit.
 
 The next time a container dies and someone asks "what happened?", you'll have more than a one-line kernel log to show them.
 

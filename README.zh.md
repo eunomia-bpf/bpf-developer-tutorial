@@ -78,7 +78,7 @@ GPU:
 - [lesson 50-tcx](src/50-tcx/README.zh.md) eBPF 入门实践教程第五十篇：使用 TCX Link 实现可组合的流量控制
 - [lesson 53-egress-pacer](src/53-egress-pacer/README.zh.md) eBPF 教程：用 BPF Qdisc 实现出口限速
 - [lesson 56-tc-flow-index](src/56-tc-flow-index/README.zh.md) eBPF 实战教程：用双红黑树索引构建 Top-Flow 监控器
-- [lesson 60-afxdp-dump](src/60-afxdp-dump/README.zh.md) eBPF 实战教程：用 AF_XDP 实现高性能 UDP 抓包
+- [lesson 60-afxdp-dump](src/60-afxdp-dump/README.zh.md) eBPF 实战教程：用 AF_XDP 高性能接收 UDP 报文
 
 
 追踪:
