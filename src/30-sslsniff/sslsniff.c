@@ -90,8 +90,8 @@ struct env {
 	.uid = INVALID_UID,
 	.pid = INVALID_PID,
 	.openssl = true,
-	.gnutls = false,
-	.nss = false,
+	.gnutls = true,
+	.nss = true,
 	.comm = NULL,
 };
 
@@ -399,18 +399,30 @@ int main(int argc, char **argv) {
 
 	if (env.openssl) {
 		char *openssl_path = find_library_path("libssl.so");
-		printf("OpenSSL path: %s\n", openssl_path);
-		attach_openssl(obj, openssl_path);
+		if (!openssl_path) {
+			warn("libssl.so not found; skipping OpenSSL probing\n");
+		} else {
+			printf("OpenSSL path: %s\n", openssl_path);
+			attach_openssl(obj, openssl_path);
+		}
 	}
 	if (env.gnutls) {
 		char *gnutls_path = find_library_path("libgnutls.so");
-		printf("GnuTLS path: %s\n", gnutls_path);
-		attach_gnutls(obj, gnutls_path);
+		if (!gnutls_path) {
+			warn("libgnutls.so not found; skipping GnuTLS probing\n");
+		} else {
+			printf("GnuTLS path: %s\n", gnutls_path);
+			attach_gnutls(obj, gnutls_path);
+		}
 	}
 	if (env.nss) {
 		char *nss_path = find_library_path("libnspr4.so");
-		printf("NSS path: %s\n", nss_path);
-		attach_nss(obj, nss_path);
+		if (!nss_path) {
+			warn("libnspr4.so not found; skipping NSS probing\n");
+		} else {
+			printf("NSS path: %s\n", nss_path);
+			attach_nss(obj, nss_path);
+		}
 	}
 
 	pb = perf_buffer__new(bpf_map__fd(obj->maps.perf_SSL_events),
