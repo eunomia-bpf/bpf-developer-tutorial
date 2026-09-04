@@ -253,9 +253,11 @@ int attach_nss(struct sslsniff_bpf *skel, const char *lib) {
 	return 0;
 }
 
-static void attach_provider(struct sslsniff_bpf *obj, const char *name,
-							const char *libname,
+static void attach_provider(struct sslsniff_bpf *obj, bool enabled,
+							const char *name, const char *libname,
 							int (*attach)(struct sslsniff_bpf *, const char *)) {
+	if (!enabled)
+		return;
 	char *path = find_library_path(libname);
 
 	if (!path) {
@@ -433,12 +435,9 @@ int main(int argc, char **argv) {
 		goto cleanup;
 	}
 
-	if (env.openssl)
-		attach_provider(obj, "OpenSSL", "libssl.so", attach_openssl);
-	if (env.gnutls)
-		attach_provider(obj, "GnuTLS", "libgnutls.so", attach_gnutls);
-	if (env.nss)
-		attach_provider(obj, "NSS", "libnspr4.so", attach_nss);
+	attach_provider(obj, env.openssl, "OpenSSL", "libssl.so", attach_openssl);
+	attach_provider(obj, env.gnutls, "GnuTLS", "libgnutls.so", attach_gnutls);
+	attach_provider(obj, env.nss, "NSS", "libnspr4.so", attach_nss);
 	if (attached_link_count == 0) {
 		warn("no SSL provider probes attached\n");
 		err = -ENOENT;
