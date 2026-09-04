@@ -240,8 +240,9 @@ char *find_library_path(const char *libname) {
 	static char path[512];
 	FILE *fp;
 
-	// Construct the ldconfig command with grep
-	snprintf(cmd, sizeof(cmd), "ldconfig -p | grep %s", libname);
+	// Match the SONAME prefix literally; dots in library names must not be
+	// interpreted as regular-expression wildcards.
+	snprintf(cmd, sizeof(cmd), "ldconfig -p | grep -F -- '%s'", libname);
 
 	// Execute the command and read the output
 	fp = popen(cmd, "r");
