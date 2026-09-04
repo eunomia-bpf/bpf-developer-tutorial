@@ -20,28 +20,27 @@
 #define INVALID_UID -1
 #define INVALID_PID -1
 #define DEFAULT_BUFFER_SIZE 8192
+#define MAX_ATTACH_LINKS 32
+
+static struct bpf_link *attached_links[MAX_ATTACH_LINKS];
+static size_t attached_link_count;
+static int track_attached_link(struct bpf_link *link, const char *program_name);
 
 #define __ATTACH_UPROBE(skel, binary_path, sym_name, prog_name, is_retprobe)   \
 	do {                                                                       \
 	  LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = #sym_name,        \
 				  .retprobe = is_retprobe);                                    \
-	  skel->links.prog_name = bpf_program__attach_uprobe_opts(                 \
+	  struct bpf_link *link = bpf_program__attach_uprobe_opts(                 \
 		  skel->progs.prog_name, env.pid, binary_path, 0, &uprobe_opts);       \
-	} while (false)
-
-#define __CHECK_PROGRAM(skel, prog_name)               \
-	do {                                               \
-	  if (!skel->links.prog_name) {                    \
-		perror("no program attached for " #prog_name); \
-		return -errno;                                 \
-	  }                                                \
+	  int attach_err = track_attached_link(link, #prog_name);                  \
+	  if (attach_err)                                                          \
+		return attach_err;                                                     \
 	} while (false)
 
 #define __ATTACH_UPROBE_CHECKED(skel, binary_path, sym_name, prog_name,     \
 								is_retprobe)                                \
 	do {                                                                    \
 	  __ATTACH_UPROBE(skel, binary_path, sym_name, prog_name, is_retprobe); \
-	  __CHECK_PROGRAM(skel, prog_name);                                     \
 	} while (false)
 
 #define ATTACH_UPROBE_CHECKED(skel, binary_path, sym_name, prog_name)     \
@@ -59,7 +58,7 @@ const char argp_program_doc[] =
 	"USAGE: sslsniff [OPTIONS]\n"
 	"\n"
 	"EXAMPLES:\n"
-	"    ./sslsniff              # sniff OpenSSL and GnuTLS functions\n"
+	"    ./sslsniff              # sniff OpenSSL, GnuTLS, and NSS functions\n"
 	"    ./sslsniff -p 181       # sniff PID 181 only\n"
 	"    ./sslsniff -u 1000      # sniff only UID 1000\n"
 	"    ./sslsniff -c curl      # sniff curl command only\n"
@@ -166,6 +165,27 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 #define PERF_BUFFER_PAGES 16
 #define PERF_POLL_TIMEOUT_MS 100
 #define warn(...) fprintf(stderr, __VA_ARGS__)
+
+static int track_attached_link(struct bpf_link *link, const char *program_name) {
+	long err = libbpf_get_error(link);
+
+	if (err) {
+		warn("failed to attach %s: %s\n", program_name, strerror(-err));
+		return (int)err;
+	}
+	if (attached_link_count == MAX_ATTACH_LINKS) {
+		bpf_link__destroy(link);
+		warn("too many SSL probes requested\n");
+		return -E2BIG;
+	}
+	attached_links[attached_link_count++] = link;
+	return 0;
+}
+
+static void destroy_attached_links(void) {
+	while (attached_link_count > 0)
+		bpf_link__destroy(attached_links[--attached_link_count]);
+}
 
 static struct argp argp = {
 	opts,
@@ -404,7 +424,9 @@ int main(int argc, char **argv) {
 			warn("libssl.so not found; skipping OpenSSL probing\n");
 		} else {
 			printf("OpenSSL path: %s\n", openssl_path);
-			attach_openssl(obj, openssl_path);
+			err = attach_openssl(obj, openssl_path);
+			if (err)
+				warn("OpenSSL probing is incomplete\n");
 		}
 	}
 	if (env.gnutls) {
@@ -413,7 +435,9 @@ int main(int argc, char **argv) {
 			warn("libgnutls.so not found; skipping GnuTLS probing\n");
 		} else {
 			printf("GnuTLS path: %s\n", gnutls_path);
-			attach_gnutls(obj, gnutls_path);
+			err = attach_gnutls(obj, gnutls_path);
+			if (err)
+				warn("GnuTLS probing is incomplete\n");
 		}
 	}
 	if (env.nss) {
@@ -422,9 +446,17 @@ int main(int argc, char **argv) {
 			warn("libnspr4.so not found; skipping NSS probing\n");
 		} else {
 			printf("NSS path: %s\n", nss_path);
-			attach_nss(obj, nss_path);
+			err = attach_nss(obj, nss_path);
+			if (err)
+				warn("NSS probing is incomplete\n");
 		}
 	}
+	if (attached_link_count == 0) {
+		warn("no SSL provider probes attached\n");
+		err = -ENOENT;
+		goto cleanup;
+	}
+	err = 0;
 
 	pb = perf_buffer__new(bpf_map__fd(obj->maps.perf_SSL_events),
 							PERF_BUFFER_PAGES, handle_event, handle_lost_events,
@@ -463,6 +495,7 @@ int main(int argc, char **argv) {
 
 cleanup:
 	perf_buffer__free(pb);
+	destroy_attached_links();
 	sslsniff_bpf__destroy(obj);
 	return err != 0;
 }

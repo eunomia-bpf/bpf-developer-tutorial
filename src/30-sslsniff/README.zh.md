@@ -309,7 +309,7 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
 
 上述代码片段中，根据环境变量 `env` 的设定，程序可以选择针对三种常见的加密库（OpenSSL、GnuTLS 和 NSS）进行挂载。这意味着我们可以在同一个工具中对多种库的调用进行追踪。
 
-为了实现这一功能，首先利用 `find_library_path` 函数确定库的路径。然后，根据库的类型，调用对应的 `attach_` 函数来将 eBPF 程序挂载到库函数上。如果 `find_library_path` 找不到某个库（例如系统中没有安装该库），工具会向 stderr 打印一条警告并跳过该库的探测，而不是挂载到无效的路径上。
+为了实现这一功能，首先利用 `find_library_path` 函数确定库的路径。然后，根据库的类型，调用对应的 `attach_` 函数来将 eBPF 程序挂载到库函数上。如果 `find_library_path` 找不到某个库（例如系统中没有安装该库），工具会向 stderr 打印一条警告并跳过该库的探测，而不是挂载到无效的路径上。每次成功挂载都会单独保存 link 句柄，因此多个库可以复用同一个 eBPF 程序而不会丢失句柄；库符号不兼容时会给出警告，如果一个探针都未能挂载，工具会退出。
 
 ```c
     if (env.openssl) {
@@ -318,7 +318,8 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
             warn("libssl.so not found; skipping OpenSSL probing\n");
         } else {
             printf("OpenSSL path: %s\n", openssl_path);
-            attach_openssl(obj, openssl_path);
+            if (attach_openssl(obj, openssl_path))
+                warn("OpenSSL probing is incomplete\n");
         }
     }
     if (env.gnutls) {
@@ -327,7 +328,8 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
             warn("libgnutls.so not found; skipping GnuTLS probing\n");
         } else {
             printf("GnuTLS path: %s\n", gnutls_path);
-            attach_gnutls(obj, gnutls_path);
+            if (attach_gnutls(obj, gnutls_path))
+                warn("GnuTLS probing is incomplete\n");
         }
     }
     if (env.nss) {
@@ -336,7 +338,8 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
             warn("libnspr4.so not found; skipping NSS probing\n");
         } else {
             printf("NSS path: %s\n", nss_path);
-            attach_nss(obj, nss_path);
+            if (attach_nss(obj, nss_path))
+                warn("NSS probing is incomplete\n");
         }
     }
 ```
@@ -352,8 +355,11 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
     do {                                                                       \
       LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = #sym_name,        \
                   .retprobe = is_retprobe);                                    \
-      skel->links.prog_name = bpf_program__attach_uprobe_opts(                 \
+      struct bpf_link *link = bpf_program__attach_uprobe_opts(                 \
           skel->progs.prog_name, env.pid, binary_path, 0, &uprobe_opts);       \
+      int attach_err = track_attached_link(link, #prog_name);                  \
+      if (attach_err)                                                          \
+        return attach_err;                                                     \
     } while (false)
 
 int attach_openssl(struct sslsniff_bpf *skel, const char *lib) {

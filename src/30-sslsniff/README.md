@@ -321,7 +321,7 @@ In the eBPF ecosystem, user-space and kernel-space code often work in collaborat
 
 In the provided code snippet, based on the setting of the `env` environment variable, the program can choose to attach to three common encryption libraries (OpenSSL, GnuTLS, and NSS). This means that we can trace calls to multiple libraries within the same tool.
 
-To achieve this functionality, the `find_library_path` function is first used to determine the library's path. Then, depending on the library type, the corresponding `attach_` function is called to attach the eBPF program to the library function. If `find_library_path` cannot locate a library (for example, because it is not installed on the system), the tool prints a warning to stderr and skips probing that provider instead of attaching against an invalid path.
+To achieve this functionality, the `find_library_path` function is first used to determine the library's path. Then, depending on the library type, the corresponding `attach_` function is called to attach the eBPF program to the library function. If `find_library_path` cannot locate a library (for example, because it is not installed on the system), the tool prints a warning to stderr and skips probing that provider instead of attaching against an invalid path. Each successful attachment is tracked separately so that multiple libraries can share the same eBPF program without losing link handles. Incompatible provider symbols produce a warning, and the tool exits if no probe could be attached.
 
 ```c
     if (env.openssl) {
@@ -330,7 +330,8 @@ To achieve this functionality, the `find_library_path` function is first used to
             warn("libssl.so not found; skipping OpenSSL probing\n");
         } else {
             printf("OpenSSL path: %s\n", openssl_path);
-            attach_openssl(obj, openssl_path);
+            if (attach_openssl(obj, openssl_path))
+                warn("OpenSSL probing is incomplete\n");
         }
     }
     if (env.gnutls) {
@@ -339,7 +340,8 @@ To achieve this functionality, the `find_library_path` function is first used to
             warn("libgnutls.so not found; skipping GnuTLS probing\n");
         } else {
             printf("GnuTLS path: %s\n", gnutls_path);
-            attach_gnutls(obj, gnutls_path);
+            if (attach_gnutls(obj, gnutls_path))
+                warn("GnuTLS probing is incomplete\n");
         }
     }
     if (env.nss) {
@@ -348,7 +350,8 @@ To achieve this functionality, the `find_library_path` function is first used to
             warn("libnspr4.so not found; skipping NSS probing\n");
         } else {
             printf("NSS path: %s\n", nss_path);
-            attach_nss(obj, nss_path);
+            if (attach_nss(obj, nss_path))
+                warn("NSS probing is incomplete\n");
         }
     }
 ```
@@ -364,8 +367,11 @@ The specific `attach` functions are as follows:
     do {                                                                       \
       LIBBPF_OPTS(bpf_uprobe_opts, uprobe_opts, .func_name = #sym_name,        \
                   .retprobe = is_retprobe);                                    \
-      skel->links.prog_name = bpf_program__attach_uprobe_opts(                 \
+      struct bpf_link *link = bpf_program__attach_uprobe_opts(                 \
           skel->progs.prog_name, env.pid, binary_path, 0, &uprobe_opts);       \
+      int attach_err = track_attached_link(link, #prog_name);                  \
+      if (attach_err)                                                          \
+        return attach_err;                                                     \
     } while (false)
 
 int attach_openssl(struct sslsniff_bpf *skel, const char *lib) {
