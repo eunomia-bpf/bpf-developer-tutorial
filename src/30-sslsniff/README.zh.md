@@ -312,36 +312,12 @@ int BPF_URETPROBE(probe_SSL_do_handshake_exit) {
 为了实现这一功能，首先利用 `find_library_path` 函数确定库的路径。然后，根据库的类型，调用对应的 `attach_` 函数来将 eBPF 程序挂载到库函数上。如果 `find_library_path` 找不到某个库（例如系统中没有安装该库），工具会向 stderr 打印一条警告并跳过该库的探测，而不是挂载到无效的路径上。每次成功挂载都会单独保存 link 句柄，因此多个库可以复用同一个 eBPF 程序而不会丢失句柄；库符号不兼容时会给出警告，如果一个探针都未能挂载，工具会退出。
 
 ```c
-    if (env.openssl) {
-        char *openssl_path = find_library_path("libssl.so");
-        if (!openssl_path) {
-            warn("libssl.so not found; skipping OpenSSL probing\n");
-        } else {
-            printf("OpenSSL path: %s\n", openssl_path);
-            if (attach_openssl(obj, openssl_path))
-                warn("OpenSSL probing is incomplete\n");
-        }
-    }
-    if (env.gnutls) {
-        char *gnutls_path = find_library_path("libgnutls.so");
-        if (!gnutls_path) {
-            warn("libgnutls.so not found; skipping GnuTLS probing\n");
-        } else {
-            printf("GnuTLS path: %s\n", gnutls_path);
-            if (attach_gnutls(obj, gnutls_path))
-                warn("GnuTLS probing is incomplete\n");
-        }
-    }
-    if (env.nss) {
-        char *nss_path = find_library_path("libnspr4.so");
-        if (!nss_path) {
-            warn("libnspr4.so not found; skipping NSS probing\n");
-        } else {
-            printf("NSS path: %s\n", nss_path);
-            if (attach_nss(obj, nss_path))
-                warn("NSS probing is incomplete\n");
-        }
-    }
+    if (env.openssl)
+        attach_provider(obj, "OpenSSL", "libssl.so", attach_openssl);
+    if (env.gnutls)
+        attach_provider(obj, "GnuTLS", "libgnutls.so", attach_gnutls);
+    if (env.nss)
+        attach_provider(obj, "NSS", "libnspr4.so", attach_nss);
 ```
 
 这里主要包含 OpenSSL、GnuTLS 和 NSS 三个库的挂载逻辑。NSS 是为组织设计的一套安全库，支持创建安全的客户端和服务器应用程序。它们最初是由 Netscape 开发的，现在由 Mozilla 维护。其他两个库前面已经介绍过了，这里不再赘述。

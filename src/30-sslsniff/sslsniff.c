@@ -25,6 +25,7 @@
 static struct bpf_link *attached_links[MAX_ATTACH_LINKS];
 static size_t attached_link_count;
 static int track_attached_link(struct bpf_link *link, const char *program_name);
+static char *find_library_path(const char *libname);
 
 #define __ATTACH_UPROBE(skel, binary_path, sym_name, prog_name, is_retprobe)   \
 	do {                                                                       \
@@ -252,10 +253,24 @@ int attach_nss(struct sslsniff_bpf *skel, const char *lib) {
 	return 0;
 }
 
+static void attach_provider(struct sslsniff_bpf *obj, const char *name,
+							const char *libname,
+							int (*attach)(struct sslsniff_bpf *, const char *)) {
+	char *path = find_library_path(libname);
+
+	if (!path) {
+		warn("%s not found; skipping %s probing\n", libname, name);
+		return;
+	}
+	printf("%s path: %s\n", name, path);
+	if (attach(obj, path))
+		warn("%s probing is incomplete\n", name);
+}
+
 /*
  * Find the path of a library using ldconfig.
  */
-char *find_library_path(const char *libname) {
+static char *find_library_path(const char *libname) {
 	char cmd[128];
 	static char path[512];
 	FILE *fp;
@@ -418,39 +433,12 @@ int main(int argc, char **argv) {
 		goto cleanup;
 	}
 
-	if (env.openssl) {
-		char *openssl_path = find_library_path("libssl.so");
-		if (!openssl_path) {
-			warn("libssl.so not found; skipping OpenSSL probing\n");
-		} else {
-			printf("OpenSSL path: %s\n", openssl_path);
-			err = attach_openssl(obj, openssl_path);
-			if (err)
-				warn("OpenSSL probing is incomplete\n");
-		}
-	}
-	if (env.gnutls) {
-		char *gnutls_path = find_library_path("libgnutls.so");
-		if (!gnutls_path) {
-			warn("libgnutls.so not found; skipping GnuTLS probing\n");
-		} else {
-			printf("GnuTLS path: %s\n", gnutls_path);
-			err = attach_gnutls(obj, gnutls_path);
-			if (err)
-				warn("GnuTLS probing is incomplete\n");
-		}
-	}
-	if (env.nss) {
-		char *nss_path = find_library_path("libnspr4.so");
-		if (!nss_path) {
-			warn("libnspr4.so not found; skipping NSS probing\n");
-		} else {
-			printf("NSS path: %s\n", nss_path);
-			err = attach_nss(obj, nss_path);
-			if (err)
-				warn("NSS probing is incomplete\n");
-		}
-	}
+	if (env.openssl)
+		attach_provider(obj, "OpenSSL", "libssl.so", attach_openssl);
+	if (env.gnutls)
+		attach_provider(obj, "GnuTLS", "libgnutls.so", attach_gnutls);
+	if (env.nss)
+		attach_provider(obj, "NSS", "libnspr4.so", attach_nss);
 	if (attached_link_count == 0) {
 		warn("no SSL provider probes attached\n");
 		err = -ENOENT;

@@ -324,36 +324,12 @@ In the provided code snippet, based on the setting of the `env` environment vari
 To achieve this functionality, the `find_library_path` function is first used to determine the library's path. Then, depending on the library type, the corresponding `attach_` function is called to attach the eBPF program to the library function. If `find_library_path` cannot locate a library (for example, because it is not installed on the system), the tool prints a warning to stderr and skips probing that provider instead of attaching against an invalid path. Each successful attachment is tracked separately so that multiple libraries can share the same eBPF program without losing link handles. Incompatible provider symbols produce a warning, and the tool exits if no probe could be attached.
 
 ```c
-    if (env.openssl) {
-        char *openssl_path = find_library_path("libssl.so");
-        if (!openssl_path) {
-            warn("libssl.so not found; skipping OpenSSL probing\n");
-        } else {
-            printf("OpenSSL path: %s\n", openssl_path);
-            if (attach_openssl(obj, openssl_path))
-                warn("OpenSSL probing is incomplete\n");
-        }
-    }
-    if (env.gnutls) {
-        char *gnutls_path = find_library_path("libgnutls.so");
-        if (!gnutls_path) {
-            warn("libgnutls.so not found; skipping GnuTLS probing\n");
-        } else {
-            printf("GnuTLS path: %s\n", gnutls_path);
-            if (attach_gnutls(obj, gnutls_path))
-                warn("GnuTLS probing is incomplete\n");
-        }
-    }
-    if (env.nss) {
-        char *nss_path = find_library_path("libnspr4.so");
-        if (!nss_path) {
-            warn("libnspr4.so not found; skipping NSS probing\n");
-        } else {
-            printf("NSS path: %s\n", nss_path);
-            if (attach_nss(obj, nss_path))
-                warn("NSS probing is incomplete\n");
-        }
-    }
+    if (env.openssl)
+        attach_provider(obj, "OpenSSL", "libssl.so", attach_openssl);
+    if (env.gnutls)
+        attach_provider(obj, "GnuTLS", "libgnutls.so", attach_gnutls);
+    if (env.nss)
+        attach_provider(obj, "NSS", "libnspr4.so", attach_nss);
 ```
 
 This section primarily covers the attachment logic for the OpenSSL, GnuTLS, and NSS libraries. NSS is a set of security libraries designed for organizations, supporting the creation of secure client and server applications. Originally developed by Netscape, they are now maintained by Mozilla. The other two libraries have been introduced earlier and are not reiterated here.
