@@ -44,7 +44,7 @@ TLS and SSL don't perfectly align with any single layer of the OSI model or the 
 
 eBPF (Extended Berkeley Packet Filter): It's a kernel technology that allows users to run predefined programs in the kernel space without modifying kernel source code or reloading modules. It creates a bridge that enables interaction between user space and kernel space, providing unprecedented capabilities for tasks like system monitoring, performance analysis, and network traffic analysis.
 
-uprobes are a significant feature of eBPF, allowing dynamic insertion of probe points in user space applications, particularly useful for tracking function calls in SSL/TLS libraries. Uprobe in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime is a user mode eBPF runtime based on LLVM JIT/AOT. It can run eBPF programs in user mode and is compatible with kernel mode eBPF, avoiding context switching between kernel mode and user mode, thereby improving the execution efficiency of eBPF programs. bpftime can have a performance overhead that is one order of magnitude smaller than that of kernel mode eBPF.
+uprobes are a significant feature of eBPF, allowing dynamic insertion of probe points in user space applications, particularly useful for tracking function calls in SSL/TLS libraries. Uprobe can also be used with a user-space eBPF runtime such as [bpftime](https://github.com/eunomia-bpf/bpftime) to reduce overhead; see [5-uprobe-bashreadline](../5-uprobe-bashreadline/README.md).
 
 ### User-Space Libraries
 
