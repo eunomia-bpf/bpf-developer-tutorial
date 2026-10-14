@@ -77,7 +77,7 @@ Java, as a high-level programming language, has automatic garbage collection (GC
 
 In the following tutorial, we will demonstrate how to use eBPF and USDT to monitor and analyze the duration of Java GC events. We hope this content will be helpful to you in your work with eBPF for application performance analysis.
 
-USDT in kernel mode eBPF runtime may also cause relatively large performance overhead. In this case, you can also consider using user mode eBPF runtime, such as [bpftime](https://github.com/eunomia-bpf/bpftime). bpftime is a user mode eBPF runtime based on LLVM JIT/AOT. It can run eBPF programs in user mode and is compatible with kernel mode eBPF, avoiding context switching between kernel mode and user mode, thereby improving the execution efficiency of eBPF programs by 10 times.
+USDT can also be used with a user-space eBPF runtime such as [bpftime](https://github.com/eunomia-bpf/bpftime) to reduce overhead; for uprobe examples, see [5-uprobe-bashreadline](../5-uprobe-bashreadline/README.md).
 
 ## eBPF Implementation Mechanism
 

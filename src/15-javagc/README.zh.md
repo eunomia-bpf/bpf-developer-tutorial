@@ -71,7 +71,7 @@ Notes at offset 0x00c43058 with length 0x00000494:
 
 在这一点上，你可以使用 SystemTap 或者 LTTng 来跟踪这些探针。然而，内置的 Linux 跟踪器，比如 ftrace 和 perf_events，目前还无法做到这一点（尽管 perf_events 的支持正在开发中）。
 
-USDT 在内核态 eBPF 运行时，也可能产生比较大的性能开销，这时候也可以考虑使用用户态 eBPF 运行时，例如  [bpftime](https://github.com/eunomia-bpf/bpftime)。bpftime 是一个基于 LLVM JIT/AOT 的用户态 eBPF 运行时，它可以在用户态运行 eBPF 程序，和内核态的 eBPF 兼容，避免了内核态和用户态之间的上下文切换，从而提高了 eBPF 程序的执行效率。对于 uprobe 而言，bpftime 的性能开销比 kernel 小一个数量级。
+USDT 也可配合用户态 eBPF 运行时（如 [bpftime](https://github.com/eunomia-bpf/bpftime)）使用，以降低开销；uprobe 相关的示例详见 [5-uprobe-bashreadline](../5-uprobe-bashreadline/README.zh.md)。
 
 ## Java GC 介绍
 
