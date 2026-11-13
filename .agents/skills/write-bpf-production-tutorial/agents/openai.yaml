@@ -1,4 +1,4 @@
 interface:
   display_name: "BPF Tutorial Writer"
-  short_description: "Design and test practical bilingual eBPF lessons"
-  default_prompt: "Use $write-bpf-production-tutorial to turn this eBPF example into a practical, tested bilingual tutorial."
+  short_description: "Let one Opus process revise one bilingual lesson"
+  default_prompt: "Use $write-bpf-production-tutorial to let one pinned Claude Opus process revise this tutorial's English and Chinese README pair paragraph by paragraph from the reader's perspective."

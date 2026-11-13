@@ -146,13 +146,15 @@ fi
     die "/dev/kvm is not available with read/write permission; refusing a TCG fallback"
 
 benchmark_root=$(realpath -e -- "$benchmark_root")
-kernel_source=$benchmark_root/vendor/linux-framework
 kernel_build=$benchmark_root/vendor/build/x86/linux
+kernel_source_link=$kernel_build/source
 kernel_image=$kernel_build/arch/x86/boot/bzImage
 kernel_config=$kernel_build/.config
 kernel_release_file=$kernel_build/include/config/kernel.release
 
-[[ -d $kernel_source ]] || die "kernel source directory is missing: $kernel_source"
+[[ -e $kernel_source_link ]] || die "kernel build source link is missing: $kernel_source_link"
+kernel_source=$(realpath -e -- "$kernel_source_link")
+[[ -d $kernel_source ]] || die "kernel build source directory is missing: $kernel_source"
 [[ -s $kernel_image ]] || die "built benchmark kernel is missing: $kernel_image"
 [[ -r $kernel_config ]] || die "kernel config is missing: $kernel_config"
 [[ -r $kernel_release_file ]] || die "kernel release file is missing: $kernel_release_file"
@@ -191,6 +193,7 @@ printf '%s\n' \
     'KVM preflight: OK' \
     "benchmark_root=$benchmark_root" \
     "kernel_image=$kernel_image" \
+    "kernel_source=$kernel_source" \
     "kernel_release=$kernel_release" \
     "kernel_sha256=$kernel_sha256" \
     "kernel_config_sha256=$config_sha256" \
