@@ -112,12 +112,16 @@ static const struct argp_option opts[] = {
 	{"latency", 'l', NULL, 0, "Show function latency"},
 	{"handshake", HANDSHAKE_KEY, NULL, 0,
 	 "Show SSL handshake latency, enabled only if latency option is on."},
+	{"extra-lib", EXTRA_LIB_KEY, "PROVIDER:PATH", 0,
+	 "Also attach to this library, e.g. openssl:/opt/lib/libssl.so.1.1"},
 	{"verbose", 'v', NULL, 0, "Verbose debug output"},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
 
 static bool verbose = false;
+
+static int validate_extra_lib(const char *spec);
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 	switch (key) {
@@ -154,6 +158,14 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 	case HANDSHAKE_KEY:
 		env.handshake = true;
 		break;
+	case EXTRA_LIB_KEY:
+		// argp_usage() would append strerror(errno) to the message and
+		// print the whole usage text; the message alone says what is
+		// wrong with the argument.
+		if (validate_extra_lib(arg) != 0)
+			exit(1);
+		env.extra_lib = strdup(arg);
+		break;
 	case 'h':
 		argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
 		break;
@@ -166,6 +178,29 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 #define PERF_BUFFER_PAGES 16
 #define PERF_POLL_TIMEOUT_MS 100
 #define warn(...) fprintf(stderr, __VA_ARGS__)
+
+/* Validate a PROVIDER:PATH spec at option-parsing time, so a typo is reported
+ * before the BPF object is opened and a load failure cannot mask it. */
+static int validate_extra_lib(const char *spec) {
+	const char *sep = strchr(spec, ':');
+	if (!sep || sep == spec || sep[1] == '\0') {
+		warn("invalid --extra-lib `%s`: expected PROVIDER:PATH\n", spec);
+		return -EINVAL;
+	}
+	size_t provider_len = (size_t)(sep - spec);
+	if (!((provider_len == strlen("openssl") &&
+	       strncmp(spec, "openssl", provider_len) == 0) ||
+	      (provider_len == strlen("gnutls") &&
+	       strncmp(spec, "gnutls", provider_len) == 0) ||
+	      (provider_len == strlen("nss") &&
+	       strncmp(spec, "nss", provider_len) == 0))) {
+		warn("invalid --extra-lib `%s`: provider must be openssl, gnutls "
+		     "or nss\n",
+		     spec);
+		return -EINVAL;
+	}
+	return 0;
+}
 
 static int track_attached_link(struct bpf_link *link, const char *program_name) {
 	long err = libbpf_get_error(link);
@@ -267,6 +302,54 @@ static void attach_provider(struct sslsniff_bpf *obj, bool enabled,
 	printf("%s path: %s\n", name, path);
 	if (attach(obj, path))
 		warn("%s probing is incomplete\n", name);
+}
+
+/*
+ * Attach to a user-specified library given as PROVIDER:PATH, where PROVIDER
+ * selects which symbol set to hook with the same probes the built-in providers
+ * use. This exists because find_library_path() resolves through ldconfig,
+ * which does not know about libraries outside the loader cache - a
+ * distribution's libssl from a custom prefix, or a bundled NSS inside an
+ * application directory.
+ */
+static int attach_extra_lib(struct sslsniff_bpf *obj, const char *spec) {
+	char *dup = strdup(spec);
+	if (!dup)
+		return -ENOMEM;
+	char *sep = strchr(dup, ':');
+	// validate_extra_lib() already rejected a malformed spec, so this is
+	// only a guard for a future caller.
+	if (!sep || sep == dup || sep[1] == '\0') {
+		warn("invalid --extra-lib `%s`: expected PROVIDER:PATH\n", spec);
+		free(dup);
+		return -EINVAL;
+	}
+	*sep = '\0';
+	const char *provider = dup;
+	const char *path = sep + 1;
+
+	int (*attach)(struct sslsniff_bpf *, const char *) =
+		strcmp(provider, "openssl") == 0 ? attach_openssl :
+		strcmp(provider, "gnutls") == 0   ? attach_gnutls :
+		strcmp(provider, "nss") == 0      ? attach_nss :
+						    NULL;
+	if (!attach) {
+		warn("invalid --extra-lib `%s`: unknown provider\n", spec);
+		free(dup);
+		return -EINVAL;
+	}
+	if (access(path, R_OK) != 0) {
+		warn("cannot read %s for --extra-lib: %s\n", path,
+		     strerror(errno));
+		free(dup);
+		return -errno;
+	}
+
+	printf("extra %s path: %s\n", provider, path);
+	if (attach(obj, path))
+		warn("%s probing of %s is incomplete\n", provider, path);
+	free(dup);
+	return 0;
 }
 
 /*
@@ -438,6 +521,8 @@ int main(int argc, char **argv) {
 	attach_provider(obj, env.openssl, "OpenSSL", "libssl.so", attach_openssl);
 	attach_provider(obj, env.gnutls, "GnuTLS", "libgnutls.so", attach_gnutls);
 	attach_provider(obj, env.nss, "NSS", "libnspr4.so", attach_nss);
+	if (env.extra_lib)
+		attach_extra_lib(obj, env.extra_lib);
 	if (attached_link_count == 0) {
 		warn("no SSL provider probes attached\n");
 		err = -ENOENT;
