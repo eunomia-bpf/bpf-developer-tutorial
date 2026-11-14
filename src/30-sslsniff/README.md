@@ -323,10 +323,17 @@ In the provided code snippet, based on the setting of the `env` environment vari
 
 To achieve this functionality, the `find_library_path` function is first used to determine the library's path. Then, depending on the library type, the corresponding `attach_` function is called to attach the eBPF program to the library function. If `find_library_path` cannot locate a library (for example, because it is not installed on the system), the tool prints a warning to stderr and skips probing that provider instead of attaching against an invalid path. Each successful attachment is tracked separately so that multiple libraries can share the same eBPF program without losing link handles. Incompatible provider symbols produce a warning, and the tool exits if no probe could be attached.
 
+`find_library_path` resolves names through `ldconfig`, so it only sees libraries in the loader cache. For a `libssl.so.1.1` from a custom prefix, or a `libnspr4.so` bundled inside an application directory, `--extra-lib PROVIDER:PATH` attaches to the given path with the same probe set as the matching built-in provider. The path is used as given, and a failure to attach is fatal rather than silently ignored.
+
 ```c
     attach_provider(obj, env.openssl, "OpenSSL", "libssl.so", attach_openssl);
     attach_provider(obj, env.gnutls, "GnuTLS", "libgnutls.so", attach_gnutls);
     attach_provider(obj, env.nss, "NSS", "libnspr4.so", attach_nss);
+    if (env.extra_lib) {
+        err = attach_extra_lib(obj, env.extra_lib);
+        if (err)
+            goto cleanup;
+    }
 ```
 
 This section primarily covers the attachment logic for the OpenSSL, GnuTLS, and NSS libraries. NSS is a set of security libraries designed for organizations, supporting the creation of secure client and server applications. Originally developed by Netscape, they are now maintained by Mozilla. The other two libraries have been introduced earlier and are not reiterated here.
