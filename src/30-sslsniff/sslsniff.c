@@ -26,6 +26,9 @@ static struct bpf_link *attached_links[MAX_ATTACH_LINKS];
 static size_t attached_link_count;
 static int track_attached_link(struct bpf_link *link, const char *program_name);
 static char *find_library_path(const char *libname);
+int attach_openssl(struct sslsniff_bpf *skel, const char *lib);
+int attach_gnutls(struct sslsniff_bpf *skel, const char *lib);
+int attach_nss(struct sslsniff_bpf *skel, const char *lib);
 
 #define __ATTACH_UPROBE(skel, binary_path, sym_name, prog_name, is_retprobe)   \
 	do {                                                                       \
@@ -112,12 +115,53 @@ static const struct argp_option opts[] = {
 	{"latency", 'l', NULL, 0, "Show function latency"},
 	{"handshake", HANDSHAKE_KEY, NULL, 0,
 	 "Show SSL handshake latency, enabled only if latency option is on."},
+	{"extra-lib", EXTRA_LIB_KEY, "PROVIDER:PATH", 0,
+	 "Also attach to this library, e.g. openssl:/opt/lib/libssl.so.1.1"},
 	{"verbose", 'v', NULL, 0, "Verbose debug output"},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
 
 static bool verbose = false;
+
+struct ssl_provider {
+	const char *name;
+	int (*attach)(struct sslsniff_bpf *skel, const char *lib);
+};
+
+static const struct ssl_provider providers[] = {
+	{"openssl", attach_openssl},
+	{"gnutls", attach_gnutls},
+	{"nss", attach_nss},
+};
+
+/* Split a PROVIDER:PATH spec for --extra-lib; both halves point into spec.
+ * This is the only place the spec grammar lives, so option parsing and attach
+ * cannot disagree about what is accepted. *why describes -EINVAL. */
+static int parse_extra_lib(const char *spec,
+			   const struct ssl_provider **provider, const char **path,
+			   const char **why) {
+	const char *sep = strchr(spec, ':');
+	size_t name_len;
+
+	if (!sep || sep == spec || sep[1] == '\0') {
+		*why = "expected PROVIDER:PATH";
+		return -EINVAL;
+	}
+	name_len = (size_t)(sep - spec);
+	for (size_t i = 0; i < sizeof(providers) / sizeof(providers[0]); i++) {
+		if (strlen(providers[i].name) == name_len &&
+		    strncmp(providers[i].name, spec, name_len) == 0) {
+			if (provider)
+				*provider = &providers[i];
+			if (path)
+				*path = sep + 1;
+			return 0;
+		}
+	}
+	*why = "provider must be openssl, gnutls or nss";
+	return -EINVAL;
+}
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 	switch (key) {
@@ -154,6 +198,20 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state) {
 	case HANDSHAKE_KEY:
 		env.handshake = true;
 		break;
+	case EXTRA_LIB_KEY: {
+		const char *why = NULL;
+
+		// Report a bad value through argp like every other parse failure,
+		// instead of exit()ing from inside the callback.
+		if (parse_extra_lib(arg, NULL, NULL, &why) != 0)
+			argp_error(state, "invalid --extra-lib `%s`: %s", arg,
+				   why);
+		env.extra_lib = strdup(arg);
+		if (!env.extra_lib)
+			argp_failure(state, EXIT_FAILURE, ENOMEM,
+				     "cannot duplicate --extra-lib value");
+		break;
+	}
 	case 'h':
 		argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
 		break;
@@ -267,6 +325,39 @@ static void attach_provider(struct sslsniff_bpf *obj, bool enabled,
 	printf("%s path: %s\n", name, path);
 	if (attach(obj, path))
 		warn("%s probing is incomplete\n", name);
+}
+
+/*
+ * Attach to a user-specified library given as PROVIDER:PATH, where PROVIDER
+ * selects which symbol set to hook with the same probes the built-in providers
+ * use. This exists because find_library_path() resolves through ldconfig,
+ * which does not know about libraries outside the loader cache - a
+ * distribution's libssl from a custom prefix, or a bundled NSS inside an
+ * application directory.
+ */
+static int attach_extra_lib(struct sslsniff_bpf *obj, const char *spec) {
+	const struct ssl_provider *provider = NULL;
+	const char *path = NULL, *why = NULL;
+	size_t attached_before = attached_link_count;
+	int err = parse_extra_lib(spec, &provider, &path, &why);
+
+	if (err) {
+		warn("invalid --extra-lib `%s`: %s\n", spec, why);
+		return err;
+	}
+
+	// The path is used as given: libbpf opens the library itself and
+	// reports the precise reason if it cannot, so there is no check-then-
+	// open window and no real/effective UID mismatch under sudo.
+	printf("extra %s path: %s\n", provider->name, path);
+	err = provider->attach(obj, path);
+	if (attached_link_count == attached_before) {
+		warn("%s probing of %s failed\n", provider->name, path);
+		return err ? err : -ENOENT;
+	}
+	if (err)
+		warn("%s probing of %s is incomplete\n", provider->name, path);
+	return 0;
 }
 
 /*
@@ -438,6 +529,11 @@ int main(int argc, char **argv) {
 	attach_provider(obj, env.openssl, "OpenSSL", "libssl.so", attach_openssl);
 	attach_provider(obj, env.gnutls, "GnuTLS", "libgnutls.so", attach_gnutls);
 	attach_provider(obj, env.nss, "NSS", "libnspr4.so", attach_nss);
+	if (env.extra_lib) {
+		err = attach_extra_lib(obj, env.extra_lib);
+		if (err)
+			goto cleanup;
+	}
 	if (attached_link_count == 0) {
 		warn("no SSL provider probes attached\n");
 		err = -ENOENT;
