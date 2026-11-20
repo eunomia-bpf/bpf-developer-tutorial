@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # LLVM 14 is not available on ubuntu-26.04 (the current ubuntu-latest).
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v7
       with:
