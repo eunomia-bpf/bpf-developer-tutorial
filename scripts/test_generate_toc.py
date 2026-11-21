@@ -16,6 +16,7 @@ TRACING_LESSONS = {
     "src/40-mysql",
     "src/48-energy",
     "src/52-fsession-latency",
+    "src/57-oom-watch",
 }
 
 
