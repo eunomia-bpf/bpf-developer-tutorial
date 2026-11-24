@@ -28,7 +28,7 @@ Provide an overview of the specific eBPF programs, tools, or features you'll dis
 
 Dive into the kernel-mode eBPF code and user-space code, focusing on high-level concepts rather than basic syntax.
 
-Always include the full code as it is first. then break down the key parts.
+Show the core kernel-mode eBPF program in full when it is central to the lesson, then break down the key parts. For user-space code, include only the functions and excerpts needed to understand loading, configuration, event handling, and cleanup. Link to the tutorial directory for the complete implementation.
 
 Try to avoid using too much list, make it more like a story.
 
@@ -43,7 +43,7 @@ Follow the steps:
 
 Do not make them a list, make them some paragraphs, you can also quote some code snippets to explain the key parts of the code if needed, focus on the logic and features used in advanced eBPF development. Don't make it too long, but make sure it is informative enough and you explain everything a advanced eBPF developer wants to know.
 
-3. Then briefly explain the user-space code
+3. Then briefly explain the user-space code, using focused excerpts when they make the control flow easier to follow
 
 Aim to help readers grasp how the code works without getting bogged down in basic details.
 
@@ -76,6 +76,7 @@ You should include the important references and resources that used in the tutor
 - **Focus on Advanced Concepts:** Assume readers have basic eBPF knowledge; skip elementary explanations.
 - **Engagement:** Encourage readers to think critically and engage with the material.
 - **Consistency:** Keep a consistent style and formatting throughout.
-- **Code Formatting:** Ensure code snippets are well-formatted and highlight key parts. Do not change or simplify any of the code and commands, keep them as they are.
+- **Punctuation:** Do not use em dashes, doubled Chinese em dashes, or en dashes as sentence punctuation. Use commas, semicolons, colons, parentheses, or separate sentences.
+- **Code Formatting:** Ensure code snippets are well-formatted and highlight key parts. Keep every included excerpt and command faithful to the implementation. The tutorial does not need to embed the complete user-space loader.
 - **Proofreading:** Double-check for errors and ensure technical accuracy.
 - **Accessibility:** Make the content valuable for readers with advanced expertise, avoiding unnecessary simplifications.
