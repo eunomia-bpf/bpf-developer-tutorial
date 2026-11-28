@@ -452,7 +452,24 @@ return skb->len;
 
 ### 编译运行
 
-完整的源代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/> 编译运行上述代码：
+完整的源代码可以在 <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http> 中找到。关于如何安装依赖，请参考：<https://eunomia.dev/tutorials/11-bootstrap/>
+
+编译需要 BTF，因为 `vmlinux.h` 由它生成。本仓库自带了一份，位于
+`src/third_party/vmlinux/x86/vmlinux.h`（其他架构是 `arm64/` 等），`Makefile`
+里的 `VMLINUX` 变量指向它，所以正常 `make` 不依赖运行内核的 BTF。如果你把
+`VMLINUX` 改成自己机器上生成的头文件，那么那台内核需要
+`CONFIG_DEBUG_INFO_BTF=y`，可以这样确认：
+
+```console
+$ ls /sys/kernel/btf/vmlinux
+/sys/kernel/btf/vmlinux
+```
+
+文件不存在时，`BPF` 这一步会报 BTF 错误。此时要么换用带
+`CONFIG_DEBUG_INFO_BTF=y` 的内核，要么从一个有 BTF 的内核导出：
+`bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h`。
+
+然后编译运行：
 
 ```console
 $ git submodule update --init --recursive

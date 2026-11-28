@@ -441,6 +441,23 @@ if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd, sizeof(prog_fd))) {
 
 The complete source code can be found at <https://github.com/eunomia-bpf/bpf-developer-tutorial/tree/main/src/23-http>. To compile and run the code:
 
+Compiling needs BTF, because `vmlinux.h` comes from it. This repository vendors
+one at `../third_party/vmlinux/$(ARCH)/vmlinux.h` — after `git submodule update
+--init`, the file is `src/third_party/vmlinux/x86/vmlinux.h` (or `arm64/`, …);
+the `Makefile`'s `VMLINUX` variable points there. A normal `make` therefore
+does not need BTF on the running kernel. If you point `VMLINUX` at a header
+generated on your own machine instead, that kernel needs
+`CONFIG_DEBUG_INFO_BTF=y`; check it with
+
+```console
+$ ls /sys/kernel/btf/vmlinux
+/sys/kernel/btf/vmlinux
+```
+
+If the file is missing, the `BPF` step fails with a BTF error. Either use a
+kernel built with `CONFIG_DEBUG_INFO_BTF=y`, or generate `vmlinux.h` from one
+(`bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h`).
+
 ```console
 $ git submodule update --init --recursive
 $ make
